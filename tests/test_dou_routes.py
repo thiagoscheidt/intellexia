@@ -12,6 +12,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from flask import render_template
+
 from main import app
 from app.models import User
 from app.utils.permissions import (MODULE_PERMISSIONS, ENDPOINT_MODULE_MAP,
@@ -84,6 +86,34 @@ def test_acervo_com_login():
               str(resposta.status_code))
 
 
+def test_link_no_menu_lateral():
+    """O item do menu tem de aparecer para quem tem SÓ a permissão 'dou'.
+
+    O módulo é concedido individualmente, então esse é o caso mais provável em
+    produção. Na primeira versão o item foi aninhado dentro do submenu do
+    Painel de Processos, cujo bloco só renderiza com process_panel ou
+    communications — um usuário só com 'dou' não via link nenhum.
+
+    O sidebar é renderizado direto, com can_view_module controlado, em vez de
+    forjar a sessão: o middleware check_session recarrega o usuário do banco a
+    cada request e sobrescreve user_role/user_module_permissions, então sessão
+    forjada nunca vence.
+    """
+    print('\n5. Link no menu lateral (usuário só com a permissão dou)')
+
+    with app.test_request_context('/dou/acervo'):
+        html = render_template('partials/sidebar.html',
+                               can_view_module=lambda k: k == 'dou')
+
+    check('o link do acervo aparece', '/dou/acervo' in html, html[:200])
+    check('o link da captura aparece', '/dou/captura' in html)
+    check('o rótulo do módulo aparece', 'Diário Oficial' in html)
+    check('é item de primeiro nível, não filho do Painel de Processos',
+          'Painel de Processos' not in html and '/process-panel' not in html,
+          'o item ainda depende do grupo de process_panel')
+    check('não depende do Monitoramento', '/comunicacoes' not in html)
+
+
 def main():
     print('=' * 60)
     print('TESTES DAS ROTAS DO DIÁRIO OFICIAL')
@@ -93,6 +123,7 @@ def main():
     test_rotas_registradas()
     test_exige_login()
     test_acervo_com_login()
+    test_link_no_menu_lateral()
 
     print('\n' + '=' * 60)
     if _falhas:

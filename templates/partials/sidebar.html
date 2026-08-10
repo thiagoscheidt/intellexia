@@ -292,16 +292,6 @@
               </a>
             </li>
             {% endif %}
-            {% if can_view_module('dou') %}
-            <li class="nav-item">
-              <a href="{{ url_for('dou.acervo') }}"
-                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('dou.') else '' }}"
-                style="font-size: 0.9em;">
-                <i class="nav-icon bi bi-newspaper" style="margin-right: 8px; color: #6c757d;"></i>
-                <p style="margin-left: 15px;" title="Diário Oficial da União">Diário Oficial</p>
-              </a>
-            </li>
-            {% endif %}
             {% if can_view_module('process_panel') %}
             <li class="nav-item">
               <a href="{{ url_for('process_panel.list_all_benefits') }}"
@@ -322,6 +312,39 @@
             </li>
             {% endif %}
             {% endif %}
+          </ul>
+        </li>
+        {% endif %}
+
+        {% if can_view_module('dou') %}
+        <li
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('dou.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('dou.') else '' }}">
+            <i class="nav-icon bi bi-newspaper"></i>
+            <p style="line-height: 1.15;">
+              Diário Oficial
+              <small class="d-block" style="font-size: 0.72em; opacity: 0.65;">(D.O.U.)</small>
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
+            <li class="nav-item">
+              <a href="{{ url_for('dou.acervo') }}"
+                class="nav-link {{ 'active' if request.endpoint in ('dou.acervo', 'dou.materia') else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-collection" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Acervo</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('dou.captura') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'dou.captura' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-activity" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Captura</p>
+              </a>
+            </li>
           </ul>
         </li>
         {% endif %}
