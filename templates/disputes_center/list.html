@@ -47,6 +47,7 @@
 {% block title %}{{ page_title }} - IntellexIA{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fap-protocol-cell.css') }}" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
   crossorigin="anonymous" />
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
@@ -556,6 +557,14 @@
                       selecionada{% endif %}{% if current_vigencia_filter.company_name %} - {{
                       current_vigencia_filter.company_name }}{% elif current_vigencia_filter.company_cnpj %} - {{
                       current_vigencia_filter.company_cnpj }}{% endif %}{% endif %}</span>
+                    {% if current_vigencia_filter and current_vigencia_filter.fap_protocols %}
+                    {# Renderizado só no servidor: o badge acima é reescrito pelo JS. #}
+                    {% for proto in current_vigencia_filter.fap_protocols %}
+                    <span class="vigencia-filter-badge ms-1" data-bs-toggle="tooltip" title="{{ proto.detalhe }}">
+                      <i class="bi bi-hash"></i>{{ proto.instancias_label }} inst. {{ proto.protocolo_formatado }}
+                    </span>
+                    {% endfor %}
+                    {% endif %}
                   </div>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
@@ -659,6 +668,21 @@
                     <option value="">Todas as empresas</option>
                   </select>
                 </div>
+                <div class="col-md-3">
+                  <label for="quickGrupoFilter" class="form-label mb-1 small text-muted">Grupo Empresarial</label>
+                  <select id="quickGrupoFilter" class="form-select form-select-sm">
+                    <option value="">Todos os grupos</option>
+                    {% for grupo in fap_group_options or [] %}
+                    <option value="{{ grupo.root }}">{{ grupo.label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label for="quickProtocoloFilter" class="form-label mb-1 small text-muted">Protocolo administrativo</label>
+                  <input type="text" id="quickProtocoloFilter" class="form-control form-control-sm"
+                    placeholder="Com ou sem pontuação" autocomplete="off"
+                    title="Aceita 10128.053144/2025-42, 10128053144202542 ou só um trecho do número." />
+                </div>
                 <div class="col-md-1" id="quickCnpjFilterSpacer"></div>
               </div>
 
@@ -690,6 +714,7 @@
                     <th style="width: 220px;">Número / NIT / Tipo</th>
                     <th>Segurado</th>
                     <th style="width: 180px;">CNPJ Empregador</th>
+                    <th style="width: 190px;">Protocolo administrativo</th>
                     <th style="width: 170px;" class="text-center">Status 1ª instância</th>
                     <th style="width: 170px;" class="text-center">Status 2ª instância</th>
                     <th style="width: 150px;">Vigência FAP</th>
@@ -887,6 +912,11 @@
 {% block extra_js %}
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script src="{{ url_for('static', filename='js/fap-protocol-cell.js') }}"></script>
+<script>
+  // Link do protocolo para o Painel FAP — nulo (só texto) sem o módulo.
+  window.fapPanelProtocolUrl = {% if can_view_module('fap_panel') %}"{{ url_for('fap_panel.contestacoes_page') }}?protocolo="{% else %}null{% endif %};
+</script>
 <script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>
 <script>
   $(document).ready(function () {
@@ -1025,6 +1055,8 @@
         d.quick_client = ($('#quickClientFilter').val() || '').trim();
         d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
         d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
+        d.quick_protocolo = ($('#quickProtocoloFilter').val() || '').trim();
+        d.quick_grupo = ($('#quickGrupoFilter').val() || '').trim();
         d.quick_category_mode = ($('#quickCategoryModeFilter').val() || 'all').trim();
         d.vigencia_id = initialVigenciaId;
       },
@@ -1039,7 +1071,7 @@
     "pageLength": 25,
     "order": [[0, "desc"]],
     "columnDefs": [
-      { "orderable": false, "targets": 8 }
+      { "orderable": false, "targets": [4, 9, 10] }
     ],
     columns: [
       {
@@ -1085,6 +1117,12 @@
                 ${name}
               </div>`;
         }
+      },
+      {
+        data: 'fap_protocols',
+        render: function (data) {
+          return window.renderFapProtocolCell(data);
+        },
       },
       {
         data: null,
@@ -1569,6 +1607,8 @@
       quick_client: ($('#quickClientFilter').val() || '').trim(),
       quick_root: ($('#quickRootCnpjFilter').val() || '').trim(),
       quick_cnpj: ($('#quickCnpjFilter').val() || '').trim(),
+      quick_protocolo: ($('#quickProtocoloFilter').val() || '').trim(),
+      quick_grupo: ($('#quickGrupoFilter').val() || '').trim(),
       quick_category_mode: ($('#quickCategoryModeFilter').val() || 'all').trim(),
       vigencia_id: initialVigenciaId,
     };
@@ -1724,6 +1764,8 @@
     $('#quickCategoryModeFilter').val('all');
     $('#quickCnpjFilterWrapper').hide();
     $('#quickCnpjFilterSpacer').show();
+    $('#quickProtocoloFilter').val('');
+    $('#quickGrupoFilter').val('').trigger('change.select2');
     renderActiveFilters();
     table.search('');
     table.ajax.reload();
@@ -1769,6 +1811,16 @@
     table.ajax.reload();
   });
 
+  let protocoloFilterTimer = null;
+  $('#quickProtocoloFilter').on('input', function () {
+    clearTimeout(protocoloFilterTimer);
+    protocoloFilterTimer = setTimeout(function () { table.ajax.reload(); }, 400);
+  });
+
+  $('#quickGrupoFilter').on('change', function () {
+    table.ajax.reload();
+  });
+
   $('#quickCategoryModeFilter').on('change', function () {
     table.ajax.reload();
   });
@@ -1786,6 +1838,14 @@
       placeholder: 'Todos os clientes',
       width: '100%',
       language: { noResults: function () { return 'Nenhum cliente encontrado.'; } },
+    });
+    $('#quickGrupoFilter').select2({
+      theme: 'bootstrap-5',
+      allowClear: true,
+      placeholder: 'Todos os grupos',
+      width: '100%',
+      matcher: window.cnpjSelect2Matcher,
+      language: { noResults: function () { return 'Nenhum grupo encontrado.'; } },
     });
     $('#quickRootCnpjFilter').select2({
       theme: 'bootstrap-5',

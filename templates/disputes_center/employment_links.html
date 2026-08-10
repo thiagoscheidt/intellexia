@@ -24,6 +24,7 @@
 {% block title %}{{ page_title }} - IntellexIA{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fap-protocol-cell.css') }}" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
   crossorigin="anonymous" />
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
@@ -503,6 +504,21 @@
                     <option value="">Todas as empresas</option>
                   </select>
                 </div>
+                <div class="col-md-3">
+                  <label for="quickGrupoFilter" class="form-label mb-1 small text-muted">Grupo Empresarial</label>
+                  <select id="quickGrupoFilter" class="form-select form-select-sm">
+                    <option value="">Todos os grupos</option>
+                    {% for grupo in fap_group_options or [] %}
+                    <option value="{{ grupo.root }}">{{ grupo.label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label for="quickProtocoloFilter" class="form-label mb-1 small text-muted">Protocolo administrativo</label>
+                  <input type="text" id="quickProtocoloFilter" class="form-control form-control-sm"
+                    placeholder="Com ou sem pontuação" autocomplete="off"
+                    title="Aceita 10128.053144/2025-42, 10128053144202542 ou só um trecho do número." />
+                </div>
                 <div class="col-md-4" id="quickCnpjFilterSpacer"></div>
               </div>
 
@@ -517,6 +533,7 @@
                   <tr>
                     <th style="width: 60px;">ID</th>
                     <th>CNPJ Empregador</th>
+                    <th style="width: 190px;">Protocolo administrativo</th>
                     <th style="width: 80px;">Vigência</th>
                     <th>Competência</th>
                     <th class="text-end">Quantidade Original</th>
@@ -659,6 +676,11 @@
 {% block extra_js %}
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script src="{{ url_for('static', filename='js/fap-protocol-cell.js') }}"></script>
+<script>
+  // Link do protocolo para o Painel FAP — nulo (só texto) sem o módulo.
+  window.fapPanelProtocolUrl = {% if can_view_module('fap_panel') %}"{{ url_for('fap_panel.contestacoes_page') }}?protocolo="{% else %}null{% endif %};
+</script>
 <script>
   const apiUrl = '{{ url_for("disputes_center.list_employment_links_api") }}';
   const exportUrl = '{{ url_for("disputes_center.export_employment_links_excel") }}';
@@ -780,6 +802,8 @@
           d.custom_filters = JSON.stringify(filters.map(f => ({ field: f.field, operator: f.operator, value: f.value })));
           d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
           d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
+          d.quick_protocolo = ($('#quickProtocoloFilter').val() || '').trim();
+          d.quick_grupo = ($('#quickGrupoFilter').val() || '').trim();
           if (initialVigenciaId) d.vigencia_id = initialVigenciaId;
         },
         dataSrc: function (json) {
@@ -790,7 +814,7 @@
       language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
       pageLength: 25,
       order: [[0, 'desc']],
-      columnDefs: [{ orderable: false, targets: 8 }],
+      columnDefs: [{ orderable: false, targets: [2, 9] }],
       columns: [
         {
           data: 'id',
@@ -806,6 +830,12 @@
               ? `<small class="text-muted">${escapeHtml(row.employer_name)}</small>`
               : '';
             return `<div class="d-flex flex-column gap-1">${cnpj}${name}</div>`;
+          },
+        },
+        {
+          data: 'fap_protocols',
+          render: function (data) {
+            return window.renderFapProtocolCell(data);
           },
         },
         {
@@ -939,6 +969,8 @@
         })),
         quick_root: ($('#quickRootCnpjFilter').val() || '').trim(),
         quick_cnpj: ($('#quickCnpjFilter').val() || '').trim(),
+        quick_protocolo: ($('#quickProtocoloFilter').val() || '').trim(),
+        quick_grupo: ($('#quickGrupoFilter').val() || '').trim(),
         vigencia_id: initialVigenciaId,
       };
 
@@ -1046,6 +1078,8 @@
       refreshCnpjSelect2();
       $('#quickCnpjFilterWrapper').hide();
       $('#quickCnpjFilterSpacer').show();
+      $('#quickProtocoloFilter').val('');
+      $('#quickGrupoFilter').val('').trigger('change.select2');
       renderActiveFilters();
       table.search('');
       table.ajax.reload();
@@ -1084,6 +1118,16 @@
     });
 
     $('#quickCnpjFilter').on('change', function () { table.ajax.reload(); });
+
+    let protocoloFilterTimer = null;
+    $('#quickProtocoloFilter').on('input', function () {
+      clearTimeout(protocoloFilterTimer);
+      protocoloFilterTimer = setTimeout(function () { table.ajax.reload(); }, 400);
+    });
+
+    $('#quickGrupoFilter').on('change', function () {
+      table.ajax.reload();
+    });
 
     function renderActiveFilters() {
       const container = $('#activeElFilters');
@@ -1246,6 +1290,14 @@
     }
 
     if (window.jQuery && $.fn.select2) {
+      $('#quickGrupoFilter').select2({
+        theme: 'bootstrap-5',
+        allowClear: true,
+        placeholder: 'Todos os grupos',
+        width: '100%',
+        matcher: window.cnpjSelect2Matcher,
+        language: { noResults: function () { return 'Nenhum grupo encontrado.'; } },
+      });
       $('#quickRootCnpjFilter').select2({
         theme: 'bootstrap-5',
         allowClear: true,

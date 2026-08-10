@@ -88,16 +88,20 @@ FILTER_FIELD_MAP = {
 }
 
 
+# Índice da coluna no DataTables -> coluna ordenável no banco. Os índices
+# precisam acompanhar a ordem do <thead> do template; colunas derivadas (sem
+# coluna SQL correspondente) ficam de fora e são marcadas orderable:false lá.
 ORDER_COLUMN_MAP = {
     0: Benefit.id,
     1: Benefit.benefit_number,
     2: Benefit.insured_name,
     3: Benefit.employer_cnpj,
-    4: Benefit.first_instance_status,
-    5: Benefit.second_instance_status,
-    6: Benefit.fap_vigencia_years,
-    7: Benefit.fap_contestation_topic,
-    8: Benefit.benefit_start_date,
+    # 4 = Protocolo administrativo (vem do FAP Web, não é coluna de benefits)
+    5: Benefit.first_instance_status,
+    6: Benefit.second_instance_status,
+    7: Benefit.fap_vigencia_years,
+    8: Benefit.fap_contestation_topic,
+    9: Benefit.benefit_start_date,
 }
 
 
@@ -118,12 +122,14 @@ CAT_FILTER_FIELD_MAP = {
 CAT_ORDER_COLUMN_MAP = {
     0: FapContestationCat.id,
     1: FapContestationCat.cat_number,
-    2: FapContestationCat.employer_cnpj,
-    3: FapContestationCat.insured_nit,
-    4: FapContestationCat.first_instance_status,
-    5: FapContestationCat.second_instance_status,
+    2: FapContestationCat.vigencia_year,
+    3: FapContestationCat.employer_cnpj,
+    # 4 = Protocolo administrativo (derivado do FAP Web)
+    5: FapContestationCat.insured_nit,
     6: FapContestationCat.accident_date,
-    7: FapContestationCat.cat_registration_date,
+    7: FapContestationCat.first_instance_status,
+    8: FapContestationCat.second_instance_status,
+    9: FapContestationCat.cat_block,
 }
 
 PAYROLL_MASS_FILTER_FIELD_MAP = {
@@ -140,11 +146,13 @@ PAYROLL_MASS_FILTER_FIELD_MAP = {
 PAYROLL_MASS_ORDER_COLUMN_MAP = {
     0: FapContestationPayrollMass.id,
     1: FapContestationPayrollMass.employer_cnpj,
-    2: FapContestationPayrollMass.competence,
-    3: FapContestationPayrollMass.total_remuneration,
-    4: FapContestationPayrollMass.first_instance_requested_value,
-    5: FapContestationPayrollMass.first_instance_status,
-    6: FapContestationPayrollMass.second_instance_status,
+    # 2 = Protocolo administrativo (derivado do FAP Web)
+    3: FapContestationPayrollMass.vigencia_year,
+    4: FapContestationPayrollMass.competence,
+    5: FapContestationPayrollMass.total_remuneration,
+    6: FapContestationPayrollMass.first_instance_requested_value,
+    7: FapContestationPayrollMass.first_instance_status,
+    8: FapContestationPayrollMass.second_instance_status,
 }
 
 EMPLOYMENT_LINK_FILTER_FIELD_MAP = {
@@ -161,11 +169,13 @@ EMPLOYMENT_LINK_FILTER_FIELD_MAP = {
 EMPLOYMENT_LINK_ORDER_COLUMN_MAP = {
     0: FapContestationEmploymentLink.id,
     1: FapContestationEmploymentLink.employer_cnpj,
-    2: FapContestationEmploymentLink.competence,
-    3: FapContestationEmploymentLink.quantity,
-    4: FapContestationEmploymentLink.first_instance_requested_quantity,
-    5: FapContestationEmploymentLink.first_instance_status,
-    6: FapContestationEmploymentLink.second_instance_status,
+    # 2 = Protocolo administrativo (derivado do FAP Web)
+    3: FapContestationEmploymentLink.vigencia_year,
+    4: FapContestationEmploymentLink.competence,
+    5: FapContestationEmploymentLink.quantity,
+    6: FapContestationEmploymentLink.first_instance_requested_quantity,
+    7: FapContestationEmploymentLink.first_instance_status,
+    8: FapContestationEmploymentLink.second_instance_status,
 }
 
 TURNOVER_RATE_FILTER_FIELD_MAP = {
@@ -182,11 +192,13 @@ TURNOVER_RATE_FILTER_FIELD_MAP = {
 TURNOVER_RATE_ORDER_COLUMN_MAP = {
     0: FapContestationTurnoverRate.id,
     1: FapContestationTurnoverRate.employer_cnpj,
-    2: FapContestationTurnoverRate.year,
-    3: FapContestationTurnoverRate.turnover_rate,
-    4: FapContestationTurnoverRate.admissions,
-    5: FapContestationTurnoverRate.first_instance_status,
-    6: FapContestationTurnoverRate.second_instance_status,
+    # 2 = Protocolo administrativo (derivado do FAP Web)
+    3: FapContestationTurnoverRate.vigencia_year,
+    4: FapContestationTurnoverRate.year,
+    5: FapContestationTurnoverRate.turnover_rate,
+    6: FapContestationTurnoverRate.admissions,
+    7: FapContestationTurnoverRate.first_instance_status,
+    8: FapContestationTurnoverRate.second_instance_status,
 }
 
 
@@ -392,6 +404,275 @@ def _extract_cnpj_root(cnpj):
 def _extract_cnpj_branch(cnpj):
     digits = _normalize_cnpj_digits(cnpj)
     return digits[8:12] if len(digits) >= 12 else ''
+
+
+def _vigencia_cnpj_key(cnpj):
+    """CNPJ em 14 dígitos — mesma normalização da sincronização do FAP Web.
+
+    `FapWebContestacao.cnpj` é gravado com zero-padding à esquerda
+    (fap_panel.sync), e `FapVigenciaCnpj.employer_cnpj` só é criado com 14
+    dígitos. Normalizar os dois lados pela mesma regra é o que faz o par
+    (CNPJ, ano) casar.
+    """
+    digits = _normalize_cnpj_digits(cnpj)
+    if not digits:
+        return ''
+    return digits.zfill(14) if len(digits) <= 14 else digits
+
+
+def _format_protocolo_nup(protocolo):
+    """Protocolo administrativo no formato NUP (NNNNN.NNNNNN/AAAA-DD).
+
+    Só os protocolos de 17 dígitos seguem o Número Único de Protocolo; os de 16
+    vêm de um formato antigo do FAP Web e voltam sem máscara.
+    """
+    raw = _normalize_text(protocolo)
+    digits = ''.join(ch for ch in raw if ch.isdigit())
+    if len(digits) != 17:
+        return raw
+    return f'{digits[:5]}.{digits[5:11]}/{digits[11:15]}-{digits[15:]}'
+
+
+def _fap_protocols_for_vigencias(law_firm_id, keys):
+    """Protocolos administrativos do FAP Web para pares (CNPJ 14 dígitos, ano).
+
+    `FapWebContestacao` (Painel FAP) é a única fonte do número de protocolo. A
+    chave natural (cnpj, ano_vigencia) casa com FapVigenciaCnpj(employer_cnpj,
+    vigencia_year), então o vínculo não exige coluna nova aqui. Retorna
+    {(cnpj, ano): [protocolo...]} — vigências sem contestação sincronizada
+    simplesmente não aparecem no mapa.
+    """
+    keys = {key for key in (keys or ()) if key and key[0] and key[1]}
+    if not keys:
+        return {}
+
+    years = set()
+    for _, year in keys:
+        try:
+            years.add(int(year))
+        except (TypeError, ValueError):
+            continue
+    if not years:
+        return {}
+
+    rows = (
+        db.session.query(
+            FapWebContestacao.cnpj,
+            FapWebContestacao.ano_vigencia,
+            FapWebContestacao.protocolo,
+            FapWebContestacao.instancia_codigo,
+            FapWebContestacao.instancia_descricao,
+            FapWebContestacao.situacao_descricao,
+        )
+        .filter(
+            FapWebContestacao.law_firm_id == law_firm_id,
+            FapWebContestacao.cnpj.in_({key[0] for key in keys}),
+            FapWebContestacao.ano_vigencia.in_(years),
+            FapWebContestacao.protocolo.isnot(None),
+            func.trim(cast(FapWebContestacao.protocolo, String)) != '',
+        )
+        .all()
+    )
+
+    # O mesmo NUP percorre as duas instâncias administrativas (são contestações
+    # distintas no FAP Web, mas um único processo). Agrupar por protocolo evita
+    # imprimir o mesmo número duas vezes na tela.
+    grouped = {}
+    for cnpj, ano_vigencia, protocolo, instancia_codigo, instancia_descricao, situacao in rows:
+        key = (_vigencia_cnpj_key(cnpj), str(ano_vigencia or '').strip())
+        if key not in keys:
+            continue
+        numero = _normalize_text(protocolo)
+        entry = grouped.setdefault(key, {}).setdefault(
+            numero,
+            {
+                'protocolo': numero,
+                'protocolo_formatado': _format_protocolo_nup(numero),
+                'instancias': set(),
+                'detalhes': [],
+            },
+        )
+        instancia = 2 if (instancia_codigo or '').endswith('SEGUNDA_INSTANCIA') else 1
+        entry['instancias'].add(instancia)
+        rotulo = _normalize_text(instancia_descricao) or f'Administrativo {instancia}ª instância'
+        situacao_texto = _normalize_text(situacao)
+        entry['detalhes'].append(f'{rotulo} — {situacao_texto}' if situacao_texto else rotulo)
+
+    protocols_by_key = {}
+    for key, entries in grouped.items():
+        rendered = []
+        for entry in entries.values():
+            instancias = sorted(entry['instancias'])
+            rendered.append(
+                {
+                    'protocolo': entry['protocolo'],
+                    'protocolo_formatado': entry['protocolo_formatado'],
+                    'instancias_label': '/'.join(f'{i}ª' for i in instancias),
+                    'detalhe': ' · '.join(sorted(set(entry['detalhes']))),
+                    'ordem': instancias[0] if instancias else 9,
+                }
+            )
+        rendered.sort(key=lambda item: (item['ordem'], item['protocolo']))
+        protocols_by_key[key] = rendered
+
+    return protocols_by_key
+
+
+def _fap_protocols_by_vigencia_id(law_firm_id, vigencia_ids):
+    """Protocolos administrativos indexados por id de vigência.
+
+    Ponte para as listagens que já carregam a FK da vigência (benefícios via
+    `fap_vigencia_cnpj_id`; CATs, massas, vínculos e taxas via `vigencia_id`):
+    resolve o par (CNPJ, ano) e delega para `_fap_protocols_for_vigencias`.
+    Chame uma vez por página da listagem, com os ids das linhas exibidas.
+    """
+    ids = set()
+    for value in vigencia_ids or ():
+        try:
+            ids.add(int(value))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return {}
+
+    rows = (
+        db.session.query(
+            FapVigenciaCnpj.id,
+            FapVigenciaCnpj.employer_cnpj,
+            FapVigenciaCnpj.vigencia_year,
+        )
+        .filter(
+            FapVigenciaCnpj.law_firm_id == law_firm_id,
+            FapVigenciaCnpj.id.in_(ids),
+        )
+        .all()
+    )
+
+    key_by_id = {
+        vigencia_id: (_vigencia_cnpj_key(cnpj), str(year or '').strip())
+        for vigencia_id, cnpj, year in rows
+    }
+    protocols = _fap_protocols_for_vigencias(law_firm_id, set(key_by_id.values()))
+    return {
+        vigencia_id: protocols.get(key, [])
+        for vigencia_id, key in key_by_id.items()
+    }
+
+
+def _build_fap_group_options(law_firm_id):
+    """Opções do filtro "Grupo Empresarial", vindas de `FapCompany`.
+
+    É a mesma lista da tela "Empresas Sincronizadas (FAP)" do Painel FAP, onde
+    cada empresa é gravada pela **raiz do CNPJ** (8 dígitos) + nome. Por isso o
+    filtro se comporta como o de CNPJ raiz: seleciona a raiz e alcança todos os
+    estabelecimentos dela. A diferença é a origem das opções — nomes vindos do
+    FAP Web, em vez das raízes derivadas do cadastro de clientes.
+    """
+    companies = (
+        FapCompany.query.filter_by(law_firm_id=law_firm_id)
+        .order_by(FapCompany.nome.asc(), FapCompany.cnpj.asc())
+        .all()
+    )
+
+    options = {}
+    for company in companies:
+        root = _extract_cnpj_root(company.cnpj)
+        if not root:
+            continue
+        name = _normalize_text(company.nome)
+        # Uma raiz pode repetir entre escritórios/sincronizações; o primeiro
+        # nome não vazio vence, para a opção nunca aparecer só como número.
+        if root not in options or (name and not options[root]['name']):
+            options[root] = {
+                'root': root,
+                'name': name,
+                'label': f'{name} - {root}' if name else root,
+            }
+
+    return sorted(options.values(), key=lambda item: (item['name'].lower(), item['root']))
+
+
+def _apply_grupo_filter(query, quick_grupo, employer_cnpj_column):
+    """Restringe a listagem aos CNPJs sob a raiz do grupo empresarial."""
+    root = ''.join(ch for ch in (quick_grupo or '') if ch.isdigit())[:8]
+    if not root:
+        return query
+
+    sanitized_cnpj = func.replace(
+        func.replace(
+            func.replace(func.replace(cast(employer_cnpj_column, String), '.', ''), '/', ''),
+            '-',
+            '',
+        ),
+        ' ',
+        '',
+    )
+    return query.filter(sanitized_cnpj.like(f'{root}%'))
+
+
+def _vigencia_ids_by_protocolo(law_firm_id, protocolo_text):
+    """Ids de vigência cujas contestações no FAP Web batem com o protocolo.
+
+    Aceita o número com ou sem máscara: "10128.053144/2025-42",
+    "10128053144202542" e um trecho como "053144" chegam ao mesmo registro,
+    porque tanto a busca quanto a coluna são reduzidas a dígitos antes da
+    comparação. Casamento parcial (LIKE) — digitar só o miolo do NUP funciona.
+
+    Devolve None quando não há termo de busca (não filtrar) e [] quando o termo
+    não casa com nada (filtrar para vazio, em vez de ignorar o filtro).
+    """
+    digits = ''.join(ch for ch in (protocolo_text or '') if ch.isdigit())
+    if not digits:
+        return None
+
+    protocolo_normalizado = func.replace(
+        func.replace(
+            func.replace(
+                func.replace(cast(FapWebContestacao.protocolo, String), '.', ''),
+                '/',
+                '',
+            ),
+            '-',
+            '',
+        ),
+        ' ',
+        '',
+    )
+
+    pares = {
+        (_vigencia_cnpj_key(cnpj), str(ano or '').strip())
+        for cnpj, ano in db.session.query(
+            FapWebContestacao.cnpj, FapWebContestacao.ano_vigencia
+        ).filter(
+            FapWebContestacao.law_firm_id == law_firm_id,
+            protocolo_normalizado.like(f'%{digits}%'),
+        )
+    }
+    if not pares:
+        return []
+
+    # O par (CNPJ, ano) é resolvido em Python: `ano_vigencia` é inteiro e
+    # `vigencia_year` é texto, e o CNPJ precisa da mesma normalização usada na
+    # sincronização — comparar direto no SQL dependeria de cast frágil.
+    return [
+        vigencia_id
+        for vigencia_id, cnpj, ano in db.session.query(
+            FapVigenciaCnpj.id,
+            FapVigenciaCnpj.employer_cnpj,
+            FapVigenciaCnpj.vigencia_year,
+        ).filter(FapVigenciaCnpj.law_firm_id == law_firm_id)
+        if (_vigencia_cnpj_key(cnpj), str(ano or '').strip()) in pares
+    ]
+
+
+def _apply_protocolo_filter(query, law_firm_id, quick_protocolo, vigencia_fk_column):
+    """Restringe a listagem às vigências que têm o protocolo informado."""
+    if not quick_protocolo or not law_firm_id:
+        return query
+    vigencia_ids = _vigencia_ids_by_protocolo(law_firm_id, quick_protocolo)
+    if vigencia_ids is None:
+        return query
+    return query.filter(vigencia_fk_column.in_(vigencia_ids))
 
 
 def _build_cnpj_by_root(clients_data):
@@ -771,7 +1052,7 @@ def _parse_cat_custom_filters(raw_filters):
     return valid_filters
 
 
-def _apply_cats_filters(query, search_value='', custom_filters=None, quick_employer_name='', quick_root='', quick_cnpj='', vigencia_id=None):
+def _apply_cats_filters(query, search_value='', custom_filters=None, quick_employer_name='', quick_root='', quick_cnpj='', vigencia_id=None, quick_protocolo='', law_firm_id=None, quick_grupo=''):
     search_text = (search_value or '').strip().lower()
     if search_text:
         like_term = f'%{search_text}%'
@@ -820,6 +1101,9 @@ def _apply_cats_filters(query, search_value='', custom_filters=None, quick_emplo
             query = query.filter(FapContestationCat.vigencia_id == int(vigencia_id))
         except (TypeError, ValueError):
             pass
+
+    query = _apply_protocolo_filter(query, law_firm_id, quick_protocolo, FapContestationCat.vigencia_id)
+    query = _apply_grupo_filter(query, quick_grupo, FapContestationCat.employer_cnpj)
 
     for item in custom_filters or []:
         field = item['field']
@@ -873,11 +1157,12 @@ def _apply_cats_filters(query, search_value='', custom_filters=None, quick_emplo
     return query
 
 
-def _serialize_cat_row(cat):
+def _serialize_cat_row(cat, fap_protocols=None):
     return {
         'id': cat.id,
         'cat_number': cat.cat_number or '',
         'vigencia_year': cat.vigencia_year or '',
+        'fap_protocols': fap_protocols or [],
         'employer_cnpj': cat.employer_cnpj or '',
         'employer_cnpj_assigned': cat.employer_cnpj_assigned or '',
         'employer_name': cat.employer_name or '',
@@ -932,7 +1217,7 @@ def _parse_payroll_mass_custom_filters(raw_filters):
     return valid_filters
 
 
-def _apply_payroll_mass_filters(query, search_value='', custom_filters=None, quick_root='', quick_cnpj='', vigencia_id=None):
+def _apply_payroll_mass_filters(query, search_value='', custom_filters=None, quick_root='', quick_cnpj='', vigencia_id=None, quick_protocolo='', law_firm_id=None, quick_grupo=''):
     search_text = (search_value or '').strip().lower()
     if search_text:
         like_term = f'%{search_text}%'
@@ -974,6 +1259,9 @@ def _apply_payroll_mass_filters(query, search_value='', custom_filters=None, qui
             query = query.filter(FapContestationPayrollMass.vigencia_id == int(vigencia_id))
         except (TypeError, ValueError):
             pass
+
+    query = _apply_protocolo_filter(query, law_firm_id, quick_protocolo, FapContestationPayrollMass.vigencia_id)
+    query = _apply_grupo_filter(query, quick_grupo, FapContestationPayrollMass.employer_cnpj)
 
     for item in custom_filters or []:
         field = item['field']
@@ -1027,10 +1315,11 @@ def _apply_payroll_mass_filters(query, search_value='', custom_filters=None, qui
     return query
 
 
-def _serialize_payroll_mass_row(pm):
+def _serialize_payroll_mass_row(pm, fap_protocols=None):
     return {
         'id': pm.id,
         'vigencia_year': pm.vigencia_year or '',
+        'fap_protocols': fap_protocols or [],
         'employer_cnpj': pm.employer_cnpj or '',
         'employer_name': pm.employer_name or '',
         'competence': pm.competence or '',
@@ -1082,7 +1371,7 @@ def _parse_employment_link_custom_filters(raw_filters):
     return valid_filters
 
 
-def _apply_employment_link_filters(query, search_value='', custom_filters=None, quick_root='', quick_cnpj='', vigencia_id=None):
+def _apply_employment_link_filters(query, search_value='', custom_filters=None, quick_root='', quick_cnpj='', vigencia_id=None, quick_protocolo='', law_firm_id=None, quick_grupo=''):
     search_text = (search_value or '').strip().lower()
     if search_text:
         like_term = f'%{search_text}%'
@@ -1124,6 +1413,9 @@ def _apply_employment_link_filters(query, search_value='', custom_filters=None, 
             query = query.filter(FapContestationEmploymentLink.vigencia_id == int(vigencia_id))
         except (TypeError, ValueError):
             pass
+
+    query = _apply_protocolo_filter(query, law_firm_id, quick_protocolo, FapContestationEmploymentLink.vigencia_id)
+    query = _apply_grupo_filter(query, quick_grupo, FapContestationEmploymentLink.employer_cnpj)
 
     for item in custom_filters or []:
         field = item['field']
@@ -1177,10 +1469,11 @@ def _apply_employment_link_filters(query, search_value='', custom_filters=None, 
     return query
 
 
-def _serialize_employment_link_row(el):
+def _serialize_employment_link_row(el, fap_protocols=None):
     return {
         'id': el.id,
         'vigencia_year': el.vigencia_year or '',
+        'fap_protocols': fap_protocols or [],
         'employer_cnpj': el.employer_cnpj or '',
         'employer_name': el.employer_name or '',
         'competence': el.competence or '',
@@ -1236,7 +1529,7 @@ def _parse_turnover_rate_custom_filters(raw_filters):
     return valid_filters
 
 
-def _apply_turnover_rate_filters(query, search_value='', custom_filters=None, quick_root='', quick_cnpj='', vigencia_id=None):
+def _apply_turnover_rate_filters(query, search_value='', custom_filters=None, quick_root='', quick_cnpj='', vigencia_id=None, quick_protocolo='', law_firm_id=None, quick_grupo=''):
     search_text = (search_value or '').strip().lower()
     if search_text:
         like_term = f'%{search_text}%'
@@ -1278,6 +1571,9 @@ def _apply_turnover_rate_filters(query, search_value='', custom_filters=None, qu
             query = query.filter(FapContestationTurnoverRate.vigencia_id == int(vigencia_id))
         except (TypeError, ValueError):
             pass
+
+    query = _apply_protocolo_filter(query, law_firm_id, quick_protocolo, FapContestationTurnoverRate.vigencia_id)
+    query = _apply_grupo_filter(query, quick_grupo, FapContestationTurnoverRate.employer_cnpj)
 
     for item in custom_filters or []:
         field = item['field']
@@ -1331,10 +1627,11 @@ def _apply_turnover_rate_filters(query, search_value='', custom_filters=None, qu
     return query
 
 
-def _serialize_turnover_rate_row(tr):
+def _serialize_turnover_rate_row(tr, fap_protocols=None):
     return {
         'id': tr.id,
         'vigencia_year': tr.vigencia_year or '',
+        'fap_protocols': fap_protocols or [],
         'employer_cnpj': tr.employer_cnpj or '',
         'employer_name': tr.employer_name or '',
         'year': tr.year or '',
@@ -1422,6 +1719,9 @@ def _apply_benefits_filters(
     quick_cnpj='',
     vigencia_id=None,
     quick_category_mode='',
+    quick_protocolo='',
+    law_firm_id=None,
+    quick_grupo='',
 ):
     search_text = (search_value or '').strip().lower()
     if search_text:
@@ -1478,6 +1778,9 @@ def _apply_benefits_filters(
             query = query.filter(Benefit.fap_vigencia_cnpj_id == int(vigencia_id))
         except (TypeError, ValueError):
             pass
+
+    query = _apply_protocolo_filter(query, law_firm_id, quick_protocolo, Benefit.fap_vigencia_cnpj_id)
+    query = _apply_grupo_filter(query, quick_grupo, Benefit.employer_cnpj)
 
     legacy_filled = and_(
         Benefit.fap_contestation_topic.isnot(None),
@@ -1573,11 +1876,12 @@ def _apply_benefits_filters(
     return query
 
 
-def _serialize_benefit_row(benefit, client_name, decisions_count=0):
+def _serialize_benefit_row(benefit, client_name, decisions_count=0, fap_protocols=None):
     topics_text = _benefit_topics_text(benefit)
     return {
         'id': benefit.id,
         'decisions_count': int(decisions_count or 0),
+        'fap_protocols': fap_protocols or [],
         'benefit_number': benefit.benefit_number or '',
         'client_name': client_name or '',
         'insured_name': benefit.insured_name or '',
@@ -1630,6 +1934,8 @@ def _collect_listing_payload(default_length=25):
             'quick_client': _normalize_text(payload.get('quick_client', '')),
             'quick_root': _normalize_text(payload.get('quick_root', '')),
             'quick_cnpj': _normalize_text(payload.get('quick_cnpj', '')),
+            'quick_protocolo': _normalize_text(payload.get('quick_protocolo', '')),
+            'quick_grupo': _normalize_text(payload.get('quick_grupo', '')),
             'quick_category_mode': _normalize_text(payload.get('quick_category_mode', 'all')).lower(),
             'vigencia_id': payload.get('vigencia_id'),
         }
@@ -1645,6 +1951,8 @@ def _collect_listing_payload(default_length=25):
     quick_client = _normalize_text(request.args.get('quick_client', ''))
     quick_root = _normalize_text(request.args.get('quick_root', ''))
     quick_cnpj = _normalize_text(request.args.get('quick_cnpj', ''))
+    quick_protocolo = _normalize_text(request.args.get('quick_protocolo', ''))
+    quick_grupo = _normalize_text(request.args.get('quick_grupo', ''))
     quick_category_mode = _normalize_text(request.args.get('quick_category_mode', 'all')).lower()
 
     return {
@@ -1658,6 +1966,8 @@ def _collect_listing_payload(default_length=25):
         'quick_client': quick_client,
         'quick_root': quick_root,
         'quick_cnpj': quick_cnpj,
+        'quick_protocolo': quick_protocolo,
+        'quick_grupo': quick_grupo,
         'quick_category_mode': quick_category_mode,
         'vigencia_id': request.args.get('vigencia_id'),
     }
@@ -2393,11 +2703,18 @@ def list_disputes_center():
                     or ''
                 ).strip()
 
+            protocol_key = (
+                _vigencia_cnpj_key(vigencia.employer_cnpj),
+                (vigencia.vigencia_year or '').strip(),
+            )
             current_vigencia_filter = {
                 'id': vigencia.id,
                 'year': (vigencia.vigencia_year or '').strip(),
                 'company_name': company_name,
                 'company_cnpj': _format_cnpj(vigencia.employer_cnpj),
+                'fap_protocols': _fap_protocols_for_vigencias(
+                    law_firm_id, {protocol_key}
+                ).get(protocol_key, []),
             }
 
     return render_template(
@@ -2412,6 +2729,7 @@ def list_disputes_center():
         first_instance_stats=first_instance_stats,
         second_instance_stats=second_instance_stats,
         cnpj_roots=cnpj_roots,
+        fap_group_options=_build_fap_group_options(law_firm_id),
         cnpj_by_root=cnpj_by_root,
         client_options=client_options,
         current_vigencia_filter=current_vigencia_filter,
@@ -2428,6 +2746,12 @@ def list_fap_vigencias():
     selected_client_cnpj = _normalize_cnpj_digits(request.args.get('client_cnpj', ''))[:14]
     selected_client_root = _normalize_cnpj_digits(request.args.get('client_root', ''))[:8]
     selected_show_deferivel = request.args.get('show_deferivel', '') == '1'
+    selected_protocolo = _normalize_text(request.args.get('protocolo', ''))
+    selected_grupo = _normalize_cnpj_digits(request.args.get('grupo', ''))[:8]
+    # None = sem filtro; set() = filtro informado que não casou com nada.
+    protocolo_vigencia_ids = _vigencia_ids_by_protocolo(law_firm_id, selected_protocolo)
+    if protocolo_vigencia_ids is not None:
+        protocolo_vigencia_ids = set(protocolo_vigencia_ids)
 
     try:
         selected_client_id = int(selected_client_id_raw) if selected_client_id_raw else None
@@ -2674,6 +2998,14 @@ def list_fap_vigencias():
         ):
             continue
 
+        if protocolo_vigencia_ids is not None and vigencia.id not in protocolo_vigencia_ids:
+            continue
+
+        if selected_grupo and not _normalize_cnpj_digits(
+            vigencia.employer_cnpj
+        ).startswith(selected_grupo):
+            continue
+
         if selected_show_deferivel:
             can_mark = (
                 int(second_instance_activity_count or 0) > 0
@@ -2739,6 +3071,8 @@ def list_fap_vigencias():
                 'id': vigencia.id,
                 'vigencia_year': vigencia.vigencia_year,
                 'employer_cnpj': _format_cnpj(vigencia.employer_cnpj),
+                'employer_cnpj_digits': _vigencia_cnpj_key(vigencia.employer_cnpj),
+                'fap_protocols': [],  # preenchido após a paginação
                 'benefits_count': benefits_count,
                 'cats_count': cats_count,
                 'payroll_masses_count': pm_count,
@@ -2795,7 +3129,15 @@ def list_fap_vigencias():
     linked_clients_count = sum(1 for item in grouped_client_list if not item['is_unlinked'])
     unlinked_groups_count = sum(1 for item in grouped_client_list if item['is_unlinked'])
     active_filter_count = sum(
-        1 for value in (selected_client_id_raw, selected_client_cnpj, selected_client_root) if value
+        1
+        for value in (
+            selected_client_id_raw,
+            selected_client_cnpj,
+            selected_client_root,
+            selected_protocolo,
+            selected_grupo,
+        )
+        if value
     ) + (1 if selected_show_deferivel else 0)
 
     cnpj_by_root = _build_cnpj_by_root([(client.cnpj, client.name) for client in clients])
@@ -2814,6 +3156,22 @@ def list_fap_vigencias():
     start_offset = (current_page - 1) * VIGENCIAS_PER_PAGE
     end_offset = start_offset + VIGENCIAS_PER_PAGE
     page_groups = grouped_client_list[start_offset:end_offset]
+
+    # Protocolo administrativo (FAP Web) só das vigências que vão para a tela —
+    # consultar depois do fatiamento evita varrer as milhares de contestações do
+    # escritório a cada render.
+    page_vigencias = [vigencia for group in page_groups for vigencia in group['vigencias']]
+    protocols_by_key = _fap_protocols_for_vigencias(
+        law_firm_id,
+        {
+            (item['employer_cnpj_digits'], str(item['vigencia_year'] or '').strip())
+            for item in page_vigencias
+        },
+    )
+    for item in page_vigencias:
+        item['fap_protocols'] = protocols_by_key.get(
+            (item['employer_cnpj_digits'], str(item['vigencia_year'] or '').strip()), []
+        )
 
     pagination = {
         'page': current_page,
@@ -2845,6 +3203,9 @@ def list_fap_vigencias():
         selected_client_id=selected_client_id_raw,
         selected_client_cnpj=_format_cnpj(selected_client_cnpj) if selected_client_cnpj else '',
         selected_client_root=selected_client_root,
+        selected_protocolo=selected_protocolo,
+        selected_grupo=selected_grupo,
+        fap_group_options=_build_fap_group_options(law_firm_id),
         selected_show_deferivel=selected_show_deferivel,
         active_filter_count=active_filter_count,
         markable_vigencia_ids=markable_vigencia_ids,
@@ -2904,12 +3265,16 @@ def mark_vigencias_first_instance_deferred_batch():
     selected_client_id = _normalize_text(request.form.get('client_id', ''))
     selected_client_cnpj = _normalize_text(request.form.get('client_cnpj', ''))
     selected_client_root = _normalize_text(request.form.get('client_root', ''))
+    selected_protocolo = _normalize_text(request.form.get('protocolo', ''))
+    selected_grupo = _normalize_text(request.form.get('grupo', ''))
     selected_show_deferivel = request.form.get('show_deferivel', '') == '1'
 
     redirect_kwargs = {
         'client_id': selected_client_id or None,
         'client_cnpj': selected_client_cnpj or None,
         'client_root': selected_client_root or None,
+        'protocolo': selected_protocolo or None,
+        'grupo': selected_grupo or None,
         'show_deferivel': '1' if selected_show_deferivel else None,
     }
 
@@ -3000,6 +3365,9 @@ def list_disputes_center_api():
         quick_cnpj=payload.get('quick_cnpj', ''),
         quick_category_mode=payload.get('quick_category_mode', 'all'),
         vigencia_id=payload.get('vigencia_id'),
+        quick_protocolo=payload.get('quick_protocolo', ''),
+        law_firm_id=law_firm_id,
+        quick_grupo=payload.get('quick_grupo', ''),
     )
 
     records_filtered = filtered_query.with_entities(func.count(Benefit.id)).scalar() or 0
@@ -3072,8 +3440,17 @@ def list_disputes_center_api():
         )
         decisions_counts = {bid: cnt for bid, cnt in count_rows}
 
+    protocols_by_vigencia = _fap_protocols_by_vigencia_id(
+        law_firm_id, {benefit.fap_vigencia_cnpj_id for benefit, _ in paged_results}
+    )
+
     data = [
-        _serialize_benefit_row(benefit, client_name, decisions_counts.get(benefit.id, 0))
+        _serialize_benefit_row(
+            benefit,
+            client_name,
+            decisions_counts.get(benefit.id, 0),
+            protocols_by_vigencia.get(benefit.fap_vigencia_cnpj_id, []),
+        )
         for benefit, client_name in paged_results
     ]
 
@@ -3265,6 +3642,9 @@ def export_disputes_center_excel():
         quick_cnpj=payload.get('quick_cnpj', ''),
         quick_category_mode=payload.get('quick_category_mode', 'all'),
         vigencia_id=payload.get('vigencia_id'),
+        quick_protocolo=payload.get('quick_protocolo', ''),
+        law_firm_id=law_firm_id,
+        quick_grupo=payload.get('quick_grupo', ''),
     )
 
     order_column = ORDER_COLUMN_MAP.get(payload['order_column'], Benefit.id)
@@ -4171,6 +4551,7 @@ def list_cats():
         first_instance_stats=first_instance_stats,
         second_instance_stats=second_instance_stats,
         cnpj_roots=cnpj_roots,
+        fap_group_options=_build_fap_group_options(law_firm_id),
         cnpj_by_root=cnpj_by_root,
         employer_name_options=employer_name_options,
         initial_cnpj=initial_cnpj,
@@ -4204,6 +4585,9 @@ def list_cats_api():
         quick_root=payload['quick_root'],
         quick_cnpj=payload['quick_cnpj'],
         vigencia_id=payload['vigencia_id'],
+        quick_protocolo=payload.get('quick_protocolo', ''),
+        law_firm_id=law_firm_id,
+        quick_grupo=payload.get('quick_grupo', ''),
     )
     records_filtered = filtered_query.with_entities(func.count(FapContestationCat.id)).scalar() or 0
 
@@ -4226,7 +4610,13 @@ def list_cats_api():
         filtered_query = filtered_query.order_by(order_column.desc(), FapContestationCat.id.desc())
 
     paged_results = filtered_query.offset(payload['start']).limit(payload['length']).all()
-    data = [_serialize_cat_row(cat) for cat in paged_results]
+    protocols_by_vigencia = _fap_protocols_by_vigencia_id(
+        law_firm_id, {cat.vigencia_id for cat in paged_results}
+    )
+    data = [
+        _serialize_cat_row(cat, protocols_by_vigencia.get(cat.vigencia_id, []))
+        for cat in paged_results
+    ]
 
     return jsonify({
         'draw': payload['draw'],
@@ -4259,6 +4649,9 @@ def export_cats_excel():
         quick_root=payload['quick_root'],
         quick_cnpj=payload['quick_cnpj'],
         vigencia_id=payload['vigencia_id'],
+        quick_protocolo=payload.get('quick_protocolo', ''),
+        law_firm_id=law_firm_id,
+        quick_grupo=payload.get('quick_grupo', ''),
     )
 
     order_column = CAT_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationCat.id)
@@ -4652,6 +5045,7 @@ def list_payroll_masses():
         first_instance_stats=first_instance_stats,
         second_instance_stats=second_instance_stats,
         cnpj_roots=cnpj_roots,
+        fap_group_options=_build_fap_group_options(law_firm_id),
         cnpj_by_root=cnpj_by_root,
         initial_cnpj=initial_cnpj,
         current_vigencia_filter=current_vigencia_filter,
@@ -4682,6 +5076,9 @@ def list_payroll_masses_api():
         quick_root=payload['quick_root'],
         quick_cnpj=payload['quick_cnpj'],
         vigencia_id=payload['vigencia_id'],
+        quick_protocolo=payload.get('quick_protocolo', ''),
+        law_firm_id=law_firm_id,
+        quick_grupo=payload.get('quick_grupo', ''),
     )
     records_filtered = filtered_query.with_entities(func.count(FapContestationPayrollMass.id)).scalar() or 0
 
@@ -4704,7 +5101,13 @@ def list_payroll_masses_api():
         filtered_query = filtered_query.order_by(order_column.desc(), FapContestationPayrollMass.id.desc())
 
     paged_results = filtered_query.offset(payload['start']).limit(payload['length']).all()
-    data = [_serialize_payroll_mass_row(pm) for pm in paged_results]
+    protocols_by_vigencia = _fap_protocols_by_vigencia_id(
+        law_firm_id, {pm.vigencia_id for pm in paged_results}
+    )
+    data = [
+        _serialize_payroll_mass_row(pm, protocols_by_vigencia.get(pm.vigencia_id, []))
+        for pm in paged_results
+    ]
 
     return jsonify({
         'draw': payload['draw'],
@@ -4736,6 +5139,9 @@ def export_payroll_masses_excel():
         quick_root=payload['quick_root'],
         quick_cnpj=payload['quick_cnpj'],
         vigencia_id=payload['vigencia_id'],
+        quick_protocolo=payload.get('quick_protocolo', ''),
+        law_firm_id=law_firm_id,
+        quick_grupo=payload.get('quick_grupo', ''),
     )
 
     order_column = PAYROLL_MASS_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationPayrollMass.id)
@@ -5121,6 +5527,7 @@ def list_employment_links():
         first_instance_stats=first_instance_stats,
         second_instance_stats=second_instance_stats,
         cnpj_roots=cnpj_roots,
+        fap_group_options=_build_fap_group_options(law_firm_id),
         cnpj_by_root=cnpj_by_root,
         initial_cnpj=initial_cnpj,
         current_vigencia_filter=current_vigencia_filter,
@@ -5151,6 +5558,9 @@ def list_employment_links_api():
         quick_root=payload['quick_root'],
         quick_cnpj=payload['quick_cnpj'],
         vigencia_id=payload['vigencia_id'],
+        quick_protocolo=payload.get('quick_protocolo', ''),
+        law_firm_id=law_firm_id,
+        quick_grupo=payload.get('quick_grupo', ''),
     )
     records_filtered = filtered_query.with_entities(func.count(FapContestationEmploymentLink.id)).scalar() or 0
 
@@ -5173,7 +5583,13 @@ def list_employment_links_api():
         filtered_query = filtered_query.order_by(order_column.desc(), FapContestationEmploymentLink.id.desc())
 
     paged_results = filtered_query.offset(payload['start']).limit(payload['length']).all()
-    data = [_serialize_employment_link_row(el) for el in paged_results]
+    protocols_by_vigencia = _fap_protocols_by_vigencia_id(
+        law_firm_id, {el.vigencia_id for el in paged_results}
+    )
+    data = [
+        _serialize_employment_link_row(el, protocols_by_vigencia.get(el.vigencia_id, []))
+        for el in paged_results
+    ]
 
     return jsonify({
         'draw': payload['draw'],
@@ -5205,6 +5621,9 @@ def export_employment_links_excel():
         quick_root=payload['quick_root'],
         quick_cnpj=payload['quick_cnpj'],
         vigencia_id=payload['vigencia_id'],
+        quick_protocolo=payload.get('quick_protocolo', ''),
+        law_firm_id=law_firm_id,
+        quick_grupo=payload.get('quick_grupo', ''),
     )
 
     order_column = EMPLOYMENT_LINK_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationEmploymentLink.id)
@@ -5577,6 +5996,7 @@ def list_turnover_rates():
         first_instance_stats=first_instance_stats,
         second_instance_stats=second_instance_stats,
         cnpj_roots=cnpj_roots,
+        fap_group_options=_build_fap_group_options(law_firm_id),
         cnpj_by_root=cnpj_by_root,
         initial_cnpj=initial_cnpj,
         current_vigencia_filter=current_vigencia_filter,
@@ -5607,6 +6027,9 @@ def list_turnover_rates_api():
         quick_root=payload['quick_root'],
         quick_cnpj=payload['quick_cnpj'],
         vigencia_id=payload['vigencia_id'],
+        quick_protocolo=payload.get('quick_protocolo', ''),
+        law_firm_id=law_firm_id,
+        quick_grupo=payload.get('quick_grupo', ''),
     )
     records_filtered = filtered_query.with_entities(func.count(FapContestationTurnoverRate.id)).scalar() or 0
 
@@ -5629,7 +6052,13 @@ def list_turnover_rates_api():
         filtered_query = filtered_query.order_by(order_column.desc(), FapContestationTurnoverRate.id.desc())
 
     paged_results = filtered_query.offset(payload['start']).limit(payload['length']).all()
-    data = [_serialize_turnover_rate_row(tr) for tr in paged_results]
+    protocols_by_vigencia = _fap_protocols_by_vigencia_id(
+        law_firm_id, {tr.vigencia_id for tr in paged_results}
+    )
+    data = [
+        _serialize_turnover_rate_row(tr, protocols_by_vigencia.get(tr.vigencia_id, []))
+        for tr in paged_results
+    ]
 
     return jsonify({
         'draw': payload['draw'],
@@ -5661,6 +6090,9 @@ def export_turnover_rates_excel():
         quick_root=payload['quick_root'],
         quick_cnpj=payload['quick_cnpj'],
         vigencia_id=payload['vigencia_id'],
+        quick_protocolo=payload.get('quick_protocolo', ''),
+        law_firm_id=law_firm_id,
+        quick_grupo=payload.get('quick_grupo', ''),
     )
 
     order_column = TURNOVER_RATE_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationTurnoverRate.id)

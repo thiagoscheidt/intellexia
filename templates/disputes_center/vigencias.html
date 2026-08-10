@@ -7,6 +7,7 @@
 {% block title %}{{ page_title }} - IntellexIA{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fap-protocol-cell.css') }}" />
 <link rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <style>
@@ -304,6 +305,7 @@
         gap: 0.45rem;
         font-weight: 600;
     }
+
 
     .vigencias-page .status-badges {
         display: flex;
@@ -606,6 +608,23 @@ icon='bi bi-diagram-3') %}
                             <option value="">Todas as empresas</option>
                         </select>
                     </div>
+                    <div class="col-lg-3 col-md-6">
+                        <label for="grupoFilter" class="form-label">Grupo Empresarial</label>
+                        <select id="grupoFilter" name="grupo" class="form-select">
+                            <option value="">Todos os grupos</option>
+                            {% for grupo in fap_group_options or [] %}
+                            <option value="{{ grupo.root }}" {{ 'selected' if selected_grupo==grupo.root else '' }}>
+                                {{ grupo.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-lg-3 col-md-6">
+                        <label for="protocoloFilter" class="form-label">Protocolo administrativo</label>
+                        <input type="text" id="protocoloFilter" name="protocolo" class="form-control"
+                            value="{{ selected_protocolo }}" placeholder="Com ou sem pontuação" autocomplete="off"
+                            title="Aceita 10128.053144/2025-42, 10128053144202542 ou só um trecho do número.">
+                    </div>
                     <div class="col-lg-3 col-md-6 align-self-end pb-1">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="showDeferivel" name="show_deferivel"
@@ -659,6 +678,8 @@ icon='bi bi-diagram-3') %}
                     <input type="hidden" name="client_id" value="{{ selected_client_id }}">
                     <input type="hidden" name="client_cnpj" value="{{ selected_client_cnpj }}">
                     <input type="hidden" name="client_root" value="{{ selected_client_root }}">
+                    <input type="hidden" name="protocolo" value="{{ selected_protocolo }}">
+                    <input type="hidden" name="grupo" value="{{ selected_grupo }}">
                     <input type="hidden" name="show_deferivel" value="1">
                     {% for vigencia_id in markable_vigencia_ids %}
                     <input type="hidden" name="vigencia_ids" value="{{ vigencia_id }}">
@@ -740,6 +761,7 @@ icon='bi bi-diagram-3') %}
                         <thead>
                             <tr>
                                 <th style="width: 110px;">Vigência</th>
+                                <th style="width: 190px;">Protocolo administrativo</th>
                                 <th style="width: 100px;">Benefícios</th>
                                 <th style="width: 100px;">CATs</th>
                                 <th style="width: 100px;">Massas</th>
@@ -755,6 +777,30 @@ icon='bi bi-diagram-3') %}
                             <tr>
                                 <td>
                                     <span class="year-pill">{{ vigencia.vigencia_year or '-' }}</span>
+                                </td>
+                                <td>
+                                    {% if vigencia.fap_protocols %}
+                                    <div class="protocol-list">
+                                        {% for proto in vigencia.fap_protocols %}
+                                        <div class="protocol-item">
+                                            <span class="protocol-instance">{{ proto.instancias_label }}</span>
+                                            {% if can_view_module('fap_panel') %}
+                                            <a class="protocol-code"
+                                                href="{{ url_for('fap_panel.contestacoes_page', protocolo=proto.protocolo) }}"
+                                                data-bs-toggle="tooltip"
+                                                title="{{ proto.detalhe }} · ver no Painel FAP">{{
+                                                proto.protocolo_formatado }}</a>
+                                            {% else %}
+                                            <span class="protocol-code" data-bs-toggle="tooltip"
+                                                title="{{ proto.detalhe }}">{{ proto.protocolo_formatado }}</span>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <span class="protocol-empty" data-bs-toggle="tooltip"
+                                        title="Nenhuma contestação do FAP Web sincronizada para este CNPJ nesta vigência.">—</span>
+                                    {% endif %}
                                 </td>
                                 <td>
                                     <span class="benefit-count">
@@ -1007,6 +1053,11 @@ icon='bi bi-diagram-3') %}
                     theme: 'bootstrap-5', allowClear: true, placeholder: 'Todas as empresas', width: '100%',
                     matcher: window.cnpjSelect2Matcher,
                     language: { noResults: function () { return 'Nenhuma empresa encontrada.'; } }
+                });
+                $('#grupoFilter').select2({
+                    theme: 'bootstrap-5', allowClear: true, placeholder: 'Todos os grupos', width: '100%',
+                    matcher: window.cnpjSelect2Matcher,
+                    language: { noResults: function () { return 'Nenhum grupo encontrado.'; } }
                 });
             }
 

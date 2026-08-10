@@ -1,0 +1,48 @@
+/*
+ * Célula de protocolo administrativo (FAP Web).
+ *
+ * Compartilhada pelas telas do Centro de Contestações: vigências (render no
+ * servidor, via Jinja) e as listagens DataTables de benefícios, CATs, massas
+ * salariais, vínculos e taxas de rotatividade (render no cliente, via
+ * static/js/fap-protocol-cell.js). Mantenha os dois renders usando estas
+ * mesmas classes para que a coluna tenha a mesma aparência em todo o módulo.
+ */
+
+.protocol-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.protocol-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.protocol-instance {
+    flex: 0 0 auto;
+    padding: 0.05rem 0.35rem;
+    border-radius: 6px;
+    background: rgba(108, 117, 125, 0.16);
+    color: #4b5359;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.protocol-code {
+    font-family: var(--bs-font-monospace);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #0b4cb3;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+a.protocol-code:hover {
+    text-decoration: underline;
+}
+
+.protocol-empty {
+    color: #adb5bd;
+}
