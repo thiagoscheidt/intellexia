@@ -8,7 +8,9 @@
      artigo.identifica or 'Matéria do Diário Oficial',
      artigo.orgao_hierarquia or '',
      'bi bi-file-text',
-     [{'label': 'Diário Oficial', 'href': url_for('dou.acervo')},
+     [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
+      {'label': artigo.pub_date.strftime('%d/%m/%Y') if artigo.pub_date else 'Edição',
+       'href': url_for('dou.edicao', data_str=artigo.pub_date.isoformat(), secao=edicao.secao) if artigo.pub_date and edicao else None},
       {'label': 'Matéria', 'active': True}]) }}
 
 <div class="row">
@@ -55,10 +57,16 @@
           <i class="bi bi-file-earmark-pdf me-1"></i>PDF assinado da edição
         </a>
         {% endif %}
-        <a href="{{ url_for('dou.acervo', data=artigo.pub_date.isoformat() if artigo.pub_date else '') }}"
+        {% if artigo.pub_date and edicao %}
+        <a href="{{ url_for('dou.edicao', data_str=artigo.pub_date.isoformat(), secao=edicao.secao) }}"
            class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-left me-1"></i>Voltar à edição de {{ artigo.pub_date.strftime('%d/%m/%Y') }}
+        </a>
+        {% else %}
+        <a href="{{ url_for('dou.edicoes') }}" class="btn btn-outline-secondary btn-sm">
           <i class="bi bi-arrow-left me-1"></i>Voltar ao acervo
         </a>
+        {% endif %}
       </div>
     </div>
   </div>

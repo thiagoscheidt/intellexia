@@ -1,9 +1,19 @@
 """
 Diário Oficial — acervo do DOU capturado do INLABS.
 
-Duas frentes: o **acervo** (navegar por data e seção, filtrar por órgão e tipo
-de ato, ler a matéria, baixar o PDF assinado) e a **captura** (saúde da
-ingestão, com reprocesso de data).
+Navegação em três níveis, do familiar ao específico:
+
+  1. ``/dou``                  edições por data, como a listagem do INLABS —
+                               quem só quer o PDF assinado do dia resolve aqui
+  2. ``/dou/edicao/<data>``    a edição do dia, com uma aba por seção e a lista
+                               de matérias daquela seção (filtro por órgão/tipo)
+  3. ``/dou/materia/<id>``     o inteiro teor da matéria
+
+Mais a aba **Captura** (``/dou/captura``), com a saúde da ingestão.
+
+As matérias são filtradas por ``edition_id``, nunca por ``pub_name``: o
+atributo ``pubName`` vem do XML e não se sabe o que a Imprensa Nacional grava
+nele dentro de um ZIP de edição extra. ``edition_id`` é exato nos dois casos.
 
 Esta tela nunca baixa nada de forma síncrona numa requisição de usuário: o
 download é responsabilidade do cron (scripts/sync_dou.py). O botão
@@ -22,11 +32,13 @@ from flask import (Blueprint, render_template, request, redirect,
 from sqlalchemy import func
 
 from app.models import db, DouEdition, DouArticle, DouSyncRun
+
 from app.services import dou_ingestion_service as ingestion
 
 dou_bp = Blueprint('dou', __name__, url_prefix='/dou')
 
-PER_PAGE = 30
+PER_PAGE_EDICOES = 30
+PER_PAGE_MATERIAS = 50
 
 
 def _parse_data(valor):
@@ -38,62 +50,102 @@ def _parse_data(valor):
         return None
 
 
+# ------------------------------------------------------- nível 1: as edições
+
 @dou_bp.route('/')
-def index():
-    return redirect(url_for('dou.acervo'))
+def edicoes():
+    """Lista as edições por data, da mais recente para a mais antiga.
+
+    É a porta de entrada e espelha a listagem do INLABS: uma linha por dia,
+    com as seções capturadas e o PDF assinado de cada uma. Só aparecem datas
+    com ao menos uma seção processada — fim de semana e feriado, em que nada é
+    publicado, não viram linha vazia.
+    """
+    page = request.args.get('page', 1, type=int)
+
+    paginacao = (db.session.query(DouEdition.data_publicacao)
+                 .filter(DouEdition.status == DouEdition.STATUS_PARSED)
+                 .distinct()
+                 .order_by(DouEdition.data_publicacao.desc())
+                 .paginate(page=page, per_page=PER_PAGE_EDICOES, error_out=False))
+
+    datas = [linha[0] for linha in paginacao.items]
+
+    por_data = {}
+    if datas:
+        for edicao in (DouEdition.query
+                       .filter(DouEdition.data_publicacao.in_(datas))
+                       .order_by(DouEdition.secao).all()):
+            por_data.setdefault(edicao.data_publicacao, []).append(edicao)
+
+    linhas = [
+        {
+            'data': data,
+            'edicoes': [e for e in por_data.get(data, [])
+                        if e.status == DouEdition.STATUS_PARSED],
+            'total_materias': sum(e.qtd_materias or 0 for e in por_data.get(data, [])),
+        }
+        for data in datas
+    ]
+
+    return render_template('dou/edicoes.html', linhas=linhas, paginacao=paginacao,
+                           total_materias=DouArticle.query.count())
 
 
-@dou_bp.route('/acervo')
-def acervo():
-    """Navegação por data e seção, com filtro por órgão e tipo de ato."""
-    data = _parse_data(request.args.get('data'))
+# ---------------------------------------------------- nível 2: a edição do dia
+
+@dou_bp.route('/edicao/<data_str>')
+def edicao(data_str):
+    """A edição de um dia: abas por seção e as matérias da seção escolhida."""
+    data = _parse_data(data_str)
+    if data is None:
+        abort(404)
+
+    todas = (DouEdition.query
+             .filter_by(data_publicacao=data)
+             .order_by(DouEdition.secao).all())
+    if not todas:
+        abort(404)
+
+    # Só viram aba as seções que de fato têm matérias
+    abas = [e for e in todas if e.status == DouEdition.STATUS_PARSED and e.qtd_materias]
+
     secao = (request.args.get('secao') or '').strip().upper()
+    ativa = next((e for e in abas if e.secao == secao), None) or (abas[0] if abas else None)
+
     orgao = (request.args.get('orgao') or '').strip()
     tipo = (request.args.get('tipo') or '').strip()
     page = request.args.get('page', 1, type=int)
 
-    # Datas disponíveis, da mais recente para a mais antiga
-    datas = [
-        d[0] for d in db.session.query(DouEdition.data_publicacao)
-        .filter(DouEdition.status == DouEdition.STATUS_PARSED)
-        .distinct().order_by(DouEdition.data_publicacao.desc()).limit(180).all()
-    ]
-
-    if data is None and datas:
-        data = datas[0]
-
-    edicoes = []
     materias = None
-    if data:
-        edicoes = (DouEdition.query
-                   .filter_by(data_publicacao=data)
-                   .order_by(DouEdition.secao).all())
-
-        query = DouArticle.query.filter(DouArticle.pub_date == data)
-        if secao:
-            query = query.filter(DouArticle.pub_name == secao)
+    tipos = []
+    if ativa is not None:
+        query = DouArticle.query.filter(DouArticle.edition_id == ativa.id)
         if orgao:
             query = query.filter(DouArticle.orgao_hierarquia.ilike(f'%{orgao}%'))
         if tipo:
             query = query.filter(DouArticle.art_type == tipo)
 
-        materias = (query.order_by(DouArticle.pub_name, DouArticle.id)
-                    .paginate(page=page, per_page=PER_PAGE, error_out=False))
+        materias = (query.order_by(DouArticle.id)
+                    .paginate(page=page, per_page=PER_PAGE_MATERIAS, error_out=False))
 
-    tipos = [
-        t[0] for t in db.session.query(DouArticle.art_type)
-        .filter(DouArticle.pub_date == data, DouArticle.art_type.isnot(None))
-        .distinct().order_by(DouArticle.art_type).all()
-    ] if data else []
+        tipos = [
+            t[0] for t in db.session.query(DouArticle.art_type)
+            .filter(DouArticle.edition_id == ativa.id,
+                    DouArticle.art_type.isnot(None))
+            .distinct().order_by(DouArticle.art_type).all()
+        ]
 
-    return render_template(
-        'dou/acervo.html',
-        datas=datas, data_selecionada=data, edicoes=edicoes,
-        materias=materias, tipos=tipos,
-        f_secao=secao, f_orgao=orgao, f_tipo=tipo,
-        secoes=DouEdition.XML_SECTIONS, section_labels=DouEdition.SECTION_LABELS,
-    )
+    return render_template('dou/edicao.html', data=data, abas=abas, ativa=ativa,
+                           nao_publicadas=[e for e in todas
+                                           if e.status == DouEdition.STATUS_NOT_PUBLISHED],
+                           com_erro=[e for e in todas
+                                     if e.status == DouEdition.STATUS_ERROR],
+                           materias=materias, tipos=tipos,
+                           f_orgao=orgao, f_tipo=tipo)
 
+
+# ------------------------------------------------------- nível 3: a matéria
 
 @dou_bp.route('/materia/<int:article_id>')
 def materia(article_id):
@@ -104,16 +156,19 @@ def materia(article_id):
 @dou_bp.route('/edicao/<int:edition_id>/pdf')
 def baixar_pdf(edition_id):
     """Entrega o PDF assinado da edição, se ainda existir em disco."""
-    edicao = DouEdition.query.get_or_404(edition_id)
-    if not edicao.pdf_disponivel:
+    edicao_obj = DouEdition.query.get_or_404(edition_id)
+    if not edicao_obj.pdf_disponivel:
         flash('O PDF assinado desta edição não está disponível.', 'warning')
-        return redirect(url_for('dou.acervo', data=edicao.data_publicacao.isoformat()))
+        return redirect(url_for('dou.edicao',
+                                data_str=edicao_obj.data_publicacao.isoformat()))
 
-    caminho = Path(edicao.pdf_path)
+    caminho = Path(edicao_obj.pdf_path)
     if not caminho.exists():
         abort(404)
     return send_file(caminho.resolve(), as_attachment=True, download_name=caminho.name)
 
+
+# ----------------------------------------------------------------- captura
 
 @dou_bp.route('/captura')
 def captura():

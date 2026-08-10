@@ -8,7 +8,7 @@
      'Captura do Diário Oficial',
      'Estado da ingestão das edições do INLABS',
      'bi bi-activity',
-     [{'label': 'Diário Oficial', 'href': url_for('dou.acervo')},
+     [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
       {'label': 'Captura', 'active': True}]) }}
 
 <div class="row g-3 mb-4">
@@ -77,7 +77,7 @@
             {% for data, secoes, materias in cobertura %}
             <tr>
               <td>
-                <a href="{{ url_for('dou.acervo', data=data.isoformat()) }}" class="text-decoration-none">
+                <a href="{{ url_for('dou.edicao', data_str=data.isoformat()) }}" class="text-decoration-none">
                   {{ data.strftime('%d/%m/%Y') }}
                 </a>
               </td>

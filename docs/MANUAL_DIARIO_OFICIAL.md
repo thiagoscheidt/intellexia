@@ -9,36 +9,58 @@ edições, separa cada matéria publicada e deixa tudo pronto para consulta.
 > substitui a versão certificada** — para uso oficial, baixe o PDF assinado da
 > edição, disponível na própria tela.
 
-## Acervo
+## Como a tela é organizada
 
-É a tela principal. Você escolhe uma **data** e o sistema mostra as seções
-capturadas naquele dia:
+A navegação tem três níveis, do geral ao específico. Você desce só até onde
+precisa.
+
+### 1. Edições
+
+É a tela de entrada, e é parecida com a listagem do portal da Imprensa Nacional:
+**uma linha por dia**, do mais recente para o mais antigo. Em cada linha você vê
+quais seções foram publicadas, quantas matérias o dia teve, e os botões para
+baixar o PDF assinado de cada seção.
+
+**Se você só quer o Diário do dia em PDF, resolve aqui** — sem precisar entrar
+em mais nada.
+
+### 2. A edição do dia
+
+Clicando na data, abre a edição daquele dia com uma **aba por seção**:
 
 - **Seção 1** — atos normativos (portarias, resoluções, decretos).
 - **Seção 2** — pessoal do serviço público federal.
 - **Seção 3** — contratos, licitações e avisos.
 - **Edições Extras** — publicações fora da edição normal do dia.
 
-Abaixo das seções vem a lista de matérias. Clique em qualquer uma para ler o
-inteiro teor.
+Cada aba mostra quantas matérias tem e lista essas matérias.
 
-### Filtros
+> [!INFO] **Matéria é um ato publicado** — uma portaria, um acórdão, um aviso de
+> licitação. Não é um arquivo: o sistema recebe o Diário da Imprensa Nacional e
+> separa cada ato individualmente, para você chegar direto no que interessa em
+> vez de percorrer um PDF de centenas de páginas.
+
+Como uma seção pode ter milhares de matérias no mesmo dia, use os filtros:
 
 | Filtro | Para que serve |
 |---|---|
-| Data | O dia da publicação. A lista começa sempre no dia mais recente capturado. |
-| Seção | Restringe a uma seção do Diário. |
-| Tipo de ato | Portaria, Resolução, Aviso, Extrato — os tipos existentes naquele dia. |
 | Órgão | Busca por parte do nome do órgão. Ex.: digitar `Previdência` traz tudo do Ministério da Previdência Social. |
+| Tipo de ato | Portaria, Resolução, Aviso, Extrato — os tipos existentes naquela seção. |
 
 > [!INFO] Nesta versão ainda **não há busca por palavra dentro do texto** das
 > matérias. A navegação é por data, seção, órgão e tipo de ato.
 
+### 3. A matéria
+
+Clicando numa matéria, você lê o inteiro teor, com a ementa, o órgão, a página e
+o número da edição. Há também um link para a mesma matéria no portal oficial da
+Imprensa Nacional.
+
 ### PDF assinado
 
-Quando a edição tem o PDF assinado guardado, aparece o botão vermelho de PDF ao
-lado da seção. É o arquivo oficial da Imprensa Nacional, com assinatura digital
-— o que você junta em processo.
+Quando a edição tem o PDF assinado guardado, aparece o botão vermelho de PDF —
+tanto na lista de edições quanto dentro da aba da seção. É o arquivo oficial da
+Imprensa Nacional, com assinatura digital: o que você junta em processo.
 
 > [!ALERTA] Os PDFs são guardados por tempo limitado (24 meses, por padrão), por
 > causa do tamanho. O texto das matérias, esse **nunca é apagado**. Se o PDF de

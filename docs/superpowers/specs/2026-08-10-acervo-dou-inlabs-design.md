@@ -339,14 +339,29 @@ Módulo **"Diário Oficial"**, prefixo `/dou`, blueprint `dou_bp`, herdando de
 `templates/layout/base.html` e usando `page_hero`, conforme as convenções de
 frontend do projeto.
 
-### 8.1 Aba Acervo
+### 8.1 Acervo — navegação em três níveis
 
-- Navegação por **data** e **seção**.
-- Lista de matérias com filtro por **órgão** (`orgao_hierarquia`) e **tipo de
-  ato** (`art_type`), paginada.
-- Detalhe da matéria: `identifica`, ementa, texto, órgão, página, edição, e link
-  para a página oficial (`pdf_page`).
-- Download do PDF assinado da edição, quando presente.
+A primeira versão caiu direto na lista de matérias e ficou ilegível: um único
+dia tem ~3.400 matérias, o que dava 115 páginas de rolagem sem nenhum degrau
+antes. Pior, o usuário não reconhecia o que estava vendo ("cada item é um
+XML?"). A hierarquia abaixo resolve os dois problemas.
+
+1. **`/dou` — edições por data.** Porta de entrada, espelhando a listagem do
+   INLABS: uma linha por dia, mais recente primeiro, com as seções capturadas
+   (com contagem), o total de matérias e o PDF assinado de cada seção. Quem só
+   quer o PDF do dia resolve aqui, sem ver matéria nenhuma. Só entram datas com
+   ao menos uma seção `parsed` — fim de semana não vira linha vazia.
+2. **`/dou/edicao/<data>` — a edição do dia.** Uma aba por seção publicada, com
+   a contagem de matérias; a aba ativa lista suas matérias com filtro por
+   **órgão** (`orgao_hierarquia`) e **tipo de ato** (`art_type`), paginadas. O
+   PDF assinado da seção ativa fica ao lado dos filtros. Seções não publicadas e
+   com falha aparecem como nota de rodapé, não como abas vazias.
+3. **`/dou/materia/<id>` — a matéria.** `identifica`, ementa, texto, órgão,
+   página, edição, e link para a página oficial (`pdf_page`).
+
+As matérias são filtradas por **`edition_id`**, nunca por `pub_name`: o
+`pubName` vem do XML e não se sabe o que a Imprensa Nacional grava nele dentro
+de um ZIP de edição extra. `edition_id` é exato nos dois casos.
 
 Sem busca por termo nesta fase (fica para o spec de busca full-text). A navegação
 é por data/seção/órgão/tipo, que os índices do §5.3 atendem.

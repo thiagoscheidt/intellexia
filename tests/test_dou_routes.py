@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from flask import render_template
 
 from main import app
-from app.models import User
+from app.models import User, DouEdition, DouArticle
 from app.utils.permissions import (MODULE_PERMISSIONS, ENDPOINT_MODULE_MAP,
                                    ROLE_DEFAULT_MODULE_PERMISSIONS)
 
@@ -45,7 +45,7 @@ def test_registro_do_modulo():
 def test_rotas_registradas():
     print('\n2. Rotas registradas')
     endpoints = {r.endpoint for r in app.url_map.iter_rules()}
-    for esperado in ('dou.acervo', 'dou.materia', 'dou.captura',
+    for esperado in ('dou.edicoes', 'dou.edicao', 'dou.materia', 'dou.captura',
                      'dou.reprocessar', 'dou.baixar_pdf'):
         check(f'{esperado} existe', esperado in endpoints)
 
@@ -53,19 +53,25 @@ def test_rotas_registradas():
 def test_exige_login():
     print('\n3. Acesso sem login')
     with app.test_client() as c:
-        resposta = c.get('/dou/acervo', follow_redirects=False)
+        resposta = c.get('/dou/', follow_redirects=False)
         check('redireciona para o login', resposta.status_code in (301, 302),
               str(resposta.status_code))
 
 
-def test_acervo_com_login():
-    print('\n4. Acervo com sessão de admin')
+def test_navegacao_em_tres_niveis():
+    """A entrada é a lista de edições; a matéria fica dois cliques adiante."""
+    print('\n4. Navegação em três níveis (sessão de admin)')
     with app.app_context():
         usuario = User.query.filter_by(role='admin').first()
         if usuario is None:
             print('  ⏭️  nenhum usuário admin no banco — pulando')
             return
         user_id, firm_id = usuario.id, usuario.law_firm_id
+        edicao = (DouEdition.query
+                  .filter_by(status=DouEdition.STATUS_PARSED)
+                  .filter(DouEdition.qtd_materias > 0).first())
+        artigo = (DouArticle.query.filter_by(edition_id=edicao.id).first()
+                  if edicao else None)
 
     with app.test_client() as c:
         with c.session_transaction() as sessao:
@@ -73,17 +79,46 @@ def test_acervo_com_login():
             sessao['law_firm_id'] = firm_id
             sessao['user_role'] = 'admin'
 
-        resposta = c.get('/dou/acervo')
-        check('acervo responde 200', resposta.status_code == 200, str(resposta.status_code))
-        check('renderiza o título do módulo',
-              'Diário Oficial'.encode() in resposta.data)
+        # Nível 1
+        resposta = c.get('/dou/')
+        check('nível 1 (edições) responde 200', resposta.status_code == 200,
+              str(resposta.status_code))
+        html = resposta.get_data(as_text=True)
+        check('nível 1 traz o título do módulo', 'Diário Oficial' in html)
 
         resposta = c.get('/dou/captura')
         check('captura responde 200', resposta.status_code == 200, str(resposta.status_code))
 
-        resposta = c.get('/dou/')
-        check('raiz redireciona para o acervo', resposta.status_code in (301, 302),
+        if edicao is None:
+            print('  ⏭️  sem edição capturada — pulando níveis 2 e 3')
+            return
+
+        dia = edicao.data_publicacao.isoformat()
+        check('nível 1 lista a data capturada',
+              edicao.data_publicacao.strftime('%d/%m/%Y') in html)
+
+        # Nível 2
+        resposta = c.get(f'/dou/edicao/{dia}')
+        check('nível 2 (edição do dia) responde 200', resposta.status_code == 200,
               str(resposta.status_code))
+        html = resposta.get_data(as_text=True)
+        check('nível 2 mostra as abas de seção', edicao.secao_label in html)
+        check('nível 2 lista matérias', '/dou/materia/' in html)
+
+        check('data inexistente no acervo dá 404',
+              c.get('/dou/edicao/1900-01-01').status_code == 404)
+        check('data mal formatada dá 404',
+              c.get('/dou/edicao/10-08-2026').status_code == 404)
+
+        # Nível 3
+        if artigo is not None:
+            resposta = c.get(f'/dou/materia/{artigo.id}')
+            check('nível 3 (matéria) responde 200', resposta.status_code == 200,
+                  str(resposta.status_code))
+            check('nível 3 volta para a edição',
+                  f'/dou/edicao/{dia}' in resposta.get_data(as_text=True))
+
+        check('matéria inexistente dá 404', c.get('/dou/materia/999999').status_code == 404)
 
 
 def test_link_no_menu_lateral():
@@ -101,11 +136,11 @@ def test_link_no_menu_lateral():
     """
     print('\n5. Link no menu lateral (usuário só com a permissão dou)')
 
-    with app.test_request_context('/dou/acervo'):
+    with app.test_request_context('/dou/'):
         html = render_template('partials/sidebar.html',
                                can_view_module=lambda k: k == 'dou')
 
-    check('o link do acervo aparece', '/dou/acervo' in html, html[:200])
+    check('o link das edições aparece', '/dou/' in html, html[:200])
     check('o link da captura aparece', '/dou/captura' in html)
     check('o rótulo do módulo aparece', 'Diário Oficial' in html)
     check('é item de primeiro nível, não filho do Painel de Processos',
@@ -122,7 +157,7 @@ def main():
     test_registro_do_modulo()
     test_rotas_registradas()
     test_exige_login()
-    test_acervo_com_login()
+    test_navegacao_em_tres_niveis()
     test_link_no_menu_lateral()
 
     print('\n' + '=' * 60)

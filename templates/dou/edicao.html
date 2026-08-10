@@ -1,0 +1,159 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}DOU de {{ data.strftime('%d/%m/%Y') }}{% endblock %}
+
+{% block content %}
+{{ page_hero(
+     'Diário Oficial de ' ~ data.strftime('%d/%m/%Y'),
+     'Matérias publicadas nesta edição',
+     'bi bi-newspaper',
+     [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
+      {'label': data.strftime('%d/%m/%Y'), 'active': True}]) }}
+
+<div class="row mb-3">
+  <div class="col-12">
+    <a href="{{ url_for('dou.edicoes') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Todas as edições
+    </a>
+  </div>
+</div>
+
+{% if not abas %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-calendar-x display-4 text-muted"></i>
+    <h5 class="mt-3">Nada publicado nesta data</h5>
+    <p class="text-muted mb-0">
+      Fim de semana, feriado ou edição ainda não capturada.
+    </p>
+  </div>
+</div>
+{% else %}
+
+<ul class="nav nav-tabs mb-0">
+  {% for e in abas %}
+  <li class="nav-item">
+    <a class="nav-link {{ 'active' if ativa and e.id == ativa.id else '' }}"
+       href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=e.secao) }}">
+      {{ e.secao_label }}
+      <span class="badge text-bg-secondary ms-1">{{ e.qtd_materias }}</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+
+<div class="card border-0 shadow-sm rounded-top-0">
+  <div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+      <form method="get" class="row g-2 align-items-end flex-grow-1">
+        <input type="hidden" name="secao" value="{{ ativa.secao if ativa }}">
+        <div class="col-md-4">
+          <label class="form-label small text-muted mb-1">Órgão</label>
+          <input type="text" name="orgao" value="{{ f_orgao }}"
+                 class="form-control form-control-sm" placeholder="ex.: Previdência">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">Tipo de ato</label>
+          <select name="tipo" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for t in tipos %}
+            <option value="{{ t }}" {{ 'selected' if t == f_tipo }}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary btn-sm">
+            <i class="bi bi-funnel me-1"></i>Filtrar
+          </button>
+          {% if f_orgao or f_tipo %}
+          <a href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao) }}"
+             class="btn btn-outline-secondary btn-sm">Limpar</a>
+          {% endif %}
+        </div>
+      </form>
+
+      {% if ativa and ativa.pdf_disponivel %}
+      <a href="{{ url_for('dou.baixar_pdf', edition_id=ativa.id) }}"
+         class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-file-earmark-pdf me-1"></i>PDF assinado desta seção
+      </a>
+      {% endif %}
+    </div>
+
+    {% if materias and materias.items %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Matéria</th>
+            <th style="width: 32%;">Órgão</th>
+            <th style="width: 80px;">Página</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in materias.items %}
+          <tr>
+            <td>
+              <a href="{{ url_for('dou.materia', article_id=m.id) }}"
+                 class="fw-semibold text-decoration-none">
+                {{ m.identifica or m.titulo or '(sem identificação)' }}
+              </a>
+              {% if m.ementa %}
+              <div class="text-muted small text-truncate" style="max-width: 560px;">{{ m.ementa }}</div>
+              {% endif %}
+            </td>
+            <td class="small text-muted">{{ m.orgao_hierarquia or '—' }}</td>
+            <td class="small">{{ m.pagina or '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if materias.pages > 1 %}
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      <small class="text-muted">
+        Página {{ materias.page }} de {{ materias.pages }} —
+        {{ '{:,}'.format(materias.total).replace(',', '.') }} matéria(s)
+      </small>
+      <div class="btn-group btn-group-sm">
+        {% if materias.has_prev %}
+        <a class="btn btn-outline-secondary"
+           href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao, orgao=f_orgao, tipo=f_tipo, page=materias.prev_num) }}">Anterior</a>
+        {% endif %}
+        {% if materias.has_next %}
+        <a class="btn btn-outline-secondary"
+           href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao, orgao=f_orgao, tipo=f_tipo, page=materias.next_num) }}">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-search display-6"></i>
+      <p class="mt-2 mb-0">Nenhuma matéria para os filtros escolhidos.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endif %}
+
+{% if nao_publicadas or com_erro %}
+<p class="text-muted small mt-3 mb-0">
+  {% if nao_publicadas %}
+  <i class="bi bi-dash-circle me-1"></i>Sem publicação nesta data:
+  {{ nao_publicadas | map(attribute='secao') | join(', ') }}.
+  {% endif %}
+  {% if com_erro %}
+  <span class="text-danger">
+    <i class="bi bi-exclamation-triangle me-1"></i>Falha na captura:
+    {{ com_erro | map(attribute='secao') | join(', ') }} —
+    <a href="{{ url_for('dou.captura') }}">reprocessar</a>.
+  </span>
+  {% endif %}
+</p>
+{% endif %}
+{% endblock %}

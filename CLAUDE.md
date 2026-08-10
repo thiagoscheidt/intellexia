@@ -144,7 +144,7 @@ intellexia/
 | `admin_users` | — | Gerenciamento de usuários (admin-only) |
 | `access_audit` | `/admin/access-audit` | Atividade de usuários (admin-only): último login, telas acessadas, online agora. Visitas de tela agregadas por dia em `user_page_visits`, gravadas pelo middleware no mesmo commit de `last_activity` |
 | `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
-| `dou` | `/dou` | **Diário Oficial**: acervo do DOU capturado do INLABS (Imprensa Nacional). Captura diária dos ZIPs de XML das seções `DO1 DO2 DO3 DO1E DO2E DO3E` mais os PDFs assinados, quebrando cada edição matéria a matéria. Tela de acervo (navegação por data/seção, filtro por órgão e tipo de ato) e de captura (cobertura, falhas, reprocesso) |
+| `dou` | `/dou` | **Diário Oficial**: acervo do DOU capturado do INLABS (Imprensa Nacional). Captura diária dos ZIPs de XML das seções `DO1 DO2 DO3 DO1E DO2E DO3E` mais os PDFs assinados, quebrando cada edição matéria a matéria. Acervo em três níveis — edições por data (espelha a listagem do INLABS, com o PDF assinado) → edição do dia com aba por seção e filtro por órgão/tipo → matéria — mais a tela de captura (cobertura, falhas, reprocesso) |
 | `communications` | `/comunicacoes` | **Monitoramento de Processos**: comunicações processuais por fonte de informação (`ProcessCommunication.source` — hoje só `comunica_pje`; novas fontes = nova constante `SOURCE_*` + rótulo em `SOURCE_LABELS`). Radar por OAB, inteiro teor, controle de lidas, descoberta automática de processos. O nome de exibição é "Monitoramento de Processos"; endpoint/URL/módulo permanecem `communications` |
 
 ### Documentação do usuário (Manual + Assistente "pergunte ao manual")
