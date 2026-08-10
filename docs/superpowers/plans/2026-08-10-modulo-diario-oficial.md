@@ -607,7 +607,10 @@ class DouArticle(db.Model):
     titulo = db.Column(db.Text)
     subtitulo = db.Column(db.Text)
 
-    texto = db.Column(db.Text(16777215))        # MEDIUMTEXT — texto limpo
+    # Texto longo: o comprimento declarado faz o MySQL escolher LONGTEXT (o
+    # TEXT padrão são 64 KB em bytes, e matéria de DOU passa disso com folga —
+    # foi o que obrigou o ALTER de process_communications.texto no passado).
+    texto = db.Column(db.Text(16777215))        # texto limpo, sem tags
     texto_html = db.Column(db.Text(16777215))   # conteúdo original de <Texto>
     raw_xml = db.Column(db.Text(16777215))      # o <article> inteiro, verbatim
 

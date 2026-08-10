@@ -214,7 +214,7 @@ Uma linha por matéria (`<article>` do XML).
 | `art_class` | String(255) | |
 | `ementa` | Text | |
 | `titulo` / `subtitulo` | Text | |
-| `texto` | `db.Text(16777215)` | MEDIUMTEXT — texto limpo, sem tags |
+| `texto` | `db.Text(16777215)` | LONGTEXT no MySQL — texto limpo, sem tags |
 | `texto_html` | `db.Text(16777215)` | conteúdo original de `<Texto>` |
 | `raw_xml` | `db.Text(16777215)` | o `<article>` inteiro, verbatim |
 | `hash` | String(64) | SHA-256 do conteúdo — **UNIQUE** |
