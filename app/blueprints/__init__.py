@@ -23,6 +23,7 @@ from app.blueprints.fap_review import fap_review_bp
 from app.blueprints.impugnacao_references import impugnacao_references_bp
 from app.blueprints.docs import docs_bp
 from app.blueprints.communications import communications_bp
+from app.blueprints.dou import dou_bp
 
 __all__ = [
     'auth_bp',
@@ -47,4 +48,5 @@ __all__ = [
     'impugnacao_references_bp',
     'docs_bp',
     'communications_bp',
+    'dou_bp',
 ]

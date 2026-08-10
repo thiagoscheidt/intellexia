@@ -1,0 +1,127 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Captura do Diário Oficial{% endblock %}
+
+{% block content %}
+{{ page_hero(
+     'Captura do Diário Oficial',
+     'Estado da ingestão das edições do INLABS',
+     'bi bi-activity',
+     [{'label': 'Diário Oficial', 'href': url_for('dou.acervo')},
+      {'label': 'Captura', 'active': True}]) }}
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="text-muted small">Matérias no acervo</div>
+        <div class="h3 mb-0">{{ '{:,}'.format(total_materias).replace(',', '.') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        <form method="post" action="{{ url_for('dou.reprocessar') }}" class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label small text-muted mb-1">Reprocessar data</label>
+            <input type="date" name="data" class="form-control form-control-sm" required>
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-arrow-clockwise me-1"></i>Reprocessar
+            </button>
+          </div>
+          <div class="col">
+            <small class="text-muted d-block">
+              Rebaixa a data do INLABS e reprocessa. Seguro: reprocessar atualiza, nunca duplica.
+            </small>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if com_erro %}
+<div class="card border-0 shadow-sm mb-4 border-start border-danger border-4">
+  <div class="card-header bg-white fw-semibold text-danger">
+    <i class="bi bi-exclamation-triangle me-1"></i>Edições com falha ({{ com_erro|length }})
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-light"><tr><th>Data</th><th>Seção</th><th>Erro</th></tr></thead>
+      <tbody>
+        {% for e in com_erro %}
+        <tr>
+          <td>{{ e.data_publicacao.strftime('%d/%m/%Y') }}</td>
+          <td>{{ e.secao }}</td>
+          <td class="small text-muted">{{ e.error_message or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white fw-semibold">Cobertura por dia</div>
+      <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-light"><tr><th>Data</th><th>Seções</th><th>Matérias</th></tr></thead>
+          <tbody>
+            {% for data, secoes, materias in cobertura %}
+            <tr>
+              <td>
+                <a href="{{ url_for('dou.acervo', data=data.isoformat()) }}" class="text-decoration-none">
+                  {{ data.strftime('%d/%m/%Y') }}
+                </a>
+              </td>
+              <td>{{ secoes }}</td>
+              <td>{{ materias or 0 }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="text-center text-muted py-4">Nenhuma edição capturada.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white fw-semibold">Execuções recentes</div>
+      <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr><th>Início</th><th>Modo</th><th>Novas</th><th>Atual.</th><th>Erros</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {% for r in execucoes %}
+            <tr>
+              <td class="small">{{ r.iniciado_em|datetime_sp }}</td>
+              <td class="small">{{ r.modo }}</td>
+              <td>{{ r.materias_inseridas }}</td>
+              <td>{{ r.materias_atualizadas }}</td>
+              <td>{{ r.erros }}</td>
+              <td>
+                <span class="badge text-bg-{{ 'success' if r.status == 'success' else ('warning' if r.status == 'partial' else ('danger' if r.status == 'error' else 'secondary')) }}">
+                  {{ r.status }}
+                </span>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center text-muted py-4">Nenhuma execução registrada.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

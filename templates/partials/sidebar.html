@@ -292,6 +292,16 @@
               </a>
             </li>
             {% endif %}
+            {% if can_view_module('dou') %}
+            <li class="nav-item">
+              <a href="{{ url_for('dou.acervo') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('dou.') else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-newspaper" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;" title="Diário Oficial da União">Diário Oficial</p>
+              </a>
+            </li>
+            {% endif %}
             {% if can_view_module('process_panel') %}
             <li class="nav-item">
               <a href="{{ url_for('process_panel.list_all_benefits') }}"

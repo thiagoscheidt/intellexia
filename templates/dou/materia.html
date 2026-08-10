@@ -1,0 +1,66 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}{{ artigo.identifica or 'Matéria do DOU' }}{% endblock %}
+
+{% block content %}
+{{ page_hero(
+     artigo.identifica or 'Matéria do Diário Oficial',
+     artigo.orgao_hierarquia or '',
+     'bi bi-file-text',
+     [{'label': 'Diário Oficial', 'href': url_for('dou.acervo')},
+      {'label': 'Matéria', 'active': True}]) }}
+
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-body">
+        {% if artigo.ementa %}
+        <div class="alert alert-light border">
+          <div class="small text-muted mb-1">Ementa</div>
+          {{ artigo.ementa }}
+        </div>
+        {% endif %}
+        {% if artigo.titulo %}<h5>{{ artigo.titulo }}</h5>{% endif %}
+        {% if artigo.subtitulo %}<h6 class="text-muted">{{ artigo.subtitulo }}</h6>{% endif %}
+        <div class="dou-texto mt-3" style="white-space: pre-wrap; line-height: 1.7;">{{ artigo.texto }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-4">
+      <div class="card-header bg-white fw-semibold">Dados da publicação</div>
+      <div class="card-body small">
+        <dl class="row mb-0">
+          <dt class="col-5 text-muted">Seção</dt><dd class="col-7">{{ artigo.pub_name }}</dd>
+          <dt class="col-5 text-muted">Data</dt>
+          <dd class="col-7">{{ artigo.pub_date.strftime('%d/%m/%Y') if artigo.pub_date else '—' }}</dd>
+          <dt class="col-5 text-muted">Edição</dt><dd class="col-7">{{ artigo.edicao or '—' }}</dd>
+          <dt class="col-5 text-muted">Página</dt><dd class="col-7">{{ artigo.pagina or '—' }}</dd>
+          <dt class="col-5 text-muted">Tipo</dt><dd class="col-7">{{ artigo.art_type or '—' }}</dd>
+          <dt class="col-5 text-muted">Órgão</dt><dd class="col-7">{{ artigo.orgao_hierarquia or '—' }}</dd>
+        </dl>
+      </div>
+      <div class="card-footer bg-white d-grid gap-2">
+        {% if artigo.pdf_page %}
+        <a href="{{ artigo.pdf_page }}" target="_blank" rel="noopener"
+           class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-box-arrow-up-right me-1"></i>Ver no portal oficial
+        </a>
+        {% endif %}
+        {% if edicao and edicao.pdf_disponivel %}
+        <a href="{{ url_for('dou.baixar_pdf', edition_id=edicao.id) }}"
+           class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-file-earmark-pdf me-1"></i>PDF assinado da edição
+        </a>
+        {% endif %}
+        <a href="{{ url_for('dou.acervo', data=artigo.pub_date.isoformat() if artigo.pub_date else '') }}"
+           class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-left me-1"></i>Voltar ao acervo
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
