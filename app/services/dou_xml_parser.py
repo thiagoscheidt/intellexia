@@ -70,6 +70,14 @@ def _parse_date(value: str | None) -> date | None:
         return None
 
 
+def _parse_int(value: str | None) -> int | None:
+    """Só os dígitos: 'numberPage' é texto e pode vir vazio ou fora do padrão."""
+    if not value:
+        return None
+    digitos = ''.join(c for c in value if c.isdigit())
+    return int(digitos) if digitos else None
+
+
 def _clean(value: str | None) -> str | None:
     """Normaliza texto de tag: vazio vira None, para não poluir o banco."""
     if value is None:
@@ -113,6 +121,7 @@ def parse_article_xml(xml_bytes: bytes) -> list[dict]:
     for article in elementos:
         dados = {chave: _clean(article.get(attr)) for chave, attr in _ATTR_MAP.items()}
         dados['pub_date'] = _parse_date(article.get('pubDate'))
+        dados['pagina_num'] = _parse_int(dados['pagina'])
 
         body = article.find('body')
         for chave, tag in _BODY_MAP.items():

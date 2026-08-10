@@ -3883,7 +3883,12 @@ class DouArticle(db.Model):
     pub_date = db.Column(db.Date, index=True)
 
     edicao = db.Column(db.String(20))
-    pagina = db.Column(db.String(20))
+    pagina = db.Column(db.String(20))           # como veio do XML, verbatim
+    # Mesma página como inteiro, só para ordenar: a ordem de página é a ordem de
+    # leitura do jornal, e ordenar pela coluna de texto daria 1, 101, 103, ..., 2.
+    # Coluna própria (em vez de CAST na query) para o índice ser usável e para
+    # não depender de sintaxe específica de MySQL ou SQLite.
+    pagina_num = db.Column(db.Integer, index=True)
     pdf_page = db.Column(db.Text)               # URL da página no pesquisa.in.gov.br
 
     orgao_hierarquia = db.Column(db.String(500), index=True)   # artCategory

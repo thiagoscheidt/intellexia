@@ -43,6 +43,8 @@ def test_materia_completa():
     check('pub_date vira date', a['pub_date'] == date(2026, 8, 10), repr(a['pub_date']))
     check('edicao', a['edicao'] == '152', repr(a['edicao']))
     check('pagina', a['pagina'] == '42', repr(a['pagina']))
+    check('pagina_num vira inteiro, para ordenar',
+          a['pagina_num'] == 42 and isinstance(a['pagina_num'], int), repr(a['pagina_num']))
     check('art_type', a['art_type'] == 'Portaria', repr(a['art_type']))
     check('art_class', a['art_class'] == '00012:00003', repr(a['art_class']))
     check(
@@ -81,6 +83,7 @@ def test_atributos_ausentes():
     check('parseia sem erro', len(artigos) == 1, f'veio {len(artigos)}')
     a = artigos[0]
     check('pub_date ausente vira None', a['pub_date'] is None, repr(a['pub_date']))
+    check('pagina_num sem página vira None', a['pagina_num'] is None, repr(a['pagina_num']))
     check('art_type ausente vira None', a['art_type'] is None, repr(a['art_type']))
     check('ementa ausente vira None', a['ementa'] is None, repr(a['ementa']))
     check('texto ausente vira string vazia', a['texto'] == '', repr(a['texto']))

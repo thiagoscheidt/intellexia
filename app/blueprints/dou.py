@@ -47,6 +47,13 @@ MESES = ('jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul',
          'ago', 'set', 'out', 'nov', 'dez')
 
 
+ORDENS = {
+    'pagina': 'Página do Diário',
+    'orgao': 'Órgão',
+    'tipo': 'Tipo de ato',
+}
+
+
 def _parse_data(valor):
     if not valor:
         return None
@@ -54,6 +61,26 @@ def _parse_data(valor):
         return datetime.strptime(valor, '%Y-%m-%d').date()
     except ValueError:
         return None
+
+
+def _ordenacao(ordem):
+    """Critérios de ORDER BY, sempre terminando em ``id``.
+
+    Página é o padrão porque é a ordem de leitura do jornal impresso. Sem isso a
+    listagem saía na ordem em que os arquivos vinham do ZIP — arbitrária, com a
+    página pulando 117, 26, 116, 26.
+
+    ``pagina_num.is_(None)`` como primeiro critério joga as páginas nulas para o
+    fim: MySQL não aceita NULLS LAST, e o booleano ordena False antes de True
+    nos dois bancos. O ``id`` no fim garante ordem estável na paginação — sem
+    ele, empates fazem LIMIT/OFFSET repetir e pular linhas.
+    """
+    pagina = (DouArticle.pagina_num.is_(None), DouArticle.pagina_num)
+    if ordem == 'orgao':
+        return (DouArticle.orgao_hierarquia, *pagina, DouArticle.id)
+    if ordem == 'tipo':
+        return (DouArticle.art_type, *pagina, DouArticle.id)
+    return (*pagina, DouArticle.id)
 
 
 # ------------------------------------------------------- nível 1: as edições
@@ -140,6 +167,7 @@ def edicao(data_str):
 
     orgao = (request.args.get('orgao') or '').strip()
     tipo = (request.args.get('tipo') or '').strip()
+    ordem = request.args.get('ordem') if request.args.get('ordem') in ORDENS else 'pagina'
     page = request.args.get('page', 1, type=int)
 
     materias = None
@@ -151,7 +179,7 @@ def edicao(data_str):
         if tipo:
             query = query.filter(DouArticle.art_type == tipo)
 
-        materias = (query.order_by(DouArticle.id)
+        materias = (query.order_by(*_ordenacao(ordem))
                     .paginate(page=page, per_page=PER_PAGE_MATERIAS, error_out=False))
 
         tipos = [
@@ -166,8 +194,8 @@ def edicao(data_str):
                                            if e.status == DouEdition.STATUS_NOT_PUBLISHED],
                            com_erro=[e for e in todas
                                      if e.status == DouEdition.STATUS_ERROR],
-                           materias=materias, tipos=tipos,
-                           f_orgao=orgao, f_tipo=tipo)
+                           materias=materias, tipos=tipos, ordens=ORDENS,
+                           f_orgao=orgao, f_tipo=tipo, f_ordem=ordem)
 
 
 # ------------------------------------------------------- nível 3: a matéria
