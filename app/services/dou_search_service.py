@@ -58,10 +58,15 @@ TAM_TRECHO = 40
 # escapa o texto original. Como o texto do DOU chega com '<' e '&' literais
 # (6 em 5.000 matérias têm '<', p.ex. "Site da SEAD <centraldecompras.pi.gov.br>"),
 # mandar '<mark>' direto significaria injetar HTML do documento na página.
-# Pedimos caracteres de controle como marca, escapamos tudo, e só então
-# trocamos a marca pela tag de verdade. STX/ETX não ocorrem em texto do DOU.
-MARCA_INI = '\x02'
-MARCA_FIM = '\x03'
+# Pedimos um marcador neutro, escapamos tudo, e só então trocamos o marcador
+# pela tag de verdade.
+#
+# ASCII imprimível de propósito: a primeira versão usava STX/ETX (\x02/\x03) e
+# caractere de controle atravessa JSON e proxies de forma imprevisível entre
+# versões do servidor. O marcador abaixo não ocorre em texto do DOU e não
+# depende de como a camada de transporte trata bytes de controle.
+MARCA_INI = '@@DOUMARK@@'
+MARCA_FIM = '@@/DOUMARK@@'
 TAM_JANELA_IDENTIFICADOR = 240
 
 # Formatos conferidos contra o acervo real:
@@ -179,10 +184,17 @@ def get_index(nome: str | None = None):
             indice.update_sortable_attributes(_SORTABLE).task_uid,
             timeout_in_ms=20000)
 
-    client.wait_for_task(
-        indice.update_typo_tolerance(
-            TypoTolerance(enabled=True, disable_on_attributes=_SEM_TOLERANCIA)
-        ).task_uid, timeout_in_ms=20000)
+    # Comparar antes de gravar, como nos três acima. Sem a comparação, TODA
+    # busca enfileirava uma tarefa de settings e ficava esperando por ela: com
+    # o Meilisearch ocupado (uma captura ou reindexação em curso), a espera
+    # estourava o timeout e a tela mostrava "A busca falhou".
+    tolerancia = indice.get_typo_tolerance()
+    if (not tolerancia.enabled
+            or list(tolerancia.disable_on_attributes or []) != _SEM_TOLERANCIA):
+        client.wait_for_task(
+            indice.update_typo_tolerance(
+                TypoTolerance(enabled=True, disable_on_attributes=_SEM_TOLERANCIA)
+            ).task_uid, timeout_in_ms=20000)
 
     return indice
 
