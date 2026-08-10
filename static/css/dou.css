@@ -1,0 +1,281 @@
+/* Diário Oficial — refinamento visual da lista de edições.
+
+   O DOU é um jornal diário em três cadernos de espessura muito desigual: a
+   Seção 3 costuma ter 5 a 6 vezes o volume da Seção 1. A tabela anterior
+   escondia isso em números soltos e repetia o nome de cada seção duas vezes
+   por linha (badge de contagem + botão de PDF).
+
+   Aqui cada edição é uma faixa: a data manda visualmente (é ela o assunto da
+   linha) e cada caderno vira uma linha própria com barra proporcional — a
+   barra é o elemento-assinatura do módulo e mostra de relance onde está o
+   volume do dia. O PDF fica preso ao caderno a que pertence, o que elimina a
+   duplicação.
+
+   Cor econômica, na regra do communications.css: um tom estável por caderno
+   (isso é informação — qual seção — não enfeite) e nada mais. Todos os valores
+   saem de var(--bs-*) ou de tokens próprios com variante escura. */
+
+.dou-page {
+  --dou-s1: #5b6bc0;
+  --dou-s2: #3f8f83;
+  --dou-s3: #b07d33;
+  --dou-trilho: var(--bs-secondary-bg);
+}
+
+[data-bs-theme="dark"] .dou-page {
+  --dou-s1: #8b98e0;
+  --dou-s2: #5fb3a5;
+  --dou-s3: #d3a259;
+  --dou-trilho: rgba(255, 255, 255, .08);
+}
+
+/* Linha de metadados do acervo — período coberto, contagens. Uma linha
+   discreta, não cartões de estatística: o assunto da tela é a lista. */
+.dou-resumo {
+  font-size: .82rem;
+  color: var(--bs-secondary-color);
+}
+
+.dou-resumo strong {
+  color: var(--bs-body-color);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------ a edição */
+
+.dou-edicao {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  gap: 1.25rem;
+  align-items: center;
+  padding: .9rem 1.15rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 14px;
+  background: var(--bs-body-bg);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.dou-edicao + .dou-edicao {
+  margin-top: .6rem;
+}
+
+.dou-edicao:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, .07);
+  border-color: var(--bs-primary-border-subtle);
+}
+
+/* A edição mais recente ganha o trilho de atenção — mesma gramática da linha
+   não lida do Monitoramento de Processos.
+   O hover acima também define box-shadow e tem especificidade maior, então o
+   trilho precisa ser repetido no estado de hover para não sumir sob o mouse. */
+.dou-edicao--recente {
+  box-shadow: inset 3px 0 0 var(--bs-primary);
+}
+
+.dou-edicao--recente:hover {
+  box-shadow: inset 3px 0 0 var(--bs-primary), 0 12px 24px rgba(0, 0, 0, .07);
+}
+
+/* -------------------------------------------------- bloco da data (esquerda) */
+
+.dou-data {
+  text-align: center;
+  line-height: 1.05;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.dou-data__semana {
+  font-size: .66rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--bs-secondary-color);
+}
+
+.dou-data__dia {
+  font-size: 2.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--bs-body-color);
+}
+
+.dou-data__mes {
+  font-size: .72rem;
+  color: var(--bs-secondary-color);
+}
+
+.dou-edicao:hover .dou-data__dia {
+  color: var(--bs-primary);
+}
+
+/* --------------------------------------------------- os cadernos (centro) */
+
+.dou-cadernos {
+  min-width: 0;
+}
+
+/* Duas colunas: o caderno inteiro é um link; o PDF é outro, ao lado. Evita
+   display:contents no <a>, que já apagou a semântica do link em navegadores
+   e não é necessário aqui. */
+.dou-caderno {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 1.75rem;
+  gap: .55rem;
+  align-items: center;
+  padding: .18rem 0;
+}
+
+.dou-caderno__link {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 9.5rem) minmax(0, 1fr) 4rem;
+  gap: .55rem;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.dou-caderno__link:hover .dou-caderno__assunto {
+  color: var(--bs-primary);
+  text-decoration: underline;
+}
+
+.dou-caderno__num {
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-align: center;
+  padding: .1rem 0;
+  border-radius: 5px;
+  color: #fff;
+}
+
+.dou-caderno--s1 .dou-caderno__num { background: var(--dou-s1); }
+.dou-caderno--s2 .dou-caderno__num { background: var(--dou-s2); }
+.dou-caderno--s3 .dou-caderno__num { background: var(--dou-s3); }
+
+.dou-caderno__assunto {
+  font-size: .82rem;
+  color: var(--bs-body-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A barra: espessura do caderno naquele dia, em escala comum à página */
+.dou-barra {
+  height: 7px;
+  border-radius: 4px;
+  background: var(--dou-trilho);
+  overflow: hidden;
+}
+
+.dou-barra__preenche {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  min-width: 3px;
+}
+
+.dou-caderno--s1 .dou-barra__preenche { background: var(--dou-s1); }
+.dou-caderno--s2 .dou-barra__preenche { background: var(--dou-s2); }
+.dou-caderno--s3 .dou-barra__preenche { background: var(--dou-s3); }
+
+.dou-caderno__qtd {
+  font-size: .78rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--bs-secondary-color);
+}
+
+/* PDF preso ao caderno a que pertence, discreto até o hover */
+.dou-pdf {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 6px;
+  font-size: .85rem;
+  color: var(--bs-secondary-color);
+  text-decoration: none;
+  transition: color .15s ease, background-color .15s ease;
+}
+
+.dou-pdf:hover,
+.dou-pdf:focus-visible {
+  color: var(--bs-danger);
+  background: var(--bs-danger-bg-subtle);
+}
+
+/* --------------------------------------------------- total do dia (direita) */
+
+.dou-total {
+  text-align: right;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.dou-total__num {
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--bs-body-color);
+}
+
+.dou-total__rot {
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--bs-secondary-color);
+}
+
+/* ------------------------------------------------------------ responsivo */
+
+@media (max-width: 767.98px) {
+  .dou-edicao {
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: .85rem;
+    row-gap: .7rem;
+  }
+
+  .dou-data__dia { font-size: 1.7rem; }
+
+  /* o total desce para a linha de baixo, alinhado à esquerda do bloco */
+  .dou-total {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  /* sem espaço para a barra no celular: a contagem já informa. As colunas são
+     redeclaradas para três — deixar quatro com um item oculto deslocaria a
+     contagem para a coluna errada. */
+  .dou-caderno__link {
+    grid-template-columns: 1.9rem minmax(0, 1fr) 3.4rem;
+  }
+
+  .dou-barra { display: none; }
+}
+
+/* ------------------------------------------------------------ acessibilidade */
+
+.dou-data:focus-visible,
+.dou-caderno__link:focus-visible,
+.dou-pdf:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dou-edicao,
+  .dou-pdf {
+    transition: none;
+  }
+
+  .dou-edicao:hover {
+    transform: none;
+  }
+}

@@ -40,6 +40,12 @@ dou_bp = Blueprint('dou', __name__, url_prefix='/dou')
 PER_PAGE_EDICOES = 30
 PER_PAGE_MATERIAS = 50
 
+# Rótulos de data em português: strftime depende de locale instalado no
+# servidor, o que não se pode assumir.
+DIAS_SEMANA = ('seg', 'ter', 'qua', 'qui', 'sex', 'sáb', 'dom')
+MESES = ('jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul',
+         'ago', 'set', 'out', 'nov', 'dez')
+
 
 def _parse_data(valor):
     if not valor:
@@ -78,17 +84,36 @@ def edicoes():
                        .order_by(DouEdition.secao).all()):
             por_data.setdefault(edicao.data_publicacao, []).append(edicao)
 
-    linhas = [
-        {
+    linhas = []
+    for data in datas:
+        publicadas = [e for e in por_data.get(data, [])
+                      if e.status == DouEdition.STATUS_PARSED]
+        linhas.append({
             'data': data,
-            'edicoes': [e for e in por_data.get(data, [])
-                        if e.status == DouEdition.STATUS_PARSED],
-            'total_materias': sum(e.qtd_materias or 0 for e in por_data.get(data, [])),
-        }
-        for data in datas
-    ]
+            'dia': data.day,
+            'semana': DIAS_SEMANA[data.weekday()],
+            'mes_ano': f'{MESES[data.month - 1]} {data.year}',
+            'edicoes': publicadas,
+            'total_materias': sum(e.qtd_materias or 0 for e in publicadas),
+        })
+
+    # Escala das barras: o maior caderno visível na página. Comparar contra o
+    # maior da página (e não contra o do próprio dia) mantém as barras
+    # comparáveis entre dias diferentes.
+    maior_caderno = max(
+        (e.qtd_materias or 0 for linha in linhas for e in linha['edicoes']),
+        default=0,
+    ) or 1
+
+    periodo = db.session.query(
+        func.min(DouEdition.data_publicacao), func.max(DouEdition.data_publicacao)
+    ).filter(DouEdition.status == DouEdition.STATUS_PARSED).first()
 
     return render_template('dou/edicoes.html', linhas=linhas, paginacao=paginacao,
+                           maior_caderno=maior_caderno,
+                           periodo_inicio=periodo[0] if periodo else None,
+                           periodo_fim=periodo[1] if periodo else None,
+                           total_edicoes=paginacao.total,
                            total_materias=DouArticle.query.count())
 
 

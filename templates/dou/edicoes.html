@@ -3,7 +3,13 @@
 
 {% block title %}Diário Oficial{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="dou-page">
+
 {{ page_hero(
      'Diário Oficial da União',
      'Edições capturadas do portal da Imprensa Nacional',
@@ -11,23 +17,31 @@
      [{'label': 'Início', 'href': url_for('dashboard.index')},
       {'label': 'Diário Oficial', 'active': True}]) }}
 
-<div class="row mb-3">
-  <div class="col-12 d-flex justify-content-between align-items-center">
-    <small class="text-muted">
-      {% if total_materias %}
-      {{ '{:,}'.format(total_materias).replace(',', '.') }} matérias no acervo
-      {% endif %}
-    </small>
-    <a href="{{ url_for('dou.captura') }}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-activity me-1"></i>Estado da captura
-    </a>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div class="dou-resumo">
+    {% if total_edicoes %}
+    <strong>{{ '{:,}'.format(total_edicoes).replace(',', '.') }}</strong>
+    {{ 'edição' if total_edicoes == 1 else 'edições' }}
+    <span class="mx-1">·</span>
+    {% if periodo_inicio == periodo_fim %}
+    {{ periodo_fim.strftime('%d/%m/%Y') }}
+    {% else %}
+    {{ periodo_inicio.strftime('%d/%m/%Y') }} a {{ periodo_fim.strftime('%d/%m/%Y') }}
+    {% endif %}
+    <span class="mx-1">·</span>
+    <strong>{{ '{:,}'.format(total_materias).replace(',', '.') }}</strong>
+    {{ 'matéria' if total_materias == 1 else 'matérias' }}
+    {% endif %}
   </div>
+  <a href="{{ url_for('dou.captura') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-activity me-1"></i>Estado da captura
+  </a>
 </div>
 
 {% if not linhas %}
 <div class="card border-0 shadow-sm">
   <div class="card-body text-center py-5">
-    <i class="bi bi-inbox display-4 text-muted"></i>
+    <i class="bi bi-newspaper display-4 text-muted"></i>
     <h5 class="mt-3">Nenhuma edição capturada ainda</h5>
     <p class="text-muted mb-0">
       Rode <code>uv run python scripts/sync_dou.py</code> ou aguarde a próxima
@@ -37,82 +51,80 @@
 </div>
 {% else %}
 
-<div class="card border-0 shadow-sm">
-  <div class="card-body p-0">
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead class="table-light">
-          <tr>
-            <th style="width: 190px;">Edição</th>
-            <th>Seções publicadas</th>
-            <th class="text-end" style="width: 120px;">Matérias</th>
-            <th class="text-end" style="width: 210px;">PDF assinado</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for linha in linhas %}
-          <tr>
-            <td>
-              <a href="{{ url_for('dou.edicao', data_str=linha.data.isoformat()) }}"
-                 class="fw-semibold text-decoration-none">
-                <i class="bi bi-calendar3 me-1 text-muted"></i>{{ linha.data.strftime('%d/%m/%Y') }}
-              </a>
-            </td>
-            <td>
-              {% for e in linha.edicoes %}
-              <a href="{{ url_for('dou.edicao', data_str=linha.data.isoformat(), secao=e.secao) }}"
-                 class="badge text-bg-light border text-decoration-none me-1"
-                 title="{{ e.secao_label }} — {{ e.qtd_materias }} matéria(s)">
-                {{ e.secao }} <span class="text-muted">({{ e.qtd_materias }})</span>
-              </a>
-              {% endfor %}
-            </td>
-            <td class="text-end">{{ '{:,}'.format(linha.total_materias).replace(',', '.') }}</td>
-            <td class="text-end">
-              {% for e in linha.edicoes %}
-                {% if e.pdf_disponivel %}
-                <a href="{{ url_for('dou.baixar_pdf', edition_id=e.id) }}"
-                   target="_blank" rel="noopener"
-                   class="btn btn-outline-danger btn-sm py-0 px-1 me-1"
-                   title="Abrir o PDF assinado em nova aba — {{ e.secao_label }}">
-                  <i class="bi bi-file-earmark-pdf"></i> {{ e.secao }}
-                </a>
-                {% endif %}
-              {% else %}
-              <span class="text-muted small">—</span>
-              {% endfor %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+{% for linha in linhas %}
+<article class="dou-edicao {{ 'dou-edicao--recente' if loop.first and paginacao.page == 1 }}">
 
-    {% if paginacao.pages > 1 %}
-    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
-      <small class="text-muted">
-        Página {{ paginacao.page }} de {{ paginacao.pages }} — {{ paginacao.total }} edição(ões)
-      </small>
-      <div class="btn-group btn-group-sm">
-        {% if paginacao.has_prev %}
-        <a class="btn btn-outline-secondary"
-           href="{{ url_for('dou.edicoes', page=paginacao.prev_num) }}">Anterior</a>
-        {% endif %}
-        {% if paginacao.has_next %}
-        <a class="btn btn-outline-secondary"
-           href="{{ url_for('dou.edicoes', page=paginacao.next_num) }}">Próxima</a>
-        {% endif %}
-      </div>
+  <a class="dou-data" href="{{ url_for('dou.edicao', data_str=linha.data.isoformat()) }}"
+     aria-label="Edição de {{ linha.data.strftime('%d/%m/%Y') }}">
+    <div class="dou-data__semana">{{ linha.semana }}</div>
+    <div class="dou-data__dia">{{ '%02d' % linha.dia }}</div>
+    <div class="dou-data__mes">{{ linha.mes_ano }}</div>
+  </a>
+
+  <div class="dou-cadernos">
+    {% for e in linha.edicoes %}
+    {% set largura = ((e.qtd_materias or 0) * 100 / maior_caderno) | round(1) %}
+    <div class="dou-caderno dou-caderno--s{{ e.secao_numero[0] }}">
+      <a class="dou-caderno__link"
+         href="{{ url_for('dou.edicao', data_str=linha.data.isoformat(), secao=e.secao) }}"
+         title="{{ e.secao_label }} — {{ e.qtd_materias }} matérias">
+        <span class="dou-caderno__num">{{ e.secao_numero }}</span>
+        <span class="dou-caderno__assunto">{{ e.secao_assunto }}</span>
+        <span class="dou-barra" aria-hidden="true">
+          <span class="dou-barra__preenche" style="width: {{ largura }}%"></span>
+        </span>
+        <span class="dou-caderno__qtd">{{ '{:,}'.format(e.qtd_materias or 0).replace(',', '.') }}</span>
+      </a>
+      {% if e.pdf_disponivel %}
+      <a class="dou-pdf" target="_blank" rel="noopener"
+         href="{{ url_for('dou.baixar_pdf', edition_id=e.id) }}"
+         title="Abrir o PDF assinado da {{ e.secao_label }} em nova aba">
+        <i class="bi bi-file-earmark-pdf"></i>
+      </a>
+      {% else %}
+      <span></span>
+      {% endif %}
     </div>
+    {% endfor %}
+  </div>
+
+  <div class="dou-total">
+    <div class="dou-total__num">{{ '{:,}'.format(linha.total_materias).replace(',', '.') }}</div>
+    <div class="dou-total__rot">matérias</div>
+  </div>
+
+</article>
+{% endfor %}
+
+{% if paginacao.pages > 1 %}
+<div class="d-flex justify-content-between align-items-center mt-4">
+  <small class="text-muted">
+    Página {{ paginacao.page }} de {{ paginacao.pages }}
+  </small>
+  <div class="btn-group btn-group-sm">
+    {% if paginacao.has_prev %}
+    <a class="btn btn-outline-secondary"
+       href="{{ url_for('dou.edicoes', page=paginacao.prev_num) }}">
+      <i class="bi bi-chevron-left me-1"></i>Mais recentes
+    </a>
+    {% endif %}
+    {% if paginacao.has_next %}
+    <a class="btn btn-outline-secondary"
+       href="{{ url_for('dou.edicoes', page=paginacao.next_num) }}">
+      Mais antigas<i class="bi bi-chevron-right ms-1"></i>
+    </a>
     {% endif %}
   </div>
 </div>
+{% endif %}
 
-<p class="text-muted small mt-3 mb-0">
+<p class="dou-resumo mt-4 mb-0">
   <i class="bi bi-info-circle me-1"></i>
-  Clique na data para ler as matérias publicadas, ou abra o PDF assinado da
-  seção em nova aba — o arquivo oficial da Imprensa Nacional.
+  A barra mostra o tamanho de cada caderno na comparação com o maior desta
+  página. Clique no caderno para ler as matérias, ou no ícone de PDF para abrir
+  o arquivo assinado da Imprensa Nacional em nova aba.
 </p>
 
 {% endif %}
+</div>
 {% endblock %}

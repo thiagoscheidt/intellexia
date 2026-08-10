@@ -3774,6 +3774,16 @@ class DouEdition(db.Model):
         'DO2E': 'Seção 2 — Edição Extra',
         'DO3E': 'Seção 3 — Edição Extra',
     }
+    # Só o assunto do caderno, sem o prefixo "Seção N" — na tela o número já
+    # aparece no chip ao lado, e repeti-lo rouba espaço da informação.
+    SECTION_SUBJECTS = {
+        'DO1': 'Atos normativos',
+        'DO2': 'Pessoal',
+        'DO3': 'Contratos e licitações',
+        'DO1E': 'Atos normativos · extra',
+        'DO2E': 'Pessoal · extra',
+        'DO3E': 'Contratos · extra',
+    }
 
     STATUS_PENDING = 'pending'
     STATUS_DOWNLOADED = 'downloaded'
@@ -3816,6 +3826,16 @@ class DouEdition(db.Model):
     @property
     def secao_label(self):
         return self.SECTION_LABELS.get(self.secao, self.secao)
+
+    @property
+    def secao_assunto(self):
+        """'Atos normativos' — o assunto do caderno, sem o prefixo 'Seção N'."""
+        return self.SECTION_SUBJECTS.get(self.secao, self.secao)
+
+    @property
+    def secao_numero(self):
+        """'DO1' → '1'; 'DO1E' → '1E'. O rótulo curto do chip na tela."""
+        return (self.secao or '').replace('DO', '') or self.secao
 
     @property
     def pdf_disponivel(self):

@@ -9,6 +9,7 @@ que mais importa no módulo — idempotência e republicação.
 """
 
 import io
+import shutil
 import sys
 import zipfile
 from datetime import date
@@ -17,11 +18,18 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from main import app
-from app.models import db, DouEdition, DouArticle, DouSyncRun
+from app.models import db, DouEdition, DouArticle
 from app.services import dou_ingestion_service as ingestion
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
-DATA_TESTE = date(2026, 8, 10)
+
+# Data-sentinela, deliberadamente impossível: o DOU eletrônico não existe em
+# 1970 e o INLABS nunca terá essa edição. A primeira versão deste teste usava a
+# data corrente e, na limpeza, apagou do banco uma captura real — além de
+# sobrescrever os ZIPs verdadeiros em uploads/dou/ com as fixtures. Teste que
+# grava em caminho de produção precisa de uma chave que jamais colida com dado
+# de verdade.
+DATA_TESTE = date(1970, 1, 1)
 
 _falhas = []
 
@@ -61,12 +69,18 @@ class FakeClient:
 
 
 def limpar_dados_de_teste():
-    """Remove qualquer resíduo da data de teste."""
-    edicoes = DouEdition.query.filter_by(data_publicacao=DATA_TESTE).all()
-    for e in edicoes:
-        db.session.delete(e)
-    DouSyncRun.query.filter_by(modo=DouSyncRun.MODO_MANUAL).delete()
+    """Remove o resíduo da data-sentinela — banco e arquivos.
+
+    Só toca DATA_TESTE (1970-01-01). Nunca apagar por outro critério: a versão
+    anterior removia execuções por ``modo``, o que alcançava execuções reais.
+    """
+    for edicao in DouEdition.query.filter_by(data_publicacao=DATA_TESTE).all():
+        db.session.delete(edicao)
     db.session.commit()
+
+    diretorio = ingestion.storage_dir(DATA_TESTE)
+    if diretorio.exists():
+        shutil.rmtree(diretorio.parent.parent, ignore_errors=True)  # uploads/dou/1970
 
 
 def test_ingestao_basica():
