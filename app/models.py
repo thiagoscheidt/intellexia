@@ -646,7 +646,13 @@ class JudicialAppeal(db.Model):
 class KnowledgeBase(db.Model):
     """Tabela knowledge_base - Base de conhecimento com arquivos do escritório"""
     __tablename__ = 'knowledge_base'
-    
+    __table_args__ = (
+        # Cobre a varredura de tags do dashboard (só law_firm_id + is_active +
+        # tags): com tags no índice, o MySQL não precisa ler as linhas.
+        db.Index('ix_knowledge_base_law_firm_active_tags',
+                 'law_firm_id', 'is_active', 'tags'),
+    )
+
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
@@ -1646,6 +1652,16 @@ class Benefit(db.Model):
     __tablename__ = 'benefits'
     __table_args__ = (
         db.Index('ix_benefits_law_firm_benefit_number', 'law_firm_id', 'benefit_number'),
+        # Agregações do dashboard (contagem por status/categoria). Sem o índice
+        # composto o MySQL filtra por law_firm_id e agrupa com "Using temporary",
+        # lendo as linhas inteiras — e cada linha carrega 11 colunas longtext.
+        # Com ele o GROUP BY é resolvido só no índice.
+        db.Index('ix_benefits_law_firm_first_instance_status',
+                 'law_firm_id', 'first_instance_status'),
+        db.Index('ix_benefits_law_firm_second_instance_status',
+                 'law_firm_id', 'second_instance_status'),
+        db.Index('ix_benefits_law_firm_contestation_topic',
+                 'law_firm_id', 'fap_contestation_topic'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2488,6 +2504,13 @@ class FapWebContestacao(db.Model):
         db.Index(
             'ix_fap_web_contestacoes_firm_raiz_deferimento',
             'law_firm_id', 'cnpj_raiz', 'deferimento_descricao',
+        ),
+        # "Contestações cadastradas recentemente" ordena por created_at, que não
+        # era indexado — o MySQL resolvia com "Using filesort" sobre a tabela
+        # inteira. O id no fim casa com o desempate usado na ordenação.
+        db.Index(
+            'ix_fap_web_contestacoes_firm_created_at',
+            'law_firm_id', 'created_at', 'id',
         ),
     )
 

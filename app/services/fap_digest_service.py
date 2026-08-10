@@ -169,24 +169,41 @@ def build_latest_atualizacao(law_firm_id, limit=DEFAULT_LIMIT, since=None):
         return []
 
     cmap = fap_company_name_map(law_firm_id)
+
+    # Entradas específicas das últimas mudanças (para saber o que mudou em cada
+    # uma). Uma consulta só para todas as contestações da página — antes era uma
+    # por linha, o que dava N+1 e dominava o tempo do widget.
+    ids = [r.id for r, _ in rows]
+    entries_query = (
+        FapWebContestacaoChangeHistory.query
+        .filter(
+            FapWebContestacaoChangeHistory.law_firm_id == law_firm_id,
+            FapWebContestacaoChangeHistory.contestacao_db_id.in_(ids),
+            FapWebContestacaoChangeHistory.change_type == 'updated',
+        )
+        .with_entities(
+            FapWebContestacaoChangeHistory.contestacao_db_id,
+            FapWebContestacaoChangeHistory.changed_fields,
+        )
+    )
+    if since is not None:
+        entries_query = entries_query.filter(FapWebContestacaoChangeHistory.synced_at >= since)
+
+    # Mesma ordenação de antes (synced_at desc, id desc); o primeiro de cada
+    # contestação é a entrada mais recente, então só o primeiro é mantido.
+    last_changed_fields = {}
+    for cid, changed_fields in entries_query.order_by(
+        FapWebContestacaoChangeHistory.synced_at.desc(),
+        FapWebContestacaoChangeHistory.id.desc(),
+    ):
+        last_changed_fields.setdefault(cid, changed_fields)
+
     items = []
     for r, last_change in rows:
-        # Entrada específica da última mudança (para saber o que mudou).
-        entry_query = (
-            FapWebContestacaoChangeHistory.query
-            .filter_by(law_firm_id=law_firm_id, contestacao_db_id=r.id, change_type='updated')
-        )
-        if since is not None:
-            entry_query = entry_query.filter(FapWebContestacaoChangeHistory.synced_at >= since)
-        last_entry = entry_query.order_by(
-            FapWebContestacaoChangeHistory.synced_at.desc(),
-            FapWebContestacaoChangeHistory.id.desc(),
-        ).first()
-
         items.append(contestacao_item(
             r, cmap,
             last_change.strftime('%d/%m/%Y') if last_change else '—',
-            extra={'changed': changed_field_labels(last_entry.changed_fields if last_entry else None)},
+            extra={'changed': changed_field_labels(last_changed_fields.get(r.id))},
         ))
     return items
 
