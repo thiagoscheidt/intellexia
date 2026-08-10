@@ -43,14 +43,32 @@ def fmt_cnpj_digits(digits):
 
 
 def fap_company_name_map(law_firm_id):
-    """Mapa CNPJ → nome da empresa (para exibir junto às contestações)."""
+    """Mapa CNPJ → nome da empresa (para exibir junto às contestações).
+
+    Memoizado por requisição: as três listas do dashboard chamam esta função,
+    e sem cache a mesma consulta era repetida a cada uma. Fora de requisição
+    (cron, e-mail do resumo) segue consultando direto.
+    """
+    from flask import g, has_request_context
     from app.models import FapCompany
-    return {
+
+    cache = None
+    if has_request_context():
+        cache = getattr(g, '_fap_company_name_maps', None)
+        if cache is None:
+            cache = g._fap_company_name_maps = {}
+        if law_firm_id in cache:
+            return cache[law_firm_id]
+
+    mapa = {
         c.cnpj: c.nome
         for c in FapCompany.query.filter_by(law_firm_id=law_firm_id)
         .with_entities(FapCompany.cnpj, FapCompany.nome).all()
         if c.cnpj
     }
+    if cache is not None:
+        cache[law_firm_id] = mapa
+    return mapa
 
 
 def changed_field_labels(changed_fields_json):

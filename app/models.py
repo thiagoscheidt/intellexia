@@ -2512,6 +2512,15 @@ class FapWebContestacao(db.Model):
             'ix_fap_web_contestacoes_firm_created_at',
             'law_firm_id', 'created_at', 'id',
         ),
+        # Gráficos por situação (geral e por empresa) e por vigência.
+        db.Index(
+            'ix_fap_web_contestacoes_firm_raiz_situacao',
+            'law_firm_id', 'cnpj_raiz', 'situacao_descricao',
+        ),
+        db.Index(
+            'ix_fap_web_contestacoes_firm_ano_vigencia',
+            'law_firm_id', 'ano_vigencia',
+        ),
     )
 
     id = db.Column(db.Integer, primary_key=True)

@@ -40,6 +40,12 @@ INDEXES = [
     # caía em "Using filesort" sobre a tabela inteira.
     ('fap_web_contestacoes', 'ix_fap_web_contestacoes_firm_created_at',
      ('law_firm_id', 'created_at', 'id')),
+    # Gráficos de contestações por situação (geral e por empresa) e por
+    # vigência: agrupavam lendo as linhas, que carregam o raw_data.
+    ('fap_web_contestacoes', 'ix_fap_web_contestacoes_firm_raiz_situacao',
+     ('law_firm_id', 'cnpj_raiz', 'situacao_descricao')),
+    ('fap_web_contestacoes', 'ix_fap_web_contestacoes_firm_ano_vigencia',
+     ('law_firm_id', 'ano_vigencia')),
 ]
 
 

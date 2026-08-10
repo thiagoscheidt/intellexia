@@ -9,6 +9,7 @@ from app.services.fap_digest_service import (
     build_latest_atualizacao,
     build_latest_cadastro,
     build_latest_dou,
+    fap_company_name_map,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,22 @@ def require_admin_user(f):
 
 # As listas de contestações recentes (D.O.U. / Cadastradas / Atualizadas) vivem em
 # app/services/fap_digest_service.py, compartilhadas com o e-mail de Resumo FAP.
+def _count(model, *criteria):
+    """COUNT(*) direto na tabela, com os filtros passados.
+
+    Usar em vez de ``Model.query.filter(...).count()``: o ``count()`` do
+    SQLAlchemy embrulha a consulta num subselect que projeta **todas** as
+    colunas da entidade. Em tabelas com colunas ``longtext`` — ``benefits`` tem
+    11, ``fap_web_contestacoes`` tem o ``raw_data`` — isso arrasta os dados
+    grandes junto e nenhum índice adianta. Medido no dashboard: 331 ms nos
+    counts de benefits contra 47 ms num GROUP BY equivalente na mesma tabela.
+    """
+    query = db.session.query(db.func.count(model.id))
+    if criteria:
+        query = query.filter(*criteria)
+    return query.scalar() or 0
+
+
 def _build_deferimento_distribution(law_firm_id):
     """Distribuição de contestações por status de deferimento.
 
@@ -106,22 +123,25 @@ def dashboard():
 
         from app.models import (
             Lawyer, KnowledgeBase, KnowledgeCategory,
-            JudicialProcess, Benefit, FapWebContestacao, FapCompany,
+            JudicialProcess, Benefit, FapWebContestacao,
             FapContestationCat, FapContestationPayrollMass,
             FapContestationEmploymentLink, FapContestationTurnoverRate,
         )
 
         # ── Painel de Processos ───────────────────────────────────────
-        total_processes = JudicialProcess.query.filter_by(law_firm_id=law_firm_id).count()
-        active_processes = JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='ativo').count()
-        suspended_processes = JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='suspenso').count()
-        closed_processes = JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='encerrado').count()
+        total_processes = _count(JudicialProcess, JudicialProcess.law_firm_id == law_firm_id)
+        active_processes = _count(JudicialProcess, JudicialProcess.law_firm_id == law_firm_id,
+                                  JudicialProcess.status == 'ativo')
+        suspended_processes = _count(JudicialProcess, JudicialProcess.law_firm_id == law_firm_id,
+                                     JudicialProcess.status == 'suspenso')
+        closed_processes = _count(JudicialProcess, JudicialProcess.law_firm_id == law_firm_id,
+                                  JudicialProcess.status == 'encerrado')
 
         # ── Painel FAP — FapWebContestacao ───────────────────────────
-        total_contestacoes = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id).count()
-        contestacoes_com_pdf = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id).filter(
-            FapWebContestacao.file_path.isnot(None)
-        ).count()
+        total_contestacoes = _count(FapWebContestacao, FapWebContestacao.law_firm_id == law_firm_id)
+        contestacoes_com_pdf = _count(FapWebContestacao,
+                                      FapWebContestacao.law_firm_id == law_firm_id,
+                                      FapWebContestacao.file_path.isnot(None))
 
         contestacoes_por_situacao_result = db.session.query(
             FapWebContestacao.situacao_descricao,
@@ -154,11 +174,11 @@ def dashboard():
             FapWebContestacao.situacao_descricao,
         ).all()
 
+        # Mesmo mapa usado pelas listas de contestações recentes — reusa o
+        # memoizado da requisição em vez de repetir a consulta.
         company_names = {
-            c.cnpj: (c.nome or '')
-            for c in FapCompany.query.filter_by(law_firm_id=law_firm_id)
-            .with_entities(FapCompany.cnpj, FapCompany.nome).all()
-            if c.cnpj
+            cnpj: (nome or '')
+            for cnpj, nome in fap_company_name_map(law_firm_id).items()
         }
 
         contestacoes_situacao_por_empresa = {}
@@ -187,12 +207,13 @@ def dashboard():
         latest_atualizacao_contestacoes = build_latest_atualizacao(law_firm_id, limit=20)
 
         # ── Disputes Center — Benefit ─────────────────────────────────
-        total_benefits_dc = Benefit.query.filter_by(law_firm_id=law_firm_id).count()
-        benefits_classified = Benefit.query.filter_by(law_firm_id=law_firm_id).filter(
-            Benefit.fap_contestation_topics_json.isnot(None)
-        ).count()
-        benefits_deferidos = Benefit.query.filter_by(law_firm_id=law_firm_id, first_instance_status='deferido').count()
-        benefits_indeferidos = Benefit.query.filter_by(law_firm_id=law_firm_id, first_instance_status='indeferido').count()
+        total_benefits_dc = _count(Benefit, Benefit.law_firm_id == law_firm_id)
+        benefits_classified = _count(Benefit, Benefit.law_firm_id == law_firm_id,
+                                     Benefit.fap_contestation_topics_json.isnot(None))
+        benefits_deferidos = _count(Benefit, Benefit.law_firm_id == law_firm_id,
+                                    Benefit.first_instance_status == 'deferido')
+        benefits_indeferidos = _count(Benefit, Benefit.law_firm_id == law_firm_id,
+                                      Benefit.first_instance_status == 'indeferido')
 
         # ── Distribuição por categoria FAP (categoria principal) ──────
         topic_rows = db.session.query(
@@ -233,17 +254,25 @@ def dashboard():
         benefits_status_second = _status_by_instance(Benefit.second_instance_status)
 
         # ── Contadores das demais categorias de contestação ───────────
-        count_cats = FapContestationCat.query.filter_by(law_firm_id=law_firm_id).count()
-        count_payroll_masses = FapContestationPayrollMass.query.filter_by(law_firm_id=law_firm_id).count()
-        count_employment_links = FapContestationEmploymentLink.query.filter_by(law_firm_id=law_firm_id).count()
-        count_turnover_rates = FapContestationTurnoverRate.query.filter_by(law_firm_id=law_firm_id).count()
+        count_cats = _count(FapContestationCat, FapContestationCat.law_firm_id == law_firm_id)
+        count_payroll_masses = _count(FapContestationPayrollMass,
+                                      FapContestationPayrollMass.law_firm_id == law_firm_id)
+        count_employment_links = _count(FapContestationEmploymentLink,
+                                        FapContestationEmploymentLink.law_firm_id == law_firm_id)
+        count_turnover_rates = _count(FapContestationTurnoverRate,
+                                      FapContestationTurnoverRate.law_firm_id == law_firm_id)
 
         # ── Base de Conhecimento ──────────────────────────────────────
-        knowledge_count = KnowledgeBase.query.filter_by(law_firm_id=law_firm_id, is_active=True).count()
-        knowledge_categories_count = KnowledgeCategory.query.filter_by(law_firm_id=law_firm_id, is_active=True).count()
+        knowledge_count = _count(KnowledgeBase, KnowledgeBase.law_firm_id == law_firm_id,
+                                 KnowledgeBase.is_active.is_(True))
+        knowledge_categories_count = _count(KnowledgeCategory,
+                                            KnowledgeCategory.law_firm_id == law_firm_id,
+                                            KnowledgeCategory.is_active.is_(True))
+        # DISTINCT: só interessa o conjunto de tags, e documentos repetem muito a
+        # mesma string — deduplicar no banco evita trazer uma linha por documento.
         all_tags = KnowledgeBase.query.with_entities(KnowledgeBase.tags).filter_by(
             law_firm_id=law_firm_id, is_active=True
-        ).all()
+        ).distinct().all()
         tag_set = set()
         for (tags_str,) in all_tags:
             if tags_str:
@@ -251,8 +280,8 @@ def dashboard():
         knowledge_tags_count = len(tag_set)
 
         # ── Equipe ────────────────────────────────────────────────────
-        total_lawyers = Lawyer.query.filter_by(law_firm_id=law_firm_id).count()
-        total_users = User.query.filter_by(law_firm_id=law_firm_id).count()
+        total_lawyers = _count(Lawyer, Lawyer.law_firm_id == law_firm_id)
+        total_users = _count(User, User.law_firm_id == law_firm_id)
 
         return render_template('dashboard.html',
             total_processes=total_processes,
