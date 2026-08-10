@@ -401,7 +401,22 @@ retomável.
 | Cookie expirado no meio do backfill | Relogin transparente, uma retentativa; segunda falha propaga |
 | ZIP corrompido | `status='error'` com mensagem; arquivo preservado em disco para diagnóstico |
 | Matéria sem atributo esperado | Campo vira `None`; nunca derruba o parse do restante da edição |
+| XML hostil (DTD, expansão de entidades) | Recusado pelo `defusedxml`; a matéria é registrada em log de erro e pulada, sem derrubar a edição |
 | Disco cheio | Erro explícito e abortar — nunca gravar arquivo truncado |
+
+### 10.1 Parse de XML
+
+O XML chega dentro de um ZIP baixado da rede, o que faz dele **entrada não
+confiável por definição** — mesmo vindo de endpoint autenticado do governo, por
+HTTPS. O parser da stdlib (`xml.etree.ElementTree`) expande entidades: um único
+arquivo malicioso dentro do ZIP ("billion laughs") consumiria toda a memória do
+servidor, que é compartilhado com produção.
+
+O parse usa portanto `defusedxml.ElementTree`, que recusa DTD e expansão de
+entidades. A biblioteca já está no `uv.lock` como dependência transitiva
+(0.7.1), então adotá-la não instala nada novo — mas deve ser **declarada como
+dependência direta** em `pyproject.toml`, para não quebrar quando o pacote que a
+puxa trocar de dependências.
 
 ---
 
@@ -468,3 +483,4 @@ DOU_DOWNLOAD_TIMEOUT=120                # segundos
 | Backfill | Comando manual, não no deploy | ~11 GB e horas de download; não deve amarrar o deploy |
 | Retenção | Só PDF, padrão 24 meses | Servidor compartilhado com produção, 125 GB livres |
 | Busca por termo | Adiada | Vira spec próprio, com Meilisearch |
+| Parse de XML | `defusedxml`, não `xml.etree` | ZIP baixado da rede é entrada não confiável; a stdlib expande entidades e uma bomba derrubaria o servidor |
