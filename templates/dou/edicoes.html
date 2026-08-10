@@ -33,10 +33,33 @@
     {{ 'matéria' if total_materias == 1 else 'matérias' }}
     {% endif %}
   </div>
-  <a href="{{ url_for('dou.captura') }}" class="btn btn-outline-secondary btn-sm">
-    <i class="bi bi-activity me-1"></i>Estado da captura
-  </a>
+  <div class="d-flex align-items-center gap-2">
+    <a href="{{ url_for('dou.busca') }}" class="dou-cta">
+      <i class="bi bi-search"></i>
+      <span>Buscar no Diário</span>
+    </a>
+    <a href="{{ url_for('dou.captura') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-activity me-1"></i>Estado da captura
+    </a>
+  </div>
 </div>
+
+{# A busca é a ação de maior valor da tela: navegar por data serve para ler a
+   edição do dia, mas quem procura um assunto ou um cliente precisa da busca.
+   Por isso ela ganha uma faixa própria, e não só um botão na barra.
+   Só aparece com acervo: sem matéria capturada, convidar a buscar é convidar
+   para uma tela que não teria o que devolver. #}
+{% if total_materias %}
+<a class="dou-busca-convite" href="{{ url_for('dou.busca') }}">
+  <span class="dou-busca-convite__icone"><i class="bi bi-search"></i></span>
+  <span class="dou-busca-convite__texto">
+    <strong>Procurar em todas as edições</strong>
+    <small>Um termo, o CNPJ de um cliente ou um número de processo — em
+      {{ '{:,}'.format(total_materias).replace(',', '.') }} matérias de uma vez</small>
+  </span>
+  <span class="dou-busca-convite__seta"><i class="bi bi-arrow-right"></i></span>
+</a>
+{% endif %}
 
 {% if not linhas %}
 <div class="card border-0 shadow-sm">

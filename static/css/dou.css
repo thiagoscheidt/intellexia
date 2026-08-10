@@ -384,3 +384,113 @@
   .dou-hit { transition: none; }
   .dou-hit:hover { transform: none; }
 }
+
+/* -------------------------------------------------- chamada para a busca */
+
+/* Botão da barra: a ação principal da tela, então é sólido, não outline. */
+.dou-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .38rem .85rem;
+  border-radius: 9px;
+  font-size: .85rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: #fff;
+  background: var(--bs-primary);
+  border: 1px solid var(--bs-primary);
+  transition: filter .15s ease, box-shadow .15s ease;
+}
+
+.dou-cta:hover,
+.dou-cta:focus-visible {
+  color: #fff;
+  filter: brightness(1.08);
+  box-shadow: 0 6px 14px rgba(var(--bs-primary-rgb), .28);
+}
+
+/* Faixa de convite: navegar por data resolve "ler a edição de hoje", mas quem
+   procura um assunto ou um cliente precisa da busca — e não descobriria isso
+   só por um botão pequeno na barra. */
+.dou-busca-convite {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: .9rem;
+  align-items: center;
+  padding: .85rem 1.15rem;
+  margin-bottom: 1rem;
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid var(--bs-primary-border-subtle);
+  background: var(--bs-primary-bg-subtle);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+
+.dou-busca-convite:hover,
+.dou-busca-convite:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, .08);
+  color: inherit;
+}
+
+.dou-busca-convite__icone {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 10px;
+  background: var(--bs-primary);
+  color: #fff;
+  font-size: 1.05rem;
+}
+
+.dou-busca-convite__texto {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.dou-busca-convite__texto strong {
+  font-size: .95rem;
+  color: var(--bs-body-color);
+}
+
+.dou-busca-convite__texto small {
+  font-size: .78rem;
+  color: var(--bs-secondary-color);
+}
+
+.dou-busca-convite__seta {
+  color: var(--bs-primary);
+  font-size: 1.05rem;
+  transition: transform .18s ease;
+}
+
+.dou-busca-convite:hover .dou-busca-convite__seta {
+  transform: translateX(3px);
+}
+
+.dou-cta:focus-visible,
+.dou-busca-convite:focus-visible {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 575.98px) {
+  /* no celular a seta some e o texto secundário some: só a chamada importa */
+  .dou-busca-convite { grid-template-columns: auto minmax(0, 1fr); }
+  .dou-busca-convite__seta { display: none; }
+  .dou-busca-convite__texto small { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dou-cta,
+  .dou-busca-convite,
+  .dou-busca-convite__seta { transition: none; }
+  .dou-busca-convite:hover { transform: none; }
+  .dou-busca-convite:hover .dou-busca-convite__seta { transform: none; }
+}
