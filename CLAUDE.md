@@ -264,6 +264,31 @@ implementação de referência oficial (`github.com/Imprensa-Nacional/inlabs`).
 - **Retenção**: `DOU_PDF_RETENTION_MONTHS` (padrão 24) poda apenas os PDFs;
   XML, texto e metadados nunca são podados.
 
+**Busca (`dou_search_service`)** — índice Meilisearch `dou_articles`, um
+documento por matéria. O MySQL é a fonte da verdade e o índice é descartável:
+`scripts/reindex_dou.py` reconstrói. Indexar nunca derruba a captura; buscar
+nunca derruba a tela.
+
+- **CNPJ e número de processo não podem ser buscados como texto.** O
+  tokenizador quebra `19.630.496/0001-05` na pontuação, e quem digita
+  `19630496000105` não acharia nada — em 32% do acervo. Os identificadores são
+  extraídos, normalizados para só dígitos e guardados nos campos `cnpjs` e
+  `processos`, com tolerância a erro desligada neles (número aproximado é
+  número errado). A consulta é roteada por `classificar_consulta()`: 14 dígitos
+  → CNPJ, 17 → processo, resto → texto. O identificador só é reconhecido quando
+  o termo **inteiro** é o número, senão "portaria 19630496000105 de agosto"
+  viraria busca de CNPJ.
+- **O total exibido vem da soma das facetas, não de `estimated_total_hits`.**
+  O estimado satura no teto de paginação do Meilisearch (1.000): "licitação"
+  reportaria 1.000 quando tem 5.139. As contagens de faceta não têm esse teto.
+  `total_navegavel` é o que a paginação alcança de fato.
+- **Faceta de órgão usa só a raiz da hierarquia** (`orgao_raiz`): a hierarquia
+  completa tem centenas de valores e não vira faceta usável; a raiz tem ~43.
+- **`aguardar_indexacao` recebe o nome do índice e nunca chama `get_index`** —
+  aquela função reconfigura atributos e ficaria na fila atrás dos documentos
+  que está esperando.
+- **Índice de teste é sempre `dou_articles_test`, nunca o de produção.**
+
 ### Timezone
 
 Todas as datas de exibição usam `America/Sao_Paulo`. Filtros Jinja: `datetime_sp`, `date_sp`. Helper: `app.utils.timezone.now_sp()`. Datetimes sem `tzinfo` são tratados como UTC antes da conversão.
@@ -408,6 +433,7 @@ FapReview.revision [POST]
 | `inlabs_client`                        | Cliente HTTP do INLABS (Imprensa Nacional) — todo acesso isolado aqui: login, cookie de sessão, montagem de URL, retry com teto, timeout e relogin transparente |
 | `dou_xml_parser`                       | XML do DOU → dicts. Função pura, sem rede/banco/Flask — a peça que muda se a Imprensa Nacional alterar o schema |
 | `dou_ingestion_service`                | Ingestão do DOU: download → disco → parse → upsert → auditoria. Dedup por chave da matéria, janela de reverificação e retenção de PDF — fonte única da tela e do cron |
+| `dou_search_service`                   | Busca no acervo do DOU (Meilisearch): extração e normalização de CNPJ/processo, indexação e consulta com facetas — fonte única da tela de busca |
 | `process_radar_service`                | Radar da Mesa de Trabalho (providências IA + publicações não lidas + movimentação DataJud) — fonte única do widget do Painel de Processos (`build_radar`) e do e-mail Resumo do Radar (`build_radar_digest`) |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |
@@ -472,6 +498,7 @@ DOU_SECOES=DO1,DO2,DO3,DO1E,DO2E,DO3E   # padrão: todas
 DOU_RECHECK_DAYS=7                      # janela de reverificação
 DOU_PDF_RETENTION_MONTHS=24             # 0 = nunca podar
 DOU_DOWNLOAD_TIMEOUT=120                # segundos
+DOU_MEILI_INDEX=dou_articles            # índice da busca
 ```
 
 ---

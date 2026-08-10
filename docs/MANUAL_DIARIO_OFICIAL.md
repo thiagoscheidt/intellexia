@@ -56,6 +56,44 @@ Clicando numa matéria, você lê o inteiro teor, com a ementa, o órgão, a pá
 o número da edição. Há também um link para a mesma matéria no portal oficial da
 Imprensa Nacional.
 
+## Busca
+
+A tela **Busca** procura em todas as matérias já capturadas, de todas as datas
+e seções.
+
+### O que dá para digitar
+
+| Você digita | O sistema entende |
+|---|---|
+| `fator acidentário` | Termo livre — acha variações e tolera pequenos erros de digitação |
+| `19.630.496/0001-05` ou `19630496000105` | CNPJ, com ou sem pontuação — dá no mesmo |
+| `15414.630210/2026-80` | Número de processo administrativo |
+
+> [!INFO] Para CNPJ e número de processo a busca **não** aceita aproximação: um
+> dígito diferente é outra empresa, outro processo. Para termos de texto,
+> pequenos erros de digitação são tolerados.
+
+### Buscar por cliente
+
+A lista **"Buscar por cliente"**, ao lado do campo, traz os clientes cadastrados
+no escritório. Você pode digitar o nome ou o CNPJ para achar na lista; escolher
+um preenche a busca com o CNPJ dele. É o caminho mais rápido para responder
+"meu cliente apareceu no Diário?".
+
+### Refinar o resultado
+
+À esquerda, cada filtro mostra **quantas matérias** restam se você marcá-lo.
+Assim dá para ver que, dos 704 resultados, 201 são da Seção 1 — e chegar lá num
+clique, sem redigitar nada.
+
+Os filtros são: seção, órgão, tipo de ato e período. Marcar duas opções do mesmo
+filtro mostra as duas; marcar filtros diferentes soma as condições.
+
+Pode ordenar por **relevância** (padrão) ou por **mais recentes**.
+
+> [!ALERTA] A busca só encontra o que já foi capturado. Se um período não foi
+> baixado, ele não aparece — confira a cobertura na aba Captura.
+
 ### PDF assinado
 
 Quando a edição tem o PDF assinado guardado, aparece o botão vermelho de PDF —
