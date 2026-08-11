@@ -11,6 +11,7 @@ some da tela de login e as rotas respondem com erro amigável.
 """
 import logging
 import os
+from urllib.parse import urlparse
 
 from flask import url_for
 
@@ -19,6 +20,9 @@ from app.utils.urls import app_public_url
 logger = logging.getLogger(__name__)
 
 GOOGLE_METADATA_URL = 'https://accounts.google.com/.well-known/openid-configuration'
+
+# Host do CDN onde o Google serve as fotos de perfil (lh3, lh5, ... .googleusercontent.com).
+PICTURE_HOST = 'googleusercontent.com'
 
 _oauth = None
 
@@ -65,6 +69,34 @@ def init_google_oauth(app) -> bool:
     _oauth = oauth
     logger.info('Login com Google habilitado.')
     return True
+
+
+def sanitize_picture_url(raw):
+    """URL da foto de perfil vinda da claim ``picture``, ou ``None``.
+
+    O valor termina num ``src`` de ``<img>`` renderizado para o usuário. O
+    ``id_token`` é assinado pelo Google, então isso é cinto e suspensório — mas
+    custa três linhas e fecha a porta para qualquer coisa que não seja ``https``
+    no CDN dele. O host tem de *ser* ``googleusercontent.com`` ou terminar em
+    ``.googleusercontent.com``: comparar só o final deixaria passar
+    ``malgoogleusercontent.com``.
+    """
+    if not raw:
+        return None
+
+    url = str(raw).strip()
+    try:
+        partes = urlparse(url)
+    except ValueError:
+        return None
+
+    host = (partes.hostname or '').lower()
+    if partes.scheme != 'https':
+        return None
+    if host != PICTURE_HOST and not host.endswith('.' + PICTURE_HOST):
+        return None
+
+    return url
 
 
 def google_client():

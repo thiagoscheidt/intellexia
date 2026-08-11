@@ -1,3 +1,4 @@
+{% from 'partials/user_avatar.html' import user_avatar %}
 <!--begin::Header-->
 <nav class="app-header navbar navbar-expand bg-body shadow-sm">
   <!--begin::Container-->
@@ -195,20 +196,13 @@
       <!--begin::User Menu Dropdown-->
       <li class="nav-item dropdown user-menu">
         <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown">
-          <span
-            class="user-image rounded-circle shadow d-inline-flex align-items-center justify-content-center text-bg-primary fw-semibold">
-            {{ (session.get('user_name', 'U')[:1] or 'U') | upper }}
-          </span>
+          {{ user_avatar(32, 16, 'user-image text-bg-primary fw-semibold') }}
           <span class="d-none d-md-inline">{{ session.get('user_name', 'Usuário') }}</span>
         </a>
         <ul class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
           <!--begin::User Image-->
           <li class="user-header text-bg-primary">
-            <div
-              class="rounded-circle shadow d-inline-flex align-items-center justify-content-center bg-white text-primary fw-bold"
-              style="width: 90px; height: 90px; font-size: 32px;">
-              {{ (session.get('user_name', 'U')[:1] or 'U') | upper }}
-            </div>
+            {{ user_avatar(90, 32, 'bg-white text-primary fw-bold') }}
             <p>
               {{ session.get('user_name', 'Usuário') }}
               <small>{{ session.get('user_email', '') }}</small>

@@ -1,0 +1,25 @@
+{#
+  Avatar do usuário: foto do Google quando houver, inicial em círculo quando não.
+
+  A inicial fica sempre no DOM (escondida quando há foto) porque o `onerror` da
+  imagem precisa de algo para revelar: a URL do CDN pode virar 404 se a pessoa
+  trocar a foto entre um login e outro, e há rede de escritório que bloqueia
+  googleusercontent.com. Sem esse par, o avatar viraria ícone quebrado.
+
+  size / font_size em px; extra_classes vai nos dois elementos, para que a troca
+  no onerror não mude tamanho nem posição. A paleta (bg/cor/peso) vem de
+  extra_classes: a header usa dois esquemas diferentes.
+#}
+{% macro user_avatar(size, font_size, extra_classes='') -%}
+{%- set foto = session.get('user_picture') -%}
+{%- set inicial = (session.get('user_name', 'U')[:1] or 'U') | upper -%}
+{%- set dimensao = 'width: %dpx; height: %dpx;' % (size, size) -%}
+{%- if foto %}
+<img src="{{ foto }}" alt="" referrerpolicy="no-referrer" width="{{ size }}" height="{{ size }}"
+  class="rounded-circle shadow {{ extra_classes }}" style="{{ dimensao }} object-fit: cover;"
+  onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+{%- endif %}
+<span
+  class="rounded-circle shadow d-inline-flex align-items-center justify-content-center {{ extra_classes }}"
+  style="{{ dimensao }} font-size: {{ font_size }}px;{% if foto %} display: none;{% endif %}">{{ inicial }}</span>
+{%- endmacro %}

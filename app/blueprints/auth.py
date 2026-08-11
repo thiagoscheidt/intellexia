@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
 from sqlalchemy import func
 from app.models import db, User, LawFirm
-from app.services.google_oauth import google_client, google_login_enabled, google_redirect_uri
+from app.services.google_oauth import (google_client, google_login_enabled, google_redirect_uri,
+                                       sanitize_picture_url)
 from app.utils.permissions import get_landing_endpoint
 from datetime import datetime
 import logging
@@ -66,6 +67,8 @@ def _start_user_session(user, remember=False, via_google=False):
     session['user_name'] = user.name
     session['user_role'] = user.role
     session['user_module_permissions'] = user.get_module_permissions()
+    # Vale também para o login por senha: a foto vem do banco, não do fluxo do Google.
+    session['user_picture'] = user.google_picture_url
     session['law_firm_id'] = user.law_firm_id
     session['law_firm_name'] = user.law_firm.name
 
@@ -178,6 +181,8 @@ def google_callback():
         return redirect(url_for('auth.login', erro='escritorio_inativo'))
 
     _link_google_account(user, google_sub)
+    # Reescrita a cada login: se a pessoa trocou ou removeu a foto no Google, segue.
+    user.google_picture_url = sanitize_picture_url(claims.get('picture'))
 
     landing_endpoint = _start_user_session(user, via_google=True)
     return redirect(next_url or url_for(landing_endpoint))

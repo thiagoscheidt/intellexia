@@ -97,6 +97,8 @@ class User(db.Model):
     # Login com Google (opcional): 'sub' é o ID imutável da conta Google
     google_sub = db.Column(db.String(64), unique=True, nullable=True, index=True)
     google_linked_at = db.Column(db.DateTime, nullable=True)
+    # Foto de perfil: URL no CDN do Google, reescrita a cada login com Google
+    google_picture_url = db.Column(db.String(512), nullable=True)
     # Adoção do login com Google (tela de Atividade de Usuários)
     google_last_login_at = db.Column(db.DateTime, nullable=True)
     google_login_count = db.Column(db.Integer, nullable=False, default=0, server_default='0')
