@@ -22,14 +22,6 @@
   --dou-trilho: var(--bs-secondary-bg);
 }
 
-/* A listagem é conteúdo curto por linha. Esticada a 1700 px, o botão do PDF
-   ficava a ~600 px do nome do caderno, com um vazio no meio que lê como
-   layout quebrado. Largura de leitura fixa mantém cada linha como uma
-   unidade — data, caderno, ação — em qualquer monitor. */
-.dou-page--lista {
-  max-width: 1240px;
-}
-
 [data-bs-theme="dark"] .dou-page {
   --dou-s1: #8b98e0;
   --dou-s2: #5fb3a5;
@@ -154,16 +146,22 @@
   border-top: 1px solid var(--bs-border-color);
 }
 
-/* Colunas de largura definida, nunca 1fr no nome. O link estica até o botão,
-   mas `justify-content: start` mantém chip, nome, contagem e barra colados à
-   esquerda e alinhados entre as linhas — com `1fr` no nome, a contagem era
-   jogada centenas de pixels para a direita, com um vazio no meio. */
+/* Duas faixas: o texto (chip, nome, contagem) colado à esquerda e a barra
+   ocupando sozinha toda a folga até o botão.
+
+   É assim que a linha preenche a largura sem estreitar a tela — a tentativa
+   anterior foi limitar a página a 1240 px, o que num monitor largo deixava
+   metade dele vazia. A barra crescer não distorce nada: a escala é a mesma em
+   todas as linhas da página, então a comparação entre cadernos continua
+   valendo em qualquer largura.
+
+   O nome nunca leva `1fr`: quando ele absorvia a folga, a contagem era jogada
+   centenas de pixels à direita e cada linha quebrava num lugar diferente. */
 .dou-caderno__link {
   display: grid;
-  grid-template-columns: 1.9rem minmax(0, 22rem) 7rem minmax(56px, 10rem);
-  gap: .75rem;
+  grid-template-columns: auto minmax(56px, 1fr);
+  gap: 1.25rem;
   align-items: center;
-  justify-content: start;
   text-decoration: none;
   color: inherit;
   padding: .25rem .35rem;
@@ -178,6 +176,15 @@
 .dou-caderno__link:hover .dou-caderno__assunto {
   color: var(--bs-primary);
   text-decoration: underline;
+}
+
+/* Chip, nome e contagem andam juntos, com larguras fixas, para alinharem
+   entre as linhas do card. */
+.dou-caderno__info {
+  display: grid;
+  grid-template-columns: 1.9rem minmax(0, 22rem) 7rem;
+  gap: .75rem;
+  align-items: center;
 }
 
 .dou-caderno__num {

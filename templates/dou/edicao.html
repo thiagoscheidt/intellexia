@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="dou-page dou-page--lista">
+<div class="dou-page">
 
 {{ page_hero(
      'Diário Oficial de ' ~ data.strftime('%d/%m/%Y'),
@@ -188,7 +188,7 @@
               <div class="dou-subunidade">{{ unidade }}</div>
               {% endif %}
               {% if m.ementa %}
-              <div class="text-muted small text-truncate" style="max-width: 560px;">{{ m.ementa }}</div>
+              <div class="text-muted small text-truncate">{{ m.ementa }}</div>
               {% endif %}
             </td>
             {# Atalho para o fac-símile: a rota já recorta a página da matéria e

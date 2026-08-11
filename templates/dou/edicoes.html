@@ -8,7 +8,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="dou-page dou-page--lista">
+<div class="dou-page">
 
 {{ page_hero(
      'Diário Oficial da União',
@@ -116,11 +116,13 @@
       <a class="dou-caderno__link"
          href="{{ url_for('dou.edicao', data_str=linha.data.isoformat(), secao=e.secao) }}"
          title="Ler as {{ e.qtd_materias }} matérias da {{ e.secao_label }}">
-        <span class="dou-caderno__num">{{ e.secao_numero }}</span>
-        <span class="dou-caderno__assunto">{{ e.secao_assunto }}</span>
-        <span class="dou-caderno__qtd">
-          {{ '{:,}'.format(e.qtd_materias or 0).replace(',', '.') }}
-          <small>matérias</small>
+        <span class="dou-caderno__info">
+          <span class="dou-caderno__num">{{ e.secao_numero }}</span>
+          <span class="dou-caderno__assunto">{{ e.secao_assunto }}</span>
+          <span class="dou-caderno__qtd">
+            {{ '{:,}'.format(e.qtd_materias or 0).replace(',', '.') }}
+            <small>matérias</small>
+          </span>
         </span>
         {# Indicador de espessura do caderno. Pequeno de propósito: é
            contexto, não a informação principal da linha. #}
