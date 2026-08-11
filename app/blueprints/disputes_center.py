@@ -573,21 +573,49 @@ def _anos_beneficios(law_firm_id):
     return fap_vigencia_service.benefit_available_years(law_firm_id)
 
 
+def _ano_do_drilldown(anos):
+    """Ano da vigência aberta por ``?vigencia_id=`` — '' quando não se aplica.
+
+    Entrar numa vigência pela tela de Vigências já restringe a listagem àquela
+    linha (CNPJ + ano). Se a caixa de vigência abrisse no ano mais recente, os
+    dois recortes se contradiriam e a tela viria vazia — que foi exatamente o
+    que aconteceu ao introduzir a caixa. Devolve '' quando o ano não está entre
+    as opções, deixando a caixa em "Todas": o vigencia_id já faz o recorte.
+    """
+    bruto = request.args.get('vigencia_id')
+    if not bruto:
+        return ''
+    try:
+        registro = FapVigenciaCnpj.query.filter_by(
+            id=int(bruto), law_firm_id=get_current_law_firm_id(),
+        ).first()
+    except (TypeError, ValueError):
+        return ''
+    ano = str(registro.vigencia_year or '').strip() if registro else ''
+    return ano if ano in (anos or []) else ''
+
+
 def _vigencia_contexto(anos, parametro='quick_vigencia'):
     """Variáveis da caixa de vigência para o template, resolvendo os anos uma vez só.
 
-    O padrão (vigência mais recente) só vale quando o parâmetro não veio na
-    URL — "Todas" escolhido pelo usuário é respeitado em vez de ser
-    sobrescrito pelo padrão a cada carga.
+    O padrão só vale quando o parâmetro não veio na URL — "Todas" escolhido
+    pelo usuário é respeitado em vez de ser sobrescrito a cada carga. Chegando
+    por drill-down, o padrão é o ano daquela vigência (ver ``_ano_do_drilldown``).
     """
+    ausente = parametro not in request.args
+    if ausente:
+        selecionado = _ano_do_drilldown(anos) or fap_vigencia_service.default_year(anos)
+    else:
+        selecionado = fap_vigencia_service.resolve_selected(
+            request.args.get(parametro), anos, ausente=False,
+        )
+
     return {
         'vigencia_years': anos,
-        'vigencia_selected': fap_vigencia_service.resolve_selected(
-            request.args.get(parametro), anos, ausente=parametro not in request.args,
-        ),
+        'vigencia_selected': selecionado,
         # Separado do selecionado: "limpar filtros" volta ao estado de abertura
         # da tela, não à seleção que o usuário acabou de descartar.
-        'vigencia_default': fap_vigencia_service.default_year(anos),
+        'vigencia_default': selecionado,
     }
 
 

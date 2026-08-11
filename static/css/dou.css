@@ -695,40 +695,18 @@
 }
 
 
-/* ---------------------------------------------- matéria: texto + fac-símile */
+/* ------------------------------------------ leitor: a folha do Diário sozinha */
 
-/* Texto e folha oficial lado a lado. Antes eram abas, e conferir um ato
-   obrigava a alternar entre elas: o número que se quer conferir está num lado
-   e a redação, no outro.
-
-   Abaixo de 1200 px viram uma coluna: a folha do DOU é A3 e, dividida ao meio
-   numa tela de 1100, cada metade fica estreita demais para o texto do PDF. */
-.dou-materia {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-}
-
-@media (min-width: 1200px) {
-  .dou-materia--com-pagina {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-
-  /* A folha oficial fica à esquerda, mas vem depois do texto no HTML: em uma
-     coluna só (celular) a ordem do documento é a que vale, e abrir a tela com
-     65vh de PDF empurraria o texto para fora dela. Aqui a posição é dita pela
-     grade, sem mexer na ordem de leitura. */
-  .dou-materia--com-pagina .dou-materia__pagina { grid-column: 1; grid-row: 1; }
-  .dou-materia--com-pagina .dou-materia__texto  { grid-column: 2; grid-row: 1; }
-
-  /* A folha acompanha a rolagem do texto: um ato longo tem dezenas de
-     parágrafos e, sem isto, a página oficial sairia da tela no primeiro
-     scroll — que é justamente quando se quer conferir. */
-  .dou-materia--com-pagina .dou-materia__pagina {
-    position: sticky;
-    top: 1rem;
-  }
+/* No leitor a folha é a tela inteira, sem o texto do ato ao lado: a página do
+   DOU é A3 e qualquer coisa dividindo o espaço com ela a deixa ilegível. Quem
+   quer o inteiro teor vai pela lista de matérias, no rodapé. */
+/* Os 265 px são o que fica acima da folha nesta tela — cabeçalho, abas e barra,
+   medidos em 2560/1920/1600/1280/1100. Com eles a folha termina na dobra: a
+   página não rola, quem rola é o PDF por dentro. O min-height é o piso para
+   telas baixas, onde sobra menos que isso. */
+.dou-pdf-quadro--leitor {
+  height: calc(100vh - 265px);
+  min-height: 480px;
 }
 
 /* Barra do visualizador: andar de página, saltar para um número e o sumário
@@ -769,11 +747,40 @@
   max-width: 15rem;
 }
 
-.dou-leitor-nota {
-  font-size: .8rem;
+/* Ponte de volta para o texto. Em linha e não em tabela: são poucas matérias
+   por página (mediana de 4 na Seção 1) e uma tabela para isso pesaria mais que
+   a informação. */
+.dou-leitor-materias {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .3rem .75rem;
+  font-size: .85rem;
+}
+
+.dou-leitor-materias__rot {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
   color: var(--bs-secondary-color);
-  margin: 0 0 .5rem;
-  padding: 0 .35rem;
+  white-space: nowrap;
+}
+
+/* Cada item corta em si mesmo. O separador não pode ser um `::before` do
+   próprio link: ele entraria na caixa truncada e sumiria junto com o texto. */
+.dou-leitor-materias__item {
+  text-decoration: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-left: 1px solid var(--bs-border-color);
+  padding-left: .75rem;
+}
+
+.dou-leitor-materias__item:first-of-type {
+  border-left: 0;
+  padding-left: 0;
 }
 
 

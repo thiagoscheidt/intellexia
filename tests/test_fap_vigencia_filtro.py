@@ -207,6 +207,30 @@ def main():
     else:
         check('API de listagem responde', False, resposta.status_code)
 
+    # ── 9. drill-down + caixa de vigência não podem se contradizer ───────
+    # Regressão: entrar numa vigência de 2023 pela tela de Vigências carrega
+    # vigencia_id daquela linha, mas a caixa abria no ano mais recente (2026).
+    # Os dois filtros somavam e a tela vinha vazia.
+    print('\n9. drill-down por vigencia_id (regressão)')
+
+    # vigência 3 = 2023, com 1 benefício (id=4)
+    resposta = cliente.get('/disputes-center/api/list?vigencia_id=3&draw=1&start=0&length=10')
+    dados = _json.loads(resposta.get_data(as_text=True))
+    check('drill-down numa vigência antiga continua mostrando os registros',
+          dados.get('recordsFiltered') == 1, dados.get('recordsFiltered'))
+
+    html = cliente.get('/disputes-center/?vigencia_id=3').get_data(as_text=True)
+    bloco = re.search(r'<select id="quickVigenciaFilter".*?</select>', html, re.S)
+    check('a caixa mostra o ano da vigência aberta, não o mais recente',
+          bloco and 'value="2023" selected' in bloco.group(0),
+          bloco.group(0)[:200].replace('\n', ' ') if bloco else '(não encontrado)')
+
+    # sem drill-down, o padrão continua sendo o ano mais recente
+    html = cliente.get('/disputes-center/').get_data(as_text=True)
+    bloco = re.search(r'<select id="quickVigenciaFilter".*?</select>', html, re.S)
+    check('sem drill-down, o padrão segue sendo o mais recente',
+          bloco and 'value="2026" selected' in bloco.group(0))
+
     print('\n' + '=' * 62)
     print('RESULTADO:', 'TUDO OK' if not FALHAS else f'{len(FALHAS)} FALHA(S): {FALHAS}')
     if os.path.exists(DB_FILE):

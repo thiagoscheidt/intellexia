@@ -340,6 +340,57 @@ def edicao(data_str):
                            f_orgao=orgao, f_tipo=tipo, f_ordem=ordem, f_q=termo)
 
 
+@dou_bp.route('/edicao/<data_str>/pagina/<int:numero>')
+def leitor(data_str, numero):
+    """A folha do Diário em tela cheia, para folhear a edição página a página.
+
+    É o visualizador do portal da Imprensa Nacional: a página ocupa a tela e a
+    barra de cima anda por ela. O texto do ato não entra aqui de propósito —
+    para isso existe ``/dou/materia/<id>``, e as matérias desta página ficam
+    listadas embaixo como atalho para ele.
+    """
+    data = _parse_data(data_str)
+    if data is None:
+        abort(404)
+
+    # Só as seções com PDF assinado viram aba: as extras (DO*E) não têm arquivo
+    # próprio, o PDF da seção normal já as contempla.
+    abas = [e for e in DouEdition.query.filter_by(data_publicacao=data)
+            .order_by(DouEdition.secao).all() if e.pdf_disponivel]
+    if not abas:
+        abort(404)
+
+    secao = (request.args.get('secao') or '').strip().upper()
+    ativa = next((e for e in abas if e.secao == secao), None) or abas[0]
+    termo_busca = (request.args.get('q') or '').strip()
+
+    # O campo "ir para" é um GET no próprio endereço, sem JavaScript. Em vez de
+    # atender com o número na query, manda para o endereço canônico: o que fica
+    # na barra do navegador é /pagina/87, que se copia e se guarda. O `!=`
+    # fecha o laço quando o número pedido já é o da vez.
+    pedida = request.args.get('pagina', type=int)
+    if pedida is not None and pedida != numero:
+        return redirect(url_for('dou.leitor', data_str=data_str,
+                                numero=max(pedida, 1), secao=ativa.secao,
+                                q=termo_busca or None))
+
+    # Número fora do intervalo é preso na borda em vez de virar 404: quem
+    # digita 9999 quer o fim do caderno, e trocar de seção no meio da edição
+    # cai numa seção mais curta sem tela de erro.
+    total = _total_paginas(ativa)
+    if total:
+        numero = min(max(numero, 1), total)
+
+    return render_template(
+        'dou/leitor.html', data=data, abas=abas, ativa=ativa,
+        numero=numero, total=total,
+        sumario=_sumario_da_edicao(ativa.id),
+        materias=(DouArticle.query
+                  .filter_by(edition_id=ativa.id, pagina_num=numero)
+                  .order_by(DouArticle.identifica, DouArticle.id).all()),
+        termo_busca=termo_busca)
+
+
 # ----------------------------------------------------------------- busca
 
 @dou_bp.route('/busca')
@@ -396,28 +447,15 @@ def materia(article_id):
 
     termo_busca = (request.args.get('q') or '').strip()
 
-    total_paginas = _total_paginas(edicao_obj)
-
-    # A barra folheia a seção sem sair da matéria, como o "Ir para a página" do
-    # portal oficial. Sem parâmetro, abre na página da matéria; com um número
-    # fora do intervalo, prende na borda — quem digita 9999 quer o fim do
-    # caderno, não um 404. O `is None` separa "não pediu página" de "pediu a
-    # zero": com `or`, o zero cairia no primeiro caso e o -5 no segundo.
-    pedida = request.args.get('pagina', type=int)
-    pagina_vista = pagina_no_pdf if pedida is None else pedida
-    if pagina_vista is not None and total_paginas:
-        pagina_vista = min(max(pagina_vista, 1), total_paginas)
-
-    # Onde a página fica dentro do recorte de três: a primeira, quando ela abre
-    # a seção e não há anterior; a segunda no resto dos casos.
-    pagina_no_recorte = 1 if (pagina_vista or 1) <= 1 else 2
+    # Onde a matéria fica dentro do recorte de três páginas: a primeira, quando
+    # ela abre a seção e não há anterior; a segunda no resto dos casos.
+    pagina_no_recorte = 1 if (artigo.pagina_num or 1) <= 1 else 2
 
     # Vindo da busca, abrir onde o termo está — que nem sempre é a página
     # registrada na matéria. No edital 11908 o título está na 109 e o CNPJ
     # procurado, na 110: abrir na 109 mostraria a página certa e o achado
-    # nenhum. Só vale na página da própria matéria; depois de folhear, o
-    # recorte é outro e o termo pode nem estar nele.
-    if termo_busca and pagina_no_pdf and pagina_vista == pagina_no_pdf:
+    # nenhum.
+    if termo_busca and pagina_no_pdf:
         encontrada = _pagina_do_termo(artigo, termo_busca)
         if encontrada:
             pagina_no_recorte = encontrada
@@ -427,9 +465,6 @@ def materia(article_id):
         artigo=artigo,
         edicao=edicao_obj,
         pagina_no_recorte=pagina_no_recorte,
-        pagina_vista=pagina_vista,
-        total_paginas=total_paginas,
-        sumario=_sumario_da_edicao(edicao_obj.id) if pagina_no_pdf else [],
         termo_busca=termo_busca,
         # A ordem importa: sanitizar primeiro, grifar depois. Grifar antes
         # faria a faxina descartar o <mark> que acabamos de inserir.

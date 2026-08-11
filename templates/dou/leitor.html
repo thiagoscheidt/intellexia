@@ -1,0 +1,137 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}DOU {{ data.strftime('%d/%m/%Y') }} — página {{ numero }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
+{% endblock %}
+
+{# Esta mesma tela em outra página ou em outra seção. #}
+{%- macro url_pagina(n, secao=None) -%}
+{{ url_for('dou.leitor', data_str=data.isoformat(), numero=n,
+           secao=secao or ativa.secao, q=termo_busca or none) }}
+{%- endmacro -%}
+
+{% block content %}
+<div class="dou-page">
+
+{{ page_hero(
+     'Diário Oficial de ' ~ data.strftime('%d/%m/%Y'),
+     ativa.secao_label ~ ' — folha assinada da Imprensa Nacional',
+     'bi bi-journal-text',
+     [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
+      {'label': data.strftime('%d/%m/%Y'),
+       'href': url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao)},
+      {'label': 'Página ' ~ numero, 'active': True}]) }}
+
+{# Uma aba por caderno com PDF assinado. Trocar de seção mantém o número da
+   página: é assim que se folheia o jornal impresso. #}
+<ul class="nav nav-tabs mb-0 align-items-end">
+  {% for e in abas %}
+  <li class="nav-item">
+    <a class="nav-link {{ 'active' if e.id == ativa.id else '' }}"
+       href="{{ url_pagina(numero, e.secao) }}">{{ e.secao_label }}</a>
+  </li>
+  {% endfor %}
+  <li class="nav-item ms-auto pb-2 ps-2">
+    <a href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao) }}"
+       class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-list-ul me-1"></i>Lista de matérias
+    </a>
+  </li>
+</ul>
+
+<div class="card border-0 shadow-sm rounded-top-0">
+  <div class="card-body p-2">
+
+    {# A barra do visualizador da Imprensa Nacional: anda de página, salta para
+       um número e tem o sumário da edição. #}
+    <div class="dou-leitor-barra">
+      <div class="dou-leitor-passo">
+        {% if numero > 1 %}
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_pagina(numero - 1) }}"
+           title="Página {{ numero - 1 }}"><i class="bi bi-chevron-left"></i></a>
+        {% else %}
+        <span class="btn btn-outline-secondary btn-sm disabled"><i class="bi bi-chevron-left"></i></span>
+        {% endif %}
+        <span class="dou-leitor-pos">
+          Página <strong>{{ numero }}</strong>{% if total %} de {{ total }}{% endif %}
+        </span>
+        {% if total and numero < total %}
+        <a class="btn btn-outline-secondary btn-sm" href="{{ url_pagina(numero + 1) }}"
+           title="Página {{ numero + 1 }}"><i class="bi bi-chevron-right"></i></a>
+        {% else %}
+        <span class="btn btn-outline-secondary btn-sm disabled"><i class="bi bi-chevron-right"></i></span>
+        {% endif %}
+      </div>
+
+      <form method="get" class="dou-leitor-ir">
+        <input type="hidden" name="secao" value="{{ ativa.secao }}">
+        {% if termo_busca %}<input type="hidden" name="q" value="{{ termo_busca }}">{% endif %}
+        <label class="form-label small text-muted mb-0" for="ir-pagina">Ir para</label>
+        <input class="form-control form-control-sm" id="ir-pagina" type="number"
+               name="pagina" min="1" max="{{ total or 9999 }}" value="{{ numero }}"
+               aria-label="Número da página">
+        <button class="btn btn-outline-secondary btn-sm" type="submit">ok</button>
+      </form>
+
+      {# Nenhum órgão vem marcado: numa página cabe mais de um, e marcar o
+         último faria a barra anunciar um órgão que não é o desta folha. #}
+      {% if sumario %}
+      <select class="form-select form-select-sm dou-leitor-sumario"
+              aria-label="Sumário da edição"
+              onchange="if (this.value) location.href = this.value;">
+        <option value="" selected>Sumário da edição…</option>
+        {% for orgao, pag in sumario %}
+        <option value="{{ url_pagina(pag) }}">{{ orgao }} — pág. {{ pag }}</option>
+        {% endfor %}
+      </select>
+      {% endif %}
+
+      <a class="btn btn-outline-danger btn-sm ms-auto"
+         href="{{ url_for('dou.pagina_da_edicao_pdf', edition_id=ativa.id, numero=numero, q=termo_busca or None) }}"
+         target="_blank" rel="noopener"
+         title="Abrir só esta página em nova aba, para imprimir ou salvar">
+        <i class="bi bi-file-earmark-pdf me-1"></i>Esta página em PDF
+      </a>
+    </div>
+
+    {# Só três páginas recortadas do PDF da seção: ~510 KB em vez dos 60 MB do
+       arquivo inteiro. As vizinhas vêm junto porque um ato pode continuar na
+       página seguinte, e o visualizador abre na do meio. #}
+    <iframe class="dou-pdf-quadro dou-pdf-quadro--leitor"
+            title="Página {{ numero }} do Diário Oficial de {{ data.strftime('%d/%m/%Y') }}"
+            src="{{ url_for('dou.pagina_da_edicao_pdf', edition_id=ativa.id, numero=numero, q=termo_busca or None) }}#page={{ 1 if numero <= 1 else 2 }}"></iframe>
+  </div>
+</div>
+
+{# A ponte de volta para o texto: a folha é imagem de PDF e não se copia bem,
+   então quem precisa do inteiro teor chega nele por aqui. #}
+<div class="card border-0 shadow-sm mt-3">
+  <div class="card-body py-2 px-3">
+    {% if materias %}
+    <div class="dou-leitor-materias">
+      <span class="dou-leitor-materias__rot">
+        Nesta página ({{ materias | length }})
+      </span>
+      {% for m in materias %}
+      <a class="dou-leitor-materias__item"
+         href="{{ url_for('dou.materia', article_id=m.id, q=termo_busca or none) }}"
+         title="{{ m.orgao_hierarquia or '' }}">
+        {{ m.identifica or m.titulo or '(sem identificação)' }}
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <span class="text-muted small">
+      <i class="bi bi-dash-circle me-1"></i>
+      Nenhuma matéria indexada nesta página — costuma ser capa, sumário ou
+      página de continuação de um ato que começou antes.
+    </span>
+    {% endif %}
+  </div>
+</div>
+
+</div>
+{% endblock %}

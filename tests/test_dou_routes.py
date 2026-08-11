@@ -47,7 +47,8 @@ def test_rotas_registradas():
     print('\n2. Rotas registradas')
     endpoints = {r.endpoint for r in app.url_map.iter_rules()}
     for esperado in ('dou.edicoes', 'dou.edicao', 'dou.materia', 'dou.captura',
-                     'dou.reprocessar', 'dou.baixar_pdf'):
+                     'dou.reprocessar', 'dou.baixar_pdf', 'dou.leitor',
+                     'dou.pagina_da_edicao_pdf'):
         check(f'{esperado} existe', esperado in endpoints)
 
 
@@ -369,13 +370,15 @@ def test_edicao_do_dia():
 
         check('o PDF assinado está na linha das abas, não no fim do filtro',
               'PDF assinado da seção' in html and 'nav-item ms-auto' in html)
-        check('cada linha tem atalho para a página no PDF',
-              '/pagina.pdf' in html and 'dou-pag-pdf' in html)
+        check('a linha das abas leva ao leitor da edição',
+              'Folhear a edição' in html and '/pagina/1?' in html)
+        check('cada linha tem atalho para a folha daquela página',
+              'dou-pag-pdf' in html and re.search(r'/dou/edicao/[\d-]+/pagina/\d+', html))
 
 
-def test_leitor_da_materia():
-    """Fac-símile ao lado do texto: barra de páginas e sumário da edição."""
-    print('\n10. Tela da matéria (folha oficial + texto)')
+def test_leitor_da_edicao():
+    """A folha do Diário em tela própria: barra de páginas e sumário."""
+    print('\n10. Leitor da edição (a folha sozinha)')
     from app.blueprints import dou as tela
 
     # --- função pura: a janela do recorte encosta nas bordas sem estourar
@@ -405,15 +408,11 @@ def test_leitor_da_materia():
             return
 
         user_id, firm_id = usuario.id, usuario.law_firm_id
-        artigo_id, pagina_da_materia = artigo.id, artigo.pagina_num
-        edicao_id = edicao.id
+        edicao_id, secao = edicao.id, edicao.secao
+        dia = edicao.data_publicacao.isoformat()
+        artigo_id, pagina = artigo.id, artigo.pagina_num
         total = tela._total_paginas(edicao)
         sumario = tela._sumario_da_edicao(edicao_id)
-
-        # Matéria de uma edição sem o PDF assinado, para o caminho degradado
-        sem_pdf = (DouArticle.query.join(DouEdition)
-                   .filter(DouEdition.pdf_path.is_(None)).first())
-        sem_pdf_id = sem_pdf.id if sem_pdf else None
 
     check('o total de páginas sai do PDF assinado', total > 0, f'total={total}')
     check('o sumário traz órgão e página', bool(sumario) and
@@ -431,56 +430,64 @@ def test_leitor_da_materia():
             sessao['law_firm_id'] = firm_id
             sessao['user_role'] = 'admin'
 
-        html = c.get(f'/dou/materia/{artigo_id}').get_data(as_text=True)
+        base = f'/dou/edicao/{dia}/pagina'
         recorte = f'/dou/edicao/{edicao_id}/pagina/'
+        html = c.get(f'{base}/{pagina}?secao={secao}').get_data(as_text=True)
 
-        check('o texto e a folha dividem a tela, sem abas',
-              'dou-materia--com-pagina' in html and 'data-bs-toggle="tab"' not in html)
+        check('o leitor abre', 'dou-pdf-quadro--leitor' in html)
         check('a barra diz em que página está e quantas há',
               f'de {total}' in html and 'dou-leitor-barra' in html)
-        check('a folha abre na página da matéria',
-              f'{recorte}{pagina_da_materia}.pdf' in html)
-        check('o campo "ir para" existe', 'name="pagina"' in html)
+        check('a folha da página pedida está no quadro',
+              f'{recorte}{pagina}.pdf' in html)
         check('o sumário da edição está na barra',
               'Sumário da edição' in html and f'{sumario[0][0]} — pág.' in html)
         check('nenhum órgão vem pré-selecionado no sumário',
               html.count('<option value="" selected>') == 1,
-              'marcar um órgão anunciaria um que não é o da matéria')
+              'marcar um órgão anunciaria um que não é o desta folha')
+        check('o leitor não traz o texto do ato', 'dou-texto' not in html)
+        check('a folha tem a volta para o inteiro teor',
+              f'/dou/materia/{artigo_id}' in html or 'Nenhuma matéria indexada' in html)
 
         # --- folhear
-        outra = total if total != pagina_da_materia else max(1, total - 1)
-        andou = c.get(f'/dou/materia/{artigo_id}?pagina={outra}').get_data(as_text=True)
-        check('folhear troca a página da folha', f'{recorte}{outra}.pdf' in andou)
-        check('fora da página da matéria, a tela avisa e oferece a volta',
-              'saiu da página da matéria' in andou
-              and f'pagina={pagina_da_materia}' in andou)
+        outra = total if total != pagina else max(1, total - 1)
+        andou = c.get(f'{base}/{outra}?secao={secao}').get_data(as_text=True)
+        check('folhear troca a folha', f'{recorte}{outra}.pdf' in andou)
 
-        # Número inválido não pode dar 404 nem visualizador em branco
-        alto = c.get(f'/dou/materia/{artigo_id}?pagina=99999').get_data(as_text=True)
-        check('página acima do fim cai na última', f'{recorte}{total}.pdf' in alto)
-        baixo = c.get(f'/dou/materia/{artigo_id}?pagina=0').get_data(as_text=True)
-        check('página zero cai na primeira', f'{recorte}1.pdf' in baixo)
+        # "Ir para" é um GET sem JavaScript e cai no endereço canônico
+        pulo = c.get(f'{base}/{pagina}?secao={secao}&pagina={outra}')
+        check('"ir para" redireciona para o endereço da página',
+              pulo.status_code == 302
+              and pulo.headers.get('Location', '').endswith(f'/pagina/{outra}?secao={secao}'),
+              f'{pulo.status_code} {pulo.headers.get("Location")}')
+        check('"ir para" na página em que já se está não entra em laço',
+              c.get(f'{base}/{pagina}?secao={secao}&pagina={pagina}').status_code == 200)
 
-        # --- a rota do recorte
+        # Número inválido prende na borda em vez de dar 404
+        check('página acima do fim cai na última',
+              f'{recorte}{total}.pdf' in c.get(f'{base}/99999?secao={secao}').get_data(as_text=True))
+        check('página zero cai na primeira',
+              f'{recorte}1.pdf' in c.get(f'{base}/0?secao={secao}').get_data(as_text=True))
+        check('data que não é data dá 404',
+              c.get('/dou/edicao/nao-e-data/pagina/1').status_code == 404)
+
+        # --- a rota do recorte não pode ser engolida pela rota do leitor
         pdf = c.get(f'{recorte}{outra}.pdf')
-        check('o recorte de uma página qualquer é um PDF',
+        check('o recorte continua sendo servido como PDF',
               pdf.status_code == 200 and pdf.content_type == 'application/pdf',
               f'{pdf.status_code} {pdf.content_type}')
         check('o recorte não carrega a seção inteira',
               len(pdf.data) < 5 * 1024 * 1024, f'{len(pdf.data) // 1024} KB')
-        check('página inexistente dá 404, não 500',
+        check('página inexistente no PDF dá 404, não 500',
               c.get(f'{recorte}99999.pdf').status_code == 404)
-        check('o atalho por linha da listagem continua valendo',
-              c.get(f'/dou/materia/{artigo_id}/pagina.pdf').status_code == 200)
 
-        # --- sem PDF assinado, a tela não pode oferecer o que não tem
-        if sem_pdf_id:
-            nu = c.get(f'/dou/materia/{sem_pdf_id}')
-            corpo = nu.get_data(as_text=True)
-            check('sem PDF, a matéria abre mesmo assim', nu.status_code == 200)
-            check('sem PDF, nem barra nem folha',
-                  'dou-leitor-barra' not in corpo and 'dou-pdf-quadro' not in corpo)
-            check('sem PDF, o texto continua inteiro', 'dou-texto' in corpo)
+        # --- a matéria continua sendo a tela do texto, e leva ao leitor
+        materia = c.get(f'/dou/materia/{artigo_id}').get_data(as_text=True)
+        check('a matéria voltou a ser texto com aba, não duas colunas',
+              'dou-materia--com-pagina' not in materia
+              and 'data-bs-toggle="tab"' in materia)
+        check('a matéria aponta para o leitor',
+              f'{base}/{pagina}?secao={secao}' in materia
+              or f'/pagina/{pagina}?' in materia)
 
 
 def main():
@@ -497,7 +504,7 @@ def main():
     test_chip_da_header()
     test_contadores_de_saude()
     test_edicao_do_dia()
-    test_leitor_da_materia()
+    test_leitor_da_edicao()
 
     print('\n' + '=' * 60)
     if _falhas:
