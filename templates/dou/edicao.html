@@ -3,7 +3,13 @@
 
 {% block title %}DOU de {{ data.strftime('%d/%m/%Y') }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="dou-page dou-page--lista">
+
 {{ page_hero(
      'Diário Oficial de ' ~ data.strftime('%d/%m/%Y'),
      'Matérias publicadas nesta edição',
@@ -11,11 +17,37 @@
      [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
       {'label': data.strftime('%d/%m/%Y'), 'active': True}]) }}
 
-<div class="row mb-3">
-  <div class="col-12">
-    <a href="{{ url_for('dou.edicoes') }}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-arrow-left me-1"></i>Todas as edições
+{# Navegar de dia em dia é como o Diário é lido. Os saltos vêm do acervo, não
+   de data ± 1, então pulam fim de semana, feriado e lacuna de captura. #}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <a href="{{ url_for('dou.edicoes') }}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Todas as edições
+  </a>
+  <div class="dou-dia-nav">
+    {% if dia_anterior %}
+    <a class="btn btn-outline-secondary btn-sm"
+       href="{{ url_for('dou.edicao', data_str=dia_anterior.isoformat(), secao=ativa.secao if ativa) }}"
+       title="Edição anterior no acervo">
+      <i class="bi bi-chevron-left me-1"></i>{{ dias_semana[dia_anterior.weekday()] }}
+      {{ dia_anterior.strftime('%d/%m') }}
     </a>
+    {% else %}
+    <span class="btn btn-outline-secondary btn-sm disabled">
+      <i class="bi bi-chevron-left me-1"></i>mais antiga
+    </span>
+    {% endif %}
+    {% if dia_seguinte %}
+    <a class="btn btn-outline-secondary btn-sm"
+       href="{{ url_for('dou.edicao', data_str=dia_seguinte.isoformat(), secao=ativa.secao if ativa) }}"
+       title="Próxima edição no acervo">
+      {{ dias_semana[dia_seguinte.weekday()] }} {{ dia_seguinte.strftime('%d/%m') }}
+      <i class="bi bi-chevron-right ms-1"></i>
+    </a>
+    {% else %}
+    <span class="btn btn-outline-secondary btn-sm disabled">
+      mais recente<i class="bi bi-chevron-right ms-1"></i>
+    </span>
+    {% endif %}
   </div>
 </div>
 
@@ -31,7 +63,9 @@
 </div>
 {% else %}
 
-<ul class="nav nav-tabs mb-0">
+{# O PDF assinado é ação da seção, então fica na linha das abas — antes ficava
+   no fim da barra de filtros, onde ninguém procura por ele. #}
+<ul class="nav nav-tabs mb-0 align-items-end">
   {% for e in abas %}
   <li class="nav-item">
     <a class="nav-link {{ 'active' if ativa and e.id == ativa.id else '' }}"
@@ -41,69 +75,104 @@
     </a>
   </li>
   {% endfor %}
+  {% if ativa and ativa.pdf_disponivel %}
+  <li class="nav-item ms-auto pb-2 ps-2">
+    <a href="{{ url_for('dou.baixar_pdf', edition_id=ativa.id) }}"
+       target="_blank" rel="noopener" class="btn btn-outline-danger btn-sm"
+       title="Abrir em nova aba o PDF assinado completo desta seção">
+      <i class="bi bi-file-earmark-pdf me-1"></i>PDF assinado da seção
+      <i class="bi bi-box-arrow-up-right ms-1 small"></i>
+    </a>
+  </li>
+  {% endif %}
 </ul>
 
 <div class="card border-0 shadow-sm rounded-top-0">
   <div class="card-body">
-    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
-      <form method="get" class="row g-2 align-items-end flex-grow-1">
-        <input type="hidden" name="secao" value="{{ ativa.secao if ativa }}">
-        <div class="col-md-4">
-          <label class="form-label small text-muted mb-1">Órgão</label>
-          <input type="text" name="orgao" value="{{ f_orgao }}"
-                 class="form-control form-control-sm" placeholder="ex.: Previdência">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small text-muted mb-1">Tipo de ato</label>
-          <select name="tipo" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            {% for t in tipos %}
-            <option value="{{ t }}" {{ 'selected' if t == f_tipo }}>{{ t }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-3">
-          <label class="form-label small text-muted mb-1">Ordenar por</label>
-          <select name="ordem" class="form-select form-select-sm" onchange="this.form.submit()">
-            {% for chave, rotulo in ordens.items() %}
-            <option value="{{ chave }}" {{ 'selected' if chave == f_ordem }}>{{ rotulo }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-auto">
-          <button type="submit" class="btn btn-primary btn-sm">
-            <i class="bi bi-funnel me-1"></i>Filtrar
-          </button>
-          {% if f_orgao or f_tipo %}
-          <a href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao) }}"
-             class="btn btn-outline-secondary btn-sm">Limpar</a>
+    <form method="get" class="row g-2 align-items-end mb-3">
+      <input type="hidden" name="secao" value="{{ ativa.secao if ativa }}">
+      <div class="col-md-4">
+        <label class="form-label small text-muted mb-1">Buscar nesta seção</label>
+        <input type="search" name="q" value="{{ f_q }}" class="form-control form-control-sm"
+               placeholder="título ou ementa da matéria">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Órgão</label>
+        <select name="orgao" class="form-select form-select-sm">
+          <option value="">Todos os órgãos</option>
+          {% for nome, qtd in orgaos %}
+          <option value="{{ nome }}" {{ 'selected' if nome == f_orgao }}>
+            {{ nome }} ({{ qtd }})
+          </option>
+          {% endfor %}
+          {# Valor fora da lista (link antigo) não pode sumir do select, senão o
+             filtro fica ativo sem aparecer em lugar nenhum. #}
+          {% if f_orgao and f_orgao not in orgaos | map(attribute=0) | list %}
+          <option value="{{ f_orgao }}" selected>{{ f_orgao }}</option>
           {% endif %}
-        </div>
-      </form>
-
-      {% if ativa and ativa.pdf_disponivel %}
-      <a href="{{ url_for('dou.baixar_pdf', edition_id=ativa.id) }}"
-         target="_blank" rel="noopener"
-         class="btn btn-outline-danger btn-sm"
-         title="Abrir em nova aba">
-        <i class="bi bi-file-earmark-pdf me-1"></i>PDF assinado desta seção
-        <i class="bi bi-box-arrow-up-right ms-1 small"></i>
-      </a>
-      {% endif %}
-    </div>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">Tipo de ato</label>
+        <select name="tipo" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          {% for t in tipos %}
+          <option value="{{ t }}" {{ 'selected' if t == f_tipo }}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">Ordenar por</label>
+        <select name="ordem" class="form-select form-select-sm" onchange="this.form.submit()">
+          {% for chave, rotulo in ordens.items() %}
+          <option value="{{ chave }}" {{ 'selected' if chave == f_ordem }}>{{ rotulo }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-funnel me-1"></i>Filtrar
+        </button>
+        {% if f_orgao or f_tipo or f_q %}
+        <a href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao) }}"
+           class="btn btn-outline-secondary btn-sm">Limpar</a>
+        {% endif %}
+      </div>
+    </form>
 
     {% if materias and materias.items %}
+    {% if f_orgao or f_tipo or f_q %}
+    <p class="text-muted small mb-2">
+      <i class="bi bi-funnel me-1"></i>
+      <strong>{{ '{:,}'.format(materias.total).replace(',', '.') }}</strong>
+      {{ 'matéria' if materias.total == 1 else 'matérias' }} de
+      {{ '{:,}'.format(ativa.qtd_materias).replace(',', '.') }} na seção.
+    </p>
+    {% endif %}
+
+    {% set colunas = 3 if agrupado else 4 %}
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead class="table-light">
           <tr>
             <th style="width: 62px;" class="text-end">Pág.</th>
             <th>Matéria</th>
-            <th style="width: 34%;">Órgão</th>
+            <th style="width: 52px;" class="text-center" title="Abrir a página no PDF assinado">PDF</th>
+            {% if not agrupado %}<th style="width: 32%;">Órgão</th>{% endif %}
           </tr>
         </thead>
         <tbody>
-          {% for m in materias.items %}
+          {% for rotulo, itens in blocos %}
+          {% if rotulo %}
+          <tr class="dou-grupo">
+            <th colspan="{{ colunas }}">
+              <i class="bi bi-bank me-1"></i>{{ rotulo }}
+              <span class="dou-grupo__qtd"
+                    title="matérias deste órgão nesta página">{{ itens | length }}</span>
+            </th>
+          </tr>
+          {% endif %}
+          {% for m, orgao_raiz, unidade in itens %}
           <tr>
             <td class="text-end text-muted small" style="font-variant-numeric: tabular-nums;">
               {{ m.pagina or '—' }}
@@ -113,12 +182,35 @@
                  class="fw-semibold text-decoration-none">
                 {{ m.identifica or m.titulo or '(sem identificação)' }}
               </a>
+              {% if agrupado and unidade %}
+              {# A raiz já está no cabeçalho do grupo; aqui vai só o que sobra
+                 dela, para não perder a unidade que assinou o ato. #}
+              <div class="dou-subunidade">{{ unidade }}</div>
+              {% endif %}
               {% if m.ementa %}
               <div class="text-muted small text-truncate" style="max-width: 560px;">{{ m.ementa }}</div>
               {% endif %}
             </td>
-            <td class="small text-muted">{{ m.orgao_hierarquia or '—' }}</td>
+            {# Atalho para o fac-símile: a rota já recorta a página da matéria e
+               as vizinhas, então dá para conferir o ato oficial sem abrir a
+               matéria antes. #}
+            <td class="text-center">
+              {% if ativa.pdf_disponivel and m.pagina_num %}
+              <a class="dou-pag-pdf" target="_blank" rel="noopener"
+                 href="{{ url_for('dou.pagina_pdf', article_id=m.id, q=f_q or none) }}"
+                 title="Abrir a página {{ m.pagina }} do PDF assinado em nova aba">
+                <i class="bi bi-file-earmark-pdf"></i>
+              </a>
+              {% endif %}
+            </td>
+            {% if not agrupado %}
+            <td class="small text-muted" title="{{ m.orgao_hierarquia or '' }}">
+              {{ orgao_raiz or '—' }}
+              {% if unidade %}<div class="dou-subunidade">{{ unidade }}</div>{% endif %}
+            </td>
+            {% endif %}
           </tr>
+          {% endfor %}
           {% endfor %}
         </tbody>
       </table>
@@ -133,11 +225,11 @@
       <div class="btn-group btn-group-sm">
         {% if materias.has_prev %}
         <a class="btn btn-outline-secondary"
-           href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao, orgao=f_orgao, tipo=f_tipo, ordem=f_ordem, page=materias.prev_num) }}">Anterior</a>
+           href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao, orgao=f_orgao, tipo=f_tipo, q=f_q, ordem=f_ordem, page=materias.prev_num) }}">Anterior</a>
         {% endif %}
         {% if materias.has_next %}
         <a class="btn btn-outline-secondary"
-           href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao, orgao=f_orgao, tipo=f_tipo, ordem=f_ordem, page=materias.next_num) }}">Próxima</a>
+           href="{{ url_for('dou.edicao', data_str=data.isoformat(), secao=ativa.secao, orgao=f_orgao, tipo=f_tipo, q=f_q, ordem=f_ordem, page=materias.next_num) }}">Próxima</a>
         {% endif %}
       </div>
     </div>
@@ -146,7 +238,14 @@
     {% else %}
     <div class="text-center py-5 text-muted">
       <i class="bi bi-search display-6"></i>
-      <p class="mt-2 mb-0">Nenhuma matéria para os filtros escolhidos.</p>
+      <p class="mt-2 mb-1">Nenhuma matéria para os filtros escolhidos.</p>
+      {% if f_q %}
+      <p class="small mb-0">
+        A busca aqui olha título e ementa desta seção.
+        <a href="{{ url_for('dou.busca', q=f_q) }}">Procurar “{{ f_q }}” em todo o acervo</a>,
+        inclusive no inteiro teor.
+      </p>
+      {% endif %}
     </div>
     {% endif %}
   </div>
@@ -169,4 +268,5 @@
   {% endif %}
 </p>
 {% endif %}
+</div>
 {% endblock %}

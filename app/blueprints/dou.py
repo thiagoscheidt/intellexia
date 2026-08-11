@@ -26,11 +26,12 @@ a proteção é a permissão de módulo, aplicada pelo middleware.
 
 from datetime import datetime
 from io import BytesIO
+from itertools import groupby
 from pathlib import Path
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, flash, send_file, abort, session, current_app)
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.models import db, DouEdition, DouArticle, DouSyncRun, Client
 
@@ -85,6 +86,93 @@ def _ordenacao(ordem):
     if ordem == 'tipo':
         return (DouArticle.art_type, *pagina, DouArticle.id)
     return (*pagina, DouArticle.id)
+
+
+def _dias_vizinhos(data):
+    """Datas com edição no acervo imediatamente antes e depois de ``data``.
+
+    Quem lê o Diário lê dia após dia; sem isso o único caminho é voltar à
+    listagem e reentrar. Vem do acervo, não de ``data ± 1``: assim o salto
+    pula fim de semana, feriado e qualquer lacuna de captura sem precisar
+    saber o calendário.
+    """
+    base = (db.session.query(DouEdition.data_publicacao)
+            .filter(DouEdition.status == DouEdition.STATUS_PARSED))
+    anterior = (base.filter(DouEdition.data_publicacao < data)
+                .order_by(DouEdition.data_publicacao.desc()).first())
+    seguinte = (base.filter(DouEdition.data_publicacao > data)
+                .order_by(DouEdition.data_publicacao.asc()).first())
+    return (anterior[0] if anterior else None,
+            seguinte[0] if seguinte else None)
+
+
+def _orgaos_da_secao(edition_id):
+    """Órgãos-raiz da seção com a contagem de matérias, para o filtro.
+
+    Só a raiz da hierarquia: uma seção tem ~104 hierarquias completas, que não
+    viram filtro usável, contra ~27 raízes. É o mesmo recorte da busca global
+    (``dou_search_service.orgao_raiz``), então os dois filtram igual.
+
+    A agregação é em Python porque cortar na barra dentro do SQL não é
+    portável entre SQLite e MySQL — e são ~100 linhas, não uma varredura.
+    """
+    linhas = (db.session.query(DouArticle.orgao_hierarquia, func.count())
+              .filter(DouArticle.edition_id == edition_id)
+              .group_by(DouArticle.orgao_hierarquia).all())
+    totais = {}
+    for hierarquia, qtd in linhas:
+        raiz = busca_service.orgao_raiz(hierarquia)
+        if raiz:
+            totais[raiz] = totais.get(raiz, 0) + qtd
+    return sorted(totais.items(), key=lambda item: (-item[1], item[0]))
+
+
+def _blocos_de_materias(itens, agrupar):
+    """Linhas em blocos ``(cabeçalho, [(matéria, órgão, unidade)])``.
+
+    Sem agrupamento vem um bloco único sem cabeçalho, para a tela percorrer os
+    dois casos com o mesmo laço.
+
+    Agrupa pela **raiz** da hierarquia, não pela hierarquia completa: na Seção 3
+    cada aviso sai de uma unidade diferente e a hierarquia inteira dava 36
+    grupos para 50 linhas — cabeçalho por linha não é estrutura, é ruído. A
+    raiz é o mesmo recorte do filtro de órgão, então cabeçalho e filtro falam
+    a mesma língua; a unidade continua visível em cada linha.
+
+    Só faz sentido ordenado por órgão: na ordem de página a raiz vai e volta e
+    os blocos voltariam a picotar.
+    """
+    if not agrupar:
+        return [(None, [(a, *_orgao_da_linha(a, False)) for a in itens])]
+
+    return [
+        (raiz or '—', [(a, *_orgao_da_linha(a, True)) for a in linhas])
+        for raiz, linhas in groupby(
+            itens, key=lambda a: busca_service.orgao_raiz(a.orgao_hierarquia))
+    ]
+
+
+def _orgao_da_linha(artigo, agrupado):
+    """O que a linha mostra do órgão: ``(raiz, unidade)``.
+
+    Agrupado, a raiz já está no cabeçalho e a linha leva o caminho abaixo dela.
+
+    Fora do agrupamento, a hierarquia inteira ocupava quatro linhas por matéria
+    ("Presidência da República/Advocacia-Geral da União/Secretaria-Geral
+    de.../Superintendência..."), inflando a altura da tabela. Sobram a raiz e a
+    unidade que assinou o ato, que é o que se lê; o caminho completo vai no
+    ``title`` da célula.
+    """
+    hierarquia = (artigo.orgao_hierarquia or '').strip()
+    raiz = busca_service.orgao_raiz(hierarquia)
+    if raiz and hierarquia.startswith(raiz):
+        resto = hierarquia[len(raiz):].lstrip('/').strip()
+    else:
+        raiz, resto = (raiz or hierarquia), ''
+
+    if agrupado:
+        return None, (resto or None)
+    return (raiz or None), (resto.split('/')[-1].strip() or None if resto else None)
 
 
 @dou_bp.app_context_processor
@@ -189,20 +277,46 @@ def edicao(data_str):
 
     orgao = (request.args.get('orgao') or '').strip()
     tipo = (request.args.get('tipo') or '').strip()
+    termo = (request.args.get('q') or '').strip()
     ordem = request.args.get('ordem') if request.args.get('ordem') in ORDENS else 'pagina'
     page = request.args.get('page', 1, type=int)
 
     materias = None
     tipos = []
+    orgaos = []
+    blocos = []
+    agrupado = ordem == 'orgao'
     if ativa is not None:
+        orgaos = _orgaos_da_secao(ativa.id)
+
         query = DouArticle.query.filter(DouArticle.edition_id == ativa.id)
         if orgao:
-            query = query.filter(DouArticle.orgao_hierarquia.ilike(f'%{orgao}%'))
+            if orgao in dict(orgaos):
+                # Raiz escolhida no select: casa o órgão exato e tudo abaixo
+                # dele na hierarquia. `startswith` com autoescape porque nome
+                # de órgão pode conter os curingas do LIKE.
+                query = query.filter(or_(
+                    DouArticle.orgao_hierarquia == orgao,
+                    DouArticle.orgao_hierarquia.startswith(orgao + '/',
+                                                           autoescape=True)))
+            else:
+                # Valor fora da lista (link antigo, digitação): cai no
+                # comportamento anterior em vez de devolver tela vazia.
+                query = query.filter(DouArticle.orgao_hierarquia.ilike(f'%{orgao}%'))
         if tipo:
             query = query.filter(DouArticle.art_type == tipo)
+        if termo:
+            # Só identificação, título e ementa. O inteiro teor é longtext e
+            # varrê-lo com LIKE não escala; quem quer o corpo do ato tem a
+            # busca global, que é indexada.
+            like = f'%{termo}%'
+            query = query.filter(or_(DouArticle.identifica.ilike(like),
+                                     DouArticle.titulo.ilike(like),
+                                     DouArticle.ementa.ilike(like)))
 
         materias = (query.order_by(*_ordenacao(ordem))
                     .paginate(page=page, per_page=PER_PAGE_MATERIAS, error_out=False))
+        blocos = _blocos_de_materias(materias.items, agrupado)
 
         tipos = [
             t[0] for t in db.session.query(DouArticle.art_type)
@@ -211,13 +325,18 @@ def edicao(data_str):
             .distinct().order_by(DouArticle.art_type).all()
         ]
 
+    anterior, seguinte = _dias_vizinhos(data)
+
     return render_template('dou/edicao.html', data=data, abas=abas, ativa=ativa,
                            nao_publicadas=[e for e in todas
                                            if e.status == DouEdition.STATUS_NOT_PUBLISHED],
                            com_erro=[e for e in todas
                                      if e.status == DouEdition.STATUS_ERROR],
-                           materias=materias, tipos=tipos, ordens=ORDENS,
-                           f_orgao=orgao, f_tipo=tipo, f_ordem=ordem)
+                           materias=materias, blocos=blocos, agrupado=agrupado,
+                           tipos=tipos,
+                           orgaos=orgaos, ordens=ORDENS, dias_semana=DIAS_SEMANA,
+                           dia_anterior=anterior, dia_seguinte=seguinte,
+                           f_orgao=orgao, f_tipo=tipo, f_ordem=ordem, f_q=termo)
 
 
 # ----------------------------------------------------------------- busca

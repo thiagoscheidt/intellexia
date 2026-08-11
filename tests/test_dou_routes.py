@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from flask import render_template
 
 from main import app
-from app.models import User, DouEdition, DouArticle
+from app.models import db, User, DouEdition, DouArticle
 from app.utils.permissions import (MODULE_PERMISSIONS, ENDPOINT_MODULE_MAP,
                                    ROLE_DEFAULT_MODULE_PERMISSIONS)
 
@@ -261,6 +261,118 @@ def test_contadores_de_saude():
           saude['badge'] == bool(saude['com_erro'] or saude['parada']), str(saude))
 
 
+def test_edicao_do_dia():
+    """Navegação entre dias, filtros e atalhos da tela da edição."""
+    print('\n9. Tela da edição do dia')
+    from app.blueprints import dou as tela
+
+    # --- funções puras, sem banco
+    class Fake:
+        def __init__(self, h): self.orgao_hierarquia = h
+
+    raiz, unidade = tela._orgao_da_linha(
+        Fake('Presidência da República/Casa Civil/Agência Brasileira de Inteligência'),
+        agrupado=False)
+    check('fora do agrupamento: raiz + unidade que assinou',
+          (raiz, unidade) == ('Presidência da República',
+                              'Agência Brasileira de Inteligência'),
+          f'{raiz!r} / {unidade!r}')
+
+    raiz, unidade = tela._orgao_da_linha(
+        Fake('Presidência da República/Casa Civil/Agência Brasileira de Inteligência'),
+        agrupado=True)
+    check('agrupado: a raiz sai da linha (já está no cabeçalho)', raiz is None, repr(raiz))
+    check('agrupado: a linha leva o caminho abaixo da raiz',
+          unidade == 'Casa Civil/Agência Brasileira de Inteligência', repr(unidade))
+
+    check('hierarquia vazia não quebra',
+          tela._orgao_da_linha(Fake(None), agrupado=False) == (None, None),
+          str(tela._orgao_da_linha(Fake(None), agrupado=False)))
+
+    check('sem agrupar, um bloco só e sem cabeçalho',
+          tela._blocos_de_materias([Fake('A/B')], agrupar=False)[0][0] is None)
+
+    blocos = tela._blocos_de_materias(
+        [Fake('Ministério X/Unidade 1'), Fake('Ministério X/Unidade 2'),
+         Fake('Ministério Y/Unidade 3')], agrupar=True)
+    check('agrupa pela raiz, não pela hierarquia completa',
+          [(rotulo, len(itens)) for rotulo, itens in blocos]
+          == [('Ministério X', 2), ('Ministério Y', 1)],
+          str([(r, len(i)) for r, i in blocos]))
+
+    # --- tela
+    with app.app_context():
+        usuario = User.query.filter_by(role='admin').first()
+        edicao = (DouEdition.query.filter_by(status=DouEdition.STATUS_PARSED)
+                  .filter(DouEdition.qtd_materias > 0)
+                  .order_by(DouEdition.data_publicacao.desc()).first())
+        if usuario is None or edicao is None:
+            print('  ⏭️  sem usuário admin ou sem edição capturada — pulando')
+            return
+        user_id, firm_id = usuario.id, usuario.law_firm_id
+        dia, secao = edicao.data_publicacao.isoformat(), edicao.secao
+        tem_pdf = edicao.pdf_disponivel
+        anteriores = [
+            d for (d,) in db.session.query(DouEdition.data_publicacao)
+            .filter(DouEdition.status == DouEdition.STATUS_PARSED,
+                    DouEdition.data_publicacao < edicao.data_publicacao)
+            .distinct().order_by(DouEdition.data_publicacao.desc()).limit(1)]
+
+    with app.test_client() as c:
+        with c.session_transaction() as sessao:
+            sessao['user_id'] = user_id
+            sessao['law_firm_id'] = firm_id
+            sessao['user_role'] = 'admin'
+
+        base = f'/dou/edicao/{dia}?secao={secao}'
+        html = c.get(base).get_data(as_text=True)
+
+        check('a edição mais recente não oferece "próxima"',
+              'mais recente' in html, 'botão de dia seguinte apareceu na ponta')
+        if anteriores:
+            check('o salto para o dia anterior vem do acervo, não de data-1',
+                  f'/dou/edicao/{anteriores[0].isoformat()}' in html,
+                  f'esperava link para {anteriores[0]}')
+
+        check('o filtro de órgão é select, não campo livre',
+              'Todos os órgãos' in html and 'name="orgao"' in html)
+        check('a busca dentro do dia existe', 'name="q"' in html)
+        check('na ordem de página a coluna Órgão fica e não há grupos',
+              '>Órgão</th>' in html and 'class="dou-grupo"' not in html)
+
+        agrupado = c.get(base + '&ordem=orgao').get_data(as_text=True)
+        check('ordenando por órgão, aparecem cabeçalhos de grupo',
+              'class="dou-grupo"' in agrupado)
+        check('agrupado, a coluna Órgão sai (viraria repetição do cabeçalho)',
+              '>Órgão</th>' not in agrupado)
+
+        vazio = c.get(base + '&q=' + 'z' * 25).get_data(as_text=True)
+        check('busca sem resultado não dá 500 e aponta a busca global',
+              '/dou/busca?q=' in vazio, 'faltou a saída para o acervo inteiro')
+
+        # Os atalhos de PDF exigem uma seção com o assinado baixado — a edição
+        # mais recente costuma ainda não ter o dela.
+        if not tem_pdf:
+            with app.app_context():
+                com_pdf = (DouEdition.query
+                           .filter_by(status=DouEdition.STATUS_PARSED)
+                           .filter(DouEdition.pdf_path.isnot(None),
+                                   DouEdition.qtd_materias > 0)
+                           .order_by(DouEdition.data_publicacao.desc()).first())
+                alvo = ((com_pdf.data_publicacao.isoformat(), com_pdf.secao)
+                        if com_pdf and com_pdf.pdf_disponivel else None)
+            if alvo is None:
+                print('  ⏭️  nenhuma edição com PDF assinado no acervo — atalhos não '
+                      'verificados')
+                return
+            html = c.get(f'/dou/edicao/{alvo[0]}?secao={alvo[1]}').get_data(as_text=True)
+
+        check('o PDF assinado está na linha das abas, não no fim do filtro',
+              'PDF assinado da seção' in html and 'nav-item ms-auto' in html)
+        check('cada linha tem atalho para a página no PDF',
+              '/pagina.pdf' in html and 'dou-pag-pdf' in html)
+
+
 def main():
     print('=' * 60)
     print('TESTES DAS ROTAS DO DIÁRIO OFICIAL')
@@ -274,6 +386,7 @@ def main():
     test_tela_de_busca()
     test_chip_da_header()
     test_contadores_de_saude()
+    test_edicao_do_dia()
 
     print('\n' + '=' * 60)
     if _falhas:
