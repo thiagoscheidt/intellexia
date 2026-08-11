@@ -566,16 +566,19 @@ def _grifar(recorte, termos) -> int:
     return primeira
 
 
-def _entregar_recorte(edicao_obj, pagina_num, consulta):
-    """A página pedida e as vizinhas, recortadas do PDF assinado da seção.
+def _entregar_recorte(edicao_obj, pagina_num, consulta, vizinhas=True):
+    """A página pedida, recortada do PDF assinado da seção.
 
     Mandar o PDF inteiro para mostrar uma página é inviável: a Seção 3 tem
     60 MB. O recorte custa poucos milissegundos e o tamanho não depende do
     arquivo de origem. Mantém o texto selecionável, o que uma imagem perderia.
 
-    Vêm a anterior e a seguinte porque matéria não respeita limite de página:
-    um edital começa numa e termina na outra, e mostrar só a página registrada
-    entregaria o ato cortado.
+    Com ``vizinhas``, vêm também a anterior e a seguinte — é o que a tela da
+    matéria pede, porque matéria não respeita limite de página: um edital
+    começa numa e termina na outra, e mostrar só a registrada entregaria o ato
+    cortado. O leitor pede sem: lá a folha é a tela inteira e o ``›`` já leva à
+    seguinte, então as três faziam a página escolhida dividir espaço com duas
+    que ninguém pediu.
     """
     if not (edicao_obj and edicao_obj.pdf_disponivel and pagina_num):
         abort(404)
@@ -592,7 +595,8 @@ def _entregar_recorte(edicao_obj, pagina_num, consulta):
             indice = pagina_num - 1
             if not 0 <= indice < documento.page_count:
                 abort(404)
-            inicio, fim = _janela_do_recorte(pagina_num, documento.page_count)
+            inicio, fim = (_janela_do_recorte(pagina_num, documento.page_count)
+                           if vizinhas else (indice, indice))
             with fitz.open() as recorte:
                 recorte.insert_pdf(documento, from_page=inicio, to_page=fim)
 
@@ -633,14 +637,13 @@ def pagina_pdf(article_id):
 
 @dou_bp.route('/edicao/<int:edition_id>/pagina/<int:numero>.pdf')
 def pagina_da_edicao_pdf(edition_id, numero):
-    """O recorte numa página qualquer da seção.
+    """A folha de uma página qualquer da seção, sozinha — é o que o leitor usa.
 
-    Separada de ``pagina_pdf`` porque a barra de navegação da matéria anda pela
-    seção inteira: a partir do primeiro salto a matéria já não é a referência,
-    só a edição.
+    Separada de ``pagina_pdf`` porque aqui a referência é a edição, não a
+    matéria: o leitor anda pela seção inteira e entrega uma página por vez.
     """
     return _entregar_recorte(DouEdition.query.get_or_404(edition_id), numero,
-                             request.args.get('q'))
+                             request.args.get('q'), vizinhas=False)
 
 
 @dou_bp.route('/edicao/<int:edition_id>/pdf')

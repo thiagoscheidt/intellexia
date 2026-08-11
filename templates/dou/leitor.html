@@ -97,12 +97,12 @@
       </a>
     </div>
 
-    {# Só três páginas recortadas do PDF da seção: ~510 KB em vez dos 60 MB do
-       arquivo inteiro. As vizinhas vêm junto porque um ato pode continuar na
-       página seguinte, e o visualizador abre na do meio. #}
+    {# Uma página só, recortada do PDF da seção: quem quer a seguinte tem o ›.
+       O recorte também evita mandar os 60 MB da seção inteira para mostrar
+       uma folha. #}
     <iframe class="dou-pdf-quadro dou-pdf-quadro--leitor"
             title="Página {{ numero }} do Diário Oficial de {{ data.strftime('%d/%m/%Y') }}"
-            src="{{ url_for('dou.pagina_da_edicao_pdf', edition_id=ativa.id, numero=numero, q=termo_busca or None) }}#page={{ 1 if numero <= 1 else 2 }}"></iframe>
+            src="{{ url_for('dou.pagina_da_edicao_pdf', edition_id=ativa.id, numero=numero, q=termo_busca or None) }}"></iframe>
   </div>
 </div>
 

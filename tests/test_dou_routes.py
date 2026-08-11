@@ -480,6 +480,27 @@ def test_leitor_da_edicao():
         check('página inexistente no PDF dá 404, não 500',
               c.get(f'{recorte}99999.pdf').status_code == 404)
 
+        # No leitor a folha vem sozinha; na matéria, com as vizinhas, porque um
+        # ato começa numa página e termina na outra.
+        import fitz
+        with fitz.open(stream=pdf.data, filetype='pdf') as doc:
+            paginas_leitor = doc.page_count
+            rotulo = doc[0].get_label()
+        check('o leitor entrega uma página só', paginas_leitor == 1,
+              f'{paginas_leitor} páginas')
+        check('a página recortada mantém o número do Diário',
+              rotulo == str(outra), f'rótulo {rotulo!r}, esperado {outra!r}')
+
+        with app.app_context():
+            adiante = (DouArticle.query.filter_by(edition_id=edicao_id)
+                       .filter(DouArticle.pagina_num > 1).first())
+        if adiante is not None:
+            bruto = c.get(f'/dou/materia/{adiante.id}/pagina.pdf').data
+            with fitz.open(stream=bruto, filetype='pdf') as doc:
+                paginas_materia = doc.page_count
+            check('a matéria continua com a página e as vizinhas',
+                  paginas_materia > 1, f'{paginas_materia} página(s)')
+
         # --- a matéria continua sendo a tela do texto, e leva ao leitor
         materia = c.get(f'/dou/materia/{artigo_id}').get_data(as_text=True)
         check('a matéria voltou a ser texto com aba, não duas colunas',
