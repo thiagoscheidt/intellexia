@@ -1774,7 +1774,6 @@ def _apply_benefits_filters(
     query,
     search_value='',
     custom_filters=None,
-    quick_client='',
     quick_root='',
     quick_cnpj='',
     vigencia_id=None,
@@ -1802,9 +1801,6 @@ def _apply_benefits_filters(
                 func.lower(cast(Benefit.fap_vigencia_years, String)).like(like_term),
             )
         )
-
-    if quick_client:
-        query = query.filter(func.lower(cast(Client.name, String)) == quick_client.strip().lower())
 
     if quick_root:
         root = ''.join(ch for ch in quick_root if ch.isdigit())[:8]
@@ -2733,8 +2729,6 @@ def list_disputes_center():
         for item in cnpj_by_root[root_key]:
             del item['digits']
 
-    client_options = sorted({(name or '').strip() for _, name in clients_data if (name or '').strip()})
-
     current_vigencia_id = _normalize_text(request.args.get('vigencia_id', ''))
     if current_vigencia_id:
         try:
@@ -2800,7 +2794,6 @@ def list_disputes_center():
         fap_group_options=_build_fap_group_options(law_firm_id),
         **_vigencia_contexto(_anos_beneficios(law_firm_id), 'quick_vigencia'),
         cnpj_by_root=cnpj_by_root,
-        client_options=client_options,
         current_vigencia_filter=current_vigencia_filter,
     )
 
@@ -3450,7 +3443,6 @@ def list_disputes_center_api():
         _base_benefits_query(law_firm_id),
         search_value=payload['search'],
         custom_filters=payload['filters'],
-        quick_client=payload['quick_client'],
         quick_root=payload['quick_root'],
         quick_cnpj=payload.get('quick_cnpj', ''),
         quick_category_mode=payload.get('quick_category_mode', 'all'),
@@ -3728,7 +3720,6 @@ def export_disputes_center_excel():
         _base_benefits_query(law_firm_id),
         search_value=payload['search'],
         custom_filters=payload['filters'],
-        quick_client=payload['quick_client'],
         quick_root=payload['quick_root'],
         quick_cnpj=payload.get('quick_cnpj', ''),
         quick_category_mode=payload.get('quick_category_mode', 'all'),

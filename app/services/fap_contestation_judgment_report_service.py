@@ -644,11 +644,26 @@ class FapContestationJudgmentReportService:
         if not normalized_validity_year:
             return candidates[0]
 
+        # 1) O ideal: já existe a linha daquele benefício naquela vigência.
         for candidate in candidates:
             candidate_years = self._parse_vigencia_years(candidate.fap_vigencia_years)
             if normalized_validity_year in candidate_years:
                 return candidate
 
+        # 2) Existe o benefício, mas sem vigência gravada — adota em vez de
+        #    criar outro. `fap_vigencia_years` só é escrito quando o relatório
+        #    traz o ano na capa E a atualização é aplicada; quando a primeira
+        #    importação não conseguiu ler o ano, a linha fica sem ele. Sem este
+        #    ramo, a importação seguinte não reconhecia a linha e inseria uma
+        #    segunda — foi assim que 61 benefícios ficaram duplicados, sempre
+        #    em blocos contíguos de id (o mesmo relatório lido duas vezes).
+        for candidate in candidates:
+            if not self._parse_vigencia_years(candidate.fap_vigencia_years):
+                return candidate
+
+        # 3) Todos os candidatos já têm vigência, e nenhuma é esta: aí sim é
+        #    outra linha legítima — o mesmo benefício pesa em mais de uma
+        #    vigência do FAP, uma linha por vigência.
         return None
 
     @staticmethod

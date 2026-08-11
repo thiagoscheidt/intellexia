@@ -645,15 +645,6 @@
 
               <div class="row g-2 align-items-end mt-1 pt-2 border-top">
                 {{ vigencia_select(vigencia_years, vigencia_selected) }}
-                <div class="col-md-4">
-                  <label for="quickClientFilter" class="form-label mb-1 small text-muted">Cliente</label>
-                  <select id="quickClientFilter" class="form-select form-select-sm">
-                    <option value="">Todos os clientes</option>
-                    {% for name in client_options or [] %}
-                    <option value="{{ name }}">{{ name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
                 <div class="col-md-3">
                   <label for="quickRootCnpjFilter" class="form-label mb-1 small text-muted">CNPJ raiz</label>
                   <select id="quickRootCnpjFilter" class="form-select form-select-sm">
@@ -953,14 +944,10 @@
   }
 
   function applyFiltersFromUrl() {
-    const quickClient = (urlParams.get('quick_client') || '').trim();
     const quickRoot = (urlParams.get('quick_root') || '').trim();
     const quickCategoryMode = (urlParams.get('quick_category_mode') || 'all').trim().toLowerCase();
     const rawFilters = (urlParams.get('custom_filters') || '').trim();
 
-    if (quickClient) {
-      $('#quickClientFilter').val(quickClient);
-    }
 
     if (quickRoot) {
       $('#quickRootCnpjFilter').val(quickRoot);
@@ -1054,7 +1041,6 @@
           operator: filter.operator,
           value: filter.value,
         })));
-        d.quick_client = ($('#quickClientFilter').val() || '').trim();
         d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
         d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
         d.quick_protocolo = ($('#quickProtocoloFilter').val() || '').trim();
@@ -1607,7 +1593,6 @@
         operator: filter.operator,
         value: filter.value,
       })),
-      quick_client: ($('#quickClientFilter').val() || '').trim(),
       quick_root: ($('#quickRootCnpjFilter').val() || '').trim(),
       quick_cnpj: ($('#quickCnpjFilter').val() || '').trim(),
       quick_protocolo: ($('#quickProtocoloFilter').val() || '').trim(),
@@ -1761,7 +1746,6 @@
 
   $('#clearCentralFiltersBtn').on('click', function () {
     filters.splice(0, filters.length);
-    $('#quickClientFilter').val('').trigger('change.select2');
     $('#quickRootCnpjFilter').val('').trigger('change.select2');
     $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
     refreshCnpjSelect2();
@@ -1775,10 +1759,6 @@
     $('#quickVigenciaFilter').val('{{ vigencia_default }}');
     renderActiveFilters();
     table.search('');
-    table.ajax.reload();
-  });
-
-  $('#quickClientFilter').on('change', function () {
     table.ajax.reload();
   });
 
@@ -1843,13 +1823,6 @@
   applyFiltersFromUrl();
 
   if (window.jQuery && $.fn.select2) {
-    $('#quickClientFilter').select2({
-      theme: 'bootstrap-5',
-      allowClear: true,
-      placeholder: 'Todos os clientes',
-      width: '100%',
-      language: { noResults: function () { return 'Nenhum cliente encontrado.'; } },
-    });
     $('#quickGrupoFilter').select2({
       theme: 'bootstrap-5',
       allowClear: true,
@@ -1880,7 +1853,6 @@
   renderActiveFilters();
   if (
     filters.length ||
-    $('#quickClientFilter').val() ||
     $('#quickRootCnpjFilter').val() ||
     ($('#quickCategoryModeFilter').val() || 'all') !== 'all'
   ) {
