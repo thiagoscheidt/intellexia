@@ -32,6 +32,8 @@ from pathlib import Path
 import defusedxml.ElementTree as ElementTree
 from defusedxml.common import DefusedXmlException
 
+from sqlalchemy import func
+
 from app.models import db, DouEdition, DouArticle, DouSyncRun
 from app.services import inlabs_client
 from app.services.dou_xml_parser import parse_article_xml
@@ -366,6 +368,51 @@ def ingest_single_date(data: date, with_pdf: bool = True,
                        dry_run: bool = False) -> DouSyncRun:
     """Reprocessa uma data específica (botão da tela e --data do CLI)."""
     return _executar(DouSyncRun.MODO_MANUAL, [data], with_pdf, dry_run)
+
+
+# ------------------------------------------------------------------- saúde
+
+# Quantos dias úteis de atraso toleramos antes de acusar que a captura parou.
+# Dois, e não um, para um feriado sozinho não disparar alarme falso.
+TOLERANCIA_DIAS_UTEIS = 2
+
+
+def _dias_uteis_entre(inicio: date, fim: date) -> int:
+    """Dias úteis estritamente entre as duas datas. O DOU não sai fim de semana."""
+    dias = 0
+    cursor = inicio + timedelta(days=1)
+    while cursor < fim:
+        if cursor.weekday() < 5:
+            dias += 1
+        cursor += timedelta(days=1)
+    return dias
+
+
+def health_counters() -> dict:
+    """Pendências da captura, para o chip da header. Dois COUNT com índice.
+
+    O DOU não tem fila de trabalho — ninguém "resolve" o Diário Oficial, e um
+    contador de matérias só cresceria. O que pede ação é a captura ter falhado
+    ou parado, e é só isso que este contador reporta.
+
+    Chaves: ``com_erro`` (edições a reprocessar), ``parada`` (o cron não roda),
+    ``ultima_data`` e ``badge`` (há algo a mostrar).
+    """
+    com_erro = DouEdition.query.filter_by(status=DouEdition.STATUS_ERROR).count()
+
+    ultima = (db.session.query(func.max(DouEdition.data_publicacao))
+              .filter(DouEdition.status == DouEdition.STATUS_PARSED).scalar())
+
+    # Acervo vazio não é captura parada: é instalação sem credencial ainda.
+    # Acusar aqui seria alarme para quem nunca ligou o módulo.
+    parada = bool(ultima) and _dias_uteis_entre(ultima, date.today()) >= TOLERANCIA_DIAS_UTEIS
+
+    return {
+        'com_erro': com_erro,
+        'parada': parada,
+        'ultima_data': ultima,
+        'badge': bool(com_erro) or parada,
+    }
 
 
 # ----------------------------------------------------------------- retenção

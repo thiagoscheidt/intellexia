@@ -87,6 +87,24 @@ def _ordenacao(ordem):
     return (*pagina, DouArticle.id)
 
 
+@dou_bp.app_context_processor
+def inject_dou_health():
+    """Chip do Diário Oficial na header (barato: dois COUNT com índice).
+
+    Conta **saúde da captura**, não volume. O DOU não tem fila de trabalho:
+    ninguém "resolve" o Diário, e um contador de matérias só cresceria — ao
+    lado de badges que significam "faça algo", isso ensinaria a ignorar a área
+    inteira. O que pede ação é a captura ter falhado ou parado.
+
+    Sem filtro por escritório, diferente dos outros chips: o acervo é global e
+    a saúde da captura é a mesma para todos.
+    """
+    try:
+        return {'dou_health': ingestion.health_counters()}
+    except Exception:  # noqa: BLE001 — chip nunca derruba a header
+        return {'dou_health': None}
+
+
 # ------------------------------------------------------- nível 1: as edições
 
 @dou_bp.route('/')

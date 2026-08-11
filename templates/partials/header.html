@@ -20,7 +20,10 @@
       {% set show_fap_review_chip = can_view_module('fap_review') and fap_review_pending_counts %}
       {% set show_deadlines_chip = can_view_module('process_panel') and process_deadline_counts
          and (process_deadline_counts.overdue or process_deadline_counts.soon) %}
-      {% if show_communications_chip or show_fap_review_chip or show_deadlines_chip %}
+      {# Saúde da captura do DOU: some quando está tudo em dia — o módulo não
+         tem fila de trabalho, então só aparece quando pede ação. #}
+      {% set show_dou_chip = can_view_module('dou') and dou_health and dou_health.badge %}
+      {% if show_communications_chip or show_fap_review_chip or show_deadlines_chip or show_dou_chip %}
       <li class="nav-item d-flex align-items-center">
         <div class="module-counters">
           {% if show_deadlines_chip %}
@@ -70,6 +73,23 @@
               title="{{ fap_review_pending_counts.awaiting_approval }} aguardando aprovação">{{
               fap_review_pending_counts.awaiting_approval if fap_review_pending_counts.awaiting_approval < 100 else
               '99+' }}</span>
+            {% endif %}
+          </a>
+          {% endif %}
+          {% if show_dou_chip %}
+          <a class="module-counter-chip" href="{{ url_for('dou.captura') }}"
+            title="Diário Oficial{% if dou_health.com_erro %} — {{ dou_health.com_erro }} edição(ões) com falha na captura{% endif %}{% if dou_health.parada %} — nada capturado desde {{ dou_health.ultima_data.strftime('%d/%m/%Y') if dou_health.ultima_data else '—' }}{% endif %}">
+            <i class="bi bi-newspaper"></i>
+            <span class="mc-label">Diário Oficial</span>
+            {% if dou_health.com_erro %}
+            <span class="badge rounded-pill text-bg-warning"
+              title="{{ dou_health.com_erro }} edição(ões) a reprocessar">{{
+              dou_health.com_erro if dou_health.com_erro < 100 else '99+' }}</span>
+            {% endif %}
+            {% if dou_health.parada %}
+            <span class="badge rounded-pill text-bg-danger" title="A captura parou">
+              <i class="bi bi-exclamation-triangle"></i>
+            </span>
             {% endif %}
           </a>
           {% endif %}

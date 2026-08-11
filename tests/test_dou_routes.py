@@ -7,6 +7,7 @@ Usa app.test_client() no padrão dos demais testes de rota do projeto.
     uv run python tests/test_dou_routes.py
 """
 
+import re
 import sys
 from pathlib import Path
 
@@ -185,6 +186,64 @@ def test_tela_de_busca():
               'Nada encontrado' in resposta.get_data(as_text=True))
 
 
+def test_chip_da_header():
+    """O chip do DOU conta saúde da captura, e some quando está tudo em dia.
+
+    Ao contrário dos outros dois chips, este não é fila de trabalho: o módulo
+    não tem "não lidas". Um contador de matérias só cresceria e, ao lado de
+    badges que significam "faça algo", ensinaria a ignorar a área inteira.
+    """
+    print('\n7. Chip de saúde na header')
+    from datetime import date
+
+    def chip(saude, permissao=lambda k: k == 'dou'):
+        with app.test_request_context('/dou/'):
+            html = render_template('partials/header.html',
+                                   can_view_module=permissao, dou_health=saude,
+                                   fap_review_pending_counts=None,
+                                   process_deadline_counts=None)
+        achado = re.search(
+            r'<a class="module-counter-chip"[^>]*?/dou/captura[^>]*>(.*?)</a>',
+            html, re.S)
+        return re.findall(r'text-bg-(\w+)', achado.group(1)) if achado else None
+
+    em_dia = {'com_erro': 0, 'parada': False, 'ultima_data': date(2026, 8, 10), 'badge': False}
+    com_falha = {'com_erro': 3, 'parada': False, 'ultima_data': date(2026, 8, 10), 'badge': True}
+    parada = {'com_erro': 0, 'parada': True, 'ultima_data': date(2026, 7, 1), 'badge': True}
+    ambos = {'com_erro': 2, 'parada': True, 'ultima_data': date(2026, 7, 1), 'badge': True}
+    vazio = {'com_erro': 0, 'parada': False, 'ultima_data': None, 'badge': False}
+
+    check('tudo em dia: o chip não aparece', chip(em_dia) is None, str(chip(em_dia)))
+    check('edição com falha: badge âmbar', chip(com_falha) == ['warning'], str(chip(com_falha)))
+    check('captura parada: badge vermelho', chip(parada) == ['danger'], str(chip(parada)))
+    check('os dois problemas: dois badges', chip(ambos) == ['warning', 'danger'], str(chip(ambos)))
+    check('acervo vazio não alarma (instalação sem credencial)',
+          chip(vazio) is None, str(chip(vazio)))
+    check('sem a permissão do módulo, nunca aparece',
+          chip(ambos, permissao=lambda k: False) is None)
+
+
+def test_contadores_de_saude():
+    """A regra de dias úteis não pode alarmar na segunda-feira."""
+    print('\n8. Regra de "a captura parou"')
+    from datetime import date
+    from app.services import dou_ingestion_service as ing
+
+    check('sexta -> segunda não alarma',
+          ing._dias_uteis_entre(date(2026, 8, 7), date(2026, 8, 10)) < ing.TOLERANCIA_DIAS_UTEIS)
+    check('sexta -> terça tolera (feriado na segunda)',
+          ing._dias_uteis_entre(date(2026, 8, 7), date(2026, 8, 11)) < ing.TOLERANCIA_DIAS_UTEIS)
+    check('sexta -> quarta alarma',
+          ing._dias_uteis_entre(date(2026, 8, 7), date(2026, 8, 12)) >= ing.TOLERANCIA_DIAS_UTEIS)
+
+    with app.app_context():
+        saude = ing.health_counters()
+    check('health_counters devolve as chaves da tela',
+          set(saude) == {'com_erro', 'parada', 'ultima_data', 'badge'}, str(sorted(saude)))
+    check('badge reflete os dois sinais',
+          saude['badge'] == bool(saude['com_erro'] or saude['parada']), str(saude))
+
+
 def main():
     print('=' * 60)
     print('TESTES DAS ROTAS DO DIÁRIO OFICIAL')
@@ -196,6 +255,8 @@ def main():
     test_navegacao_em_tres_niveis()
     test_link_no_menu_lateral()
     test_tela_de_busca()
+    test_chip_da_header()
+    test_contadores_de_saude()
 
     print('\n' + '=' * 60)
     if _falhas:
