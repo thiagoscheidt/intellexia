@@ -61,6 +61,26 @@
 </a>
 {% endif %}
 
+{% if linhas %}
+{# Diz do que a tela trata antes da lista. Sem isso, quem chega vê datas e
+   siglas (DO1, DO2) e precisa deduzir o que são. #}
+<div class="dou-legenda">
+  <div class="dou-legenda__intro">
+    Cada linha é <strong>um dia do Diário Oficial da União</strong>, dividido nos
+    três cadernos em que ele é publicado. Clique no caderno para ler as matérias,
+    ou abra o PDF assinado — o arquivo oficial, com assinatura digital.
+  </div>
+  <div class="dou-legenda__secoes">
+    <span class="dou-legenda__item"><i class="dou-legenda__cor dou-legenda__cor--s1"></i>
+      <b>Seção 1</b> atos normativos: portarias, resoluções, decretos</span>
+    <span class="dou-legenda__item"><i class="dou-legenda__cor dou-legenda__cor--s2"></i>
+      <b>Seção 2</b> pessoal do serviço público federal</span>
+    <span class="dou-legenda__item"><i class="dou-legenda__cor dou-legenda__cor--s3"></i>
+      <b>Seção 3</b> contratos, licitações e avisos</span>
+  </div>
+</div>
+{% endif %}
+
 {% if not linhas %}
 <div class="card border-0 shadow-sm">
   <div class="card-body text-center py-5">
@@ -90,22 +110,33 @@
     <div class="dou-caderno dou-caderno--s{{ e.secao_numero[0] }}">
       <a class="dou-caderno__link"
          href="{{ url_for('dou.edicao', data_str=linha.data.isoformat(), secao=e.secao) }}"
-         title="{{ e.secao_label }} — {{ e.qtd_materias }} matérias">
+         title="Ler as {{ e.qtd_materias }} matérias da {{ e.secao_label }}">
         <span class="dou-caderno__num">{{ e.secao_numero }}</span>
         <span class="dou-caderno__assunto">{{ e.secao_assunto }}</span>
-        <span class="dou-barra" aria-hidden="true">
+        <span class="dou-caderno__qtd">
+          {{ '{:,}'.format(e.qtd_materias or 0).replace(',', '.') }}
+          <small>matérias</small>
+        </span>
+        {# Indicador de espessura do caderno. Pequeno de propósito: é
+           contexto, não a informação principal da linha. #}
+        <span class="dou-barra" aria-hidden="true"
+              title="tamanho relativo do caderno nesta página">
           <span class="dou-barra__preenche" style="width: {{ largura }}%"></span>
         </span>
-        <span class="dou-caderno__qtd">{{ '{:,}'.format(e.qtd_materias or 0).replace(',', '.') }}</span>
       </a>
       {% if e.pdf_disponivel %}
-      <a class="dou-pdf" target="_blank" rel="noopener"
+      <a class="dou-pdf-btn" target="_blank" rel="noopener"
          href="{{ url_for('dou.baixar_pdf', edition_id=e.id) }}"
-         title="Abrir o PDF assinado da {{ e.secao_label }} em nova aba">
+         title="Abrir em nova aba o PDF assinado da {{ e.secao_label }} de {{ linha.data.strftime('%d/%m/%Y') }} — arquivo oficial da Imprensa Nacional">
         <i class="bi bi-file-earmark-pdf"></i>
+        <span>PDF da Seção {{ e.secao_numero }}</span>
+        <i class="bi bi-box-arrow-up-right dou-pdf-btn__seta"></i>
       </a>
       {% else %}
-      <span></span>
+      <span class="dou-pdf-btn dou-pdf-btn--vazio" title="O PDF desta seção não está disponível">
+        <i class="bi bi-dash-circle"></i>
+        <span>sem PDF</span>
+      </span>
       {% endif %}
     </div>
     {% endfor %}

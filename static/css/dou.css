@@ -117,24 +117,37 @@
   min-width: 0;
 }
 
-/* Duas colunas: o caderno inteiro é um link; o PDF é outro, ao lado. Evita
+/* Duas colunas: o caderno inteiro é um link; o PDF é um botão ao lado. Evita
    display:contents no <a>, que já apagou a semântica do link em navegadores
    e não é necessário aqui. */
 .dou-caderno {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 1.75rem;
-  gap: .55rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .75rem;
   align-items: center;
-  padding: .18rem 0;
+  padding: .3rem 0;
 }
 
+.dou-caderno + .dou-caderno {
+  border-top: 1px solid var(--bs-border-color);
+}
+
+/* A contagem vem antes da barra: o número é a informação, a barra é só o
+   contexto de "qual caderno está mais gordo hoje". */
 .dou-caderno__link {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 9.5rem) minmax(0, 1fr) 4rem;
-  gap: .55rem;
+  grid-template-columns: 1.9rem minmax(0, 1fr) auto 56px;
+  gap: .6rem;
   align-items: center;
   text-decoration: none;
   color: inherit;
+  padding: .25rem .35rem;
+  border-radius: 8px;
+  transition: background-color .15s ease;
+}
+
+.dou-caderno__link:hover {
+  background: var(--bs-secondary-bg);
 }
 
 .dou-caderno__link:hover .dou-caderno__assunto {
@@ -164,19 +177,22 @@
   text-overflow: ellipsis;
 }
 
-/* A barra: espessura do caderno naquele dia, em escala comum à página */
+/* Indicador de espessura do caderno, em escala comum à página. Discreto de
+   propósito: mostra de relance qual caderno está maior, sem competir com a
+   contagem nem com o botão de PDF, que são o que o usuário vem buscar. */
 .dou-barra {
-  height: 7px;
-  border-radius: 4px;
+  height: 3px;
+  border-radius: 2px;
   background: var(--dou-trilho);
   overflow: hidden;
+  opacity: .7;
 }
 
 .dou-barra__preenche {
   display: block;
   height: 100%;
-  border-radius: 4px;
-  min-width: 3px;
+  border-radius: 2px;
+  min-width: 2px;
 }
 
 .dou-caderno--s1 .dou-barra__preenche { background: var(--dou-s1); }
@@ -184,30 +200,59 @@
 .dou-caderno--s3 .dou-barra__preenche { background: var(--dou-s3); }
 
 .dou-caderno__qtd {
-  font-size: .78rem;
+  font-size: .82rem;
+  font-weight: 600;
   text-align: right;
   font-variant-numeric: tabular-nums;
-  color: var(--bs-secondary-color);
+  color: var(--bs-body-color);
+  white-space: nowrap;
 }
 
-/* PDF preso ao caderno a que pertence, discreto até o hover */
-.dou-pdf {
+.dou-caderno__qtd small {
+  font-weight: 400;
+  font-size: .72rem;
+  color: var(--bs-secondary-color);
+  margin-left: .2rem;
+}
+
+/* O PDF assinado é a ação que o usuário mais procura nesta tela, então é um
+   botão com rótulo, não um ícone solto: antes era um quadradinho de 1,6 rem
+   e ninguém sabia que caderno ele abriria. */
+.dou-pdf-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
-  border-radius: 6px;
-  font-size: .85rem;
-  color: var(--bs-secondary-color);
+  gap: .4rem;
+  padding: .3rem .7rem;
+  border-radius: 8px;
+  font-size: .78rem;
+  font-weight: 600;
+  white-space: nowrap;
   text-decoration: none;
-  transition: color .15s ease, background-color .15s ease;
-}
-
-.dou-pdf:hover,
-.dou-pdf:focus-visible {
   color: var(--bs-danger);
   background: var(--bs-danger-bg-subtle);
+  border: 1px solid var(--bs-danger-border-subtle);
+  transition: filter .15s ease, box-shadow .15s ease;
+}
+
+.dou-pdf-btn:hover,
+.dou-pdf-btn:focus-visible {
+  color: var(--bs-danger);
+  filter: brightness(.97);
+  box-shadow: 0 4px 10px rgba(var(--bs-danger-rgb), .18);
+}
+
+.dou-pdf-btn__seta {
+  font-size: .68rem;
+  opacity: .6;
+}
+
+/* Seção sem PDF: ocupa o mesmo espaço, para as linhas não dançarem */
+.dou-pdf-btn--vazio {
+  color: var(--bs-secondary-color);
+  background: transparent;
+  border-color: transparent;
+  font-weight: 400;
+  cursor: default;
 }
 
 /* --------------------------------------------------- total do dia (direita) */
@@ -253,17 +298,22 @@
      redeclaradas para três — deixar quatro com um item oculto deslocaria a
      contagem para a coluna errada. */
   .dou-caderno__link {
-    grid-template-columns: 1.9rem minmax(0, 1fr) 3.4rem;
+    grid-template-columns: 1.9rem minmax(0, 1fr) auto;
   }
 
   .dou-barra { display: none; }
+
+  /* o botão vira só o ícone, mas o title continua dizendo qual seção é */
+  .dou-pdf-btn span { display: none; }
+  .dou-pdf-btn { padding: .3rem .5rem; }
+  .dou-pdf-btn__seta { display: none; }
 }
 
 /* ------------------------------------------------------------ acessibilidade */
 
 .dou-data:focus-visible,
 .dou-caderno__link:focus-visible,
-.dou-pdf:focus-visible {
+.dou-pdf-btn:focus-visible {
   outline: 2px solid var(--bs-primary);
   outline-offset: 2px;
   border-radius: 6px;
@@ -271,7 +321,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .dou-edicao,
-  .dou-pdf {
+  .dou-pdf-btn,
+  .dou-caderno__link {
     transition: none;
   }
 
@@ -589,3 +640,59 @@
 @media (max-width: 767.98px) {
   .dou-pdf-quadro { height: 65vh; }
 }
+
+
+/* ------------------------------------------------- legenda da tela de edições */
+
+/* Diz do que a tela trata antes da lista: sem isso, quem chega vê datas e
+   siglas (DO1, DO2) e precisa deduzir o que são. */
+.dou-legenda {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 14px;
+  padding: .85rem 1.15rem;
+  margin-bottom: 1rem;
+  background: var(--bs-body-bg);
+}
+
+.dou-legenda__intro {
+  font-size: .87rem;
+  color: var(--bs-secondary-color);
+  line-height: 1.5;
+}
+
+.dou-legenda__intro strong {
+  color: var(--bs-body-color);
+}
+
+.dou-legenda__secoes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem 1.4rem;
+  margin-top: .6rem;
+  padding-top: .6rem;
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.dou-legenda__item {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  font-size: .78rem;
+  color: var(--bs-secondary-color);
+}
+
+.dou-legenda__item b {
+  color: var(--bs-body-color);
+  font-weight: 600;
+}
+
+.dou-legenda__cor {
+  width: .7rem;
+  height: .7rem;
+  border-radius: 3px;
+  flex: none;
+}
+
+.dou-legenda__cor--s1 { background: var(--dou-s1); }
+.dou-legenda__cor--s2 { background: var(--dou-s2); }
+.dou-legenda__cor--s3 { background: var(--dou-s3); }
