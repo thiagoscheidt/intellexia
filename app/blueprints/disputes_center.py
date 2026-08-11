@@ -11,6 +11,7 @@ from app.services.fap_web_service import (
     FapWebAuthPayload, FapWebService, build_fap_service, resolve_fap_auth,
 )
 from app.services.fap_contestation_judgment_report_service import FapContestationJudgmentReportService
+from app.services import fap_group_service
 from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 
 from app.utils.timezone import now_sp
@@ -596,6 +597,19 @@ def _apply_grupo_filter(query, law_firm_id, quick_grupo, employer_cnpj_column):
     )
 
 
+def _vigencia_no_grupo(vigencia, grupo_raizes, selected_grupo):
+    """A vigência entra no recorte por grupo? (a tela de vigências filtra em Python).
+
+    Em "sem grupo", ``grupo_raizes`` traz TODAS as raízes já mapeadas e a
+    resposta é o complemento — inclusive vigências sem CNPJ, que também são
+    empresas ainda não classificadas.
+    """
+    raiz = _normalize_cnpj_digits(vigencia.employer_cnpj)[:8]
+    if selected_grupo == fap_group_service.SEM_GRUPO:
+        return not raiz or raiz not in grupo_raizes
+    return bool(raiz) and raiz in grupo_raizes
+
+
 def _vigencia_ids_by_protocolo(law_firm_id, protocolo_text):
     """Ids de vigência cujas contestações no FAP Web batem com o protocolo.
 
@@ -1089,7 +1103,7 @@ def _apply_cats_filters(query, search_value='', custom_filters=None, quick_emplo
             pass
 
     query = _apply_protocolo_filter(query, law_firm_id, quick_protocolo, FapContestationCat.vigencia_id)
-    query = _apply_grupo_filter(query, quick_grupo, FapContestationCat.employer_cnpj)
+    query = _apply_grupo_filter(query, law_firm_id, quick_grupo, FapContestationCat.employer_cnpj)
 
     for item in custom_filters or []:
         field = item['field']
@@ -1247,7 +1261,7 @@ def _apply_payroll_mass_filters(query, search_value='', custom_filters=None, qui
             pass
 
     query = _apply_protocolo_filter(query, law_firm_id, quick_protocolo, FapContestationPayrollMass.vigencia_id)
-    query = _apply_grupo_filter(query, quick_grupo, FapContestationPayrollMass.employer_cnpj)
+    query = _apply_grupo_filter(query, law_firm_id, quick_grupo, FapContestationPayrollMass.employer_cnpj)
 
     for item in custom_filters or []:
         field = item['field']
@@ -1401,7 +1415,7 @@ def _apply_employment_link_filters(query, search_value='', custom_filters=None, 
             pass
 
     query = _apply_protocolo_filter(query, law_firm_id, quick_protocolo, FapContestationEmploymentLink.vigencia_id)
-    query = _apply_grupo_filter(query, quick_grupo, FapContestationEmploymentLink.employer_cnpj)
+    query = _apply_grupo_filter(query, law_firm_id, quick_grupo, FapContestationEmploymentLink.employer_cnpj)
 
     for item in custom_filters or []:
         field = item['field']
@@ -1559,7 +1573,7 @@ def _apply_turnover_rate_filters(query, search_value='', custom_filters=None, qu
             pass
 
     query = _apply_protocolo_filter(query, law_firm_id, quick_protocolo, FapContestationTurnoverRate.vigencia_id)
-    query = _apply_grupo_filter(query, quick_grupo, FapContestationTurnoverRate.employer_cnpj)
+    query = _apply_grupo_filter(query, law_firm_id, quick_grupo, FapContestationTurnoverRate.employer_cnpj)
 
     for item in custom_filters or []:
         field = item['field']
@@ -1766,7 +1780,7 @@ def _apply_benefits_filters(
             pass
 
     query = _apply_protocolo_filter(query, law_firm_id, quick_protocolo, Benefit.fap_vigencia_cnpj_id)
-    query = _apply_grupo_filter(query, quick_grupo, Benefit.employer_cnpj)
+    query = _apply_grupo_filter(query, law_firm_id, quick_grupo, Benefit.employer_cnpj)
 
     legacy_filled = and_(
         Benefit.fap_contestation_topic.isnot(None),
@@ -2733,7 +2747,18 @@ def list_fap_vigencias():
     selected_client_root = _normalize_cnpj_digits(request.args.get('client_root', ''))[:8]
     selected_show_deferivel = request.args.get('show_deferivel', '') == '1'
     selected_protocolo = _normalize_text(request.args.get('protocolo', ''))
-    selected_grupo = _normalize_cnpj_digits(request.args.get('grupo', ''))[:8]
+    # Chave do grupo empresarial (não mais uma raiz de CNPJ) — ver
+    # _build_fap_group_options. As raízes do grupo são resolvidas abaixo.
+    selected_grupo = (request.args.get('grupo') or '').strip()
+    # Esta tela monta as linhas em Python (agrega vigências), então o recorte
+    # por grupo também é feito em Python — daí resolver as raízes uma vez só,
+    # fora do laço. Em "sem grupo" o conjunto é o das raízes JÁ mapeadas, e a
+    # comparação é invertida.
+    grupo_raizes = set()
+    if selected_grupo == fap_group_service.SEM_GRUPO:
+        grupo_raizes = set(fap_group_service.mapped_roots(law_firm_id))
+    elif selected_grupo:
+        grupo_raizes = set(fap_group_service.roots_for_group(law_firm_id, selected_grupo))
     # None = sem filtro; set() = filtro informado que não casou com nada.
     protocolo_vigencia_ids = _vigencia_ids_by_protocolo(law_firm_id, selected_protocolo)
     if protocolo_vigencia_ids is not None:
@@ -2987,9 +3012,7 @@ def list_fap_vigencias():
         if protocolo_vigencia_ids is not None and vigencia.id not in protocolo_vigencia_ids:
             continue
 
-        if selected_grupo and not _normalize_cnpj_digits(
-            vigencia.employer_cnpj
-        ).startswith(selected_grupo):
+        if selected_grupo and not _vigencia_no_grupo(vigencia, grupo_raizes, selected_grupo):
             continue
 
         if selected_show_deferivel:

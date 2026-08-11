@@ -1025,8 +1025,16 @@ def _build_contestacoes_filters(law_firm_id):
     f_instancia = request.args.get('instancia', '').strip()
     f_situacao  = request.args.get('situacao', '').strip()
     f_protocolo = request.args.get('protocolo', '').strip()
+    f_grupo     = request.args.get('grupo', '').strip()
 
     conds = [FapWebContestacao.law_firm_id == law_firm_id]
+    # Grupo empresarial: uma chave alcança todas as raízes do grupo. Como
+    # cnpj_raiz já é a raiz limpa e indexada, vira um IN direto.
+    grupo_cond = fap_group_service.group_condition(
+        law_firm_id, f_grupo, FapWebContestacao.cnpj_raiz, coluna_e_raiz=True,
+    )
+    if grupo_cond is not None:
+        conds.append(grupo_cond)
     if f_year and f_year != '__all__':
         try:
             conds.append(FapWebContestacao.ano_vigencia == int(f_year))
@@ -1638,19 +1646,10 @@ def contestacoes_export_excel():
     f_situacao  = request.args.get('situacao', '').strip()
     f_protocolo = request.args.get('protocolo', '').strip()
 
-    query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
-    if f_year and f_year != '__all__':
-        query = query.filter(FapWebContestacao.ano_vigencia == int(f_year))
-    if f_cnpj_raiz:
-        query = query.filter(FapWebContestacao.cnpj_raiz == f_cnpj_raiz)
-    if f_cnpj:
-        query = query.filter(FapWebContestacao.cnpj == f_cnpj)
-    if f_instancia:
-        query = query.filter(FapWebContestacao.instancia_codigo == f_instancia)
-    if f_situacao:
-        query = query.filter(FapWebContestacao.situacao_codigo == f_situacao)
-    if f_protocolo:
-        query = query.filter(FapWebContestacao.protocolo.ilike(f'%{f_protocolo}%'))
+    # Mesmo helper da listagem em tela: os filtros do export nunca divergem do
+    # que o usuário está vendo (antes eram duas cópias que já haviam divergido —
+    # o ano sem try/except aqui derrubava a rota com ?ano_vigencia=abc).
+    query = FapWebContestacao.query.filter(*_build_contestacoes_filters(law_firm_id))
 
     rows = query.order_by(
         FapWebContestacao.ano_vigencia.desc(),
@@ -1694,19 +1693,10 @@ def contestacoes_export_excel_agrupado():
     f_situacao  = request.args.get('situacao', '').strip()
     f_protocolo = request.args.get('protocolo', '').strip()
 
-    query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
-    if f_year and f_year != '__all__':
-        query = query.filter(FapWebContestacao.ano_vigencia == int(f_year))
-    if f_cnpj_raiz:
-        query = query.filter(FapWebContestacao.cnpj_raiz == f_cnpj_raiz)
-    if f_cnpj:
-        query = query.filter(FapWebContestacao.cnpj == f_cnpj)
-    if f_instancia:
-        query = query.filter(FapWebContestacao.instancia_codigo == f_instancia)
-    if f_situacao:
-        query = query.filter(FapWebContestacao.situacao_codigo == f_situacao)
-    if f_protocolo:
-        query = query.filter(FapWebContestacao.protocolo.ilike(f'%{f_protocolo}%'))
+    # Mesmo helper da listagem em tela: os filtros do export nunca divergem do
+    # que o usuário está vendo (antes eram duas cópias que já haviam divergido —
+    # o ano sem try/except aqui derrubava a rota com ?ano_vigencia=abc).
+    query = FapWebContestacao.query.filter(*_build_contestacoes_filters(law_firm_id))
 
     all_rows = query.order_by(
         FapWebContestacao.ano_vigencia.desc(),

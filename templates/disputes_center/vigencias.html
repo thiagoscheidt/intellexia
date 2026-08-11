@@ -613,7 +613,7 @@ icon='bi bi-diagram-3') %}
                         <select id="grupoFilter" name="grupo" class="form-select">
                             <option value="">Todos os grupos</option>
                             {% for grupo in fap_group_options or [] %}
-                            <option value="{{ grupo.root }}" {{ 'selected' if selected_grupo==grupo.root else '' }}>
+                            <option value="{{ grupo.value }}" {{ 'selected' if selected_grupo==grupo.value else '' }}>
                                 {{ grupo.label }}
                             </option>
                             {% endfor %}

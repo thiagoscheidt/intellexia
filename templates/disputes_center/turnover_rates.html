@@ -509,7 +509,7 @@
                   <select id="quickGrupoFilter" class="form-select form-select-sm">
                     <option value="">Todos os grupos</option>
                     {% for grupo in fap_group_options or [] %}
-                    <option value="{{ grupo.root }}">{{ grupo.label }}</option>
+                    <option value="{{ grupo.value }}">{{ grupo.label }}</option>
                     {% endfor %}
                   </select>
                 </div>

@@ -122,12 +122,16 @@ def mapped_roots(law_firm_id):
     ]
 
 
-def apply_group_filter(query, law_firm_id, grupo, coluna, *, coluna_e_raiz=False):
-    """Recorta a query pelo grupo empresarial.
+def group_condition(law_firm_id, grupo, coluna, *, coluna_e_raiz=False):
+    """Condição SQLAlchemy do recorte por grupo, ou ``None`` quando não há filtro.
 
-    ``grupo`` vazio não filtra. ``grupo`` inexistente filtra para vazio (em vez
-    de ignorar o filtro em silêncio, que faria a tela mostrar tudo e parecer que
-    o grupo tem todos os registros).
+    Existe separada de ``apply_group_filter`` porque algumas telas montam uma
+    lista de condições em vez de encadear ``.filter()`` — as duas formas saem
+    daqui, para não haver duas versões da mesma regra.
+
+    ``grupo`` vazio devolve None (não filtrar). ``grupo`` inexistente devolve
+    ``false()``: filtra para vazio, em vez de ignorar o filtro em silêncio e
+    fazer a tela mostrar tudo, parecendo que o grupo tem todos os registros.
 
     ``SEM_GRUPO`` devolve o complemento: registros cuja raiz não está mapeada,
     mais os que não têm CNPJ nenhum — os dois casos são "empresa que ainda não
@@ -135,21 +139,29 @@ def apply_group_filter(query, law_firm_id, grupo, coluna, *, coluna_e_raiz=False
     """
     valor = (grupo or '').strip()
     if not valor:
-        return query
+        return None
 
     expressao = _root_expression(coluna, coluna_e_raiz)
 
     if valor == SEM_GRUPO:
         conhecidas = mapped_roots(law_firm_id)
-        sem_cnpj = or_(coluna.is_(None), cast(coluna, String) == '')
         if not conhecidas:
-            return query
-        return query.filter(or_(sem_cnpj, expressao.notin_(conhecidas)))
+            return None  # ninguém mapeado ainda: "sem grupo" é o conjunto todo
+        sem_cnpj = or_(coluna.is_(None), cast(coluna, String) == '')
+        return or_(sem_cnpj, expressao.notin_(conhecidas))
 
     raizes = roots_for_group(law_firm_id, valor)
     if not raizes:
-        return query.filter(false())
-    return query.filter(expressao.in_(raizes))
+        return false()
+    return expressao.in_(raizes)
+
+
+def apply_group_filter(query, law_firm_id, grupo, coluna, *, coluna_e_raiz=False):
+    """Recorta a query pelo grupo empresarial. Ver ``group_condition``."""
+    condicao = group_condition(law_firm_id, grupo, coluna, coluna_e_raiz=coluna_e_raiz)
+    if condicao is None:
+        return query
+    return query.filter(condicao)
 
 
 def groups_by_root(law_firm_id):
