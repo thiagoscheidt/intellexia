@@ -1,4 +1,5 @@
 {% extends "layout/base.html" %}
+{% from "partials/fap_vigencia_filter.html" import vigencia_select %}
 
 {% from "partials/page_hero.html" import page_hero %}
 
@@ -487,6 +488,7 @@
                 </div>
               </div>
               <div class="row g-2 align-items-end mt-1 pt-2 border-top">
+                {{ vigencia_select(vigencia_years, vigencia_selected) }}
                 <div class="col-md-4">
                   <label for="quickRootCnpjFilter" class="form-label mb-1 small text-muted">Filtro adicional: CNPJ
                     raiz</label>
@@ -850,6 +852,7 @@
           d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
           d.quick_protocolo = ($('#quickProtocoloFilter').val() || '').trim();
           d.quick_grupo = ($('#quickGrupoFilter').val() || '').trim();
+    d.quick_vigencia = ($('#quickVigenciaFilter').val() || '').trim();
           if (initialVigenciaId) d.vigencia_id = initialVigenciaId;
         },
         dataSrc: function (json) {
@@ -1024,6 +1027,7 @@
         quick_cnpj: ($('#quickCnpjFilter').val() || '').trim(),
         quick_protocolo: ($('#quickProtocoloFilter').val() || '').trim(),
         quick_grupo: ($('#quickGrupoFilter').val() || '').trim(),
+      quick_vigencia: ($('#quickVigenciaFilter').val() || '').trim(),
         vigencia_id: initialVigenciaId,
       };
 
@@ -1133,6 +1137,9 @@
       $('#quickCnpjFilterSpacer').show();
       $('#quickProtocoloFilter').val('');
       $('#quickGrupoFilter').val('').trigger('change.select2');
+    // Vigência volta ao padrão da tela (mais recente), não a "Todas":
+    // ela é o contexto de trabalho, como no FAP Web, e não um filtro avulso.
+    $('#quickVigenciaFilter').val('{{ vigencia_default }}');
       renderActiveFilters();
       table.search('');
       table.ajax.reload();
@@ -1179,6 +1186,9 @@
     });
 
     $('#quickGrupoFilter').on('change', function () {
+      table.ajax.reload();
+
+    $('#quickVigenciaFilter').on('change', function () {
       table.ajax.reload();
     });
 

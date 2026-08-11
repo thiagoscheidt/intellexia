@@ -1,4 +1,5 @@
 {% extends "layout/base.html" %}
+{% from "partials/fap_vigencia_filter.html" import vigencia_select %}
 
 {% from "partials/page_hero.html" import page_hero %}
 
@@ -578,6 +579,7 @@ icon='bi bi-diagram-3') %}
         <div class="p-3 p-lg-4">
             <form method="GET" action="{{ url_for('disputes_center.list_fap_vigencias') }}" class="filters-form">
                 <div class="row g-3 align-items-end">
+                    {{ vigencia_select(vigencia_years, vigencia_selected, campo_id="vigenciaFilter", nome="vigencia", coluna="col-md-2") }}
                     <div class="col-lg-3 col-md-6">
                         <label for="clientFilter" class="form-label">Cliente</label>
                         <select id="clientFilter" name="client_id" class="form-select">
@@ -680,6 +682,7 @@ icon='bi bi-diagram-3') %}
                     <input type="hidden" name="client_root" value="{{ selected_client_root }}">
                     <input type="hidden" name="protocolo" value="{{ selected_protocolo }}">
                     <input type="hidden" name="grupo" value="{{ selected_grupo }}">
+                    <input type="hidden" name="vigencia" value="{{ selected_vigencia }}">
                     <input type="hidden" name="show_deferivel" value="1">
                     {% for vigencia_id in markable_vigencia_ids %}
                     <input type="hidden" name="vigencia_ids" value="{{ vigencia_id }}">

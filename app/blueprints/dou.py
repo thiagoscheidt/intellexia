@@ -32,6 +32,7 @@ from pathlib import Path
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, flash, send_file, abort, session, current_app)
 from sqlalchemy import func, or_
+from werkzeug.exceptions import HTTPException
 
 from app.models import db, DouEdition, DouArticle, DouSyncRun, Client
 
@@ -395,15 +396,28 @@ def materia(article_id):
 
     termo_busca = (request.args.get('q') or '').strip()
 
-    # Onde a matéria fica dentro do recorte de três páginas: a primeira, quando
-    # ela abre a seção e não há anterior; a segunda no resto dos casos.
-    pagina_no_recorte = 1 if (artigo.pagina_num or 1) <= 1 else 2
+    total_paginas = _total_paginas(edicao_obj)
+
+    # A barra folheia a seção sem sair da matéria, como o "Ir para a página" do
+    # portal oficial. Sem parâmetro, abre na página da matéria; com um número
+    # fora do intervalo, prende na borda — quem digita 9999 quer o fim do
+    # caderno, não um 404. O `is None` separa "não pediu página" de "pediu a
+    # zero": com `or`, o zero cairia no primeiro caso e o -5 no segundo.
+    pedida = request.args.get('pagina', type=int)
+    pagina_vista = pagina_no_pdf if pedida is None else pedida
+    if pagina_vista is not None and total_paginas:
+        pagina_vista = min(max(pagina_vista, 1), total_paginas)
+
+    # Onde a página fica dentro do recorte de três: a primeira, quando ela abre
+    # a seção e não há anterior; a segunda no resto dos casos.
+    pagina_no_recorte = 1 if (pagina_vista or 1) <= 1 else 2
 
     # Vindo da busca, abrir onde o termo está — que nem sempre é a página
     # registrada na matéria. No edital 11908 o título está na 109 e o CNPJ
     # procurado, na 110: abrir na 109 mostraria a página certa e o achado
-    # nenhum.
-    if termo_busca and pagina_no_pdf:
+    # nenhum. Só vale na página da própria matéria; depois de folhear, o
+    # recorte é outro e o termo pode nem estar nele.
+    if termo_busca and pagina_no_pdf and pagina_vista == pagina_no_pdf:
         encontrada = _pagina_do_termo(artigo, termo_busca)
         if encontrada:
             pagina_no_recorte = encontrada
@@ -413,6 +427,9 @@ def materia(article_id):
         artigo=artigo,
         edicao=edicao_obj,
         pagina_no_recorte=pagina_no_recorte,
+        pagina_vista=pagina_vista,
+        total_paginas=total_paginas,
+        sumario=_sumario_da_edicao(edicao_obj.id) if pagina_no_pdf else [],
         termo_busca=termo_busca,
         # A ordem importa: sanitizar primeiro, grifar depois. Grifar antes
         # faria a faxina descartar o <mark> que acabamos de inserir.
@@ -424,10 +441,56 @@ def materia(article_id):
     )
 
 
-def _janela_do_recorte(artigo, total_paginas):
+def _janela_do_recorte(pagina_num, total_paginas):
     """(início, fim) em índice zero das páginas que entram no recorte."""
-    indice = artigo.pagina_num - 1
+    indice = pagina_num - 1
     return max(0, indice - 1), min(total_paginas - 1, indice + 1)
+
+
+def _total_paginas(edicao_obj):
+    """Quantas páginas tem o PDF assinado da seção. 0 quando não há PDF.
+
+    Lido do arquivo a cada requisição, sem coluna no banco: o ``page_count``
+    sai do xref sem ler o conteúdo e custou 1,3 ms na Seção 1 (30 MB) e 3,4 ms
+    na Seção 3 (44 MB, 223 páginas). Guardar isso seria uma coluna a manter
+    sincronizada com o disco em troca de milissegundo nenhum.
+    """
+    if not (edicao_obj and edicao_obj.pdf_disponivel):
+        return 0
+    caminho = Path(edicao_obj.pdf_path)
+    if not caminho.exists():
+        return 0
+    try:
+        import fitz  # PyMuPDF — import tardio, como nas rotas de recorte
+        with fitz.open(caminho) as documento:
+            return documento.page_count
+    except Exception:  # noqa: BLE001 — sem o total, a barra some; não é 500
+        current_app.logger.warning('DOU: não foi possível ler o PDF %s', caminho)
+        return 0
+
+
+def _sumario_da_edicao(edition_id):
+    """``[(órgão-raiz, primeira página)]`` da seção, na ordem das páginas.
+
+    É o "Sumário da Edição" do portal da Imprensa Nacional, reconstruído do
+    nosso acervo. Conferido contra o deles na Seção 1 de 10/08/2026: as mesmas
+    23 raízes, nas mesmas páginas (Agricultura 1, Comunicações 4, Cultura 7,
+    Defesa 14, Fazenda 23...).
+
+    Por raiz, e não pela hierarquia completa, pela mesma razão do filtro da
+    listagem: a hierarquia tem ~104 valores por seção e não vira índice.
+    """
+    linhas = (db.session.query(DouArticle.orgao_hierarquia,
+                               func.min(DouArticle.pagina_num))
+              .filter(DouArticle.edition_id == edition_id,
+                      DouArticle.pagina_num.isnot(None))
+              .group_by(DouArticle.orgao_hierarquia).all())
+    primeira = {}
+    for hierarquia, pagina in linhas:
+        raiz = busca_service.orgao_raiz(hierarquia)
+        if raiz:
+            primeira[raiz] = min(primeira.get(raiz, pagina), pagina)
+    return sorted(primeira.items(), key=lambda item: (item[1], item[0]))
 
 
 def _pagina_do_termo(artigo, consulta):
@@ -441,7 +504,8 @@ def _pagina_do_termo(artigo, consulta):
     try:
         import fitz
         with fitz.open(Path(artigo.edition.pdf_path)) as documento:
-            inicio, fim = _janela_do_recorte(artigo, documento.page_count)
+            inicio, fim = _janela_do_recorte(artigo.pagina_num,
+                                             documento.page_count)
             for numero in range(inicio, fim + 1):
                 if any(documento[numero].search_for(t) for t in termos):
                     return numero - inicio + 1
@@ -467,9 +531,8 @@ def _grifar(recorte, termos) -> int:
     return primeira
 
 
-@dou_bp.route('/materia/<int:article_id>/pagina.pdf')
-def pagina_pdf(article_id):
-    """A página da matéria e as vizinhas, recortadas do PDF assinado da seção.
+def _entregar_recorte(edicao_obj, pagina_num, consulta):
+    """A página pedida e as vizinhas, recortadas do PDF assinado da seção.
 
     Mandar o PDF inteiro para mostrar uma página é inviável: a Seção 3 tem
     60 MB. O recorte custa poucos milissegundos e o tamanho não depende do
@@ -479,25 +542,22 @@ def pagina_pdf(article_id):
     um edital começa numa e termina na outra, e mostrar só a página registrada
     entregaria o ato cortado.
     """
-    artigo = DouArticle.query.get_or_404(article_id)
-    edicao_obj = artigo.edition
-
-    if not (edicao_obj and edicao_obj.pdf_disponivel and artigo.pagina_num):
+    if not (edicao_obj and edicao_obj.pdf_disponivel and pagina_num):
         abort(404)
 
     caminho = Path(edicao_obj.pdf_path)
     if not caminho.exists():
         abort(404)
 
-    termos = busca_service.termos_para_pdf(request.args.get('q') or '')
+    termos = busca_service.termos_para_pdf(consulta or '')
 
     try:
-        import fitz  # PyMuPDF — import tardio: só esta rota precisa
+        import fitz  # PyMuPDF — import tardio: só as rotas de recorte precisam
         with fitz.open(caminho) as documento:
-            indice = artigo.pagina_num - 1
+            indice = pagina_num - 1
             if not 0 <= indice < documento.page_count:
                 abort(404)
-            inicio, fim = _janela_do_recorte(artigo, documento.page_count)
+            inicio, fim = _janela_do_recorte(pagina_num, documento.page_count)
             with fitz.open() as recorte:
                 recorte.insert_pdf(documento, from_page=inicio, to_page=fim)
 
@@ -511,16 +571,41 @@ def pagina_pdf(article_id):
                     _grifar(recorte, termos)
 
                 conteudo = recorte.tobytes()
+    except HTTPException:
+        # O abort() acima é decisão, não falha: deixar o except genérico
+        # engoli-lo encheria o log de stack trace por página inexistente.
+        raise
     except Exception:  # noqa: BLE001 — PDF corrompido não pode virar 500
         current_app.logger.exception(
-            'DOU: falha ao extrair a página %s da matéria %s',
-            artigo.pagina_num, article_id)
+            'DOU: falha ao extrair a página %s da edição %s',
+            pagina_num, edicao_obj.id)
         abort(404)
 
     return send_file(
         BytesIO(conteudo), mimetype='application/pdf', as_attachment=False,
-        download_name=f'DOU-{artigo.pub_date:%Y-%m-%d}-{artigo.pub_name}-p{artigo.pagina}.pdf',
+        download_name=(f'DOU-{edicao_obj.data_publicacao:%Y-%m-%d}'
+                       f'-{edicao_obj.secao}-p{pagina_num}.pdf'),
     )
+
+
+@dou_bp.route('/materia/<int:article_id>/pagina.pdf')
+def pagina_pdf(article_id):
+    """O recorte na página onde a matéria está."""
+    artigo = DouArticle.query.get_or_404(article_id)
+    return _entregar_recorte(artigo.edition, artigo.pagina_num,
+                             request.args.get('q'))
+
+
+@dou_bp.route('/edicao/<int:edition_id>/pagina/<int:numero>.pdf')
+def pagina_da_edicao_pdf(edition_id, numero):
+    """O recorte numa página qualquer da seção.
+
+    Separada de ``pagina_pdf`` porque a barra de navegação da matéria anda pela
+    seção inteira: a partir do primeiro salto a matéria já não é a referência,
+    só a edição.
+    """
+    return _entregar_recorte(DouEdition.query.get_or_404(edition_id), numero,
+                             request.args.get('q'))
 
 
 @dou_bp.route('/edicao/<int:edition_id>/pdf')

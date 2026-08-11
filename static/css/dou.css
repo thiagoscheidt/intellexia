@@ -695,6 +695,88 @@
 }
 
 
+/* ---------------------------------------------- matéria: texto + fac-símile */
+
+/* Texto e folha oficial lado a lado. Antes eram abas, e conferir um ato
+   obrigava a alternar entre elas: o número que se quer conferir está num lado
+   e a redação, no outro.
+
+   Abaixo de 1200 px viram uma coluna: a folha do DOU é A3 e, dividida ao meio
+   numa tela de 1100, cada metade fica estreita demais para o texto do PDF. */
+.dou-materia {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (min-width: 1200px) {
+  .dou-materia--com-pagina {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  /* A folha oficial fica à esquerda, mas vem depois do texto no HTML: em uma
+     coluna só (celular) a ordem do documento é a que vale, e abrir a tela com
+     65vh de PDF empurraria o texto para fora dela. Aqui a posição é dita pela
+     grade, sem mexer na ordem de leitura. */
+  .dou-materia--com-pagina .dou-materia__pagina { grid-column: 1; grid-row: 1; }
+  .dou-materia--com-pagina .dou-materia__texto  { grid-column: 2; grid-row: 1; }
+
+  /* A folha acompanha a rolagem do texto: um ato longo tem dezenas de
+     parágrafos e, sem isto, a página oficial sairia da tela no primeiro
+     scroll — que é justamente quando se quer conferir. */
+  .dou-materia--com-pagina .dou-materia__pagina {
+    position: sticky;
+    top: 1rem;
+  }
+}
+
+/* Barra do visualizador: andar de página, saltar para um número e o sumário
+   da edição, na mesma linha. */
+.dou-leitor-barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  padding: .1rem .25rem .5rem;
+}
+
+.dou-leitor-passo,
+.dou-leitor-ir {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+}
+
+.dou-leitor-pos {
+  font-size: .85rem;
+  color: var(--bs-secondary-color);
+  white-space: nowrap;
+  padding: 0 .15rem;
+}
+
+/* Largura de 4 dígitos: a Seção 3 chega a 223 páginas e o campo não precisa
+   de mais que isso. */
+.dou-leitor-ir input {
+  width: 5.2rem;
+}
+
+/* O sumário tem nomes de ministério inteiros ("Ministério do Desenvolvimento e
+   Assistência Social, Família e Combate à Fome"): sem teto ele estica a barra
+   e empurra os botões para a linha de baixo. */
+.dou-leitor-sumario {
+  width: auto;
+  max-width: 15rem;
+}
+
+.dou-leitor-nota {
+  font-size: .8rem;
+  color: var(--bs-secondary-color);
+  margin: 0 0 .5rem;
+  padding: 0 .35rem;
+}
+
+
 /* ------------------------------------------------- legenda da tela de edições */
 
 /* Diz do que a tela trata antes da lista: sem isso, quem chega vê datas e

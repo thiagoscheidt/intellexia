@@ -24,6 +24,7 @@ from app.agents.legal_drafting.impugnacao_enrichment_agent import ImpugnacaoEnri
 from app.services import process_deadline_service
 from app.services import datajud_snapshot_service
 from app.services import process_radar_service
+from app.services import fap_vigencia_service
 from app.services import ai_model_settings_service
 from datetime import datetime, date, timedelta, time as dt_time
 from functools import wraps
@@ -1270,6 +1271,37 @@ def list_processes():
     )
 
 
+def _vigencia_contexto_processos(law_firm_id, valor):
+    """Anos de vigência dos benefícios judiciais + valor selecionado.
+
+    Consulta própria (em vez do helper genérico do serviço) porque
+    JudicialProcessBenefit não tem law_firm_id: o tenant vem por join com
+    JudicialProcess.
+    """
+    linhas = (
+        db.session.query(JudicialProcessBenefit.fap_vigencia_year)
+        .join(JudicialProcess, JudicialProcessBenefit.process_id == JudicialProcess.id)
+        .filter(
+            JudicialProcess.law_firm_id == law_firm_id,
+            JudicialProcessBenefit.fap_vigencia_year.isnot(None),
+            JudicialProcessBenefit.fap_vigencia_year != '',
+        )
+        .distinct()
+        .all()
+    )
+    anos = sorted(
+        {a for (v,) in linhas if (a := str(v or '').strip()).isdigit()},
+        key=int, reverse=True,
+    )
+    return {
+        'vigencia_years': anos,
+        'vigencia_selected': fap_vigencia_service.resolve_selected(
+            valor, anos, ausente='vigencia' not in request.args,
+        ),
+        'vigencia_default': fap_vigencia_service.default_year(anos),
+    }
+
+
 @process_panel_bp.route('/beneficios')
 @require_law_firm
 def list_all_benefits():
@@ -1280,6 +1312,7 @@ def list_all_benefits():
     search_query = request.args.get('q', '').strip()
     client_filter = request.args.get('client_id', type=int)
     decision_filter = request.args.get('decision', '').strip()
+    vigencia_filter = request.args.get('vigencia', '').strip()
     page = request.args.get('page', 1, type=int)
     
     # Busca todos os benefícios do escritório com preload dos relacionamentos necessários
@@ -1310,6 +1343,11 @@ def list_all_benefits():
         benefits_query = benefits_query.filter(
             JudicialProcess.plaintiff_client_id == client_filter
         )
+
+    # Vigência: caixa dedicada, como nas telas do Painel de Contestações.
+    benefits_query = fap_vigencia_service.apply_year_filter(
+        benefits_query, vigencia_filter, JudicialProcessBenefit.fap_vigencia_year,
+    )
     
     # Buscar todos os benefícios (sem paginação inicial para agrupamento)
     all_benefits = benefits_query.order_by(JudicialProcessBenefit.benefit_number.asc()).all()
@@ -1404,7 +1442,8 @@ def list_all_benefits():
         clients=clients,
         search_query=search_query,
         client_filter=client_filter,
-        decision_filter=decision_filter
+        decision_filter=decision_filter,
+        **_vigencia_contexto_processos(law_firm_id, vigencia_filter)
     )
 
 

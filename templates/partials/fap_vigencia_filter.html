@@ -1,0 +1,30 @@
+{#
+  Caixa dedicada de Vigência.
+
+  A vigência é o recorte mais importante do FAP Web, então tem caixa própria em
+  vez de ficar no filtro genérico de campos. O bloco de filtros rápidos do
+  Painel de Contestações está copiado em 5 telas; este macro existe para o
+  select novo não virar a sexta cópia.
+
+  Uso:
+    {% from "partials/fap_vigencia_filter.html" import vigencia_select %}
+    {{ vigencia_select(vigencia_years, vigencia_selected) }}
+
+  Parâmetros:
+    anos      lista de anos (string), do mais recente para o mais antigo
+    selecionado  valor atual ('__all__' para "Todas")
+    campo_id  id do elemento (o JS das telas DataTables lê por id)
+    nome      name do campo, para as telas com <form method="get">
+    coluna    classes de grid da coluna
+#}
+{% macro vigencia_select(anos, selecionado, campo_id='quickVigenciaFilter', nome=None, coluna='col-md-2') %}
+<div class="{{ coluna }}">
+    <label for="{{ campo_id }}" class="form-label mb-1 small text-muted">Vigência</label>
+    <select id="{{ campo_id }}" {% if nome %}name="{{ nome }}"{% endif %} class="form-select form-select-sm">
+        <option value="__all__" {{ 'selected' if selecionado=='__all__' else '' }}>Todas</option>
+        {% for ano in anos or [] %}
+        <option value="{{ ano }}" {{ 'selected' if selecionado|string == ano|string else '' }}>{{ ano }}</option>
+        {% endfor %}
+    </select>
+</div>
+{% endmacro %}

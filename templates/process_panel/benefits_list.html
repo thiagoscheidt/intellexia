@@ -1,4 +1,5 @@
 {% extends "layout/base.html" %}
+{% from "partials/fap_vigencia_filter.html" import vigencia_select %}
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
   crossorigin="anonymous" />
@@ -135,6 +136,7 @@
                   <input type="text" class="form-control" id="search_query" name="q" value="{{ search_query }}"
                     placeholder="Nome, NIT ou número do benefício...">
                 </div>
+                {{ vigencia_select(vigencia_years, vigencia_selected, campo_id="vigencia_filter", nome="vigencia", coluna="col-md-2") }}
                 <div class="col-md-3">
                   <label for="client_filter" class="form-label">
                     <i class="bi bi-buildings me-1"></i>Cliente (Polo Ativo)
@@ -170,7 +172,7 @@
                     <button type="submit" class="btn btn-primary">
                       <i class="bi bi-funnel me-1"></i>Filtrar
                     </button>
-                    {% if search_query or client_filter or decision_filter %}
+                    {% if search_query or client_filter or decision_filter or vigencia_selected != '__all__' %}
                     <a href="{{ url_for('process_panel.list_all_benefits') }}" class="btn btn-outline-secondary">
                       <i class="bi bi-x-circle me-1"></i>Limpar
                     </a>
@@ -380,7 +382,7 @@
                         {% if pagination.has_prev %}
                         <li class="page-item">
                           <a class="page-link"
-                            href="{{ url_for('process_panel.list_all_benefits', page=pagination.prev_num, q=search_query, client_id=client_filter, decision=decision_filter) }}">
+                            href="{{ url_for('process_panel.list_all_benefits', page=pagination.prev_num, q=search_query, client_id=client_filter, decision=decision_filter, vigencia=vigencia_selected) }}">
                             <i class="bi bi-chevron-left"></i>
                           </a>
                         </li>
@@ -396,7 +398,7 @@
                         {% if page_num != pagination.page %}
                         <li class="page-item">
                           <a class="page-link"
-                            href="{{ url_for('process_panel.list_all_benefits', page=page_num, q=search_query, client_id=client_filter, decision=decision_filter) }}">{{
+                            href="{{ url_for('process_panel.list_all_benefits', page=page_num, q=search_query, client_id=client_filter, decision=decision_filter, vigencia=vigencia_selected) }}">{{
                             page_num }}</a>
                         </li>
                         {% else %}
@@ -414,7 +416,7 @@
                         {% if pagination.has_next %}
                         <li class="page-item">
                           <a class="page-link"
-                            href="{{ url_for('process_panel.list_all_benefits', page=pagination.next_num, q=search_query, client_id=client_filter, decision=decision_filter) }}">
+                            href="{{ url_for('process_panel.list_all_benefits', page=pagination.next_num, q=search_query, client_id=client_filter, decision=decision_filter, vigencia=vigencia_selected) }}">
                             <i class="bi bi-chevron-right"></i>
                           </a>
                         </li>
@@ -441,7 +443,7 @@
                   Não há benefícios com número cadastrados nos processos judiciais deste escritório.
                   {% endif %}
                 </p>
-                {% if search_query or client_filter or decision_filter %}
+                {% if search_query or client_filter or decision_filter or vigencia_selected != '__all__' %}
                 <a href="{{ url_for('process_panel.list_all_benefits') }}" class="btn btn-outline-secondary me-2">
                   <i class="bi bi-x-circle me-1"></i>Limpar Filtros
                 </a>
