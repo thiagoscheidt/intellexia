@@ -152,13 +152,15 @@
 
     {% set colunas = 3 if agrupado else 4 %}
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0 dou-tabela">
         <thead class="table-light">
           <tr>
             <th style="width: 62px;" class="text-end">Pág.</th>
             <th>Matéria</th>
-            <th style="width: 52px;" class="text-center" title="Abrir a página no PDF assinado">PDF</th>
             {% if not agrupado %}<th style="width: 32%;">Órgão</th>{% endif %}
+            {# A ação vai na última coluna, como o botão de PDF na listagem —
+               no meio da linha o ícone ficava solto entre o título e o órgão. #}
+            <th style="width: 52px;" class="text-center" title="Abrir a página no PDF assinado">PDF</th>
           </tr>
         </thead>
         <tbody>
@@ -191,6 +193,12 @@
               <div class="text-muted small text-truncate">{{ m.ementa }}</div>
               {% endif %}
             </td>
+            {% if not agrupado %}
+            <td class="small text-muted" title="{{ m.orgao_hierarquia or '' }}">
+              {{ orgao_raiz or '—' }}
+              {% if unidade %}<div class="dou-subunidade">{{ unidade }}</div>{% endif %}
+            </td>
+            {% endif %}
             {# Atalho para o fac-símile: a rota já recorta a página da matéria e
                as vizinhas, então dá para conferir o ato oficial sem abrir a
                matéria antes. #}
@@ -203,12 +211,6 @@
               </a>
               {% endif %}
             </td>
-            {% if not agrupado %}
-            <td class="small text-muted" title="{{ m.orgao_hierarquia or '' }}">
-              {{ orgao_raiz or '—' }}
-              {% if unidade %}<div class="dou-subunidade">{{ unidade }}</div>{% endif %}
-            </td>
-            {% endif %}
           </tr>
           {% endfor %}
           {% endfor %}

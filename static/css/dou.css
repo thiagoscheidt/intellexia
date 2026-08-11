@@ -757,6 +757,26 @@
   gap: .35rem;
 }
 
+/* Larguras fixas, não automáticas. A ementa é truncada com `text-truncate`,
+   que é `white-space: nowrap` — e numa tabela de layout automático o texto
+   sem quebra entra inteiro no cálculo da coluna, `overflow: hidden` não
+   segura a célula. A coluna Matéria ia a 1954 px numa tela de 1920, a tabela
+   estourava a viewport e a coluna Órgão era espremida a 109 px.
+
+   Com layout fixo as porcentagens do <th> valem e a ementa corta na largura
+   da célula, em vez de ditá-la. */
+.dou-tabela {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Título e órgão quebram em vez de esticar a coluna: identificação de
+   matéria do DOU passa de 400 px e não cabe numa linha em tela estreita. */
+.dou-tabela td,
+.dou-tabela th {
+  overflow-wrap: anywhere;
+}
+
 /* Cabeçalho de grupo por órgão. Fundo próprio e não sublinhado como <th>:
    precisa ler como divisória dentro da lista, não como outra tabela. */
 .dou-grupo th {
