@@ -102,6 +102,11 @@
     <div class="dou-data__semana">{{ linha.semana }}</div>
     <div class="dou-data__dia">{{ '%02d' % linha.dia }}</div>
     <div class="dou-data__mes">{{ linha.mes_ano }}</div>
+    {# O total é do dia, então fica junto da data: à direita ele ficava a
+       500 px do último botão, com um vazio no meio da linha. #}
+    <div class="dou-data__total">
+      {{ '{:,}'.format(linha.total_materias).replace(',', '.') }} matérias
+    </div>
   </a>
 
   <div class="dou-cadernos">
@@ -142,11 +147,6 @@
     {% endfor %}
   </div>
 
-  <div class="dou-total">
-    <div class="dou-total__num">{{ '{:,}'.format(linha.total_materias).replace(',', '.') }}</div>
-    <div class="dou-total__rot">matérias</div>
-  </div>
-
 </article>
 {% endfor %}
 
@@ -174,9 +174,9 @@
 
 <p class="dou-resumo mt-4 mb-0">
   <i class="bi bi-info-circle me-1"></i>
-  A barra mostra o tamanho de cada caderno na comparação com o maior desta
-  página. Clique no caderno para ler as matérias, ou no ícone de PDF para abrir
-  o arquivo assinado da Imprensa Nacional em nova aba.
+  A barrinha ao lado da contagem compara o tamanho do caderno com o maior desta
+  página. As seções marcadas <strong>extra</strong> são edições publicadas fora
+  do horário normal, e nem todo dia tem.
 </p>
 
 {% endif %}
