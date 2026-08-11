@@ -179,10 +179,17 @@
 }
 
 /* Chip, nome e contagem andam juntos, com larguras fixas, para alinharem
-   entre as linhas do card. */
+   entre as linhas do card — cada linha é um grid próprio, então largura
+   `auto` faria cada uma parar num lugar diferente.
+
+   A coluna do nome é dimensionada pelo rótulo mais longo que existe
+   ("Atos normativos · extra", de SECTION_SUBJECTS: 126 px). Estava em 22rem,
+   e como o track do pai é `auto`, ela assumia os 352 px sempre — abrindo um
+   buraco de 238 px entre o nome e a contagem que lia como layout quebrado.
+   Rótulo maior que a coluna corta com reticências, não empurra a linha. */
 .dou-caderno__info {
   display: grid;
-  grid-template-columns: 1.9rem minmax(0, 22rem) 7rem;
+  grid-template-columns: 1.9rem minmax(0, 11rem) 7rem;
   gap: .75rem;
   align-items: center;
 }
@@ -324,13 +331,20 @@
     gap: .5rem;
   }
 
+  /* O empilhamento é do bloco de texto, não do link: chip, nome e contagem
+     são filhos de `.dou-caderno__info`, e areas declaradas no link não
+     alcançam neto — foi assim que os três se sobrepuseram na mesma célula. */
   .dou-caderno__link {
+    grid-template-columns: minmax(0, 1fr);
+    gap: .1rem;
+  }
+
+  .dou-caderno__info {
     grid-template-columns: 1.9rem minmax(0, 1fr);
     grid-template-areas:
       "num  nome"
       "num  qtd";
     gap: .1rem .5rem;
-    justify-content: stretch;
   }
 
   .dou-caderno__num { grid-area: num; align-self: center; }
