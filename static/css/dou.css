@@ -705,8 +705,8 @@
    página não rola, quem rola é o PDF por dentro. O min-height é o piso para
    telas baixas, onde sobra menos que isso. */
 .dou-pdf-quadro--leitor {
-  height: calc(100vh - 265px);
-  min-height: 480px;
+  height: calc(100vh - 150px);
+  min-height: 560px;
 }
 
 /* Barra do visualizador: andar de página, saltar para um número e o sumário
