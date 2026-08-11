@@ -23,13 +23,25 @@ benefícios e contestações por empresa.', icon='bi bi-buildings') %}
         <div class="card mb-3">
             <div class="card-body">
                 <form method="get" action="{{ url_for('fap_panel.empresas_page') }}" class="row g-2 align-items-end">
-                    <div class="col-md-7 col-lg-8">
+                    <div class="col-md-5 col-lg-5">
                         <label class="form-label small text-muted text-uppercase fw-semibold mb-1">Buscar
                             empresa</label>
                         <input type="text" class="form-control" name="q" value="{{ search }}"
                             placeholder="Digite nome ou CNPJ da empresa" autocomplete="off">
                     </div>
-                    <div class="col-md-5 col-lg-4 d-flex gap-2">
+                    <div class="col-md-3 col-lg-3">
+                        <label class="form-label small text-muted text-uppercase fw-semibold mb-1">Grupo
+                            Empresarial</label>
+                        <select name="grupo" class="form-select">
+                            <option value="">Todos</option>
+                            {% for grupo in fap_group_options or [] %}
+                            <option value="{{ grupo.value }}" {{ 'selected' if f_grupo==grupo.value }}>
+                                {{ grupo.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-4 col-lg-4 d-flex gap-2">
                         <button type="submit" class="btn btn-primary flex-fill">
                             <i class="bi bi-search me-1"></i> Buscar
                         </button>
@@ -47,7 +59,13 @@ benefícios e contestações por empresa.', icon='bi bi-buildings') %}
                     <i class="bi bi-list-ul me-1 text-primary"></i>
                     Empresas sincronizadas
                 </h3>
-                <span class="badge text-bg-secondary">{{ total }} registro(s)</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge text-bg-secondary">{{ total }} registro(s)</span>
+                    <a href="{{ url_for('fap_panel.empresas_grupos_importar') }}"
+                        class="btn btn-sm btn-outline-primary" title="Importar a planilha de grupos empresariais">
+                        <i class="bi bi-file-earmark-arrow-up me-1"></i> Importar grupos
+                    </a>
+                </div>
             </div>
             <div class="card-body p-0">
                 {% if items %}
@@ -57,6 +75,7 @@ benefícios e contestações por empresa.', icon='bi bi-buildings') %}
                             <tr>
                                 <th>Empresa</th>
                                 <th>CNPJ</th>
+                                <th>Grupo Empresarial</th>
                                 <th>Tipo de Procuração</th>
                                 <th class="text-center">Contestações</th>
                                 <th>Última Sync</th>
@@ -71,6 +90,19 @@ benefícios e contestações por empresa.', icon='bi bi-buildings') %}
                                     <div class="small text-muted">Raiz: {{ item.cnpj_root or '—' }}</div>
                                 </td>
                                 <td class="font-monospace">{{ item.cnpj_fmt or item.cnpj or '—' }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="grupo-nome {{ 'text-muted fst-italic' if not item.grupo }}"
+                                            data-raiz="{{ item.cnpj_root }}">{{ item.grupo or 'Sem grupo' }}</span>
+                                        <button type="button" class="btn btn-link btn-sm p-0 btn-editar-grupo"
+                                            data-raiz="{{ item.cnpj_root }}"
+                                            data-empresa="{{ item.nome or item.cnpj_fmt }}"
+                                            data-grupo="{{ item.grupo }}"
+                                            title="Definir o grupo empresarial desta empresa">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                    </div>
+                                </td>
                                 <td>{{ item.tipo_procuracao or '—' }}</td>
                                 <td class="text-center"><span class="badge text-bg-light">{{ item.contestacoes_count
                                         }}</span></td>
@@ -105,4 +137,86 @@ benefícios e contestações por empresa.', icon='bi bi-buildings') %}
 
     </div>
 </div>
+
+{# Modal de grupo empresarial — o datalist evita criar "ADSERVI " duplicado por espaço #}
+<div class="modal fade" id="modalGrupo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-diagram-3 me-2"></i>Grupo Empresarial</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3" id="grupoEmpresaLabel"></p>
+                <label class="form-label" for="grupoInput">Nome do grupo</label>
+                <input type="text" class="form-control" id="grupoInput" list="gruposExistentes"
+                    placeholder="Ex.: ADSERVI" autocomplete="off">
+                <datalist id="gruposExistentes">
+                    {% for nome in grupos_existentes or [] %}
+                    <option value="{{ nome }}"></option>
+                    {% endfor %}
+                </datalist>
+                <div class="form-text">
+                    Deixe em branco para desvincular a empresa do grupo.
+                </div>
+                <div class="alert alert-danger mt-3 d-none" id="grupoErro"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="grupoSalvar">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var modalEl = document.getElementById('modalGrupo');
+        if (!modalEl) { return; }
+        var modal = new bootstrap.Modal(modalEl);
+        var input = document.getElementById('grupoInput');
+        var erro = document.getElementById('grupoErro');
+        var label = document.getElementById('grupoEmpresaLabel');
+        var raizAtual = null;
+
+        document.querySelectorAll('.btn-editar-grupo').forEach(function (botao) {
+            botao.addEventListener('click', function () {
+                raizAtual = botao.dataset.raiz;
+                label.textContent = botao.dataset.empresa || '';
+                input.value = botao.dataset.grupo || '';
+                erro.classList.add('d-none');
+                modal.show();
+                setTimeout(function () { input.focus(); }, 300);
+            });
+        });
+
+        input.addEventListener('keydown', function (evento) {
+            if (evento.key === 'Enter') { evento.preventDefault(); salvar(); }
+        });
+        document.getElementById('grupoSalvar').addEventListener('click', salvar);
+
+        function salvar() {
+            if (!raizAtual) { return; }
+            var dados = new FormData();
+            dados.append('cnpj_raiz', raizAtual);
+            dados.append('grupo', input.value.trim());
+
+            fetch('{{ url_for("fap_panel.empresas_set_grupo") }}', { method: 'POST', body: dados })
+                .then(function (resposta) { return resposta.json().then(function (corpo) { return { ok: resposta.ok, corpo: corpo }; }); })
+                .then(function (resultado) {
+                    if (!resultado.ok || !resultado.corpo.ok) {
+                        erro.textContent = (resultado.corpo && resultado.corpo.erro) || 'Não foi possível salvar o grupo.';
+                        erro.classList.remove('d-none');
+                        return;
+                    }
+                    // Recarrega para o filtro e a lista de grupos refletirem a mudança.
+                    window.location.reload();
+                })
+                .catch(function () {
+                    erro.textContent = 'Falha de conexão ao salvar o grupo.';
+                    erro.classList.remove('d-none');
+                });
+        }
+    })();
+</script>
 {% endblock %}

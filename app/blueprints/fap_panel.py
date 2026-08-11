@@ -20,6 +20,7 @@ from io import BytesIO
 from flask import (
     Blueprint,
     current_app,
+    flash,
     jsonify,
     redirect,
     render_template,
@@ -28,6 +29,7 @@ from flask import (
     session,
     url_for,
 )
+from werkzeug.utils import secure_filename
 from openpyxl import Workbook
 from openpyxl.styles import (
     Alignment,
@@ -48,6 +50,8 @@ from app.models import (
     FapWebProcuracao,
     db,
 )
+from app.services import fap_group_service
+from app.services import fap_group_import_service
 from app.services.fap_web_service import (
     FapWebAuthPayload, FapWebService, build_fap_service, resolve_fap_auth,
 )
@@ -141,6 +145,7 @@ def empresas_page():
     """Lista empresas sincronizadas no FAP com busca e atalhos de ação."""
     law_firm_id = get_current_law_firm_id()
     search = str(request.args.get('q') or '').strip()
+    f_grupo = str(request.args.get('grupo') or '').strip()
 
     query = FapCompany.query.filter_by(law_firm_id=law_firm_id)
     if search:
@@ -151,8 +156,13 @@ def empresas_page():
                 FapCompany.cnpj.ilike(like),
             )
         )
+    # FapCompany.cnpj já é a raiz de 8 dígitos, então a coluna é a própria raiz.
+    query = fap_group_service.apply_group_filter(
+        query, law_firm_id, f_grupo, FapCompany.cnpj, coluna_e_raiz=True,
+    )
 
     companies = query.order_by(FapCompany.nome.asc(), FapCompany.cnpj.asc()).all()
+    grupos_por_raiz = fap_group_service.groups_by_root(law_firm_id)
 
     contestacoes_by_root = {
         cnpj_raiz: int(total)
@@ -178,6 +188,8 @@ def empresas_page():
                 'tipo_procuracao': (company.tipo_procuracao_descricao or '').strip(),
                 'synced_at': company.synced_at,
                 'contestacoes_count': contestacoes_by_root.get(cnpj_root, 0),
+                'grupo': (grupos_por_raiz.get(cnpj_root) or {}).get('nome', ''),
+                'grupo_origem': (grupos_por_raiz.get(cnpj_root) or {}).get('origem', ''),
             }
         )
 
@@ -186,7 +198,120 @@ def empresas_page():
         items=items,
         search=search,
         total=len(items),
+        f_grupo=f_grupo,
+        fap_group_options=fap_group_service.select_options(law_firm_id),
+        sem_grupo_valor=fap_group_service.SEM_GRUPO,
+        # Autocompletar do modal: evita criar "ADSERVI " duplicado por espaço.
+        grupos_existentes=sorted(
+            {g['nome'] for g in fap_group_service.groups_by_root(law_firm_id).values()},
+            key=str.lower,
+        ),
     )
+
+
+@fap_panel_bp.route('/empresas/grupo', methods=['POST'])
+@require_law_firm
+def empresas_set_grupo():
+    """Define ou remove o grupo empresarial de uma empresa (botão da listagem)."""
+    law_firm_id = get_current_law_firm_id()
+    raiz = str(request.form.get('cnpj_raiz') or '').strip()
+    grupo = str(request.form.get('grupo') or '').strip()
+
+    try:
+        if grupo:
+            acao, _ = fap_group_service.assign_group(
+                law_firm_id, raiz, grupo, origem=fap_group_service.ORIGEM_MANUAL,
+            )
+        else:
+            acao = 'removido' if fap_group_service.remove_group(law_firm_id, raiz) else 'inalterado'
+        db.session.commit()
+    except ValueError as erro:
+        db.session.rollback()
+        return jsonify({'ok': False, 'erro': str(erro)}), 400
+
+    return jsonify({'ok': True, 'acao': acao, 'grupo': grupo})
+
+
+# Chave de sessão que liga o upload à confirmação. Guardamos o caminho, não o
+# conteúdo: a conferência e a gravação releem o mesmo arquivo, então o que for
+# gravado é sempre o que o usuário conferiu.
+_SESSION_GRUPOS_UPLOAD = 'fap_grupos_upload_path'
+
+
+def _grupos_upload_dir(law_firm_id):
+    return os.path.join(current_app.root_path, 'uploads', 'fap_groups', str(law_firm_id))
+
+
+@fap_panel_bp.route('/empresas/grupos/importar', methods=['GET', 'POST'])
+@require_law_firm
+def empresas_grupos_importar():
+    """Upload da planilha de grupos e tela de conferência (não grava nada)."""
+    law_firm_id = get_current_law_firm_id()
+
+    if request.method == 'GET':
+        return render_template('fap_panel/grupos_importar.html', preview=None)
+
+    arquivo = request.files.get('planilha')
+    if arquivo is None or not (arquivo.filename or '').strip():
+        flash('Escolha uma planilha .xlsx para importar.', 'warning')
+        return redirect(url_for('fap_panel.empresas_grupos_importar'))
+
+    if not (arquivo.filename or '').lower().endswith('.xlsx'):
+        flash('A planilha precisa estar no formato .xlsx.', 'warning')
+        return redirect(url_for('fap_panel.empresas_grupos_importar'))
+
+    destino_dir = _grupos_upload_dir(law_firm_id)
+    os.makedirs(destino_dir, exist_ok=True)
+    nome = secure_filename(arquivo.filename) or 'grupos.xlsx'
+    caminho = os.path.join(destino_dir, f'{int(datetime.now().timestamp())}_{nome}')
+    arquivo.save(caminho)
+
+    try:
+        preview = fap_group_import_service.build_preview(law_firm_id, caminho)
+    except fap_group_import_service.SpreadsheetFormatError as erro:
+        os.remove(caminho)
+        flash(str(erro), 'danger')
+        return redirect(url_for('fap_panel.empresas_grupos_importar'))
+
+    session[_SESSION_GRUPOS_UPLOAD] = caminho
+    return render_template(
+        'fap_panel/grupos_importar.html',
+        preview=preview,
+        nome_arquivo=nome,
+    )
+
+
+@fap_panel_bp.route('/empresas/grupos/importar/confirmar', methods=['POST'])
+@require_law_firm
+def empresas_grupos_importar_confirmar():
+    """Aplica a planilha conferida na etapa anterior."""
+    law_firm_id = get_current_law_firm_id()
+    caminho = session.get(_SESSION_GRUPOS_UPLOAD)
+
+    if not caminho or not os.path.exists(caminho):
+        flash('A planilha enviada expirou. Envie o arquivo novamente.', 'warning')
+        return redirect(url_for('fap_panel.empresas_grupos_importar'))
+
+    try:
+        totais = fap_group_import_service.apply_import(law_firm_id, caminho)
+    except fap_group_import_service.SpreadsheetFormatError as erro:
+        flash(str(erro), 'danger')
+        return redirect(url_for('fap_panel.empresas_grupos_importar'))
+    finally:
+        session.pop(_SESSION_GRUPOS_UPLOAD, None)
+
+    partes = []
+    if totais['novos']:
+        partes.append(f"{totais['novos']} empresa(s) com grupo novo")
+    if totais['alterados']:
+        partes.append(f"{totais['alterados']} alterada(s)")
+    if totais['inalterados']:
+        partes.append(f"{totais['inalterados']} sem mudança")
+    if totais['erros']:
+        partes.append(f"{totais['erros']} linha(s) ignorada(s) por erro")
+
+    flash('Importação concluída: ' + (', '.join(partes) or 'nada a fazer') + '.', 'success')
+    return redirect(url_for('fap_panel.empresas_page'))
 
 
 @fap_panel_bp.route('/sync/save-auth', methods=['POST'])
@@ -1123,6 +1248,7 @@ def contestacoes_page():
     f_instancia = request.args.get('instancia', '').strip()
     f_situacao  = request.args.get('situacao', '').strip()
     f_protocolo = request.args.get('protocolo', '').strip()
+    f_grupo     = request.args.get('grupo', '').strip()
     f_prazo2    = request.args.get('prazo_2_instancia') == '1'
     f_sort      = request.args.get('ordenar', 'padrao').strip()
     if f_sort not in ('padrao', 'dou', 'transmissao', 'cadastro', 'atualizacao'):
@@ -1136,6 +1262,7 @@ def contestacoes_page():
         f_instancia,
         f_situacao,
         f_protocolo,
+        f_grupo,
         f_prazo2,
     ])
 
@@ -1378,8 +1505,10 @@ def contestacoes_page():
         f_instancia=f_instancia,
         f_situacao=f_situacao,
         f_protocolo=f_protocolo,
+        f_grupo=f_grupo,
         f_prazo2=f_prazo2,
         f_sort=f_sort,
+        fap_group_options=fap_group_service.select_options(law_firm_id),
     )
 
 

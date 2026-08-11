@@ -572,22 +572,7 @@ def _build_fap_group_options(law_firm_id):
 
     O valor da opção é a **chave do grupo**, não mais uma raiz de CNPJ.
     """
-    opcoes = [
-        {
-            'value': grupo['chave'],
-            'label': (
-                f"{grupo['nome']} ({grupo['total_empresas']} empresas)"
-                if grupo['total_empresas'] > 1 else grupo['nome']
-            ),
-        }
-        for grupo in fap_group_service.group_options(law_firm_id)
-    ]
-    # No fim da lista, e não na ordem alfabética, para não se perder no meio.
-    opcoes.append({
-        'value': fap_group_service.SEM_GRUPO,
-        'label': fap_group_service.SEM_GRUPO_LABEL,
-    })
-    return opcoes
+    return fap_group_service.select_options(law_firm_id)
 
 
 def _apply_grupo_filter(query, law_firm_id, quick_grupo, employer_cnpj_column):

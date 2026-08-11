@@ -96,6 +96,27 @@ def group_options(law_firm_id):
     return sorted(opcoes, key=lambda o: o['nome'].lower())
 
 
+def select_options(law_firm_id):
+    """Opções prontas para os ``<select>`` das telas: [{'value', 'label'}].
+
+    Usada pelo Disputes Center e pelo Painel FAP — o rótulo e a posição do
+    "sem grupo" ficam iguais nos dois, sem cópia em cada blueprint.
+    """
+    opcoes = [
+        {
+            'value': grupo['chave'],
+            'label': (
+                f"{grupo['nome']} ({grupo['total_empresas']} empresas)"
+                if grupo['total_empresas'] > 1 else grupo['nome']
+            ),
+        }
+        for grupo in group_options(law_firm_id)
+    ]
+    # No fim da lista, e não na ordem alfabética, para não se perder no meio.
+    opcoes.append({'value': SEM_GRUPO, 'label': SEM_GRUPO_LABEL})
+    return opcoes
+
+
 def roots_for_group(law_firm_id, grupo_chave):
     """CNPJs raiz de um grupo. Lista vazia quando o grupo não existe."""
     chave = normalize_group_key(grupo_chave)

@@ -2937,7 +2937,10 @@ class FapReviewExecution(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    petition_id = db.Column(db.Integer, db.ForeignKey('fap_review_petitions.id'), index=True)
+    # Sem index=True: o índice já é declarado em __table_args__ com este mesmo
+    # nome. Declarado nos dois lugares, o create_all tentava criá-lo duas vezes
+    # e falhava — quebrando a criação de um banco do zero.
+    petition_id = db.Column(db.Integer, db.ForeignKey('fap_review_petitions.id'))
 
     execution_type = db.Column(db.String(50), nullable=False, comment='revision, training')
     status = db.Column(db.String(20), default='pending', nullable=False, comment='pending, processing, completed, failed')

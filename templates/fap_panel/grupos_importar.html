@@ -1,0 +1,233 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Importar Grupos Empresariais{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Importar Grupos Empresariais',
+subtitle='Envie a planilha com CNPJ raiz, grupo e razão social. Nada é gravado antes da sua confirmação.') %}
+{% endcall %}
+
+<div class="app-content">
+    <div class="container-fluid">
+
+        {% if not preview %}
+        {# ── Etapa 1: upload ───────────────────────────────────────────── #}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title mb-0"><i class="bi bi-file-earmark-spreadsheet me-1 text-primary"></i>
+                    Planilha de grupos</h3>
+            </div>
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data"
+                    action="{{ url_for('fap_panel.empresas_grupos_importar') }}">
+                    <div class="mb-3">
+                        <label class="form-label" for="planilha">Arquivo .xlsx</label>
+                        <input type="file" class="form-control" id="planilha" name="planilha" accept=".xlsx" required>
+                        <div class="form-text">
+                            A planilha precisa ter uma coluna de <strong>CNPJ raiz</strong> e uma coluna
+                            <strong>Grupo</strong>. A razão social é opcional. O cabeçalho pode estar em qualquer
+                            linha das primeiras 15, e as colunas em qualquer ordem.
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-upload me-1"></i> Enviar e conferir
+                        </button>
+                        <a href="{{ url_for('fap_panel.empresas_page') }}" class="btn btn-outline-secondary">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% else %}
+        {# ── Etapa 2: conferência ──────────────────────────────────────── #}
+        {% set t = preview.totais %}
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0"><i class="bi bi-clipboard-check me-1 text-primary"></i>
+                    Conferência{% if nome_arquivo %} — <span class="text-muted small">{{ nome_arquivo }}</span>{% endif %}
+                </h3>
+                <span class="badge text-bg-secondary">{{ t.linhas_validas }} linha(s) válida(s)</span>
+            </div>
+            <div class="card-body">
+                <div class="row g-2 text-center mb-3">
+                    <div class="col-6 col-md-3">
+                        <div class="border rounded p-2">
+                            <div class="fs-4 fw-semibold text-success">{{ t.novos }}</div>
+                            <div class="small text-muted">Grupo novo</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="border rounded p-2">
+                            <div class="fs-4 fw-semibold text-warning">{{ t.alterados }}</div>
+                            <div class="small text-muted">Serão alterados</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="border rounded p-2">
+                            <div class="fs-4 fw-semibold text-muted">{{ t.inalterados }}</div>
+                            <div class="small text-muted">Sem mudança</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="border rounded p-2">
+                            <div class="fs-4 fw-semibold {{ 'text-danger' if t.erros else 'text-muted' }}">{{ t.erros }}
+                            </div>
+                            <div class="small text-muted">Linhas com erro</div>
+                        </div>
+                    </div>
+                </div>
+
+                <form method="post" action="{{ url_for('fap_panel.empresas_grupos_importar_confirmar') }}"
+                    class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success" {{ 'disabled' if not t.linhas_validas }}>
+                        <i class="bi bi-check2-circle me-1"></i> Confirmar importação
+                    </button>
+                    <a href="{{ url_for('fap_panel.empresas_grupos_importar') }}" class="btn btn-outline-secondary">
+                        Enviar outra planilha
+                    </a>
+                </form>
+            </div>
+        </div>
+
+        {% if preview.alterados %}
+        <div class="card mb-3 border-warning">
+            <div class="card-header">
+                <h3 class="card-title mb-0 text-warning">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Grupos que serão alterados ({{ preview.alterados | length }})
+                </h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Linha</th>
+                                <th>CNPJ raiz</th>
+                                <th>Empresa</th>
+                                <th>Grupo atual</th>
+                                <th>Passará a ser</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in preview.alterados %}
+                            <tr>
+                                <td class="text-muted">{{ item.linha }}</td>
+                                <td class="font-monospace">{{ item.cnpj_raiz }}</td>
+                                <td>{{ item.razao_social or '—' }}</td>
+                                <td>
+                                    {{ item.grupo_atual }}
+                                    {% if item.era_manual %}
+                                    <span class="badge text-bg-warning ms-1" title="Definido manualmente no sistema">
+                                        cadastro manual
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="fw-semibold">{{ item.grupo_nome }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if preview.erros %}
+        <div class="card mb-3 border-danger">
+            <div class="card-header">
+                <h3 class="card-title mb-0 text-danger">
+                    <i class="bi bi-x-octagon me-1"></i>
+                    Linhas que serão ignoradas ({{ preview.erros | length }})
+                </h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th style="width:6rem;">Linha</th>
+                                <th>Motivo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for erro in preview.erros %}
+                            <tr>
+                                <td class="text-muted">{{ erro.linha }}</td>
+                                <td>{{ erro.mensagem }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if preview.novos %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title mb-0 text-success">
+                    <i class="bi bi-plus-circle me-1"></i>
+                    Empresas que ganharão grupo ({{ preview.novos | length }})
+                </h3>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height:22rem;">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead class="sticky-top bg-body">
+                            <tr>
+                                <th>Linha</th>
+                                <th>CNPJ raiz</th>
+                                <th>Empresa</th>
+                                <th>Grupo</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in preview.novos %}
+                            <tr>
+                                <td class="text-muted">{{ item.linha }}</td>
+                                <td class="font-monospace">{{ item.cnpj_raiz }}</td>
+                                <td>{{ item.razao_social or '—' }}</td>
+                                <td class="fw-semibold">{{ item.grupo_nome }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if preview.sem_empresa %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <h3 class="card-title mb-0 text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Sem empresa sincronizada correspondente ({{ preview.sem_empresa | length }})
+                </h3>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small mb-2">
+                    Esses CNPJs não estão hoje entre as empresas sincronizadas do FAP — normalmente são procurações
+                    já vencidas. O grupo é gravado assim mesmo, e passa a valer se a procuração voltar.
+                </p>
+                <div class="d-flex flex-wrap gap-1">
+                    {% for item in preview.sem_empresa %}
+                    <span class="badge text-bg-light font-monospace" title="{{ item.razao_social }}">
+                        {{ item.cnpj_raiz }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

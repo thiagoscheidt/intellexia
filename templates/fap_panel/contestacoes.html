@@ -648,7 +648,7 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           <button type="button" id="btnLatestDou" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-newspaper me-1"></i> Últimas publicações D.O.U.
           </button>
-          {% if f_year or f_cnpj_raiz or f_cnpj or f_instancia or f_situacao or f_protocolo or f_prazo2 %}
+          {% if f_year or f_cnpj_raiz or f_cnpj or f_instancia or f_situacao or f_protocolo or f_grupo or f_prazo2 %}
           <span class="filter-active-badge">
             <i class="bi bi-funnel-fill"></i> Filtros ativos
           </span>
@@ -671,6 +671,19 @@ vigência, empresa e instância.', icon='bi bi-table') %}
                 <option value="__all__" {{ 'selected' if f_year=='__all__' }}>Todas</option>
                 {% for y in years %}
                 <option value="{{ y }}" {{ 'selected' if f_year==y|string }}>{{ y }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            {# Grupo Empresarial — alcança todas as raízes do grupo #}
+            <div class="col-sm-3 col-6">
+              <label class="form-label">Grupo Empresarial</label>
+              <select name="grupo" class="form-select form-select-sm" id="selectGrupo">
+                <option value="">Todos</option>
+                {% for grupo in fap_group_options or [] %}
+                <option value="{{ grupo.value }}" {{ 'selected' if f_grupo==grupo.value }}>
+                  {{ grupo.label }}
+                </option>
                 {% endfor %}
               </select>
             </div>
@@ -772,7 +785,7 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           <span class="badge bg-secondary ms-1" style="font-size:.72rem;font-weight:500;">
             {{ table_rows|length }} linha(s) · {{ total }} contestação(ões)
           </span>
-          {% if f_year or f_cnpj_raiz or f_cnpj or f_instancia or f_situacao or f_protocolo %}
+          {% if f_year or f_cnpj_raiz or f_cnpj or f_instancia or f_situacao or f_protocolo or f_grupo %}
           <span class="badge bg-warning text-dark ms-1" style="font-size:.7rem;">filtrado</span>
           {% endif %}
         </h6>
@@ -784,6 +797,7 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           'instancia': f_instancia or '',
           'situacao': f_situacao or '',
           'protocolo': f_protocolo or '',
+          'grupo': f_grupo or '',
           'ordenar': f_sort or 'padrao'
           } -%}
           <button type="button" id="btnImportAll" class="btn btn-sm btn-warning"
@@ -935,6 +949,7 @@ vigência, empresa e instância.', icon='bi bi-table') %}
         'instancia': f_instancia or '',
         'situacao': f_situacao or '',
         'protocolo': f_protocolo or '',
+        'grupo': f_grupo or '',
         'ordenar': f_sort or 'padrao'
       } -%}
       <div class="pagination-shell" id="paginationShell">
@@ -1143,6 +1158,12 @@ vigência, empresa e instância.', icon='bi bi-table') %}
     /* ── Select2 ─────────────────────────────────────────────────────────── */
     if (typeof $.fn !== 'undefined' && $.fn.select2) {
       $('#selectYear').select2({ theme: 'bootstrap-5', minimumResultsForSearch: 5, width: '100%' });
+      $('#selectGrupo').select2({
+        theme: 'bootstrap-5',
+        width: '100%',
+        placeholder: 'Todos',
+        allowClear: true
+      });
       $('#selectRaiz').select2({
         theme: 'bootstrap-5',
         allowClear: true,
