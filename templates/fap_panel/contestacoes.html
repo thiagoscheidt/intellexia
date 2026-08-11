@@ -121,6 +121,10 @@ contestacao_id=c.contestacao_id) -%}
   }
 
   /* ── Stats cards ─────────────────────────────────────────────────── */
+  /* 6 cards, e as colunas são sempre divisores de 6 (6, 3, 2, 1): toda linha
+     fica com a mesma quantidade, sem card órfão. Foi por isso que o card
+     "Recursos" saiu — ele era a soma dos badges "2ª:" dos três cards de
+     situação, e o sétimo card quebrava a divisão em qualquer largura. */
   .stat-cards {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
@@ -142,6 +146,36 @@ contestacao_id=c.contestacao_id) -%}
   @media (max-width: 420px) {
     .stat-cards {
       grid-template-columns: 1fr;
+    }
+  }
+
+  /* Quando o card "Outras" entra, viram 7 e sobraria um sozinho na linha.
+     Nesse caso ele ocupa a largura toda — para um estado excepcional, chamar
+     atenção é melhor do que um card pequeno perdido no canto. O seletor pega
+     o último card só quando ele de fato inicia uma linha. */
+  .stat-cards>.stat-card:last-child:nth-child(6n+1) {
+    grid-column: 1 / -1;
+  }
+
+  @media (max-width: 1100px) {
+    .stat-cards>.stat-card:last-child:nth-child(6n+1) {
+      grid-column: auto;
+    }
+
+    .stat-cards>.stat-card:last-child:nth-child(3n+1) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 700px) {
+
+    .stat-cards>.stat-card:last-child:nth-child(3n+1),
+    .stat-cards>.stat-card:last-child:nth-child(6n+1) {
+      grid-column: auto;
+    }
+
+    .stat-cards>.stat-card:last-child:nth-child(2n+1) {
+      grid-column: 1 / -1;
     }
   }
 
@@ -610,13 +644,28 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           <span class="badge text-bg-secondary">2ª: {{ count_tra2 }}</span>
         </div>
       </div>
-      <div class="stat-card" style="--sc-color:#6f42c1;--sc-soft:rgba(111,66,193,.10);">
+      <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
         <div class="d-flex align-items-center gap-2 mb-1">
-          <span class="sc-icon"><i class="bi bi-arrow-repeat"></i></span>
-          <span class="sc-label">Recursos</span>
+          <span class="sc-icon"><i class="bi bi-newspaper"></i></span>
+          <span class="sc-label" title="Resultado divulgado no D.O.U. pela Previdência Social">Inst. Publicadas</span>
         </div>
-        <div class="sc-value">{{ count_and2 + count_tra2 }}</div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge text-bg-primary">1ª: {{ count_pub1 }}</span>
+          <span class="badge text-bg-secondary">2ª: {{ count_pub2 }}</span>
+        </div>
       </div>
+      {% if mostrar_outras %}
+      <div class="stat-card" style="--sc-color:#dc3545;--sc-soft:rgba(220,53,69,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-question-circle"></i></span>
+          <span class="sc-label" title="Situação não prevista — conferir no FAP Web">Inst. Outras</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge text-bg-danger">1ª: {{ count_out1 }}</span>
+          <span class="badge text-bg-secondary">2ª: {{ count_out2 }}</span>
+        </div>
+      </div>
+      {% endif %}
       <div class="stat-card" style="--sc-color:#0d9488;--sc-soft:rgba(13,148,136,.10);">
         <div class="d-flex align-items-center gap-2 mb-1">
           <span class="sc-icon"><i class="bi bi-hdd-fill"></i></span>
@@ -871,26 +920,46 @@ vigência, empresa e instância.', icon='bi bi-table') %}
             <tr>
               <th rowspan="2" class="align-middle" style="width:78px;">Vigência</th>
               <th rowspan="2" class="align-middle" style="min-width:165px;">Estabelecimento</th>
-              <th colspan="2" class="th-inst1" style="text-align:center;">
+              {%- set n_sub = 4 if mostrar_outras else 3 %}
+              <th colspan="{{ n_sub }}" class="th-inst1" style="text-align:center;">
                 <i class="bi bi-1-circle-fill me-1"></i> Contestações — 1ª Instância
               </th>
-              <th colspan="2" class="th-inst2" style="text-align:center;">
+              <th colspan="{{ n_sub }}" class="th-inst2" style="text-align:center;">
                 <i class="bi bi-2-circle-fill me-1"></i> Recursos — 2ª Instância
               </th>
             </tr>
             <tr>
-              <th class="th-inst1-sub" style="width:175px;">
+              {# 1ª instância — quem agiu: ninguém / nossa equipe / Previdência #}
+              <th class="th-inst1-sub" style="width:150px;">
                 <i class="bi bi-hourglass-split me-1 text-warning"></i>Em Andamento
               </th>
-              <th class="th-inst1-sub" style="width:175px;">
+              <th class="th-inst1-sub" style="width:150px;" title="Movimentação da nossa equipe">
                 <i class="bi bi-send-check me-1 text-success"></i>Transmitidas
               </th>
-              <th class="th-inst2-sub" style="width:175px;">
+              <th class="th-inst1-sub" style="width:150px;" title="Resultado divulgado no D.O.U. pela Previdência Social">
+                <i class="bi bi-newspaper me-1 text-primary"></i>Publicadas
+              </th>
+              {% if mostrar_outras %}
+              <th class="th-inst1-sub" style="width:150px;" title="Situação não prevista — conferir no FAP Web">
+                <i class="bi bi-question-circle me-1 text-danger"></i>Outras
+              </th>
+              {% endif %}
+
+              {# 2ª instância #}
+              <th class="th-inst2-sub" style="width:150px;">
                 <i class="bi bi-hourglass-split me-1 text-warning"></i>Em Andamento
               </th>
-              <th class="th-inst2-sub" style="width:175px;">
+              <th class="th-inst2-sub" style="width:150px;" title="Movimentação da nossa equipe">
                 <i class="bi bi-send-check me-1 text-success"></i>Transmitidos
               </th>
+              <th class="th-inst2-sub" style="width:150px;" title="Resultado divulgado no D.O.U. pela Previdência Social">
+                <i class="bi bi-newspaper me-1 text-primary"></i>Publicados
+              </th>
+              {% if mostrar_outras %}
+              <th class="th-inst2-sub" style="width:150px;" title="Situação não prevista — conferir no FAP Web">
+                <i class="bi bi-question-circle me-1 text-danger"></i>Outras
+              </th>
+              {% endif %}
             </tr>
           </thead>
           <tbody id="fapTbody">
@@ -909,33 +978,19 @@ vigência, empresa e instância.', icon='bi bi-table') %}
                 </div>
               </td>
 
-              {# 1ª inst · Em Andamento #}
-              <td class="{{ 'td-cells' if row.c_and1 else 'td-empty-cell' }}">
-                {% if row.c_and1 %}
-                {% for c in row.c_and1 %}{{ _render_cell(c) }}{% endfor %}
+              {# Uma célula por (instância × situação). A ordem das colunas é a
+                 mesma do cabeçalho; 'out' entra só quando mostrar_outras. #}
+              {%- set colunas = ['and', 'tra', 'pub', 'out'] if mostrar_outras else ['and', 'tra', 'pub'] %}
+              {% for inst in ['1', '2'] %}
+              {% for col in colunas %}
+              {%- set celulas = row['c_' ~ col ~ inst] %}
+              <td class="{{ 'td-cells' if celulas else 'td-empty-cell' }}">
+                {% if celulas %}
+                {% for c in celulas %}{{ _render_cell(c) }}{% endfor %}
                 {% else %}<span>—</span>{% endif %}
               </td>
-
-              {# 1ª inst · Transmitidas #}
-              <td class="{{ 'td-cells' if row.c_tra1 else 'td-empty-cell' }}">
-                {% if row.c_tra1 %}
-                {% for c in row.c_tra1 %}{{ _render_cell(c) }}{% endfor %}
-                {% else %}<span>—</span>{% endif %}
-              </td>
-
-              {# 2ª inst · Em Andamento #}
-              <td class="{{ 'td-cells' if row.c_and2 else 'td-empty-cell' }}">
-                {% if row.c_and2 %}
-                {% for c in row.c_and2 %}{{ _render_cell(c) }}{% endfor %}
-                {% else %}<span>—</span>{% endif %}
-              </td>
-
-              {# 2ª inst · Transmitidos #}
-              <td class="{{ 'td-cells' if row.c_tra2 else 'td-empty-cell' }}">
-                {% if row.c_tra2 %}
-                {% for c in row.c_tra2 %}{{ _render_cell(c) }}{% endfor %}
-                {% else %}<span>—</span>{% endif %}
-              </td>
+              {% endfor %}
+              {% endfor %}
             </tr>
             {% endfor %}
           </tbody>

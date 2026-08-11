@@ -1138,6 +1138,70 @@ def contestacoes_latest_dou():
     })
 
 
+# ── Classificação das contestações por situação ──────────────────────────────
+# A API do FAP Web devolve exatamente três situações, que separam quem agiu:
+#   EM_ANDAMENTO          "Iniciada, não transmitida"     → ninguém transmitiu ainda
+#   LIBERADA_PARA_ANALISE "Transmitida"                   → ato da NOSSA equipe
+#   PUBLICADA             "Resultado divulgado no D.O.U"  → ato da PREVIDÊNCIA
+#
+# Até 2026-08 a tela deduzia isso procurando palavras no código + descrição
+# ("ANDAMENTO" presente, "TRANSMIT"/"RESULT"/"DIVULG" ausentes). A regra
+# classificava as TRÊS como "transmitidas" e deixava a coluna "Em Andamento"
+# sempre vazia: a descrição de EM_ANDAMENTO é "Iniciada, não TRANSMITida", e a
+# busca por substring achava o "transmit" do "não transmitida", excluindo
+# justamente o registro que devia entrar. Comparar o código resolve sem
+# ambiguidade — ele é um enum, não uma frase em português.
+SITUACAO_EM_ANDAMENTO = 'EM_ANDAMENTO'
+SITUACAO_TRANSMITIDA = 'LIBERADA_PARA_ANALISE'
+SITUACAO_PUBLICADA = 'PUBLICADA'
+
+# Sufixos das chaves de célula/contador (c_and1, count_pub2, …)
+COL_ANDAMENTO = 'and'
+COL_TRANSMITIDA = 'tra'
+COL_PUBLICADA = 'pub'
+COL_OUTRAS = 'out'
+
+COLUNAS_SITUACAO = (COL_ANDAMENTO, COL_TRANSMITIDA, COL_PUBLICADA, COL_OUTRAS)
+
+# Blocos de coluna do export agrupado: (chave do balde, rótulo 1ª, rótulo 2ª).
+# A planilha é montada a partir daqui, e não de índices fixos — foi assim que
+# acrescentar "Publicadas" deixou de exigir renumerar quatro trechos à mão.
+BLOCOS_EXPORT = (
+    (COL_ANDAMENTO,  'Em Andamento', 'Em Andamento'),
+    (COL_TRANSMITIDA, 'Transmitidas', 'Transmitidos'),
+    (COL_PUBLICADA,  'Publicadas',   'Publicados'),
+    (COL_OUTRAS,     'Outras',       'Outras'),
+)
+
+_SITUACAO_PARA_COLUNA = {
+    SITUACAO_EM_ANDAMENTO: COL_ANDAMENTO,
+    SITUACAO_TRANSMITIDA: COL_TRANSMITIDA,
+    SITUACAO_PUBLICADA: COL_PUBLICADA,
+}
+
+
+def _coluna_da_situacao(situacao_codigo):
+    """Situação da contestação → coluna da tabela.
+
+    Código desconhecido cai em "Outras" de propósito, e não na primeira coluna:
+    se a Dataprev criar uma situação nova, ela precisa ficar visível em vez de
+    se dissolver num balde silencioso — que foi como a coluna "Transmitidas"
+    passou a conter tudo.
+    """
+    codigo = (situacao_codigo or '').strip().upper()
+    return _SITUACAO_PARA_COLUNA.get(codigo, COL_OUTRAS)
+
+
+def _chave_celula(situacao_codigo, instancia_codigo):
+    """Chave do balde: 'c_and1', 'c_pub2', … (1 = contestação, 2 = recurso)."""
+    instancia = '2' if (instancia_codigo or '').upper().find('SEGUNDA') >= 0 else '1'
+    return f'c_{_coluna_da_situacao(situacao_codigo)}{instancia}'
+
+
+def _baldes_vazios():
+    return {f'c_{coluna}{inst}': [] for coluna in COLUNAS_SITUACAO for inst in ('1', '2')}
+
+
 def _build_contestacoes_filters(law_firm_id):
     """Monta a lista de condições SQLAlchemy a partir dos filtros da query string.
 
@@ -1309,18 +1373,9 @@ def contestacoes_page():
     pending_count = 0
     with_file_count = 0
     without_file_count = 0
-    count_and1 = count_tra1 = count_and2 = count_tra2 = 0
-
-    # Classificação (mesma lógica usada para montar a tabela) — definida aqui
-    # para também alimentar os cards de estatística sobre TODO o conjunto filtrado.
-    #   instancia_codigo contém "SEGUNDA" → recurso (2ª); senão → contestação (1ª)
-    #   "em andamento" = situacao com "ANDAMENTO"/"PRAZO" e sem "TRANSMIT"/"RESULT"/"DIVULG"
-    def _is_segunda(cod):
-        return cod and 'SEGUNDA' in cod.upper()
-
-    def _is_em_andamento(cod, desc):
-        s = ((cod or '') + ' ' + (desc or '')).upper()
-        return ('ANDAMENTO' in s or 'PRAZO' in s) and 'TRANSMIT' not in s and 'RESULT' not in s and 'DIVULG' not in s
+    # Contadores por coluna/instância (count_and1, count_pub2, …), alimentando
+    # os cards de estatística sobre TODO o conjunto filtrado.
+    contadores = {chave.replace('c_', 'count_'): 0 for chave in _baldes_vazios()}
 
     if has_active_filters:
         # Estatísticas sobre TODO o conjunto filtrado (não só a página)
@@ -1343,13 +1398,8 @@ def contestacoes_page():
             FapWebContestacao.situacao_codigo,
             FapWebContestacao.situacao_descricao,
         ).all():
-            em_and = _is_em_andamento(sit_cod, sit_desc)
-            if _is_segunda(inst_cod):
-                count_and2 += 1 if em_and else 0
-                count_tra2 += 0 if em_and else 1
-            else:
-                count_and1 += 1 if em_and else 0
-                count_tra1 += 0 if em_and else 1
+            chave = _chave_celula(sit_cod, inst_cod).replace('c_', 'count_')
+            contadores[chave] += 1
 
         # Grupos (vigência, cnpj) distintos — unidade de paginação
         groups_q = (
@@ -1439,17 +1489,12 @@ def contestacoes_page():
 
     # ── Agrupamento por (ano_vigencia, cnpj) para montar a tabela ────────
     # Cada célula contém a lista de contestações naquela categoria.
-    # (Classificação _is_segunda/_is_em_andamento definida acima.)
-    grouped = defaultdict(lambda: {'c_and1': [], 'c_tra1': [], 'c_and2': [], 'c_tra2': []})
+    # (Classificação em _chave_celula, no topo do módulo.)
+    grouped = defaultdict(_baldes_vazios)
 
     for r in all_rows:
-        key = (r.ano_vigencia, r.cnpj)
-        is2 = _is_segunda(r.instancia_codigo)
-        em_and = _is_em_andamento(r.situacao_codigo, r.situacao_descricao)
-        if is2:
-            grouped[key]['c_and2' if em_and else 'c_tra2'].append(r)
-        else:
-            grouped[key]['c_and1' if em_and else 'c_tra1'].append(r)
+        chave = _chave_celula(r.situacao_codigo, r.instancia_codigo)
+        grouped[(r.ano_vigencia, r.cnpj)][chave].append(r)
 
     # ── Formata CNPJ 14 dígitos para exibição ────────────────────────────
     def _fmt_cnpj(digits):
@@ -1468,24 +1513,27 @@ def contestacoes_page():
             'ano_vigencia': ano,
             'cnpj_raw':     cnpj_raw,
             'cnpj_fmt':     _fmt_cnpj(cnpj_raw),
-            'c_and1':       cells['c_and1'],
-            'c_tra1':       cells['c_tra1'],
-            'c_and2':       cells['c_and2'],
-            'c_tra2':       cells['c_tra2'],
+            **cells,
         })
+
+    # A coluna "Outras" só aparece quando tem conteúdo: uma coluna sempre vazia
+    # rouba largura das três que importam, mas some-la ao balde vizinho foi o
+    # que escondeu registros até aqui. Olha o conjunto filtrado E a página.
+    mostrar_outras = bool(
+        contadores.get('count_out1') or contadores.get('count_out2')
+        or any(linha['c_out1'] or linha['c_out2'] for linha in table_rows)
+    )
 
     return render_template(
         'fap_panel/contestacoes.html',
+        mostrar_outras=mostrar_outras,
         companies=companies,
         years=FAP_AVAILABLE_YEARS,
         table_rows=table_rows,
         total=total_contestacoes,
         with_file_count=with_file_count,
         without_file_count=without_file_count,
-        count_and1=count_and1,
-        count_tra1=count_tra1,
-        count_and2=count_and2,
-        count_tra2=count_tra2,
+        **contadores,
         instancias=sorted(instancias),
         situacoes=sorted(situacoes),
         imported_map=imported_map,
@@ -1856,22 +1904,11 @@ def contestacoes_export_excel_agrupado():
             return f'{s[:2]}.{s[2:5]}.{s[5:8]}/{s[8:12]}-{s[12:]}'
         return digits
 
-    def _is_segunda(cod):
-        return cod and 'SEGUNDA' in cod.upper()
-
-    def _is_em_andamento(cod, desc):
-        s = ((cod or '') + ' ' + (desc or '')).upper()
-        return ('ANDAMENTO' in s or 'PRAZO' in s) and 'TRANSMIT' not in s and 'RESULT' not in s and 'DIVULG' not in s
-
-    grouped = defaultdict(lambda: {'c_and1': [], 'c_tra1': [], 'c_and2': [], 'c_tra2': []})
+    # Mesma classificação da tela (topo do módulo) — o export não pode divergir.
+    grouped = defaultdict(_baldes_vazios)
     for r in all_rows:
-        key = (r.ano_vigencia, r.cnpj)
-        is2 = _is_segunda(r.instancia_codigo)
-        em_and = _is_em_andamento(r.situacao_codigo, r.situacao_descricao)
-        if is2:
-            grouped[key]['c_and2' if em_and else 'c_tra2'].append(r)
-        else:
-            grouped[key]['c_and1' if em_and else 'c_tra1'].append(r)
+        chave = _chave_celula(r.situacao_codigo, r.instancia_codigo)
+        grouped[(r.ano_vigencia, r.cnpj)][chave].append(r)
 
     def _cell_summary(contest_list):
         qtd   = len(contest_list)
@@ -1925,7 +1962,17 @@ def contestacoes_export_excel_agrupado():
     #   H  1ªTra Qtd | I 1ªTra Protocolos | J 1ªTra Situações
     #   K  2ªAnd Qtd | L 2ªAnd Protocolos
     #   M  2ªTra Qtd | N 2ªTra Protocolos
-    num_cols = 14
+    # Blocos visíveis: "Outras" entra só se houver algo nela, como na tela.
+    blocos = [b for b in BLOCOS_EXPORT
+              if b[0] != COL_OUTRAS
+              or any(c[f'c_{COL_OUTRAS}1'] or c[f'c_{COL_OUTRAS}2'] for c in grouped.values())]
+    # 1ª instância: Qtd + Protocolos + Situações. 2ª: Qtd + Protocolos.
+    col_1a = {b[0]: 5 + i * 3 for i, b in enumerate(blocos)}
+    base_2a = 5 + len(blocos) * 3
+    col_2a = {b[0]: base_2a + i * 2 for i, b in enumerate(blocos)}
+    num_cols = base_2a + len(blocos) * 2 - 1
+    # Só estas colunas contêm número — a linha de totais soma exatamente elas.
+    colunas_qtd = set(col_1a.values()) | set(col_2a.values())
 
     workbook = Workbook()
     sheet = workbook.active
@@ -1981,26 +2028,36 @@ def contestacoes_export_excel_agrupado():
         c = sheet.cell(row=grp_row, column=col, value=label)
         c.font = base_hdr_font; c.fill = base_hdr_fill; c.alignment = hdr_align; c.border = cell_border
 
-    sheet.merge_cells(start_row=grp_row, start_column=5, end_row=grp_row, end_column=10)
+    sheet.merge_cells(start_row=grp_row, start_column=5, end_row=grp_row, end_column=base_2a - 1)
     g1 = sheet.cell(row=grp_row, column=5, value='1ª Instância — Contestações')
     g1.font = grp1_font; g1.fill = grp1_fill; g1.alignment = hdr_align; g1.border = cell_border
 
-    sheet.merge_cells(start_row=grp_row, start_column=11, end_row=grp_row, end_column=14)
-    g2 = sheet.cell(row=grp_row, column=11, value='2ª Instância — Recursos')
+    sheet.merge_cells(start_row=grp_row, start_column=base_2a, end_row=grp_row, end_column=num_cols)
+    g2 = sheet.cell(row=grp_row, column=base_2a, value='2ª Instância — Recursos')
     g2.font = grp2_font; g2.fill = grp2_fill; g2.alignment = hdr_align; g2.border = cell_border
 
-    sub_headers = [
-        (5,  'Em Andamento\n(Qtd)',        sub_and_fill, sub_and_font),
-        (6,  'Em Andamento\n(Protocolos)', sub_and_fill, sub_and_font),
-        (7,  'Em Andamento\n(Situações)',  sub_and_fill, sub_and_font),
-        (8,  'Transmitidas\n(Qtd)',        sub_tra_fill, sub_tra_font),
-        (9,  'Transmitidas\n(Protocolos)', sub_tra_fill, sub_tra_font),
-        (10, 'Transmitidas\n(Situações)',  sub_tra_fill, sub_tra_font),
-        (11, 'Em Andamento\n(Qtd)',        sub_and_fill, sub_and_font),
-        (12, 'Em Andamento\n(Protocolos)', sub_and_fill, sub_and_font),
-        (13, 'Transmitidos\n(Qtd)',        sub_tra_fill, sub_tra_font),
-        (14, 'Transmitidos\n(Protocolos)', sub_tra_fill, sub_tra_font),
-    ]
+    # Cada bloco pinta com a cor da sua situação; "Publicadas"/"Outras" reusam
+    # o estilo de transmitidas para não multiplicar paleta na planilha.
+    estilo_bloco = {
+        COL_ANDAMENTO: (sub_and_fill, sub_and_font),
+        COL_TRANSMITIDA: (sub_tra_fill, sub_tra_font),
+        COL_PUBLICADA: (sub_tra_fill, sub_tra_font),
+        COL_OUTRAS: (sub_and_fill, sub_and_font),
+    }
+    sub_headers = []
+    for chave, rotulo1, rotulo2 in blocos:
+        sfill, sfont = estilo_bloco[chave]
+        base = col_1a[chave]
+        sub_headers += [
+            (base,     f'{rotulo1}\n(Qtd)',        sfill, sfont),
+            (base + 1, f'{rotulo1}\n(Protocolos)', sfill, sfont),
+            (base + 2, f'{rotulo1}\n(Situações)',  sfill, sfont),
+        ]
+        base = col_2a[chave]
+        sub_headers += [
+            (base,     f'{rotulo2}\n(Qtd)',        sfill, sfont),
+            (base + 1, f'{rotulo2}\n(Protocolos)', sfill, sfont),
+        ]
     for col, label, sfill, sfont in sub_headers:
         c = sheet.cell(row=sub_row, column=col, value=label)
         c.font = sfont; c.fill = sfill; c.alignment = hdr_align; c.border = cell_border
@@ -2020,29 +2077,24 @@ def contestacoes_export_excel_agrupado():
         raiz8  = cnpj14[:8] if len(cnpj14) == 14 else (cnpj_raw or '')[:8]
         nome   = company_names.get(raiz8, '')
 
-        and1_qtd, and1_pro, and1_sit = _cell_summary(cells['c_and1'])
-        tra1_qtd, tra1_pro, tra1_sit = _cell_summary(cells['c_tra1'])
-        and2_qtd, and2_pro, _        = _cell_summary(cells['c_and2'])
-        tra2_qtd, tra2_pro, _        = _cell_summary(cells['c_tra2'])
-
-        row_values = [
-            ano, cnpj_raw or '', _fmt_cnpj(cnpj_raw), nome,
-            and1_qtd, and1_pro, and1_sit,
-            tra1_qtd, tra1_pro, tra1_sit,
-            and2_qtd, and2_pro,
-            tra2_qtd, tra2_pro,
-        ]
+        row_values = [ano, cnpj_raw or '', _fmt_cnpj(cnpj_raw), nome]
+        textos_para_altura = []
+        for chave, _r1, _r2 in blocos:
+            qtd, protos, sits = _cell_summary(cells[f'c_{chave}1'])
+            row_values += [qtd, protos, sits]
+            textos_para_altura += [protos, sits]
+        for chave, _r1, _r2 in blocos:
+            qtd, protos, _ = _cell_summary(cells[f'c_{chave}2'])
+            row_values += [qtd, protos]
+            textos_para_altura.append(protos)
 
         for col_idx, val in enumerate(row_values, start=1):
             c = sheet.cell(row=xrow, column=col_idx, value=val)
             c.border = cell_border
-            if col_idx in (5, 11):
-                c.fill = num_fill_and
-                c.font = num_font_and if val else zero_font
-                c.alignment = data_align_ctr
-            elif col_idx in (8, 13):
-                c.fill = num_fill_tra
-                c.font = num_font_tra if val else zero_font
+            if col_idx in colunas_qtd:
+                em_andamento = col_idx in (col_1a[COL_ANDAMENTO], col_2a[COL_ANDAMENTO])
+                c.fill = num_fill_and if em_andamento else num_fill_tra
+                c.font = (num_font_and if em_andamento else num_font_tra) if val else zero_font
                 c.alignment = data_align_ctr
             elif col_idx in (1, 2):
                 c.font = data_font; c.fill = dfill; c.alignment = data_align_ctr
@@ -2051,7 +2103,7 @@ def contestacoes_export_excel_agrupado():
 
         # Altura da linha de dado ajustada dinamicamente pelo conteúdo mais longo
         max_lines = 1
-        for val in [and1_pro, and1_sit, tra1_pro, tra1_sit, and2_pro, tra2_pro]:
+        for val in textos_para_altura:
             if val:
                 max_lines = max(max_lines, val.count('|') + 1)
         sheet.row_dimensions[xrow].height = max(18, min(max_lines * 14, 60))
@@ -2061,8 +2113,11 @@ def contestacoes_export_excel_agrupado():
     )
     sheet.freeze_panes = f'A{data_start}'
 
-    # A=Vigência B=CNPJ C=CNPJFmt D=Nome E=And1Qtd F=And1Proto G=And1Sit H=Tra1Qtd I=Tra1Proto J=Tra1Sit K=And2Qtd L=And2Proto M=Tra2Qtd N=Tra2Proto
-    col_widths = [10, 20, 22, 40, 8, 48, 48, 8, 48, 48, 8, 48, 8, 48]
+    # A=Vigência B=CNPJ C=CNPJFmt D=Nome, depois 3 colunas por bloco na 1ª
+    # instância (Qtd, Protocolos, Situações) e 2 por bloco na 2ª (Qtd, Protocolos).
+    col_widths = ([10, 20, 22, 40]
+                  + [8, 48, 48] * len(blocos)
+                  + [8, 48] * len(blocos))
     for idx, width in enumerate(col_widths, start=1):
         sheet.column_dimensions[get_column_letter(idx)].width = width
 
@@ -2074,7 +2129,7 @@ def contestacoes_export_excel_agrupado():
     tlbl.font = total_font_s; tlbl.fill = total_fill
     tlbl.alignment = Alignment(horizontal='center', vertical='center'); tlbl.border = cell_border
 
-    for col_idx in (5, 8, 11, 13):
+    for col_idx in sorted(colunas_qtd):
         vals = [sheet.cell(row=data_start + i, column=col_idx).value or 0 for i in range(len(sorted_groups))]
         sc = sheet.cell(row=total_row, column=col_idx, value=sum(vals))
         sc.font = total_font_s; sc.fill = total_fill
