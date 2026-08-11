@@ -22,6 +22,14 @@
   --dou-trilho: var(--bs-secondary-bg);
 }
 
+/* A listagem é conteúdo curto por linha. Esticada a 1700 px, o botão do PDF
+   ficava a ~600 px do nome do caderno, com um vazio no meio que lê como
+   layout quebrado. Largura de leitura fixa mantém cada linha como uma
+   unidade — data, caderno, ação — em qualquer monitor. */
+.dou-page--lista {
+  max-width: 1240px;
+}
+
 [data-bs-theme="dark"] .dou-page {
   --dou-s1: #8b98e0;
   --dou-s2: #5fb3a5;
@@ -123,21 +131,20 @@
 
 /* --------------------------------------------------- os cadernos (centro) */
 
-/* Largura do conteúdo, não da coluna: as linhas separadoras entre cadernos
-   se estendiam pelo espaço vazio à direita, atravessando área sem nada. */
 .dou-cadernos {
   min-width: 0;
-  width: fit-content;
-  max-width: 100%;
 }
 
 /* Duas colunas: o caderno inteiro é um link; o PDF é um botão ao lado. Evita
    display:contents no <a>, que já apagou a semântica do link em navegadores
    e não é necessário aqui. */
+/* O link ocupa a largura livre e o botão vai para a borda direita do card:
+   com `auto auto` o conteúdo parava a 45% da largura e sobrava um vazio de
+   ~900 px à direita, que lia como layout quebrado. As ações ficam alinhadas
+   numa coluna à direita, que é onde se espera achá-las. */
 .dou-caderno {
   display: grid;
-  grid-template-columns: auto auto;
-  justify-content: start;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
   align-items: center;
   padding: .3rem 0;
@@ -147,15 +154,14 @@
   border-top: 1px solid var(--bs-border-color);
 }
 
-/* Colunas de largura definida, nunca 1fr no nome: com `minmax(0, 1fr)` a
-   coluna do assunto engolia toda a largura livre e jogava a contagem 800 px
-   para a direita, deixando um vazio no meio da linha. Larguras fixas mantêm
-   nome, contagem e barra agrupados e alinhados entre as linhas; a folga sobra
-   depois, separando-os do botão de PDF. */
+/* Colunas de largura definida, nunca 1fr no nome. O link estica até o botão,
+   mas `justify-content: start` mantém chip, nome, contagem e barra colados à
+   esquerda e alinhados entre as linhas — com `1fr` no nome, a contagem era
+   jogada centenas de pixels para a direita, com um vazio no meio. */
 .dou-caderno__link {
   display: grid;
-  grid-template-columns: 1.9rem minmax(0, 15rem) 6.5rem 56px;
-  gap: .6rem;
+  grid-template-columns: 1.9rem minmax(0, 22rem) 7rem minmax(56px, 10rem);
+  gap: .75rem;
   align-items: center;
   justify-content: start;
   text-decoration: none;
