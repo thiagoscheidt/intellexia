@@ -2437,6 +2437,52 @@ class FapCompany(db.Model):
         return f'<FapCompany cnpj={self.cnpj} nome={self.nome}>'
 
 
+class FapCompanyGroup(db.Model):
+    """Tabela fap_company_groups — mapeia CNPJ raiz → grupo empresarial.
+
+    Um grupo empresarial reúne várias empresas outorgantes: ADSERVI, por
+    exemplo, tem ~15 raízes distintas. A origem é uma planilha mantida pelo
+    escritório (CNPJ Raiz Outorgante | Grupo | Razão Social), onde toda empresa
+    tem grupo — quem não faz parte de um recebe o próprio nome ou apelido.
+
+    **Chaveada por ``cnpj_raiz``, sem FK para fap_companies, de propósito:**
+    duas das três sincronizações de empresas apagam quem não voltou da API, e a
+    planilha inclui empresas de que o escritório *já teve* procuração. Uma
+    coluna em ``FapCompany`` seria apagada junto com a empresa.
+    """
+    __tablename__ = 'fap_company_groups'
+    __table_args__ = (
+        # Uma empresa pertence a um grupo só.
+        db.UniqueConstraint('law_firm_id', 'cnpj_raiz',
+                            name='uq_fap_company_groups_law_firm_cnpj_raiz'),
+        # Grupo → raízes, que é exatamente a consulta que o filtro faz.
+        db.Index('ix_fap_company_groups_law_firm_chave',
+                 'law_firm_id', 'grupo_chave'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    cnpj_raiz = db.Column(db.String(8), nullable=False)
+
+    # grupo_nome preserva o texto como veio; grupo_chave é o normalizado usado
+    # para casar e agrupar — sem ele "ÁGUIA SISTEMAS" e "Águia Sistemas"
+    # viravam dois grupos, já que a coluna da planilha é texto digitado.
+    grupo_nome = db.Column(db.String(255), nullable=False)
+    grupo_chave = db.Column(db.String(255), nullable=False)
+
+    origem = db.Column(db.String(20), nullable=False, default='manual')  # planilha | manual
+    razao_social_origem = db.Column(db.String(500))
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+
+    def __repr__(self):
+        return f'<FapCompanyGroup raiz={self.cnpj_raiz} grupo={self.grupo_nome}>'
+
+
 class FapAutoImportedContestacao(db.Model):
     """Tabela fap_auto_imported_contestacoes - Rastreia contestações importadas via importação automática FAP."""
     __tablename__ = 'fap_auto_imported_contestacoes'

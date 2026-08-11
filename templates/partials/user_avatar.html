@@ -9,6 +9,11 @@
   size / font_size em px; extra_classes vai nos dois elementos, para que a troca
   no onerror não mude tamanho nem posição. A paleta (bg/cor/peso) vem de
   extra_classes: a header usa dois esquemas diferentes.
+
+  A inicial é escondida por `d-none`, nunca por style="display:none": as
+  utilities de display do Bootstrap são `!important`, então estilo inline sem
+  `!important` perde para o `d-inline-flex` do próprio span e os dois avatares
+  aparecem lado a lado. `d-none` funciona porque vem depois na folha de estilo.
 #}
 {% macro user_avatar(size, font_size, extra_classes='') -%}
 {%- set foto = session.get('user_picture') -%}
@@ -17,9 +22,9 @@
 {%- if foto %}
 <img src="{{ foto }}" alt="" referrerpolicy="no-referrer" width="{{ size }}" height="{{ size }}"
   class="rounded-circle shadow {{ extra_classes }}" style="{{ dimensao }} object-fit: cover;"
-  onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+  onerror="this.nextElementSibling.classList.remove('d-none'); this.style.display='none';">
 {%- endif %}
 <span
-  class="rounded-circle shadow d-inline-flex align-items-center justify-content-center {{ extra_classes }}"
-  style="{{ dimensao }} font-size: {{ font_size }}px;{% if foto %} display: none;{% endif %}">{{ inicial }}</span>
+  class="rounded-circle shadow d-inline-flex align-items-center justify-content-center{% if foto %} d-none{% endif %} {{ extra_classes }}"
+  style="{{ dimensao }} font-size: {{ font_size }}px;">{{ inicial }}</span>
 {%- endmacro %}

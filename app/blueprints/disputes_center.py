@@ -560,54 +560,40 @@ def _fap_protocols_by_vigencia_id(law_firm_id, vigencia_ids):
 
 
 def _build_fap_group_options(law_firm_id):
-    """Opções do filtro "Grupo Empresarial", vindas de `FapCompany`.
+    """Opções do filtro "Grupo Empresarial", vindas de `FapCompanyGroup`.
 
-    É a mesma lista da tela "Empresas Sincronizadas (FAP)" do Painel FAP, onde
-    cada empresa é gravada pela **raiz do CNPJ** (8 dígitos) + nome. Por isso o
-    filtro se comporta como o de CNPJ raiz: seleciona a raiz e alcança todos os
-    estabelecimentos dela. A diferença é a origem das opções — nomes vindos do
-    FAP Web, em vez das raízes derivadas do cadastro de clientes.
+    Um grupo reúne várias empresas outorgantes — ADSERVI tem ~15 CNPJs raiz. O
+    mapeamento vem da planilha do escritório ou do cadastro manual na tela de
+    Empresas Sincronizadas (ver `app/services/fap_group_service.py`).
+
+    Até 2026-08 este filtro chamava de "grupo" uma empresa outorgante só, o que
+    o tornava um segundo filtro de CNPJ raiz com outro rótulo.
+
+    O valor da opção é a **chave do grupo**, não mais uma raiz de CNPJ.
     """
-    companies = (
-        FapCompany.query.filter_by(law_firm_id=law_firm_id)
-        .order_by(FapCompany.nome.asc(), FapCompany.cnpj.asc())
-        .all()
+    opcoes = [
+        {
+            'value': grupo['chave'],
+            'label': (
+                f"{grupo['nome']} ({grupo['total_empresas']} empresas)"
+                if grupo['total_empresas'] > 1 else grupo['nome']
+            ),
+        }
+        for grupo in fap_group_service.group_options(law_firm_id)
+    ]
+    # No fim da lista, e não na ordem alfabética, para não se perder no meio.
+    opcoes.append({
+        'value': fap_group_service.SEM_GRUPO,
+        'label': fap_group_service.SEM_GRUPO_LABEL,
+    })
+    return opcoes
+
+
+def _apply_grupo_filter(query, law_firm_id, quick_grupo, employer_cnpj_column):
+    """Restringe a listagem às empresas do grupo empresarial escolhido."""
+    return fap_group_service.apply_group_filter(
+        query, law_firm_id, quick_grupo, employer_cnpj_column,
     )
-
-    options = {}
-    for company in companies:
-        root = _extract_cnpj_root(company.cnpj)
-        if not root:
-            continue
-        name = _normalize_text(company.nome)
-        # Uma raiz pode repetir entre escritórios/sincronizações; o primeiro
-        # nome não vazio vence, para a opção nunca aparecer só como número.
-        if root not in options or (name and not options[root]['name']):
-            options[root] = {
-                'root': root,
-                'name': name,
-                'label': f'{name} - {root}' if name else root,
-            }
-
-    return sorted(options.values(), key=lambda item: (item['name'].lower(), item['root']))
-
-
-def _apply_grupo_filter(query, quick_grupo, employer_cnpj_column):
-    """Restringe a listagem aos CNPJs sob a raiz do grupo empresarial."""
-    root = ''.join(ch for ch in (quick_grupo or '') if ch.isdigit())[:8]
-    if not root:
-        return query
-
-    sanitized_cnpj = func.replace(
-        func.replace(
-            func.replace(func.replace(cast(employer_cnpj_column, String), '.', ''), '/', ''),
-            '-',
-            '',
-        ),
-        ' ',
-        '',
-    )
-    return query.filter(sanitized_cnpj.like(f'{root}%'))
 
 
 def _vigencia_ids_by_protocolo(law_firm_id, protocolo_text):

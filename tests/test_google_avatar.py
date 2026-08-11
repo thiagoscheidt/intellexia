@@ -84,8 +84,14 @@ def test_macro_com_foto():
     check('não vaza o referer para o Google', 'referrerpolicy="no-referrer"' in html)
     check('a inicial continua no DOM como fallback',
           re.search(r'>\s*T\s*<', html) is not None, html)
-    check('o fallback começa escondido', 'display:none' in html.replace(' ', ''), html)
-    check('onerror troca a imagem pela inicial', 'onerror=' in html, html)
+    # `d-none` e não style="display:none": as utilities do Bootstrap são
+    # !important, então estilo inline sem !important perde para `d-inline-flex`
+    # e as duas coisas apareciam lado a lado.
+    check('o fallback começa escondido pela classe d-none', 'd-none' in html, html)
+    check('não esconde por style inline (perde para o !important)',
+          'display:none' not in html.replace(' ', ''), html)
+    check('onerror revela o fallback tirando a classe',
+          "classList.remove('d-none')" in html, html)
 
 
 def test_macro_sem_foto():
@@ -93,7 +99,7 @@ def test_macro_sem_foto():
     html = _render_macro(None)
     check('não renderiza <img>', '<img' not in html, html)
     check('mostra a inicial', re.search(r'>\s*T\s*<', html) is not None, html)
-    check('a inicial não fica escondida', 'display:none' not in html.replace(' ', ''), html)
+    check('a inicial não fica escondida', 'd-none' not in html, html)
 
 
 def test_header_usa_a_macro():
