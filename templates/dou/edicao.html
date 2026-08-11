@@ -187,15 +187,16 @@
               {% if agrupado and unidade %}
               {# A raiz já está no cabeçalho do grupo; aqui vai só o que sobra
                  dela, para não perder a unidade que assinou o ato. #}
-              <div class="dou-subunidade">{{ unidade }}</div>
+              <div class="dou-subunidade" title="{{ unidade }}">{{ unidade }}</div>
               {% endif %}
               {% if m.ementa %}
-              <div class="text-muted small text-truncate">{{ m.ementa }}</div>
+              <div class="text-muted small text-truncate"
+                   title="{{ m.ementa }}">{{ m.ementa }}</div>
               {% endif %}
             </td>
             {% if not agrupado %}
             <td class="small text-muted" title="{{ m.orgao_hierarquia or '' }}">
-              {{ orgao_raiz or '—' }}
+              <div class="dou-orgao">{{ orgao_raiz or '—' }}</div>
               {% if unidade %}<div class="dou-subunidade">{{ unidade }}</div>{% endif %}
             </td>
             {% endif %}

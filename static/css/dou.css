@@ -824,3 +824,16 @@
   color: var(--bs-secondary-color);
   margin-top: .1rem;
 }
+
+/* Uma linha por informação. No acervo real a subunidade passa de 70 caracteres
+   ("Gerência Regional nos Estados de Goiás, Mato Grosso, Mato Grosso do Sul e
+   Tocantins") e ia a duas linhas em 3 de 50 linhas: a altura oscilava entre 58
+   e 77 px e a lista ficava serrilhada. Numa lista que se lê correndo o olho, a
+   régua constante vale mais que o nome inteiro — que continua no `title` da
+   célula e na página da matéria. */
+.dou-orgao,
+.dou-subunidade {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
