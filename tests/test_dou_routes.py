@@ -444,6 +444,12 @@ def test_leitor_da_edicao():
         check('nenhum órgão vem pré-selecionado no sumário',
               html.count('<option value="" selected>') == 1,
               'marcar um órgão anunciaria um que não é o desta folha')
+        check('a barra oferece a folha e a edição inteira',
+              'Esta página' in html and 'Edição completa' in html
+              and f'/dou/edicao/{edicao_id}/pdf' in html)
+        check('o botão da edição inteira avisa o peso antes do clique',
+              re.search(r'\d+ MB', html) is not None,
+              'a Seção 3 passa de 40 MB e o aviso tem de vir antes')
         check('o leitor não traz o texto do ato', 'dou-texto' not in html)
         check('a folha tem a volta para o inteiro teor',
               f'/dou/materia/{artigo_id}' in html or 'Nenhuma matéria indexada' in html)

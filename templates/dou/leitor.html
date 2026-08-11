@@ -89,12 +89,26 @@
       </select>
       {% endif %}
 
-      <a class="btn btn-outline-danger btn-sm ms-auto"
-         href="{{ url_for('dou.pagina_da_edicao_pdf', edition_id=ativa.id, numero=numero, q=termo_busca or None) }}"
-         target="_blank" rel="noopener"
-         title="Abrir só esta página em nova aba, para imprimir ou salvar">
-        <i class="bi bi-file-earmark-pdf me-1"></i>Esta página em PDF
-      </a>
+      {# Vermelho é PDF em toda a tela do Diário. O peso do arquivo inteiro vai
+         no title: a Seção 3 passa de 40 MB e ninguém deve descobrir isso só
+         depois de clicar. #}
+      <span class="dou-leitor-pdfs ms-auto">
+        <a class="btn btn-outline-danger btn-sm"
+           href="{{ url_for('dou.pagina_da_edicao_pdf', edition_id=ativa.id, numero=numero, q=termo_busca or None) }}"
+           target="_blank" rel="noopener"
+           title="Abrir só esta página em nova aba, para imprimir ou salvar">
+          <i class="bi bi-file-earmark-pdf me-1"></i>Esta página
+        </a>
+        <a class="btn btn-outline-danger btn-sm"
+           href="{{ url_for('dou.baixar_pdf', edition_id=ativa.id) }}"
+           target="_blank" rel="noopener"
+           title="Abrir em nova aba o PDF assinado completo da {{ ativa.secao_label }}{% if total %} — {{ total }} páginas{% endif %}{% if ativa.pdf_bytes %}, {{ (ativa.pdf_bytes / 1048576) | round | int }} MB{% endif %}">
+          <i class="bi bi-file-earmark-pdf me-1"></i>Edição completa
+          {% if ativa.pdf_bytes %}
+          <span class="dou-leitor-peso">{{ (ativa.pdf_bytes / 1048576) | round | int }} MB</span>
+          {% endif %}
+        </a>
+      </span>
     </div>
 
     {# Uma página só, recortada do PDF da seção: quem quer a seguinte tem o ›.

@@ -747,6 +747,20 @@
   max-width: 15rem;
 }
 
+/* Os dois PDFs andam juntos: quando a barra quebra em tela estreita, "esta
+   página" e "edição completa" descem no mesmo bloco. */
+.dou-leitor-pdfs {
+  display: inline-flex;
+  gap: .4rem;
+}
+
+/* O peso do arquivo inteiro, dentro do próprio botão. Discreto porque é
+   ressalva, não rótulo. */
+.dou-leitor-peso {
+  opacity: .7;
+  font-size: .78rem;
+}
+
 /* Ponte de volta para o texto. Em linha e não em tabela: são poucas matérias
    por página (mediana de 4 na Seção 1) e uma tabela para isso pesaria mais que
    a informação. */
