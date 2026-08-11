@@ -20,9 +20,11 @@
       {% set show_fap_review_chip = can_view_module('fap_review') and fap_review_pending_counts %}
       {% set show_deadlines_chip = can_view_module('process_panel') and process_deadline_counts
          and (process_deadline_counts.overdue or process_deadline_counts.soon) %}
-      {# Saúde da captura do DOU: some quando está tudo em dia — o módulo não
-         tem fila de trabalho, então só aparece quando pede ação. #}
-      {% set show_dou_chip = can_view_module('dou') and dou_health and dou_health.badge %}
+      {# O chip do DOU fica sempre visível, servindo de atalho para o módulo.
+         Sem contador de matérias: o acervo só cresce, e um número que nunca
+         desce ao lado de badges de pendência ensina a ignorar a área. Os
+         badges aparecem só quando há o que fazer. #}
+      {% set show_dou_chip = can_view_module('dou') %}
       {% if show_communications_chip or show_fap_review_chip or show_deadlines_chip or show_dou_chip %}
       <li class="nav-item d-flex align-items-center">
         <div class="module-counters">
@@ -77,16 +79,19 @@
           </a>
           {% endif %}
           {% if show_dou_chip %}
-          <a class="module-counter-chip" href="{{ url_for('dou.captura') }}"
-            title="Diário Oficial{% if dou_health.com_erro %} — {{ dou_health.com_erro }} edição(ões) com falha na captura{% endif %}{% if dou_health.parada %} — nada capturado desde {{ dou_health.ultima_data.strftime('%d/%m/%Y') if dou_health.ultima_data else '—' }}{% endif %}">
+          {# Com pendência o clique vai para a Captura, onde se resolve; sem
+             pendência, para o acervo, que é o que se quer ler. #}
+          <a class="module-counter-chip"
+            href="{{ url_for('dou.captura') if dou_health and dou_health.badge else url_for('dou.edicoes') }}"
+            title="Diário Oficial{% if dou_health and dou_health.com_erro %} — {{ dou_health.com_erro }} edição(ões) com falha na captura{% endif %}{% if dou_health and dou_health.parada %} — nada capturado desde {{ dou_health.ultima_data.strftime('%d/%m/%Y') if dou_health.ultima_data else '—' }}{% endif %}{% if dou_health and not dou_health.badge %} — captura em dia{% if dou_health.ultima_data %}, última em {{ dou_health.ultima_data.strftime('%d/%m/%Y') }}{% endif %}{% endif %}">
             <i class="bi bi-newspaper"></i>
             <span class="mc-label">Diário Oficial</span>
-            {% if dou_health.com_erro %}
+            {% if dou_health and dou_health.com_erro %}
             <span class="badge rounded-pill text-bg-warning"
               title="{{ dou_health.com_erro }} edição(ões) a reprocessar">{{
               dou_health.com_erro if dou_health.com_erro < 100 else '99+' }}</span>
             {% endif %}
-            {% if dou_health.parada %}
+            {% if dou_health and dou_health.parada %}
             <span class="badge rounded-pill text-bg-danger" title="A captura parou">
               <i class="bi bi-exclamation-triangle"></i>
             </span>

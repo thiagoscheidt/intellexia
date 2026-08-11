@@ -187,40 +187,57 @@ def test_tela_de_busca():
 
 
 def test_chip_da_header():
-    """O chip do DOU conta saúde da captura, e some quando está tudo em dia.
+    """O chip do DOU fica sempre visível e serve de atalho para o módulo.
 
-    Ao contrário dos outros dois chips, este não é fila de trabalho: o módulo
-    não tem "não lidas". Um contador de matérias só cresceria e, ao lado de
-    badges que significam "faça algo", ensinaria a ignorar a área inteira.
+    Nunca mostra contagem de matérias: o acervo só cresce, e um número que
+    nunca desce ao lado de badges de pendência ensina a ignorar a área. Os
+    badges aparecem só quando há o que fazer, e o destino do clique muda com o
+    estado — Captura quando há pendência, acervo quando não há.
     """
-    print('\n7. Chip de saúde na header')
+    print('\n7. Chip do Diário Oficial na header')
     from datetime import date
 
-    def chip(saude, permissao=lambda k: k == 'dou'):
+    def render(saude, permissao=lambda k: k == 'dou'):
         with app.test_request_context('/dou/'):
             html = render_template('partials/header.html',
                                    can_view_module=permissao, dou_health=saude,
                                    fap_review_pending_counts=None,
                                    process_deadline_counts=None)
-        achado = re.search(
-            r'<a class="module-counter-chip"[^>]*?/dou/captura[^>]*>(.*?)</a>',
+        return re.search(
+            r'<a class="module-counter-chip"\s+href="(/dou/[^"]*)"(.*?)</a>',
             html, re.S)
-        return re.findall(r'text-bg-(\w+)', achado.group(1)) if achado else None
+
+    def badges(saude, **kw):
+        achado = render(saude, **kw)
+        return re.findall(r'text-bg-(\w+)', achado.group(2)) if achado else None
+
+    def destino(saude):
+        achado = render(saude)
+        return achado.group(1) if achado else None
 
     em_dia = {'com_erro': 0, 'parada': False, 'ultima_data': date(2026, 8, 10), 'badge': False}
     com_falha = {'com_erro': 3, 'parada': False, 'ultima_data': date(2026, 8, 10), 'badge': True}
     parada = {'com_erro': 0, 'parada': True, 'ultima_data': date(2026, 7, 1), 'badge': True}
     ambos = {'com_erro': 2, 'parada': True, 'ultima_data': date(2026, 7, 1), 'badge': True}
-    vazio = {'com_erro': 0, 'parada': False, 'ultima_data': None, 'badge': False}
 
-    check('tudo em dia: o chip não aparece', chip(em_dia) is None, str(chip(em_dia)))
-    check('edição com falha: badge âmbar', chip(com_falha) == ['warning'], str(chip(com_falha)))
-    check('captura parada: badge vermelho', chip(parada) == ['danger'], str(chip(parada)))
-    check('os dois problemas: dois badges', chip(ambos) == ['warning', 'danger'], str(chip(ambos)))
-    check('acervo vazio não alarma (instalação sem credencial)',
-          chip(vazio) is None, str(chip(vazio)))
-    check('sem a permissão do módulo, nunca aparece',
-          chip(ambos, permissao=lambda k: False) is None)
+    check('tudo em dia: o chip aparece, sem badge', badges(em_dia) == [], str(badges(em_dia)))
+    check('edição com falha: badge âmbar', badges(com_falha) == ['warning'], str(badges(com_falha)))
+    check('captura parada: badge vermelho', badges(parada) == ['danger'], str(badges(parada)))
+    check('os dois problemas: dois badges', badges(ambos) == ['warning', 'danger'], str(badges(ambos)))
+
+    check('sem pendência o clique vai para o acervo',
+          destino(em_dia) == '/dou/', destino(em_dia))
+    check('com pendência o clique vai para a Captura',
+          destino(com_falha) == '/dou/captura', destino(com_falha))
+
+    check('nunca mostra contagem de matérias',
+          all(str(n) not in (render(em_dia).group(2) or '') for n in (20682, 24000)),
+          render(em_dia).group(2)[:80])
+
+    check('sem a permissão do módulo, não aparece',
+          badges(ambos, permissao=lambda k: False) is None)
+    check('sem dados de saúde ainda assim renderiza (não quebra a header)',
+          badges(None) == [], str(badges(None)))
 
 
 def test_contadores_de_saude():
