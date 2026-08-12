@@ -2,6 +2,7 @@
 {% from 'fap_review/_wrike_link.html' import wrike_link %}
 
 {% from "partials/page_hero.html" import page_hero %}
+{% from "partials/user_avatar.html" import user_avatar %}
 
 {% set page_title = "Revisor de Petições" %}
 
@@ -927,6 +928,7 @@
                 {% set petition = row.petition %}
                 {% set latest_revision = row.latest_revision %}
                 {% set latest_reviewer_name = row.latest_reviewer_name %}
+{% set latest_reviewer_picture = row.latest_reviewer_picture %}
                 {% set status_badge = row.status_badge %}
 
                 {% if petition.workflow_status == 'awaiting_adjustments' %}
@@ -1007,7 +1009,7 @@
                         <div class="pr-column-label d-md-none">Último usuário</div>
                         {% if latest_reviewer_name %}
                         <div class="pr-reviewer-name" title="{{ latest_reviewer_name }}">
-                            <span class="pr-reviewer-avatar">{{ latest_reviewer_name[:1]|upper }}</span>
+                            {{ user_avatar(latest_reviewer_picture, latest_reviewer_name, extra_classes='pr-reviewer-avatar') }}
                             <span class="text-truncate">{{ latest_reviewer_name }}</span>
                         </div>
                         {% else %}
@@ -1111,6 +1113,7 @@
                             {% set petition = row.petition %}
                             {% set latest_revision = row.latest_revision %}
                             {% set latest_reviewer_name = row.latest_reviewer_name %}
+{% set latest_reviewer_picture = row.latest_reviewer_picture %}
                             <div class="kanban-card" draggable="true"
                                 data-petition-id="{{ petition.id }}"
                                 data-status-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}"
@@ -1137,7 +1140,7 @@
                                 </div>
                                 <div class="kanban-card-footer">
                                     {% if latest_reviewer_name %}
-                                    <span class="pr-reviewer-avatar" title="{{ latest_reviewer_name }}">{{ latest_reviewer_name[:1]|upper }}</span>
+                                    {{ user_avatar(latest_reviewer_picture, latest_reviewer_name, extra_classes='pr-reviewer-avatar', title=latest_reviewer_name) }}
                                     {% else %}
                                     <span class="kanban-card-noreviewer">Sem revisão</span>
                                     {% endif %}

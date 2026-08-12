@@ -1133,6 +1133,7 @@ def index():
             'petition': petition,
             'latest_revision': petition.latest_revision,
             'latest_reviewer_name': petition.latest_revision.user.name if petition.latest_revision and petition.latest_revision.user else None,
+            'latest_reviewer_picture': petition.latest_revision.user.google_picture_url if petition.latest_revision and petition.latest_revision.user else None,
             'status_badge': _build_petition_status_badge(petition.workflow_status),
             'status_age_days': _status_age_days(petition),
             'findings_count': _latest_findings_count(petition),

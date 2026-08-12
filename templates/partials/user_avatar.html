@@ -3,7 +3,7 @@
 
   Foto e nome são sempre explícitos — a macro serve tanto o usuário logado
   (a header passa o que está na sessão) quanto listas de outras pessoas
-  (Administração de Usuários, Atividade de Usuários).
+  (Administração de Usuários, Atividade de Usuários, Revisor de Petições).
 
   A inicial fica sempre no DOM (escondida quando há foto) porque o `onerror` da
   imagem precisa de algo para revelar: a URL do CDN pode virar 404 se a pessoa
@@ -15,24 +15,32 @@
   `!important` perde para o `d-inline-flex` do próprio span e os dois avatares
   aparecem lado a lado. `d-none` funciona porque vem depois na folha de estilo.
 
-  size / font_size em px; extra_classes vai nos dois elementos, para que a troca
-  no onerror não mude tamanho nem posição.
+  Dois modos de dimensionamento:
+  - com `size`/`font_size` (px), a macro desenha o círculo — é o caso da header
+    e das listas administrativas;
+  - sem `size`, quem manda é o CSS de `extra_classes` — é o caso das telas que
+    já têm a própria classe de avatar (ex.: `.pr-reviewer-avatar` do Revisor),
+    onde a foto entra sem mudar em nada o visual de quem não tem foto.
 
-  A paleta da inicial vem de `extra_classes` (a header usa dois esquemas) ou,
-  em lista, de `seed`: passando o id do usuário, cada pessoa ganha sempre a
-  mesma cor e a tabela não vira uma parede de círculos idênticos.
+  A paleta da inicial vem de `extra_classes` ou, em lista, de `seed`: passando o
+  id do usuário, cada pessoa ganha sempre a mesma cor e a tabela não vira uma
+  parede de círculos idênticos.
 #}
-{% macro user_avatar(picture, name, size, font_size, extra_classes='', seed=None) -%}
+{% macro user_avatar(picture, name, size=None, font_size=None, extra_classes='', seed=None, title='') -%}
 {%- set inicial = ((name or 'U')[:1] or 'U') | upper -%}
-{%- set dimensao = 'width: %dpx; height: %dpx;' % (size, size) -%}
 {%- set paleta = ['primary', 'success', 'danger', 'warning', 'info', 'dark', 'secondary'] -%}
 {%- set cor = ('text-bg-' ~ paleta[seed % (paleta | length)] ~ ' fw-semibold') if seed is not none else '' -%}
+{%- set forma = 'rounded-circle shadow d-inline-flex align-items-center justify-content-center' if size else '' -%}
+{%- set dimensao = ('width: %dpx; height: %dpx;' % (size, size)) if size else '' -%}
 {%- if picture %}
-<img src="{{ picture }}" alt="" referrerpolicy="no-referrer" width="{{ size }}" height="{{ size }}"
-  class="rounded-circle shadow {{ extra_classes }}" style="{{ dimensao }} object-fit: cover;"
+<img src="{{ picture }}" alt="{{ title }}" referrerpolicy="no-referrer"
+  {%- if size %} width="{{ size }}" height="{{ size }}"{% endif %}
+  {%- if title %} title="{{ title }}"{% endif %}
+  class="{{ forma }} {{ extra_classes }}" style="{{ dimensao }} object-fit: cover;"
   onerror="this.nextElementSibling.classList.remove('d-none'); this.style.display='none';">
 {%- endif %}
 <span
-  class="rounded-circle shadow d-inline-flex align-items-center justify-content-center{% if picture %} d-none{% endif %} {{ cor }} {{ extra_classes }}"
-  style="{{ dimensao }} font-size: {{ font_size }}px;">{{ inicial }}</span>
+  {%- if title %} title="{{ title }}"{% endif %}
+  class="{{ forma }}{% if picture %} d-none{% endif %} {{ cor }} {{ extra_classes }}"
+  {%- if dimensao %} style="{{ dimensao }}{% if font_size %} font-size: {{ font_size }}px;{% endif %}"{% endif %}>{{ inicial }}</span>
 {%- endmacro %}

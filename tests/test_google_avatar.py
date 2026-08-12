@@ -313,6 +313,63 @@ def test_telas_administrativas():
             _limpar(user=user, firm=firm)
 
 
+def test_macro_sem_dimensao_propria():
+    """Sem `size`, quem manda no visual é o CSS do chamador (ex.: .pr-reviewer-avatar)."""
+    print('\n12. Macro sem dimensão própria (CSS do chamador manda)')
+    with app.test_request_context('/'):
+        html = render_template_string(
+            "{% from 'partials/user_avatar.html' import user_avatar %}"
+            "{{ user_avatar(foto, 'Marina', extra_classes='pr-reviewer-avatar',"
+            " title='Marina Alves') }}",
+            foto=FOTO,
+        )
+    check('não impõe largura inline', 'width' not in html, html)
+    check('não impõe as classes de forma da header', 'rounded-circle' not in html, html)
+    check('mantém a classe do chamador', 'pr-reviewer-avatar' in html, html)
+    check('mantém o recorte da foto', 'object-fit: cover' in html, html)
+    check('mantém o fallback escondido', 'd-none' in html, html)
+    check('aplica o title', html.count('title="Marina Alves"') == 2, html)
+
+
+def test_fap_review_mostra_a_foto():
+    print('\n13. /fap-review/ troca a inicial pela foto do revisor')
+    with app.app_context():
+        from app.models import FapReviewPetition
+
+        petition = next((p for p in FapReviewPetition.query.all()
+                         if p.latest_revision and p.latest_revision.user), None)
+        if petition is None:
+            check('banco de dev tem petição com revisor', False,
+                  'sem dados para exercitar a tela')
+            return
+
+        revisor = petition.latest_revision.user
+        operador = (User.query.filter_by(law_firm_id=petition.law_firm_id, role='admin').first()
+                    or revisor)
+        original = revisor.google_picture_url
+        revisor.google_picture_url = FOTO
+        db.session.commit()
+        try:
+            with app.test_client() as c:
+                with c.session_transaction() as sessao:
+                    sessao.update({'user_id': operador.id, 'law_firm_id': operador.law_firm_id,
+                                   'user_role': operador.role,
+                                   'user_module_permissions': operador.get_module_permissions()})
+                resp = c.get('/fap-review/')
+
+            check('a tela responde 200', resp.status_code == 200, str(resp.status_code))
+            html = resp.get_data(as_text=True)
+            imgs = re.findall(r'<img[^>]*>', html)
+            com_foto = [t for t in imgs if FOTO in t and 'pr-reviewer-avatar' in t]
+            check('o avatar do revisor virou <img> com a foto', len(com_foto) >= 1,
+                  f'{len(imgs)} imgs, nenhuma com a classe do revisor')
+            check('o fallback da inicial continua no HTML',
+                  'pr-reviewer-avatar' in html and "classList.remove('d-none')" in html)
+        finally:
+            revisor.google_picture_url = original
+            db.session.commit()
+
+
 def main():
     print('=' * 60)
     print('Avatar do Google na header')
@@ -328,6 +385,8 @@ def main():
     test_cor_da_inicial_por_usuario()
     test_servico_expoe_a_foto()
     test_telas_administrativas()
+    test_macro_sem_dimensao_propria()
+    test_fap_review_mostra_a_foto()
     print('\n' + '=' * 60)
     if _falhas:
         print(f'❌ {len(_falhas)} falha(s): ' + ', '.join(_falhas))
