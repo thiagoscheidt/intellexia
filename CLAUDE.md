@@ -347,6 +347,21 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
   as empurraria para fora do alcance.
 - O escape vem do `destacar`/`grifar_html`, **nunca depois**: o texto do DOU tem
   `<` de verdade e o fragmento entra no template com `| safe`.
+- **Resultado de recurso FAP é o alerta de maior valor** e tem tratamento
+  próprio. O edital do CRPS traz, na mesma linha do CNPJ, o desfecho —
+  `dou_client_alert_matches.resultado` guarda a decisão daquele estabelecimento
+  e `dou_client_alerts.tem_resultado` marca a matéria, para badge, filtro e
+  ordenação não abrirem a tabela filha. Medido no acervo: **1.070 "Indeferimento
+  Total", 249 "Deferimento Parcial", 1 "Deferimento Total"** — 28 dos 41
+  alertas. `eh_resultado` compara a **célula inteira**, nunca por substring:
+  procurar o termo dentro de texto qualquer marcaria a ementa de qualquer
+  matéria que mencione a palavra. **Deferimento é ganho de causa** (o FAP da
+  empresa cai) e indeferimento é prazo para recorrer — a cor separa os dois na
+  pílula da linha e na célula do modal, porque é essa a pergunta que o alerta
+  responde. Na listagem, quem tem decisão vem **primeiro dentro do dia**: é
+  desfecho, não notícia, e num dia de 32 alertas a ordem por id o enterraria.
+  O `texto_html` só é lido para matéria que já casou, e só quando tem `<table` —
+  é LONGTEXT, e são ~8 matérias por dia contra as milhares da edição.
 
 ### Timezone
 

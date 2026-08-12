@@ -22,6 +22,7 @@ neste arquivo:
 """
 
 import logging
+import unicodedata
 from collections import defaultdict
 from datetime import datetime
 
@@ -38,6 +39,18 @@ logger = logging.getLogger(__name__)
 
 TAM_CNPJ = 14
 TAM_RAIZ = 8
+
+# Vocabulário de decisão do CRPS. Os três primeiros são os que aparecem no
+# acervo — 1.070 "Indeferimento Total", 249 "Deferimento Parcial", 1
+# "Deferimento Total". Os demais entram porque são desfechos padrão do Conselho
+# e podem cair em qualquer edital; sem eles a coluna ficaria vazia justamente
+# no caso raro, que é quando o alerta mais importa.
+_RESULTADOS = (
+    'deferimento total', 'deferimento parcial',
+    'indeferimento total', 'indeferimento parcial',
+    'recurso nao conhecido', 'nao conhecido', 'prejudicado',
+    'diligencia', 'anulado', 'nulidade',
+)
 
 # Pesos do módulo 11, os dois dígitos verificadores do CNPJ
 _PESOS_DV1 = (5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
@@ -60,6 +73,37 @@ def cnpj_valido(digitos: str | None) -> bool:
         if int(d[tam]) != (0 if resto < 2 else 11 - resto):
             return False
     return True
+
+
+def _sem_acento(valor: str | None) -> str:
+    return (unicodedata.normalize('NFKD', (valor or '').strip().lower())
+            .encode('ascii', 'ignore').decode())
+
+
+def eh_resultado(valor: str | None) -> bool:
+    """A célula é uma decisão de recurso FAP?
+
+    Compara a célula **inteira**, não por substring: "Indeferimento Total" é
+    uma coluna própria da tabela do CRPS, e procurar o termo dentro de um texto
+    qualquer marcaria a ementa de qualquer matéria que mencione a palavra.
+    """
+    return _sem_acento(valor) in _RESULTADOS
+
+
+def resultado_do_bloco(bloco) -> str | None:
+    """A decisão na mesma linha em que o CNPJ apareceu, ou None.
+
+    O edital do CRPS é uma tabela com uma linha por estabelecimento —
+    sequência, processo, ano, CNPJ, instância e resultado. A decisão daquele
+    CNPJ é a célula de decisão da linha dele, não a primeira do documento.
+    """
+    if getattr(bloco, 'name', None) != 'tr':
+        return None
+    for celula in bloco.find_all('td'):
+        texto = celula.get_text(' ', strip=True)
+        if eh_resultado(texto):
+            return texto
+    return None
 
 
 def formatar_cnpj(digitos: str | None) -> str:
@@ -156,6 +200,37 @@ def gerar_para_datas(datas, carteiras=None) -> int:
     return _gerar_para_materias(materias, carteiras)
 
 
+def _decisoes_por_cnpj(article_id: int, cnpjs) -> dict:
+    """``{cnpj: decisão}`` lido da tabela da matéria. ``{}`` quando não é edital.
+
+    O ``texto_html`` é LONGTEXT e só é buscado para matéria que já casou — são
+    ~8 por dia, contra as milhares de uma edição. O teste por ``<table`` evita
+    até esse custo na matéria em prosa: decisão de recurso mora em tabela.
+    """
+    if not cnpjs:
+        return {}
+    linha = (db.session.query(DouArticle.texto_html)
+             .filter(DouArticle.id == article_id).first())
+    bruto = (linha[0] if linha else '') or ''
+    if '<table' not in bruto:
+        return {}
+
+    alvos = set(cnpjs)
+    decisoes = {}
+    try:
+        sopa = BeautifulSoup(sanitizar_html(bruto), 'html.parser')
+        for bloco in _blocos_com_cnpj(sopa, alvos):
+            decisao = resultado_do_bloco(bloco)
+            if not decisao:
+                continue
+            for digitos in busca_service.extrair_cnpjs(bloco.get_text(' ')):
+                if digitos in alvos:
+                    decisoes[digitos] = decisao
+    except Exception:  # noqa: BLE001 — sem decisão o alerta continua valendo
+        logger.exception('DOU: falha ao ler decisões da matéria %s', article_id)
+    return decisoes
+
+
 def _gerar_para_materias(materias, carteiras=None) -> int:
     """O laço de casamento. ``materias`` é a tupla enxuta, não o modelo inteiro.
 
@@ -203,6 +278,8 @@ def _gerar_para_materias(materias, carteiras=None) -> int:
                 db.session.add(alerta)
                 gerados += 1
 
+            decisoes = _decisoes_por_cnpj(article_id, set(por_cnpj))
+
             # Reprocessamento mantém a triagem: quem já leu o alerta não deve
             # vê-lo voltar por causa de uma republicação que não mudou nada.
             alerta.pub_date = pub_date
@@ -210,6 +287,7 @@ def _gerar_para_materias(materias, carteiras=None) -> int:
             alerta.clients_count = len(por_cnpj)
             alerta.match_type = (DouClientAlert.MATCH_EXACT if tem_exato
                                  else DouClientAlert.MATCH_ROOT)
+            alerta.tem_resultado = bool(decisoes)
 
             # Casa CNPJ a CNPJ em vez de limpar e reinserir. Um `clear()`
             # seguido de append emitia os INSERT antes dos DELETE no mesmo
@@ -225,10 +303,12 @@ def _gerar_para_materias(materias, carteiras=None) -> int:
                 if existente is None:
                     alerta.matches.append(DouClientAlertMatch(
                         law_firm_id=law_firm_id, client_id=cliente.id,
-                        cnpj=cnpj, match_type=tipo))
+                        cnpj=cnpj, match_type=tipo,
+                        resultado=decisoes.get(cnpj)))
                 else:
                     existente.client_id = cliente.id
                     existente.match_type = tipo
+                    existente.resultado = decisoes.get(cnpj)
 
     return gerados
 
@@ -251,7 +331,7 @@ def resumo(law_firm_id: int) -> dict:
                                func.count())
               .filter(DouClientAlert.law_firm_id == law_firm_id)
               .group_by(DouClientAlert.status, DouClientAlert.match_type).all())
-    dados = {'nao_lidos': 0, 'exatos': 0, 'raiz': 0, 'total': 0}
+    dados = {'nao_lidos': 0, 'exatos': 0, 'raiz': 0, 'total': 0, 'com_resultado': 0}
     for status, tipo, qtd in linhas:
         dados['total'] += qtd
         if status == DouClientAlert.STATUS_NEW:
@@ -260,12 +340,18 @@ def resumo(law_firm_id: int) -> dict:
             dados['exatos'] += qtd
         else:
             dados['raiz'] += qtd
+    dados['com_resultado'] = _base(law_firm_id).filter(
+        DouClientAlert.tem_resultado.is_(True)).count()
     return dados
 
 
 def listar(law_firm_id: int, status=None, tipo=None, secao=None,
-           client_id=None, page: int = 1, por_pagina: int = 30):
+           client_id=None, resultado=None, page: int = 1, por_pagina: int = 30):
     """Página de alertas, do mais recente para o mais antigo.
+
+    Dentro do dia, **quem traz decisão de recurso vem primeiro**: é desfecho,
+    não notícia, e num dia de 32 alertas a ordem por id o empurraria para o fim
+    da lista.
 
     A ordenação termina no ``id`` porque a carga é em lote: dezenas de alertas
     dividem a mesma ``pub_date``, e empate no critério faz LIMIT/OFFSET pular e
@@ -288,7 +374,10 @@ def listar(law_firm_id: int, status=None, tipo=None, secao=None,
             db.session.query(DouClientAlertMatch.alert_id)
             .filter(DouClientAlertMatch.law_firm_id == law_firm_id,
                     DouClientAlertMatch.client_id == client_id)))
+    if resultado:
+        query = query.filter(DouClientAlert.tem_resultado.is_(True))
     return (query.order_by(DouClientAlert.pub_date.desc(),
+                           DouClientAlert.tem_resultado.desc(),
                            DouClientAlert.id.desc())
             .paginate(page=page, per_page=por_pagina, error_out=False))
 
@@ -363,6 +452,17 @@ def _montar_html(blocos) -> str:
     partes, linhas = [], []
     for bloco in blocos:
         if getattr(bloco, 'name', None) == 'tr':
+            # A célula de decisão ganha classe própria: numa linha de seis
+            # colunas de números, é ela que responde o que aconteceu. A classe
+            # é nossa, posta depois da faxina — não vem do documento.
+            for celula in bloco.find_all('td'):
+                valor = celula.get_text(' ', strip=True)
+                if eh_resultado(valor):
+                    celula['class'] = [
+                        'dou-decisao',
+                        'dou-decisao--favoravel' if _sem_acento(valor).startswith('deferimento')
+                        else 'dou-decisao--contra',
+                    ]
             linhas.append(str(bloco))
             continue
         if linhas:

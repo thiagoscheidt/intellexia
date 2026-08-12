@@ -466,6 +466,120 @@ def test_trecho():
               'a página carregaria 30 matérias de uma vez')
 
 
+def test_resultado_fap():
+    """A decisão do recurso: detecção, contagem e destaque na tela."""
+    print('\n8. Resultado de recurso FAP')
+    from bs4 import BeautifulSoup as _BS
+
+    # --- vocabulário. Medido no acervo: 1.070 "Indeferimento Total",
+    # 249 "Deferimento Parcial", 1 "Deferimento Total".
+    for valor in ('Indeferimento Total', 'Deferimento Parcial',
+                  'Deferimento Total', 'INDEFERIMENTO TOTAL',
+                  'Deferimento parcial', 'Diligência', 'Prejudicado'):
+        check(f'{valor!r} é decisão', alertas.eh_resultado(valor))
+    for valor in ('2025', 'Adm. 2ª Instância', '10128.027795/2024-04', '', None,
+                  'O recurso trata de indeferimento total do pedido anterior'):
+        check(f'{valor!r} não é decisão', not alertas.eh_resultado(valor))
+
+    # --- a decisão sai da linha do CNPJ, não da primeira do documento
+    sopa = _BS('<table>'
+               '<tr><td><p>718</p></td><td><p>33.592.510/0001-54</p></td>'
+               '<td><p>Adm. 2ª Instância</p></td><td><p>Deferimento Parcial</p></td></tr>'
+               '<tr><td><p>719</p></td><td><p>11.222.333/0001-81</p></td>'
+               '<td><p>Adm. 2ª Instância</p></td><td><p>Indeferimento Total</p></td></tr>'
+               '</table>', 'html.parser')
+    blocos = alertas._blocos_com_cnpj(sopa, ['33592510000154'])
+    check('a decisão vem da linha daquele CNPJ',
+          alertas.resultado_do_bloco(blocos[0]) == 'Deferimento Parcial',
+          str(alertas.resultado_do_bloco(blocos[0])))
+    check('parágrafo solto não tem decisão',
+          alertas.resultado_do_bloco(_BS('<p>Indeferimento Total</p>',
+                                         'html.parser').p) is None,
+          'só linha de tabela carrega decisão de recurso')
+
+    # --- a célula de decisão ganha classe no HTML do modal
+    marcado = alertas._montar_html(blocos)
+    check('a célula de decisão é marcada no modal',
+          'dou-decisao--favoravel' in marcado, marcado[-160:])
+
+    with app.app_context():
+        com = DouClientAlert.query.filter_by(tem_resultado=True).all()
+        if not com:
+            print('  ⏭️  nenhum alerta com resultado no acervo — pulando')
+            return
+        usuario = User.query.filter_by(role='admin').first()
+        user_id, firm_id = usuario.id, usuario.law_firm_id
+
+        check('a geração marcou os alertas com decisão', len(com) > 0,
+              f'{len(com)} de {DouClientAlert.query.count()}')
+        check('todo alerta marcado tem ao menos uma decisão gravada',
+              all(a.resultados for a in com),
+              'tem_resultado sem match com resultado')
+        check('nenhum alerta sem decisão ficou marcado',
+              not DouClientAlert.query.filter(
+                  DouClientAlert.tem_resultado.is_(True),
+                  ~DouClientAlert.matches.any(
+                      DouClientAlertMatch.resultado.isnot(None))).count())
+
+        maior = max(com, key=lambda a: a.clients_count)
+        soma = sum(q for _, q, _ in maior.resultados)
+        check('a contagem por decisão fecha com os CNPJs que a têm',
+              soma == sum(1 for m in maior.matches if m.resultado),
+              f'{soma} vs {sum(1 for m in maior.matches if m.resultado)}')
+
+        favoraveis = [a for a in com if a.tem_favoravel]
+        if favoraveis:
+            alvo = favoraveis[0]
+            check('deferimento vem antes de indeferimento no resumo',
+                  alvo.resultados[0][2] is True,
+                  str(alvo.resultados))
+        check('deferimento é favorável, indeferimento não',
+              all(fav == d.lower().startswith('deferimento')
+                  for a in com for d, _, fav in a.resultados))
+
+        resumo = alertas.resumo(firm_id)
+        check('o resumo conta os alertas com resultado',
+              resumo['com_resultado'] == len(com),
+              f"{resumo['com_resultado']} vs {len(com)}")
+
+        # Dentro do dia, desfecho antes de notícia
+        pagina = alertas.listar(firm_id, status=None, page=1)
+        seq = [(a.pub_date, a.tem_resultado) for a in pagina.items]
+        fora_de_ordem = [i for i in range(len(seq) - 1)
+                         if seq[i][0] == seq[i + 1][0]
+                         and not seq[i][1] and seq[i + 1][1]]
+        check('no mesmo dia, quem tem decisão vem primeiro',
+              not fora_de_ordem, f'{len(fora_de_ordem)} inversão(ões)')
+
+        so_com = alertas.listar(firm_id, status=None, resultado=True, page=1)
+        check('o filtro devolve só quem tem decisão',
+              all(a.tem_resultado for a in so_com.items) and so_com.total == len(com),
+              f'{so_com.total} vs {len(com)}')
+
+    with app.test_client() as c:
+        with c.session_transaction() as sessao:
+            sessao['user_id'] = user_id
+            sessao['law_firm_id'] = firm_id
+            sessao['user_role'] = 'admin'
+
+        html = c.get('/dou/alertas?status=todos').get_data(as_text=True)
+        check('o tile de resultado FAP aparece', 'com resultado FAP' in html)
+        check('a linha mostra a contagem por decisão',
+              'dou-alerta__resultados' in html and 'RESULTADO FAP' in html.upper())
+        check('favorável e contrário têm cores diferentes',
+              'dou-resultado--sim' in html and 'dou-resultado--nao' in html)
+
+        filtrado = c.get('/dou/alertas?status=todos&resultado=1')
+        corpo = filtrado.get_data(as_text=True)
+        check('o tile filtra ao ser clicado', filtrado.status_code == 200)
+        check('e a página filtrada só tem linhas com decisão',
+              corpo.count('class="dou-alerta ') == corpo.count('dou-alerta--resultado'),
+              f"{corpo.count('class=\"dou-alerta ')} linhas, "
+              f"{corpo.count('dou-alerta--resultado')} com decisão")
+        check('o filtro sobrevive à paginação',
+              'resultado=1' in corpo or 'Próxima' not in corpo)
+
+
 def main():
     print('=' * 60)
     print('TESTES DOS ALERTAS DE CLIENTE NO DIÁRIO OFICIAL')
@@ -478,6 +592,7 @@ def main():
     test_tela()
     test_chip_da_header()
     test_trecho()
+    test_resultado_fap()
 
     print('\n' + '=' * 60)
     if _falhas:

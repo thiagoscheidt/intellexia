@@ -1321,3 +1321,95 @@
 .dou-trecho__html p:last-child {
   margin-bottom: 0;
 }
+
+/* ------------------------------------ resultado de recurso FAP no alerta */
+
+/* O tile vira atalho: filtrar por desfecho é o gesto mais provável da tela. */
+.dou-tile--resultado {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+
+.dou-tile--resultado:hover {
+  border-color: var(--bs-success-border-subtle);
+  background: var(--bs-secondary-bg);
+}
+
+.dou-tile--resultado .dou-tile__n {
+  color: var(--bs-success);
+}
+
+.dou-tile--ativo {
+  border-color: var(--bs-success);
+  background: var(--bs-success-bg-subtle);
+}
+
+/* Fundo próprio na linha que traz desfecho. Discreto: num dia em que 28 dos
+   41 alertas têm resultado, tinta forte demais deixaria de distinguir. */
+.dou-alerta--resultado {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--bs-success) 5%, transparent), transparent 60%);
+}
+
+.dou-alerta__resultados {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .3rem;
+  margin-top: .45rem;
+}
+
+.dou-resultado-rot {
+  font-size: .66rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-weight: 700;
+  color: var(--bs-secondary-color);
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  margin-right: .15rem;
+}
+
+/* Deferimento é ganho de causa e indeferimento é prazo para recorrer: a cor
+   separa os dois de relance, que é a pergunta que o alerta responde. */
+.dou-resultado {
+  font-size: .74rem;
+  padding: .08rem .5rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.dou-resultado strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.dou-resultado--sim {
+  background: var(--bs-success-bg-subtle);
+  border-color: var(--bs-success-border-subtle);
+  color: var(--bs-success-text-emphasis);
+}
+
+.dou-resultado--nao {
+  background: var(--bs-secondary-bg);
+  border-color: var(--bs-border-color);
+  color: var(--bs-secondary-color);
+}
+
+/* A célula de decisão dentro da tabela do modal */
+.dou-trecho__html .dou-decisao {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dou-trecho__html .dou-decisao--favoravel {
+  background: var(--bs-success-bg-subtle);
+  color: var(--bs-success-text-emphasis);
+}
+
+.dou-trecho__html .dou-decisao--contra {
+  color: var(--bs-secondary-color);
+}

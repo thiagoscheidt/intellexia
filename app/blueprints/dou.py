@@ -373,9 +373,12 @@ def alertas():
     secao = (request.args.get('secao') or '').strip().upper() or None
     client_id = request.args.get('cliente', type=int)
 
+    so_resultado = request.args.get('resultado') == '1'
+
     pagina = alert_service.listar(
         law_firm_id, status=status, tipo=tipo, secao=secao,
-        client_id=client_id, page=request.args.get('page', 1, type=int))
+        client_id=client_id, resultado=so_resultado,
+        page=request.args.get('page', 1, type=int))
 
     return render_template(
         'dou/alertas.html',
@@ -385,7 +388,8 @@ def alertas():
         invalidos=alert_service.cnpjs_invalidos(law_firm_id),
         dias_semana=DIAS_SEMANA, meses=MESES,
         f_status=request.args.get('status') or DouClientAlert.STATUS_NEW,
-        f_tipo=tipo or '', f_secao=secao or '', f_cliente=client_id)
+        f_tipo=tipo or '', f_secao=secao or '', f_cliente=client_id,
+        f_resultado=so_resultado)
 
 
 def _alerta_do_escritorio(alerta_id):

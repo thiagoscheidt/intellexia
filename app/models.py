@@ -4078,6 +4078,11 @@ class DouClientAlert(db.Model):
 
     status = db.Column(db.String(20), nullable=False, default=STATUS_NEW, index=True)
 
+    # A matéria traz decisão de recurso FAP para algum CNPJ do cliente. É o
+    # alerta de maior valor do módulo — desfecho, não notícia — e por isso vira
+    # coluna: badge, filtro e ordenação precisam dele sem abrir a tabela filha.
+    tem_resultado = db.Column(db.Boolean, nullable=False, default=False, index=True)
+
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     read_at = db.Column(db.DateTime)
@@ -4130,6 +4135,29 @@ class DouClientAlert(db.Model):
         return ordenados[0].cnpj if ordenados else None
 
     @property
+    def resultados(self):
+        """``[(decisão, quantos estabelecimentos, é favorável)]``, do maior.
+
+        Um edital traz a decisão de dezenas de estabelecimentos de uma vez;
+        listar uma por uma seria ilegível e a contagem é o que responde a
+        pergunta — "quantos caíram?".
+        """
+        contagem, favoravel = {}, {}
+        for m in self.matches:
+            if not m.resultado:
+                continue
+            contagem[m.resultado] = contagem.get(m.resultado, 0) + 1
+            favoravel[m.resultado] = m.resultado_favoravel
+        return sorted(
+            ((decisao, qtd, favoravel[decisao]) for decisao, qtd in contagem.items()),
+            key=lambda t: (not t[2], -t[1], t[0]))
+
+    @property
+    def tem_favoravel(self):
+        """Algum estabelecimento teve deferimento — a notícia boa da lista."""
+        return any(fav for _, _, fav in self.resultados)
+
+    @property
     def pagina_no_diario(self):
         """A página da folha assinada, ou None quando não dá para abri-la.
 
@@ -4176,6 +4204,11 @@ class DouClientAlertMatch(db.Model):
     match_type = db.Column(db.String(10), nullable=False,
                            default=DouClientAlert.MATCH_EXACT)
 
+    # A decisão do recurso FAP daquele estabelecimento, quando a matéria é um
+    # edital de julgamento: "Indeferimento Total", "Deferimento Parcial". Vem
+    # da mesma linha da tabela em que o CNPJ aparece.
+    resultado = db.Column(db.String(60))
+
     alert = db.relationship('DouClientAlert', back_populates='matches')
     client = db.relationship('Client')
 
@@ -4186,6 +4219,11 @@ class DouClientAlertMatch(db.Model):
         if len(d) != 14:
             return d
         return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
+
+    @property
+    def resultado_favoravel(self):
+        """Deferimento (total ou parcial) é ganho de causa; o resto não é."""
+        return (self.resultado or '').strip().lower().startswith('deferimento')
 
     def __repr__(self):
         return f'<DouClientAlertMatch {self.cnpj} {self.match_type}>'

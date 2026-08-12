@@ -23,6 +23,15 @@
       <span class="dou-tile__n">{{ resumo.nao_lidos }}</span>
       <span class="dou-tile__r">não lidos</span>
     </div>
+    {# Resultado de recurso é desfecho, não notícia: o mais valioso do módulo,
+       e por isso vira atalho clicável e não só número. #}
+    <a class="dou-tile dou-tile--resultado {{ 'dou-tile--ativo' if f_resultado }}"
+       href="{{ url_for('dou.alertas', status=f_status, resultado='1') if not f_resultado
+                else url_for('dou.alertas', status=f_status) }}"
+       title="Matérias que trazem decisão de recurso FAP para algum estabelecimento do cliente">
+      <span class="dou-tile__n">{{ resumo.com_resultado }}</span>
+      <span class="dou-tile__r">com resultado FAP</span>
+    </a>
     <div class="dou-tile">
       <span class="dou-tile__n">{{ resumo.exatos }}</span>
       <span class="dou-tile__r">citam cliente cadastrado</span>
@@ -30,10 +39,6 @@
     <div class="dou-tile">
       <span class="dou-tile__n">{{ resumo.raiz }}</span>
       <span class="dou-tile__r">outra filial do grupo</span>
-    </div>
-    <div class="dou-tile">
-      <span class="dou-tile__n">{{ resumo.total }}</span>
-      <span class="dou-tile__r">no total</span>
     </div>
   </div>
 
@@ -66,6 +71,7 @@
   <div class="card-body">
 
     <form method="get" class="row g-2 align-items-end mb-3">
+      {% if f_resultado %}<input type="hidden" name="resultado" value="1">{% endif %}
       <div class="col-md-2">
         <label class="form-label small text-muted mb-1">Situação</label>
         <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
@@ -106,7 +112,7 @@
         <button type="submit" class="btn btn-primary btn-sm">
           <i class="bi bi-funnel me-1"></i>Filtrar
         </button>
-        {% if f_tipo or f_secao or f_cliente %}
+        {% if f_tipo or f_secao or f_cliente or f_resultado %}
         <a href="{{ url_for('dou.alertas', status=f_status) }}"
            class="btn btn-outline-secondary btn-sm">Limpar</a>
         {% endif %}
@@ -131,7 +137,8 @@
     </div>
     {% endif %}
 
-    <div class="dou-alerta {{ 'dou-alerta--nova' if a.status == 'novo' }}">
+    <div class="dou-alerta {{ 'dou-alerta--nova' if a.status == 'novo' }}
+                {{ 'dou-alerta--resultado' if a.tem_resultado }}">
       <div class="dou-alerta__ref">
         {# 'DO1' e 'DO1E' compartilham a cor: é o mesmo caderno, edição extra #}
         <span class="dou-secao dou-secao--{{ (a.pub_name or 'DO1') | replace('DO', '') | first }}">{{ a.pub_name }}</span>
@@ -172,6 +179,24 @@
             {{ a.clients_count }} CNPJ{{ 's' if a.clients_count != 1 }}
           </span>
         </div>
+
+        {# O desfecho do recurso, contado por decisão. Um edital julga dezenas
+           de estabelecimentos de uma vez: "57 Deferimento Parcial · 46
+           Indeferimento Total" responde de relance o que aconteceu, e listar
+           um por um não responderia nada. #}
+        {% if a.tem_resultado %}
+        <div class="dou-alerta__resultados">
+          <span class="dou-resultado-rot">
+            <i class="bi bi-gavel"></i>Resultado FAP
+          </span>
+          {% for decisao, quantos, favoravel in a.resultados %}
+          <span class="dou-resultado {{ 'dou-resultado--sim' if favoravel else 'dou-resultado--nao' }}"
+                title="{{ quantos }} estabelecimento(s) com {{ decisao }}">
+            <strong>{{ quantos }}</strong> {{ decisao }}
+          </span>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
 
       <div class="dou-alerta__acoes">
@@ -220,11 +245,11 @@
       <div class="btn-group btn-group-sm">
         {% if alertas.has_prev %}
         <a class="btn btn-outline-secondary"
-           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, page=alertas.prev_num) }}">Anterior</a>
+           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, resultado='1' if f_resultado else none, page=alertas.prev_num) }}">Anterior</a>
         {% endif %}
         {% if alertas.has_next %}
         <a class="btn btn-outline-secondary"
-           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, page=alertas.next_num) }}">Próxima</a>
+           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, resultado='1' if f_resultado else none, page=alertas.next_num) }}">Próxima</a>
         {% endif %}
       </div>
     </div>
