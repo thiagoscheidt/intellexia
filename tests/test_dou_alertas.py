@@ -144,6 +144,11 @@ def test_alerta_e_por_materia():
         citados = maior.clientes_citados
         check('os chips agrupam por empresa, não por CNPJ',
               len(citados) <= maior.clients_count, f'{len(citados)} chips')
+        # Por nome e não por client_id: a carteira tem um cadastro por
+        # estabelecimento, e o Santander sozinho ocupa dezenas com o mesmo nome.
+        nomes = [c.name for c, _, _ in citados if c and c.name]
+        check('e não repetem a mesma empresa em dois chips',
+              len(nomes) == len(set(nomes)), str(nomes[:5]))
         if citados:
             check('o chip diz quantos estabelecimentos daquela empresa',
                   sum(n for _, _, n in citados) == maior.clients_count,
@@ -551,10 +556,42 @@ def test_resultado_fap():
         check('no mesmo dia, quem tem decisão vem primeiro',
               not fora_de_ordem, f'{len(fora_de_ordem)} inversão(ões)')
 
-        so_com = alertas.listar(firm_id, status=None, resultado=True, page=1)
-        check('o filtro devolve só quem tem decisão',
+        # --- os quatro recortes do filtro
+        so_com = alertas.listar(firm_id, status=None, fap=alertas.FAP_QUALQUER, page=1)
+        check('"qualquer resultado" devolve só quem tem decisão',
               all(a.tem_resultado for a in so_com.items) and so_com.total == len(com),
               f'{so_com.total} vs {len(com)}')
+
+        ganhos = alertas.listar(firm_id, status=None, fap=alertas.FAP_FAVORAVEL, page=1)
+        check('"com deferimento" só traz quem ganhou algo',
+              ganhos.items and all(a.tem_favoravel for a in ganhos.items),
+              f'{ganhos.total} alertas')
+        check('e é subconjunto de quem tem resultado',
+              ganhos.total <= so_com.total, f'{ganhos.total} > {so_com.total}')
+
+        perdas = alertas.listar(firm_id, status=None, fap=alertas.FAP_CONTRA, page=1)
+        check('"com indeferimento" só traz quem tem decisão não favorável',
+              perdas.items and all(any(not fav for _, _, fav in a.resultados)
+                                   for a in perdas.items),
+              f'{perdas.total} alertas')
+
+        disponiveis = alertas.resultados_disponiveis(firm_id)
+        check('o filtro só oferece decisão que existe na carteira',
+              disponiveis and all(q > 0 for _, q in disponiveis), str(disponiveis))
+        check('deferimento aparece antes de indeferimento na lista',
+              disponiveis[0][0].lower().startswith('deferimento'),
+              str([d for d, _ in disponiveis]))
+
+        decisao, quantos = disponiveis[0]
+        exata = alertas.listar(firm_id, status=None, fap=decisao, page=1)
+        check(f'a decisão exata {decisao!r} filtra',
+              exata.total == quantos, f'{exata.total} vs {quantos}')
+        check('e todo alerta devolvido tem essa decisão',
+              all(any(d == decisao for d, _, _ in a.resultados) for a in exata.items))
+
+        check('decisão inexistente devolve vazio, não a lista toda',
+              alertas.listar(firm_id, status=None, fap='Coisa Nenhuma',
+                             page=1).total == 0)
 
     with app.test_client() as c:
         with c.session_transaction() as sessao:
@@ -569,7 +606,13 @@ def test_resultado_fap():
         check('favorável e contrário têm cores diferentes',
               'dou-resultado--sim' in html and 'dou-resultado--nao' in html)
 
-        filtrado = c.get('/dou/alertas?status=todos&resultado=1')
+        check('o filtro de resultado está na barra',
+              'name="fap"' in html and 'Resultado FAP' in html)
+        check('e oferece os recortes e as decisões exatas',
+              'onde ganhamos' in html and 'Decisão exata' in html
+              and 'Indeferimento Total' in html)
+
+        filtrado = c.get(f'/dou/alertas?status=todos&fap={alertas.FAP_QUALQUER}')
         corpo = filtrado.get_data(as_text=True)
         check('o tile filtra ao ser clicado', filtrado.status_code == 200)
         check('e a página filtrada só tem linhas com decisão',
@@ -577,7 +620,16 @@ def test_resultado_fap():
               f"{corpo.count('class=\"dou-alerta ')} linhas, "
               f"{corpo.count('dou-alerta--resultado')} com decisão")
         check('o filtro sobrevive à paginação',
-              'resultado=1' in corpo or 'Próxima' not in corpo)
+              f'fap={alertas.FAP_QUALQUER}' in corpo or 'Próxima' not in corpo)
+        check('o tile aceso oferece desligar o filtro',
+              'dou-tile--ativo' in corpo)
+
+        for recorte in (alertas.FAP_FAVORAVEL, alertas.FAP_CONTRA,
+                        'Indeferimento Total'):
+            check(f'a tela responde ao filtro {recorte!r}',
+                  c.get(f'/dou/alertas?status=todos&fap={recorte}').status_code == 200)
+        check('filtro com valor inventado não dá 500',
+              c.get('/dou/alertas?status=todos&fap=xpto').status_code == 200)
 
 
 def main():

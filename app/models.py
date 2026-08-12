@@ -4105,17 +4105,19 @@ class DouClientAlert(db.Model):
     def clientes_citados(self):
         """``[(cliente, tipo, qtd_estabelecimentos)]`` — um por cliente.
 
-        Agrupado por cliente e não por CNPJ porque um edital do CRPS cita
-        vários estabelecimentos do mesmo grupo, e o nome é o mesmo nos três:
-        repetir "ITAÚ UNIBANCO S.A." três vezes gasta a linha sem informar
-        nada. A contagem de estabelecimentos vira sufixo do próprio chip.
+        Agrupado pelo **nome**, não pelo ``client_id``: a carteira tem um
+        cadastro por estabelecimento, e o Santander sozinho ocupa dezenas deles
+        com o mesmo nome. Por id, um edital que cita 31 filiais rendia três
+        chips idênticos "BANCO SANTANDER (BRASIL) S.A." antes do "+21". A
+        contagem de estabelecimentos vira sufixo do próprio chip.
 
         Um cliente com um casamento exato e outros por raiz conta como exato —
         o CNPJ cadastrado está lá, e é isso que decide o peso do alerta.
         """
         por_cliente = {}
         for m in self.matches:
-            chave = m.client_id or m.cnpj
+            chave = (m.client.name if m.client and m.client.name
+                     else m.client_id or m.cnpj)
             atual = por_cliente.get(chave)
             if atual is None:
                 por_cliente[chave] = [m.client, m.match_type, 1]

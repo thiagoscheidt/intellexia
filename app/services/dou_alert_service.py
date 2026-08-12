@@ -52,6 +52,12 @@ _RESULTADOS = (
     'diligencia', 'anulado', 'nulidade',
 )
 
+# Recortes do filtro de resultado. Além destes, o valor pode ser a decisão
+# exata ("Indeferimento Total"), para quem já sabe o que procura.
+FAP_QUALQUER = 'com'          # houve decisão, qualquer que seja
+FAP_FAVORAVEL = 'deferimento'  # onde ganhamos
+FAP_CONTRA = 'indeferimento'   # onde há prazo correndo
+
 # Pesos do módulo 11, os dois dígitos verificadores do CNPJ
 _PESOS_DV1 = (5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
 _PESOS_DV2 = (6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2)
@@ -346,7 +352,7 @@ def resumo(law_firm_id: int) -> dict:
 
 
 def listar(law_firm_id: int, status=None, tipo=None, secao=None,
-           client_id=None, resultado=None, page: int = 1, por_pagina: int = 30):
+           client_id=None, fap=None, page: int = 1, por_pagina: int = 30):
     """Página de alertas, do mais recente para o mais antigo.
 
     Dentro do dia, **quem traz decisão de recurso vem primeiro**: é desfecho,
@@ -374,12 +380,42 @@ def listar(law_firm_id: int, status=None, tipo=None, secao=None,
             db.session.query(DouClientAlertMatch.alert_id)
             .filter(DouClientAlertMatch.law_firm_id == law_firm_id,
                     DouClientAlertMatch.client_id == client_id)))
-    if resultado:
-        query = query.filter(DouClientAlert.tem_resultado.is_(True))
+    if fap:
+        # Os três recortes que o advogado pede: "houve decisão", "onde ganhamos"
+        # e "onde há prazo correndo" — mais a decisão exata, quando ele já sabe
+        # o que procura. Tudo pelo mesmo caminho, a tabela de casamentos.
+        sub = (db.session.query(DouClientAlertMatch.alert_id)
+               .filter(DouClientAlertMatch.law_firm_id == law_firm_id,
+                       DouClientAlertMatch.resultado.isnot(None)))
+        if fap == FAP_FAVORAVEL:
+            sub = sub.filter(DouClientAlertMatch.resultado.ilike('deferimento%'))
+        elif fap == FAP_CONTRA:
+            # `not ilike('deferimento%')` e não `ilike('indeferimento%')`:
+            # diligência e prejudicado também não são ganho de causa.
+            sub = sub.filter(~DouClientAlertMatch.resultado.ilike('deferimento%'))
+        elif fap != FAP_QUALQUER:
+            sub = sub.filter(DouClientAlertMatch.resultado == fap)
+        query = query.filter(DouClientAlert.id.in_(sub))
     return (query.order_by(DouClientAlert.pub_date.desc(),
                            DouClientAlert.tem_resultado.desc(),
                            DouClientAlert.id.desc())
             .paginate(page=page, per_page=por_pagina, error_out=False))
+
+
+def resultados_disponiveis(law_firm_id: int):
+    """``[(decisão, quantos alertas)]`` para o filtro — só o que existe.
+
+    Como no filtro de cliente: oferecer opção que não devolve nada é convidar
+    para uma tela vazia. O vocabulário do CRPS é curto, mas varia por edital.
+    """
+    linhas = (db.session.query(DouClientAlertMatch.resultado,
+                               func.count(func.distinct(DouClientAlertMatch.alert_id)))
+              .filter(DouClientAlertMatch.law_firm_id == law_firm_id,
+                      DouClientAlertMatch.resultado.isnot(None))
+              .group_by(DouClientAlertMatch.resultado).all())
+    # Deferimento primeiro: é o desfecho que se procura de propósito.
+    return sorted(linhas, key=lambda t: (not _sem_acento(t[0]).startswith('deferimento'),
+                                         -t[1], t[0]))
 
 
 def clientes_com_alerta(law_firm_id: int):

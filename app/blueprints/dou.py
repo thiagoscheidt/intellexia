@@ -373,11 +373,11 @@ def alertas():
     secao = (request.args.get('secao') or '').strip().upper() or None
     client_id = request.args.get('cliente', type=int)
 
-    so_resultado = request.args.get('resultado') == '1'
+    fap = (request.args.get('fap') or '').strip() or None
 
     pagina = alert_service.listar(
         law_firm_id, status=status, tipo=tipo, secao=secao,
-        client_id=client_id, resultado=so_resultado,
+        client_id=client_id, fap=fap,
         page=request.args.get('page', 1, type=int))
 
     return render_template(
@@ -385,11 +385,15 @@ def alertas():
         alertas=pagina,
         resumo=alert_service.resumo(law_firm_id),
         clientes=alert_service.clientes_com_alerta(law_firm_id),
+        decisoes=alert_service.resultados_disponiveis(law_firm_id),
         invalidos=alert_service.cnpjs_invalidos(law_firm_id),
         dias_semana=DIAS_SEMANA, meses=MESES,
+        FAP_QUALQUER=alert_service.FAP_QUALQUER,
+        FAP_FAVORAVEL=alert_service.FAP_FAVORAVEL,
+        FAP_CONTRA=alert_service.FAP_CONTRA,
         f_status=request.args.get('status') or DouClientAlert.STATUS_NEW,
         f_tipo=tipo or '', f_secao=secao or '', f_cliente=client_id,
-        f_resultado=so_resultado)
+        f_fap=fap or '')
 
 
 def _alerta_do_escritorio(alerta_id):

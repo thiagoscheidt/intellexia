@@ -305,7 +305,10 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
   52 linhas na tela e no e-mail. Medido em 7 dias de acervo: **41 alertas por
   matéria contra 1.333 por par — 32x**. Os clientes citados ficam na tabela
   filha e a tela agrupa os chips por empresa (`clientes_citados`), com a
-  contagem de estabelecimentos como sufixo.
+  contagem de estabelecimentos como sufixo. O agrupamento é **pelo nome**, não
+  pelo `client_id`: a carteira tem um cadastro por estabelecimento e o Santander
+  ocupa dezenas deles com o mesmo nome — por id, um edital com 31 filiais rendia
+  três chips idênticos antes do "+21".
 - **CNPJ sem dígito verificador válido não vigia nada** (`cnpj_valido`, mod 11,
   rejeita repetidos). A HAVAN estava cadastrada com `00000000000000`, cuja raiz
   casa com `00.000.000/0001-91` — o Banco do Brasil, presente em todo convênio
@@ -360,6 +363,11 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
   pílula da linha e na célula do modal, porque é essa a pergunta que o alerta
   responde. Na listagem, quem tem decisão vem **primeiro dentro do dia**: é
   desfecho, não notícia, e num dia de 32 alertas a ordem por id o enterraria.
+  O filtro `fap` tem quatro formas — `com` (houve decisão), `deferimento` (onde
+  ganhamos), `indeferimento` (prazo correndo) e a **decisão exata**, oferecida
+  só quando existe na carteira. `indeferimento` é `NOT ilike('deferimento%')`
+  e não `ilike('indeferimento%')`: diligência e prejudicado também não são
+  ganho de causa.
   O `texto_html` só é lido para matéria que já casou, e só quando tem `<table` —
   é LONGTEXT, e são ~8 matérias por dia contra as milhares da edição.
 

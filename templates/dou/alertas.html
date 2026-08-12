@@ -25,9 +25,9 @@
     </div>
     {# Resultado de recurso é desfecho, não notícia: o mais valioso do módulo,
        e por isso vira atalho clicável e não só número. #}
-    <a class="dou-tile dou-tile--resultado {{ 'dou-tile--ativo' if f_resultado }}"
-       href="{{ url_for('dou.alertas', status=f_status, resultado='1') if not f_resultado
-                else url_for('dou.alertas', status=f_status) }}"
+    <a class="dou-tile dou-tile--resultado {{ 'dou-tile--ativo' if f_fap }}"
+       href="{{ url_for('dou.alertas', status=f_status) if f_fap
+                else url_for('dou.alertas', status=f_status, fap=FAP_QUALQUER) }}"
        title="Matérias que trazem decisão de recurso FAP para algum estabelecimento do cliente">
       <span class="dou-tile__n">{{ resumo.com_resultado }}</span>
       <span class="dou-tile__r">com resultado FAP</span>
@@ -71,7 +71,6 @@
   <div class="card-body">
 
     <form method="get" class="row g-2 align-items-end mb-3">
-      {% if f_resultado %}<input type="hidden" name="resultado" value="1">{% endif %}
       <div class="col-md-2">
         <label class="form-label small text-muted mb-1">Situação</label>
         <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
@@ -99,6 +98,33 @@
           <option value="raiz" {{ 'selected' if f_tipo == 'raiz' }}>Só outra filial do grupo</option>
         </select>
       </div>
+      {# Deferimento e indeferimento vêm antes das decisões exatas: "onde
+         ganhamos" e "onde há prazo correndo" são as perguntas do dia a dia;
+         a decisão nominal serve para quem já sabe o que procura. #}
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Resultado FAP</label>
+        <select name="fap" class="form-select form-select-sm">
+          <option value="">Com ou sem resultado</option>
+          <option value="{{ FAP_QUALQUER }}" {{ 'selected' if f_fap == FAP_QUALQUER }}>
+            Qualquer resultado ({{ resumo.com_resultado }})
+          </option>
+          <option value="{{ FAP_FAVORAVEL }}" {{ 'selected' if f_fap == FAP_FAVORAVEL }}>
+            Com deferimento — onde ganhamos
+          </option>
+          <option value="{{ FAP_CONTRA }}" {{ 'selected' if f_fap == FAP_CONTRA }}>
+            Com indeferimento
+          </option>
+          {% if decisoes %}
+          <optgroup label="Decisão exata">
+            {% for decisao, quantos in decisoes %}
+            <option value="{{ decisao }}" {{ 'selected' if f_fap == decisao }}>
+              {{ decisao }} ({{ quantos }})
+            </option>
+            {% endfor %}
+          </optgroup>
+          {% endif %}
+        </select>
+      </div>
       <div class="col-md-2">
         <label class="form-label small text-muted mb-1">Seção</label>
         <select name="secao" class="form-select form-select-sm">
@@ -112,7 +138,7 @@
         <button type="submit" class="btn btn-primary btn-sm">
           <i class="bi bi-funnel me-1"></i>Filtrar
         </button>
-        {% if f_tipo or f_secao or f_cliente or f_resultado %}
+        {% if f_tipo or f_secao or f_cliente or f_fap %}
         <a href="{{ url_for('dou.alertas', status=f_status) }}"
            class="btn btn-outline-secondary btn-sm">Limpar</a>
         {% endif %}
@@ -245,11 +271,11 @@
       <div class="btn-group btn-group-sm">
         {% if alertas.has_prev %}
         <a class="btn btn-outline-secondary"
-           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, resultado='1' if f_resultado else none, page=alertas.prev_num) }}">Anterior</a>
+           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, fap=f_fap or none, page=alertas.prev_num) }}">Anterior</a>
         {% endif %}
         {% if alertas.has_next %}
         <a class="btn btn-outline-secondary"
-           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, resultado='1' if f_resultado else none, page=alertas.next_num) }}">Próxima</a>
+           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, fap=f_fap or none, page=alertas.next_num) }}">Próxima</a>
         {% endif %}
       </div>
     </div>
