@@ -308,7 +308,12 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
   contagem de estabelecimentos como sufixo. O agrupamento é **pelo nome**, não
   pelo `client_id`: a carteira tem um cadastro por estabelecimento e o Santander
   ocupa dezenas deles com o mesmo nome — por id, um edital com 31 filiais rendia
-  três chips idênticos antes do "+21".
+  três chips idênticos antes do "+21". Pelo mesmo motivo o **filtro de cliente
+  é select2 com o `cnpjSelect2Matcher`** e mostra o CNPJ no rótulo: são 336
+  opções, 328 delas estabelecimentos do Santander — sem o número ficam
+  indistinguíveis, e o matcher deixa procurar com ou sem pontuação. O tema
+  `select2-bootstrap-5-theme` é folha à parte do `select2.min.css` que o
+  `base.html` traz; sem ela o widget fica sem estilo.
 - **CNPJ sem dígito verificador válido não vigia nada** (`cnpj_valido`, mod 11,
   rejeita repetidos). A HAVAN estava cadastrada com `00000000000000`, cuja raiz
   casa com `00.000.000/0001-91` — o Banco do Brasil, presente em todo convênio

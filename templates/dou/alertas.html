@@ -4,6 +4,11 @@
 {% block title %}Alertas de clientes no DOU{% endblock %}
 
 {% block extra_css %}
+{# O base.html traz só o select2.min.css. O tema bootstrap-5 é folha à parte, e
+   sem ela `theme: 'bootstrap-5'` deixa o widget sem estilo nenhum — mesma
+   receita da tela de busca do DOU e das telas do disputes_center. #}
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
 {% endblock %}
 
@@ -81,11 +86,15 @@
       </div>
       <div class="col-md-3">
         <label class="form-label small text-muted mb-1">Cliente</label>
-        <select name="cliente" class="form-select form-select-sm">
-          <option value="">Todos os clientes</option>
-          {% for cid, nome, qtd in clientes %}
+        {# O CNPJ entra no rótulo porque a carteira tem um cadastro por
+           estabelecimento: sem ele, dezenas de opções "BANCO SANTANDER
+           (BRASIL) S.A." ficam idênticas na lista. É também por ele que o
+           matcher do projeto deixa procurar, com ou sem pontuação. #}
+        <select name="cliente" id="filtro-cliente" class="form-select form-select-sm">
+          <option value=""></option>
+          {% for cid, nome, cnpj, qtd in clientes %}
           <option value="{{ cid }}" {{ 'selected' if cid == f_cliente }}>
-            {{ nome }} ({{ qtd }})
+            {{ nome }} — {{ cnpj }} ({{ qtd }})
           </option>
           {% endfor %}
         </select>
@@ -344,6 +353,26 @@
 
 {% block extra_js %}
 <script>
+  (function () {
+    // Filtro de cliente com busca: são centenas de cadastros — um por
+    // estabelecimento — e um <select> simples vira rolagem inviável. O matcher
+    // do projeto acha tanto pelo nome quanto pelo CNPJ, com ou sem pontuação.
+    const cliente = document.getElementById('filtro-cliente');
+    if (cliente && window.jQuery && $.fn.select2) {
+      $(cliente).select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Todos os clientes',
+        allowClear: true,
+        width: '100%',
+        matcher: window.cnpjSelect2Matcher,
+        language: { noResults: function () { return 'Nenhum cliente encontrado.'; } },
+      });
+      // O select2 dispara 'change' pelo jQuery; submeter aqui evita o clique
+      // extra no "Filtrar", que é o que se espera de um filtro de uma escolha.
+      $(cliente).on('change', function () { this.form.submit(); });
+    }
+  })();
+
   (function () {
     const modalEl = document.getElementById('modal-trecho');
     const corpo = document.getElementById('modal-trecho-corpo');

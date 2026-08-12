@@ -419,14 +419,22 @@ def resultados_disponiveis(law_firm_id: int):
 
 
 def clientes_com_alerta(law_firm_id: int):
-    """``[(client_id, nome, qtd)]`` para o filtro — só quem tem alerta."""
+    """``[(client_id, nome, cnpj_formatado, qtd)]`` — só quem tem alerta.
+
+    O CNPJ vai junto e não é enfeite: a carteira tem um cadastro por
+    estabelecimento, e "BANCO SANTANDER (BRASIL) S.A." aparece dezenas de vezes
+    na lista. Sem o número, as opções ficam indistinguíveis — e é por ele que
+    o matcher do select2 deixa procurar, com ou sem pontuação.
+    """
     linhas = (db.session.query(DouClientAlertMatch.client_id, Client.name,
+                               Client.cnpj,
                                func.count(func.distinct(DouClientAlertMatch.alert_id)))
               .join(Client, Client.id == DouClientAlertMatch.client_id)
               .filter(DouClientAlertMatch.law_firm_id == law_firm_id)
-              .group_by(DouClientAlertMatch.client_id, Client.name)
-              .order_by(Client.name).all())
-    return [(cid, nome, qtd) for cid, nome, qtd in linhas]
+              .group_by(DouClientAlertMatch.client_id, Client.name, Client.cnpj)
+              .order_by(Client.name, Client.cnpj).all())
+    return [(cid, nome, formatar_cnpj(busca_service.so_digitos(cnpj)) or cnpj, qtd)
+            for cid, nome, cnpj, qtd in linhas]
 
 
 def cnpjs_invalidos(law_firm_id: int):

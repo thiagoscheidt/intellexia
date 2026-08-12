@@ -268,6 +268,22 @@ def test_tela():
             check('e o endereço da folha responde',
                   c.get(para_folha[0]).status_code == 200, para_folha[0])
 
+        # O filtro de cliente é select2 com busca: a carteira tem um cadastro
+        # por estabelecimento e o Santander sozinho ocupa centenas de opções.
+        with app.app_context():
+            lista = alertas.clientes_com_alerta(firm_id)
+        check('o filtro de cliente traz o CNPJ junto do nome',
+              lista and all(len(t) == 4 and t[2] for t in lista),
+              str(lista[:1]))
+        check('o CNPJ vai formatado, para achar com e sem pontuação',
+              lista and '/' in lista[0][2] and '-' in lista[0][2], str(lista[0][2]))
+        check('o select tem id para o select2 e o rótulo mostra o CNPJ',
+              'id="filtro-cliente"' in html and ' — ' in html)
+        check('o tema do select2 é carregado (sem ele o widget fica sem estilo)',
+              'select2-bootstrap-5-theme' in html)
+        check('usa o matcher de CNPJ do projeto, não o padrão',
+              'cnpjSelect2Matcher' in html)
+
         check('filtro por tipo responde',
               c.get('/dou/alertas?tipo=exato').status_code == 200)
         check('filtro por seção responde',
