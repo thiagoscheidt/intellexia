@@ -1,0 +1,240 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Alertas de clientes no DOU{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dou-page">
+
+{{ page_hero(
+     'Alertas de clientes',
+     'Matérias do Diário Oficial que citam CNPJ da carteira',
+     'bi bi-bell',
+     [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
+      {'label': 'Alertas', 'active': True}]) }}
+
+<div class="dou-alerta-topo">
+  <div class="dou-tiles">
+    <div class="dou-tile {{ 'dou-tile--atencao' if resumo.nao_lidos }}">
+      <span class="dou-tile__n">{{ resumo.nao_lidos }}</span>
+      <span class="dou-tile__r">não lidos</span>
+    </div>
+    <div class="dou-tile">
+      <span class="dou-tile__n">{{ resumo.exatos }}</span>
+      <span class="dou-tile__r">citam cliente cadastrado</span>
+    </div>
+    <div class="dou-tile">
+      <span class="dou-tile__n">{{ resumo.raiz }}</span>
+      <span class="dou-tile__r">outra filial do grupo</span>
+    </div>
+    <div class="dou-tile">
+      <span class="dou-tile__n">{{ resumo.total }}</span>
+      <span class="dou-tile__r">no total</span>
+    </div>
+  </div>
+
+  {% if resumo.nao_lidos %}
+  <form method="post" action="{{ url_for('dou.alertas_marcar_todas') }}">
+    <input type="hidden" name="voltar" value="{{ request.full_path }}">
+    <button class="btn btn-outline-secondary btn-sm" type="submit">
+      <i class="bi bi-check2-all me-1"></i>Marcar todos como lidos
+    </button>
+  </form>
+  {% endif %}
+</div>
+
+{# Cliente sem CNPJ válido não é vigiado, e isso não pode ser silencioso: a
+   pessoa confiaria numa cobertura que não existe. #}
+{% if invalidos %}
+<div class="alert alert-warning d-flex align-items-start gap-2 py-2 px-3">
+  <i class="bi bi-exclamation-triangle mt-1"></i>
+  <div class="small">
+    <strong>{{ invalidos | length }} cliente(s) fora da vigilância</strong> —
+    o CNPJ cadastrado não passa no dígito verificador, então não dá para
+    procurá-lo no Diário:
+    {% for c in invalidos %}<span class="dou-invalido">{{ c.name }}
+      <code>{{ c.cnpj or '—' }}</code></span>{% if not loop.last %} {% endif %}{% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body">
+
+    <form method="get" class="row g-2 align-items-end mb-3">
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">Situação</label>
+        <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
+          <option value="novo" {{ 'selected' if f_status == 'novo' }}>Não lidos</option>
+          <option value="lido" {{ 'selected' if f_status == 'lido' }}>Lidos</option>
+          <option value="todos" {{ 'selected' if f_status == 'todos' }}>Todos</option>
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Cliente</label>
+        <select name="cliente" class="form-select form-select-sm">
+          <option value="">Todos os clientes</option>
+          {% for cid, nome, qtd in clientes %}
+          <option value="{{ cid }}" {{ 'selected' if cid == f_cliente }}>
+            {{ nome }} ({{ qtd }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Como o CNPJ casou</label>
+        <select name="tipo" class="form-select form-select-sm">
+          <option value="">Cadastrado e filial do grupo</option>
+          <option value="exato" {{ 'selected' if f_tipo == 'exato' }}>Só cliente cadastrado</option>
+          <option value="raiz" {{ 'selected' if f_tipo == 'raiz' }}>Só outra filial do grupo</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label small text-muted mb-1">Seção</label>
+        <select name="secao" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          {% for s in ['DO1', 'DO2', 'DO3'] %}
+          <option value="{{ s }}" {{ 'selected' if f_secao == s }}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-funnel me-1"></i>Filtrar
+        </button>
+        {% if f_tipo or f_secao or f_cliente %}
+        <a href="{{ url_for('dou.alertas', status=f_status) }}"
+           class="btn btn-outline-secondary btn-sm">Limpar</a>
+        {% endif %}
+      </div>
+    </form>
+
+    {% if alertas.items %}
+    {% for a in alertas.items %}
+
+    {% if not loop.previtem or loop.previtem.pub_date != a.pub_date %}
+    <div class="dou-alerta-dia">
+      <span class="dou-alerta-dia__data">
+        {% if a.pub_date %}
+        {{ dias_semana[a.pub_date.weekday()] }}, {{ a.pub_date.strftime('%d') }}
+        de {{ meses[a.pub_date.month - 1] }}
+        {% else %}sem data{% endif %}
+      </span>
+      <a class="dou-alerta-dia__link"
+         href="{{ url_for('dou.edicao', data_str=a.pub_date.isoformat()) if a.pub_date }}">
+        ver a edição
+      </a>
+    </div>
+    {% endif %}
+
+    <div class="dou-alerta {{ 'dou-alerta--nova' if a.status == 'novo' }}">
+      <div class="dou-alerta__ref">
+        {# 'DO1' e 'DO1E' compartilham a cor: é o mesmo caderno, edição extra #}
+        <span class="dou-secao dou-secao--{{ (a.pub_name or 'DO1') | replace('DO', '') | first }}">{{ a.pub_name }}</span>
+        {% if a.article and a.article.pagina %}
+        <span class="dou-alerta__pag">p. {{ a.article.pagina }}</span>
+        {% endif %}
+      </div>
+
+      <div class="dou-alerta__corpo">
+        <a class="dou-alerta__ident {{ 'dou-alerta__ident--vazio' if not (a.article and a.article.identifica) }}"
+           href="{{ url_for('dou.materia', article_id=a.article_id, q=a.cnpj_destaque or none) }}">
+          {{ a.article.identifica if a.article and a.article.identifica
+             else 'Matéria sem identificação no XML' }}
+        </a>
+        {% if a.article and a.article.orgao_hierarquia %}
+        <div class="dou-alerta__orgao" title="{{ a.article.orgao_hierarquia }}">
+          {{ a.article.orgao_hierarquia }}
+        </div>
+        {% endif %}
+
+        {# Três clientes e o resto colapsado: 20 das 41 matérias medidas citam
+           20+ estabelecimentos, e listar todos vira parede de texto. #}
+        {% set citados = a.clientes_citados %}
+        <div class="dou-alerta__chips">
+          {% for cliente, tipo, estabelecimentos in citados[:3] %}
+          <span class="dou-chip {{ 'dou-chip--exato' if tipo == 'exato' }}"
+                title="{{ estabelecimentos }} estabelecimento(s) desta empresa nesta matéria{{ ' — nenhum é o CNPJ cadastrado' if tipo == 'raiz' }}">
+            {{ cliente.name if cliente else '—' }}
+            {%- if estabelecimentos > 1 %} <span class="dou-chip__n">&times;{{ estabelecimentos }}</span>{% endif %}
+          </span>
+          {% endfor %}
+          {% if citados | length > 3 %}
+          <span class="dou-chip dou-chip--mais">
+            + {{ citados | length - 3 }} empresa(s)
+          </span>
+          {% endif %}
+          <span class="dou-alerta__cnpjs" title="CNPJs distintos citados nesta matéria">
+            {{ a.clients_count }} CNPJ{{ 's' if a.clients_count != 1 }}
+          </span>
+        </div>
+      </div>
+
+      <div class="dou-alerta__acoes">
+        {% if a.match_type == 'raiz' %}
+        <span class="dou-selo dou-selo--filial" title="Nenhum CNPJ cadastrado bate; o que casou é outro estabelecimento do mesmo grupo">outra filial</span>
+        {% endif %}
+        <a class="btn btn-outline-primary btn-sm"
+           href="{{ url_for('dou.materia', article_id=a.article_id, q=a.cnpj_destaque or none) }}"
+           title="Abrir a matéria com o CNPJ grifado no texto e na folha">
+          Ver no Diário
+        </a>
+        <form method="post" action="{{ url_for('dou.alerta_marcar', alerta_id=a.id) }}">
+          <input type="hidden" name="voltar" value="{{ request.full_path }}">
+          <input type="hidden" name="lido" value="{{ '0' if a.status == 'lido' else '1' }}">
+          <button class="btn btn-outline-secondary btn-sm" type="submit">
+            {% if a.status == 'lido' %}
+            <i class="bi bi-arrow-counterclockwise"></i>
+            {% else %}<i class="bi bi-check2"></i>{% endif %}
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if alertas.pages > 1 %}
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      <small class="text-muted">
+        Página {{ alertas.page }} de {{ alertas.pages }} — {{ alertas.total }} alerta(s)
+      </small>
+      <div class="btn-group btn-group-sm">
+        {% if alertas.has_prev %}
+        <a class="btn btn-outline-secondary"
+           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, page=alertas.prev_num) }}">Anterior</a>
+        {% endif %}
+        {% if alertas.has_next %}
+        <a class="btn btn-outline-secondary"
+           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, page=alertas.next_num) }}">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-5 text-muted">
+      <i class="bi bi-bell-slash display-6"></i>
+      {% if f_status == 'novo' and not (f_tipo or f_secao or f_cliente) %}
+      <p class="mt-2 mb-1">Nenhum alerta pendente.</p>
+      <p class="small mb-0">
+        Cada edição capturada é conferida contra os CNPJs dos clientes.
+        {% if resumo.total %}
+        <a href="{{ url_for('dou.alertas', status='todos') }}">Ver os {{ resumo.total }} já lidos</a>.
+        {% endif %}
+      </p>
+      {% else %}
+      <p class="mt-2 mb-1">Nenhum alerta para os filtros escolhidos.</p>
+      <p class="small mb-0">
+        <a href="{{ url_for('dou.alertas', status='todos') }}">Ver todos</a>
+      </p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+</div>
+{% endblock %}

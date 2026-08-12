@@ -338,6 +338,19 @@
               </a>
             </li>
             <li class="nav-item">
+              <a href="{{ url_for('dou.alertas') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('dou.alerta') else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-bell" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Alertas
+                  {% if dou_alertas_nao_lidos %}
+                  <span class="badge rounded-pill text-bg-primary ms-1">{{
+                    dou_alertas_nao_lidos if dou_alertas_nao_lidos < 100 else '99+' }}</span>
+                  {% endif %}
+                </p>
+              </a>
+            </li>
+            <li class="nav-item">
               <a href="{{ url_for('dou.busca') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'dou.busca' else '' }}"
                 style="font-size: 0.9em;">

@@ -940,3 +940,222 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+/* ------------------------------------------- alertas de cliente no Diário */
+
+.dou-alerta-topo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+
+.dou-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .5rem;
+  flex: 1 1 26rem;
+}
+
+.dou-tile {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 10px;
+  padding: .5rem .75rem;
+  background: var(--bs-body-bg);
+  line-height: 1.25;
+}
+
+/* Só o contador de pendência ganha cor. Os outros três são contexto, e um
+   painel inteiro colorido não diz o que olhar primeiro. */
+.dou-tile--atencao {
+  border-color: var(--bs-primary-border-subtle);
+}
+
+.dou-tile--atencao .dou-tile__n {
+  color: var(--bs-primary);
+}
+
+.dou-tile__n {
+  display: block;
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dou-tile__r {
+  font-size: .74rem;
+  color: var(--bs-secondary-color);
+}
+
+.dou-invalido {
+  display: inline-block;
+  margin-right: .5rem;
+  white-space: nowrap;
+}
+
+/* Divisória de dia. A carga do DOU é espasmódica — seis dias com 1 a 3 alertas
+   e um com 32 —, então a data precisa ancorar a leitura. */
+.dou-alerta-dia {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+  margin-top: .9rem;
+  padding-bottom: .25rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.dou-alerta-dia__data {
+  font-size: .82rem;
+  font-weight: 600;
+}
+
+.dou-alerta-dia__link {
+  font-size: .76rem;
+  text-decoration: none;
+}
+
+.dou-alerta {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  gap: .85rem;
+  align-items: start;
+  padding: .65rem .5rem .65rem .75rem;
+  border-bottom: 1px solid var(--bs-border-color-translucent);
+  position: relative;
+}
+
+/* Trilho de não lida — a mesma gramática de .dou-edicao--recente e da linha
+   não lida do Monitoramento de Processos. */
+.dou-alerta--nova::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: .35rem;
+  bottom: .35rem;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--bs-primary);
+}
+
+.dou-alerta__ref {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .15rem;
+}
+
+.dou-secao {
+  font-size: .62rem;
+  font-weight: 700;
+  color: #fff;
+  padding: .05rem .3rem;
+  border-radius: 4px;
+  background: var(--bs-secondary);
+}
+
+.dou-secao--1 { background: var(--dou-s1); }
+.dou-secao--2 { background: var(--dou-s2); }
+.dou-secao--3 { background: var(--dou-s3); }
+
+.dou-alerta__pag {
+  font-size: .72rem;
+  color: var(--bs-secondary-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.dou-alerta__ident {
+  font-size: .87rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+/* Sete das dezesseis matérias do CRPS vêm sem identificação no XML: a linha
+   cai no órgão e na página, e o rótulo diz que a falta é da fonte. */
+.dou-alerta__ident--vazio {
+  font-weight: 500;
+  font-style: italic;
+  color: var(--bs-secondary-color);
+}
+
+.dou-alerta__orgao {
+  font-size: .76rem;
+  color: var(--bs-secondary-color);
+  margin-top: .1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dou-alerta__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  margin-top: .35rem;
+}
+
+.dou-chip {
+  font-size: .72rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 999px;
+  padding: .05rem .5rem;
+  background: var(--bs-secondary-bg);
+  color: var(--bs-secondary-color);
+  max-width: 22rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dou-chip--exato {
+  border-color: var(--bs-primary-border-subtle);
+  color: var(--bs-primary);
+  background: var(--bs-body-bg);
+  font-weight: 600;
+}
+
+.dou-alerta__acoes {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+}
+
+.dou-selo {
+  font-size: .64rem;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  font-weight: 700;
+  padding: .1rem .4rem;
+  border-radius: 5px;
+  background: var(--bs-secondary-bg);
+  color: var(--bs-secondary-color);
+  border: 1px solid var(--bs-border-color);
+  white-space: nowrap;
+}
+
+@media (max-width: 767.98px) {
+  .dou-alerta { grid-template-columns: 46px minmax(0, 1fr); }
+  .dou-alerta__acoes { grid-column: 2; }
+}
+
+/* Contagem de estabelecimentos dentro do chip da empresa */
+.dou-chip__n {
+  opacity: .65;
+  font-variant-numeric: tabular-nums;
+}
+
+.dou-chip--mais {
+  font-style: italic;
+}
+
+/* Quantos CNPJs distintos a matéria cita. Fica fora dos chips: é a medida do
+   alerta, não mais uma empresa. */
+.dou-alerta__cnpjs {
+  font-size: .7rem;
+  color: var(--bs-secondary-color);
+  font-variant-numeric: tabular-nums;
+  align-self: center;
+}

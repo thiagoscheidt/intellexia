@@ -4026,6 +4026,156 @@ class DouArticle(db.Model):
         return f'<DouArticle {self.pub_name} {self.pub_date} {self.identifica!r}>'
 
 
+class DouClientAlert(db.Model):
+    """Tabela dou_client_alerts - matéria do DOU que cita CNPJ de cliente.
+
+    **Exceção à exceção do multi-tenancy**: ``dou_editions`` e ``dou_articles``
+    não têm ``law_firm_id`` porque o DOU é catálogo público federal. O alerta é
+    o contrário — ele nasce do cruzamento com a carteira de clientes, que é do
+    escritório, e por isso carrega o tenant como qualquer tabela de negócio.
+
+    A unidade é a **matéria**, nunca o par (cliente, matéria). Um edital do
+    CRPS cita 52 clientes de uma vez; por par, o mesmo documento viraria 52
+    linhas na tela e 52 no e-mail. Medido no acervo de 7 dias: 41 alertas por
+    matéria contra 1.333 por par — 32x. Os clientes citados são o conteúdo do
+    alerta, e ficam em ``DouClientAlertMatch``.
+
+    Chave única ``(law_firm_id, article_id)``: reprocessar uma data atualiza a
+    linha em vez de duplicar, mesma regra do upsert de matéria.
+    """
+    __tablename__ = 'dou_client_alerts'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'article_id',
+                            name='uq_dou_client_alerts_firm_article'),
+        db.Index('ix_dou_client_alerts_firm_status_date',
+                 'law_firm_id', 'status', 'pub_date'),
+    )
+
+    # Triagem
+    STATUS_NEW = 'novo'
+    STATUS_READ = 'lido'
+
+    # Como o CNPJ casou com a carteira
+    MATCH_EXACT = 'exato'   # é o CNPJ cadastrado do cliente
+    MATCH_ROOT = 'raiz'     # outro estabelecimento do mesmo grupo (8 dígitos)
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'),
+                            nullable=False, index=True)
+    article_id = db.Column(db.Integer,
+                           db.ForeignKey('dou_articles.id', ondelete='CASCADE'),
+                           nullable=False, index=True)
+
+    # Denormalizados da matéria: a tela agrupa por dia e filtra por seção, e
+    # sem isso todo COUNT e todo ORDER BY exigiria juntar dou_articles.
+    pub_date = db.Column(db.Date, index=True)
+    pub_name = db.Column(db.String(10), index=True)
+
+    # 'exato' quando ao menos um casamento é exato; 'raiz' quando todos são de
+    # outra filial. É o que decide o selo da linha e o filtro.
+    match_type = db.Column(db.String(10), nullable=False, default=MATCH_EXACT)
+    clients_count = db.Column(db.Integer, nullable=False, default=0)
+
+    status = db.Column(db.String(20), nullable=False, default=STATUS_NEW, index=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    read_at = db.Column(db.DateTime)
+    read_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    article = db.relationship('DouArticle')
+    read_by = db.relationship('User')
+    matches = db.relationship('DouClientAlertMatch', back_populates='alert',
+                              cascade='all, delete-orphan', lazy='selectin')
+
+    @property
+    def matches_ordenados(self):
+        """Cliente cadastrado antes de filial do grupo, depois por nome."""
+        return sorted(
+            self.matches,
+            key=lambda m: (m.match_type != self.MATCH_EXACT,
+                           (m.client.name if m.client else ''), m.cnpj))
+
+    @property
+    def clientes_citados(self):
+        """``[(cliente, tipo, qtd_estabelecimentos)]`` — um por cliente.
+
+        Agrupado por cliente e não por CNPJ porque um edital do CRPS cita
+        vários estabelecimentos do mesmo grupo, e o nome é o mesmo nos três:
+        repetir "ITAÚ UNIBANCO S.A." três vezes gasta a linha sem informar
+        nada. A contagem de estabelecimentos vira sufixo do próprio chip.
+
+        Um cliente com um casamento exato e outros por raiz conta como exato —
+        o CNPJ cadastrado está lá, e é isso que decide o peso do alerta.
+        """
+        por_cliente = {}
+        for m in self.matches:
+            chave = m.client_id or m.cnpj
+            atual = por_cliente.get(chave)
+            if atual is None:
+                por_cliente[chave] = [m.client, m.match_type, 1]
+            else:
+                atual[2] += 1
+                if m.match_type == self.MATCH_EXACT:
+                    atual[1] = self.MATCH_EXACT
+        return sorted(
+            (tuple(v) for v in por_cliente.values()),
+            key=lambda t: (t[1] != self.MATCH_EXACT, -t[2],
+                           (t[0].name if t[0] else '')))
+
+    @property
+    def cnpj_destaque(self):
+        """O CNPJ a grifar ao abrir a matéria — o do cliente cadastrado."""
+        ordenados = self.matches_ordenados
+        return ordenados[0].cnpj if ordenados else None
+
+    def __repr__(self):
+        return (f'<DouClientAlert firm={self.law_firm_id} art={self.article_id} '
+                f'{self.match_type} x{self.clients_count}>')
+
+
+class DouClientAlertMatch(db.Model):
+    """Tabela dou_client_alert_matches - um cliente citado por uma matéria.
+
+    Tabela filha e não uma coluna JSON no alerta: é ela que responde "todos os
+    alertas deste cliente", e JSON no MySQL não indexa. O volume é pequeno —
+    190 linhas por dia no pior caso medido, o do edital de lista.
+    """
+    __tablename__ = 'dou_client_alert_matches'
+    __table_args__ = (
+        db.UniqueConstraint('alert_id', 'cnpj', name='uq_dou_alert_matches_alert_cnpj'),
+        db.Index('ix_dou_alert_matches_firm_client', 'law_firm_id', 'client_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    alert_id = db.Column(db.Integer,
+                         db.ForeignKey('dou_client_alerts.id', ondelete='CASCADE'),
+                         nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'),
+                            nullable=False, index=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), index=True)
+
+    # O CNPJ como apareceu no DOU, só dígitos. Num casamento por raiz ele é
+    # diferente do cadastrado — é justamente o estabelecimento novo.
+    cnpj = db.Column(db.String(14), nullable=False, index=True)
+    match_type = db.Column(db.String(10), nullable=False,
+                           default=DouClientAlert.MATCH_EXACT)
+
+    alert = db.relationship('DouClientAlert', back_populates='matches')
+    client = db.relationship('Client')
+
+    @property
+    def cnpj_formatado(self):
+        """'19630496000105' → '19.630.496/0001-05', para leitura humana."""
+        d = self.cnpj or ''
+        if len(d) != 14:
+            return d
+        return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
+
+    def __repr__(self):
+        return f'<DouClientAlertMatch {self.cnpj} {self.match_type}>'
+
+
 class DouSyncRun(db.Model):
     """Tabela dou_sync_runs - auditoria de cada execução da captura do DOU.
 

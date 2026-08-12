@@ -144,7 +144,7 @@ intellexia/
 | `admin_users` | — | Gerenciamento de usuários (admin-only) |
 | `access_audit` | `/admin/access-audit` | Atividade de usuários (admin-only): último login, telas acessadas, online agora. Visitas de tela agregadas por dia em `user_page_visits`, gravadas pelo middleware no mesmo commit de `last_activity` |
 | `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
-| `dou` | `/dou` | **Diário Oficial**: acervo do DOU capturado do INLABS (Imprensa Nacional). Captura diária dos ZIPs de XML das seções `DO1 DO2 DO3 DO1E DO2E DO3E` mais os PDFs assinados, quebrando cada edição matéria a matéria. Acervo em três níveis — edições por data (espelha a listagem do INLABS, com o PDF assinado) → edição do dia (aba por seção, salto para o dia vizinho **do acervo**, busca em título/ementa, filtro por órgão-raiz e tipo, atalho por linha para a **folha** daquela página) → matéria (o inteiro teor, em texto) — mais o **leitor** e a tela de captura (cobertura, falhas, reprocesso). O **leitor** (`/dou/edicao/<data>/pagina/<n>?secao=DO1`) é a folha assinada em tela cheia, no modelo do visualizador da Imprensa Nacional: aba por caderno, `‹ ›`, "ir para a página" e **Sumário da edição** (`_sumario_da_edicao`: órgão-raiz → primeira página, conferido linha a linha contra o `<select>` do portal oficial). **O texto do ato não entra no leitor** — a folha é A3 e qualquer coisa dividindo espaço com ela fica ilegível; a ponte de volta é a lista de matérias da página, no rodapé. O "ir para" é GET sem JavaScript e **redireciona para o endereço canônico** `/pagina/<n>`, para o que fica na barra do navegador ser copiável. A folha do leitor vem de `/dou/edicao/<id>/pagina/<n>.pdf`, **uma página por vez** (`_entregar_recorte(..., vizinhas=False)`) — no leitor o `›` já leva à seguinte, e mandar três fazia a folha escolhida dividir a tela com duas que ninguém pediu; a tela da matéria continua com as vizinhas (`/dou/materia/<id>/pagina.pdf`), porque um edital começa numa página e termina na outra. `_total_paginas` lê o `page_count` do PDF a cada requisição (1–4 ms mesmo nos 44 MB da Seção 3 — não vale coluna no banco). Órgão é sempre recortado na **raiz** da hierarquia (`dou_search_service.orgao_raiz`), no filtro, no agrupamento e no sumário: a hierarquia completa tem ~104 valores por seção contra ~27 raízes, e agrupar por ela dava 36 grupos para 50 linhas |
+| `dou` | `/dou` | **Diário Oficial**: acervo do DOU capturado do INLABS (Imprensa Nacional). Captura diária dos ZIPs de XML das seções `DO1 DO2 DO3 DO1E DO2E DO3E` mais os PDFs assinados, quebrando cada edição matéria a matéria. Acervo em três níveis — edições por data (espelha a listagem do INLABS, com o PDF assinado) → edição do dia (aba por seção, salto para o dia vizinho **do acervo**, busca em título/ementa, filtro por órgão-raiz e tipo, atalho por linha para a **folha** daquela página) → matéria (o inteiro teor, em texto) — mais o **leitor** e a tela de captura (cobertura, falhas, reprocesso). O **leitor** (`/dou/edicao/<data>/pagina/<n>?secao=DO1`) é a folha assinada em tela cheia, no modelo do visualizador da Imprensa Nacional: aba por caderno, `‹ ›`, "ir para a página" e **Sumário da edição** (`_sumario_da_edicao`: órgão-raiz → primeira página, conferido linha a linha contra o `<select>` do portal oficial). **O texto do ato não entra no leitor** — a folha é A3 e qualquer coisa dividindo espaço com ela fica ilegível; a ponte de volta é a lista de matérias da página, no rodapé. O "ir para" é GET sem JavaScript e **redireciona para o endereço canônico** `/pagina/<n>`, para o que fica na barra do navegador ser copiável. A folha do leitor vem de `/dou/edicao/<id>/pagina/<n>.pdf`, **uma página por vez** (`_entregar_recorte(..., vizinhas=False)`) — no leitor o `›` já leva à seguinte, e mandar três fazia a folha escolhida dividir a tela com duas que ninguém pediu; a tela da matéria continua com as vizinhas (`/dou/materia/<id>/pagina.pdf`), porque um edital começa numa página e termina na outra. `_total_paginas` lê o `page_count` do PDF a cada requisição (1–4 ms mesmo nos 44 MB da Seção 3 — não vale coluna no banco). Órgão é sempre recortado na **raiz** da hierarquia (`dou_search_service.orgao_raiz`), no filtro, no agrupamento e no sumário: a hierarquia completa tem ~104 valores por seção contra ~27 raízes, e agrupar por ela dava 36 grupos para 50 linhas. **Alertas** (`/dou/alertas`) cruzam os CNPJs dos clientes com cada matéria capturada — ver a seção "Alertas de cliente no DOU" |
 | `communications` | `/comunicacoes` | **Monitoramento de Processos**: comunicações processuais por fonte de informação (`ProcessCommunication.source` — hoje só `comunica_pje`; novas fontes = nova constante `SOURCE_*` + rótulo em `SOURCE_LABELS`). Radar por OAB, inteiro teor, controle de lidas, descoberta automática de processos. O nome de exibição é "Monitoramento de Processos"; endpoint/URL/módulo permanecem `communications` |
 
 ### Documentação do usuário (Manual + Assistente "pergunte ao manual")
@@ -293,6 +293,42 @@ nunca derruba a tela.
   que está esperando.
 - **Índice de teste é sempre `dou_articles_test`, nunca o de produção.**
 
+**Alertas de cliente no DOU (`dou_alert_service`)** — cruza os CNPJs da
+carteira de clientes com o texto de cada matéria capturada. Fonte única da tela
+`/dou/alertas`, do gancho na ingestão e de `scripts/gerar_alertas_dou.py`.
+
+- **`dou_client_alerts` e `dou_client_alert_matches` TÊM `law_firm_id`**, ao
+  contrário do resto do módulo: o acervo é público, mas a carteira que gera o
+  alerta é do escritório. O invariante de tenant volta a valer aqui.
+- **A unidade do alerta é a matéria, nunca o par (cliente, matéria).** Um
+  edital do CRPS cita 52 clientes de uma vez; por par o mesmo documento viraria
+  52 linhas na tela e no e-mail. Medido em 7 dias de acervo: **41 alertas por
+  matéria contra 1.333 por par — 32x**. Os clientes citados ficam na tabela
+  filha e a tela agrupa os chips por empresa (`clientes_citados`), com a
+  contagem de estabelecimentos como sufixo.
+- **CNPJ sem dígito verificador válido não vigia nada** (`cnpj_valido`, mod 11,
+  rejeita repetidos). A HAVAN estava cadastrada com `00000000000000`, cuja raiz
+  casa com `00.000.000/0001-91` — o Banco do Brasil, presente em todo convênio
+  de folha de pagamento do país; ela aparecia em acordos do TRE de Rondônia e
+  da Polícia Rodoviária Federal. O DV derrubou o ruído de 54 para 41 alertas.
+  O mesmo filtro vale para o número extraído do texto, senão protocolo e valor
+  viram CNPJ de cliente. Quem fica de fora aparece **na tela**: cobertura que
+  não existe é pior que alerta nenhum.
+- **Casamento por raiz (8 dígitos) entra, com selo próprio e filtro**: são 25
+  dos 41 alertas — outro estabelecimento do grupo que não está cadastrado.
+- **A varredura é em memória, sem Meilisearch**: `extrair_cnpjs` já existe e o
+  acervo inteiro levou 8,4 s (≈2 s por edição). O índice serve à tela de busca;
+  o alerta não pode depender dele. O gancho fica em `ingest_date` **depois do
+  commit da edição** e trata a própria falha — mesma regra do índice: alerta é
+  derivado da captura, nunca dono dela.
+- **Reprocessar casa CNPJ a CNPJ, não `clear()` + reinsert**: o `clear()`
+  emitia os INSERT antes dos DELETE no mesmo flush e estourava a unique
+  `(alert_id, cnpj)` — e reescreveria as 103 linhas de um edital a cada
+  execução. A triagem (`status`) sobrevive ao reprocessamento.
+- **O volume é espasmódico**: 32 dos 41 alertas caíram num único dia e os
+  outros seis tiveram de 1 a 3; 28 dos 41 vieram do Ministério da Previdência
+  Social, em DO3. Qualquer digest ou tela nova tem de aguentar os dois extremos.
+
 ### Timezone
 
 Todas as datas de exibição usam `America/Sao_Paulo`. Filtros Jinja: `datetime_sp`, `date_sp`. Helper: `app.utils.timezone.now_sp()`. Datetimes sem `tzinfo` são tratados como UTC antes da conversão.
@@ -439,6 +475,7 @@ FapReview.revision [POST]
 | `dou_xml_parser`                       | XML do DOU → dicts. Função pura, sem rede/banco/Flask — a peça que muda se a Imprensa Nacional alterar o schema |
 | `dou_ingestion_service`                | Ingestão do DOU: download → disco → parse → upsert → auditoria. Dedup por chave da matéria, janela de reverificação e retenção de PDF — fonte única da tela e do cron |
 | `dou_search_service`                   | Busca no acervo do DOU (Meilisearch): extração e normalização de CNPJ/processo, indexação e consulta com facetas — fonte única da tela de busca |
+| `dou_alert_service`                    | Alertas de cliente no DOU: validação de CNPJ (mod 11), carteira do escritório, casamento exato e por raiz, geração e triagem — fonte única da tela `/dou/alertas`, do gancho na ingestão e do backfill |
 | `process_radar_service`                | Radar da Mesa de Trabalho (providências IA + publicações não lidas + movimentação DataJud) — fonte única do widget do Painel de Processos (`build_radar`) e do e-mail Resumo do Radar (`build_radar_digest`) |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |

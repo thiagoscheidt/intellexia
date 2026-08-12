@@ -34,10 +34,12 @@ from flask import (Blueprint, render_template, request, redirect,
 from sqlalchemy import func, or_
 from werkzeug.exceptions import HTTPException
 
-from app.models import db, DouEdition, DouArticle, DouSyncRun, Client
+from app.models import (db, DouEdition, DouArticle, DouSyncRun, DouClientAlert,
+                        Client, User)
 
 from app.services import dou_ingestion_service as ingestion
 from app.services import dou_search_service as busca_service
+from app.services import dou_alert_service as alert_service
 from app.services.dou_xml_parser import grifar_html, sanitizar_html
 
 dou_bp = Blueprint('dou', __name__, url_prefix='/dou')
@@ -188,10 +190,20 @@ def inject_dou_health():
     Sem filtro por escritório, diferente dos outros chips: o acervo é global e
     a saúde da captura é a mesma para todos.
     """
+    dados = {'dou_health': None, 'dou_alertas_nao_lidos': 0}
     try:
-        return {'dou_health': ingestion.health_counters()}
+        dados['dou_health'] = ingestion.health_counters()
     except Exception:  # noqa: BLE001 — chip nunca derruba a header
-        return {'dou_health': None}
+        pass
+    # O alerta, ao contrário da saúde da captura, é por escritório: ele nasce
+    # da carteira de clientes do tenant.
+    try:
+        law_firm_id = session.get('law_firm_id')
+        if law_firm_id:
+            dados['dou_alertas_nao_lidos'] = alert_service.contar_nao_lidos(law_firm_id)
+    except Exception:  # noqa: BLE001
+        pass
+    return dados
 
 
 # ------------------------------------------------------- nível 1: as edições
@@ -338,6 +350,76 @@ def edicao(data_str):
                            orgaos=orgaos, ordens=ORDENS, dias_semana=DIAS_SEMANA,
                            dia_anterior=anterior, dia_seguinte=seguinte,
                            f_orgao=orgao, f_tipo=tipo, f_ordem=ordem, f_q=termo)
+
+
+# ------------------------------------------------- alertas de cliente
+
+@dou_bp.route('/alertas')
+def alertas():
+    """Matérias do DOU que citam CNPJ de cliente do escritório.
+
+    Ao contrário do resto do módulo, esta tela **é** por escritório: o acervo é
+    público, mas a carteira de clientes que gera o alerta é do tenant.
+    """
+    law_firm_id = session.get('law_firm_id')
+    if not law_firm_id:
+        abort(403)
+
+    # Padrão é a fila de trabalho — não lidos. "Todos" é escolha explícita.
+    status = (request.args.get('status') or DouClientAlert.STATUS_NEW).strip()
+    if status == 'todos':
+        status = None
+    tipo = (request.args.get('tipo') or '').strip() or None
+    secao = (request.args.get('secao') or '').strip().upper() or None
+    client_id = request.args.get('cliente', type=int)
+
+    pagina = alert_service.listar(
+        law_firm_id, status=status, tipo=tipo, secao=secao,
+        client_id=client_id, page=request.args.get('page', 1, type=int))
+
+    return render_template(
+        'dou/alertas.html',
+        alertas=pagina,
+        resumo=alert_service.resumo(law_firm_id),
+        clientes=alert_service.clientes_com_alerta(law_firm_id),
+        invalidos=alert_service.cnpjs_invalidos(law_firm_id),
+        dias_semana=DIAS_SEMANA, meses=MESES,
+        f_status=request.args.get('status') or DouClientAlert.STATUS_NEW,
+        f_tipo=tipo or '', f_secao=secao or '', f_cliente=client_id)
+
+
+def _alerta_do_escritorio(alerta_id):
+    """Carrega o alerta garantindo o tenant — nunca por id solto."""
+    law_firm_id = session.get('law_firm_id')
+    if not law_firm_id:
+        abort(403)
+    return (DouClientAlert.query
+            .filter_by(id=alerta_id, law_firm_id=law_firm_id).first_or_404())
+
+
+@dou_bp.route('/alertas/<int:alerta_id>/lida', methods=['POST'])
+def alerta_marcar(alerta_id):
+    alerta = _alerta_do_escritorio(alerta_id)
+    lido = request.form.get('lido', '1') != '0'
+    alert_service.marcar(alerta, _usuario_atual(), lido=lido)
+    db.session.commit()
+    return redirect(request.form.get('voltar') or url_for('dou.alertas'))
+
+
+@dou_bp.route('/alertas/lidas', methods=['POST'])
+def alertas_marcar_todas():
+    law_firm_id = session.get('law_firm_id')
+    if not law_firm_id:
+        abort(403)
+    quantos = alert_service.marcar_todos(law_firm_id, _usuario_atual())
+    db.session.commit()
+    flash(f'{quantos} alerta(s) marcado(s) como lido(s).'
+          if quantos else 'Nenhum alerta pendente.', 'success')
+    return redirect(request.form.get('voltar') or url_for('dou.alertas'))
+
+
+def _usuario_atual():
+    return User.query.get(session['user_id']) if session.get('user_id') else None
 
 
 @dou_bp.route('/edicao/<data_str>/pagina/<int:numero>')
