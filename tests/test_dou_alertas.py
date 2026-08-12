@@ -373,24 +373,58 @@ def test_trecho():
             return
 
         um = alertas.trechos_do_alerta(pequeno)
-        check('uma citação vira recorte, não o texto todo',
-              um['modo'] == 'trechos' and len(um['itens']) == 1, str(um['modo']))
-        if um['itens']:
-            check('o recorte traz o CNPJ marcado',
-                  '<mark>' in um['itens'][0]['html'], um['itens'][0]['html'][:80])
-            check('o recorte é menor que a matéria',
-                  len(um['itens'][0]['html']) < len(pequeno.article.texto or ''),
-                  f"{len(um['itens'][0]['html'])} vs {len(pequeno.article.texto or '')}")
+        check('matéria em prosa vem como HTML, não texto puro',
+              um['modo'] == 'html', str(um['modo']))
+        check('o bloco traz o CNPJ marcado', '<mark>' in (um['html'] or ''),
+              (um['html'] or '')[:80])
+        check('vem o parágrafo, não a matéria inteira',
+              len(um['html'] or '') < len(pequeno.article.texto_html or ''),
+              f"{len(um['html'] or '')} vs {len(pequeno.article.texto_html or '')}")
+        check('e não sobra tag proibida do documento publicado',
+              '<script' not in (um['html'] or '') and '<style' not in (um['html'] or ''))
 
         muitos = alertas.trechos_do_alerta(grande)
         if grande.clients_count > 20:
-            check('o edital-tabela cai no inteiro teor, não em N recortes',
-                  muitos['modo'] == 'inteiro', str(muitos['modo']))
-            check('e todas as citações vêm marcadas',
-                  (muitos['inteiro'] or '').count('<mark>') == grande.clients_count,
-                  f"{(muitos['inteiro'] or '').count('<mark>')} vs {grande.clients_count}")
-            check('o inteiro teor não é maior que o texto com as marcas',
-                  len(muitos['inteiro'] or '') < len(grande.article.texto or '') * 2)
+            check('o edital-tabela sai como tabela de verdade',
+                  muitos['modo'] == 'html' and '<table' in (muitos['html'] or ''),
+                  str(muitos['modo']))
+            check('uma tabela só, não uma por linha',
+                  (muitos['html'] or '').count('<table') == 1,
+                  f"{(muitos['html'] or '').count('<table')} tabelas")
+            check('todas as citações do cliente cabem no recorte',
+                  muitos['restantes'] == 0
+                  and (muitos['html'] or '').count('<mark>') >= grande.clients_count - 2,
+                  f"{(muitos['html'] or '').count('<mark>')} marcas para "
+                  f"{grande.clients_count} CNPJs, {muitos['restantes']} de fora")
+            # Comparar tamanho não serve: quando todas as linhas da tabela são
+            # do cliente, o recorte é a tabela inteira — e ainda cresce com as
+            # tags <mark>. O invariante é outro: nenhuma linha de terceiro
+            # entra no recorte.
+            from bs4 import BeautifulSoup as _BS
+            from app.services.dou_search_service import extrair_cnpjs as _ex
+            do_cliente = {m.cnpj for m in grande.matches}
+            fora = [tr for tr in _BS(muitos['html'] or '', 'html.parser').find_all('tr')
+                    if do_cliente.isdisjoint(_ex(tr.get_text(' ')))]
+            check('nenhuma linha de outra empresa entra no recorte',
+                  not fora, f'{len(fora)} linha(s) de terceiro')
+
+        # A montagem do HTML, sem depender do acervo
+        from bs4 import BeautifulSoup as _BS
+        sopa = _BS('<table><tr><td><p>33.592.510/0001-54</p></td>'
+                   '<td><p>Deferido</p></td></tr>'
+                   '<tr><td><p>11.222.333/0001-81</p></td><td><p>x</p></td></tr>'
+                   '</table><p>Nada aqui</p>', 'html.parser')
+        blocos = alertas._blocos_com_cnpj(sopa, ['33592510000154'])
+        check('o bloco de uma célula é a LINHA, não a célula',
+              len(blocos) == 1 and blocos[0].name == 'tr', str(blocos))
+        check('a linha traz as outras colunas junto',
+              'Deferido' in blocos[0].get_text(), blocos[0].get_text())
+        check('linha de outra empresa fica de fora',
+              '11.222.333' not in blocos[0].get_text())
+        montado = alertas._montar_html(blocos)
+        check('<tr> solto ganha <table> em volta, senão não renderiza',
+              montado.startswith('<table>') and montado.endswith('</table>'),
+              montado[:60])
 
         usuario = User.query.filter_by(role='admin').first()
         user_id, firm_id = usuario.id, usuario.law_firm_id
@@ -412,8 +446,11 @@ def test_trecho():
               '/dou/materia/' in html and '/pagina/' in html)
 
         grandes = c.get(f'/dou/alertas/{id_grande}/trecho').get_data(as_text=True)
-        check('o edital-tabela vem com o bloco rolável',
-              'dou-trecho__texto--inteiro' in grandes)
+        check('o edital-tabela chega como tabela, com o CSS da matéria',
+              '<table' in grandes and 'dou-texto' in grandes,
+              'sem a classe dou-texto a tabela sai sem colunas')
+        check('as ações vêm num bloco que o JS move para o rodapé fixo',
+              'dou-trecho__pe' in grandes)
 
         check('trecho de alerta inexistente dá 404',
               c.get('/dou/alertas/99999999/trecho').status_code == 404)

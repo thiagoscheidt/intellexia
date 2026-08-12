@@ -25,7 +25,19 @@
   </div>
   {% endif %}
 
-  {% if trecho.modo == 'trechos' %}
+  {% if trecho.modo == 'html' %}
+  {# Mesma classe da página da matéria: o CSS de tabela e parágrafo já está lá,
+     e é isso que faz a linha do edital sair com colunas em vez de virar
+     paredão. Sanitizado no serviço — `safe` aqui é sobre HTML já limpo. #}
+  <div class="dou-texto dou-trecho__html">{{ trecho.html | safe }}</div>
+  {% if trecho.restantes %}
+  <p class="dou-trecho__restantes">
+    Mais {{ trecho.restantes }} trecho(s) citando o cliente nesta matéria —
+    veja a matéria inteira.
+  </p>
+  {% endif %}
+
+  {% elif trecho.modo == 'trechos' %}
   <div class="dou-trecho__lista">
     {% for item in trecho.itens %}
     <div class="dou-trecho__item">

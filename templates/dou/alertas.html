@@ -272,6 +272,11 @@
           Carregando…
         </div>
       </div>
+      {# Rodapé fixo: com `modal-dialog-scrollable` só o corpo rola, e a tabela
+         de um edital passa de cem linhas — deixar as ações no fim do conteúdo
+         obrigaria a rolar tudo para chegar nelas. O JS move para cá o bloco de
+         ações que veio no fragmento. #}
+      <div class="modal-footer py-2 justify-content-start" id="modal-trecho-pe"></div>
     </div>
   </div>
 </div>
@@ -284,10 +289,20 @@
   (function () {
     const modalEl = document.getElementById('modal-trecho');
     const corpo = document.getElementById('modal-trecho-corpo');
+    const rodape = document.getElementById('modal-trecho-pe');
     if (!modalEl || !corpo) return;
 
     const carregando = corpo.innerHTML;
     const modal = new bootstrap.Modal(modalEl);
+
+    // As ações vêm no fragmento (dependem do alerta) mas moram no rodapé fixo,
+    // fora da área que rola.
+    function moverAcoes() {
+      const pe = corpo.querySelector('.dou-trecho__pe');
+      rodape.replaceChildren();
+      if (pe) rodape.appendChild(pe);
+      rodape.hidden = !pe;
+    }
 
     // Delegação no container: a lista é repaginada por link, e um listener por
     // botão teria de ser religado a cada troca de página.
@@ -296,6 +311,8 @@
       if (!botao) return;
 
       corpo.innerHTML = carregando;
+      rodape.replaceChildren();
+      rodape.hidden = true;
       modal.show();
 
       fetch(botao.dataset.url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -303,7 +320,11 @@
           if (!resposta.ok) throw new Error(resposta.status);
           return resposta.text();
         })
-        .then(function (html) { corpo.innerHTML = html; })
+        .then(function (html) {
+          corpo.innerHTML = html;
+          corpo.scrollTop = 0;
+          moverAcoes();
+        })
         .catch(function () {
           corpo.innerHTML =
             '<p class="text-danger mb-0">Não foi possível carregar o trecho. ' +

@@ -1237,15 +1237,37 @@
   overflow-wrap: anywhere;
 }
 
-/* Inteiro teor do edital-tabela: rola dentro do próprio bloco para o modal não
-   virar uma página de 9 mil caracteres. */
+/* Inteiro teor em texto puro (matéria sem texto_html). Também sem rolagem
+   própria — quem rola é o corpo do modal, pelo mesmo motivo. */
 .dou-trecho__texto--inteiro {
-  max-height: 55vh;
-  overflow-y: auto;
   border: 1px solid var(--bs-border-color);
   border-radius: 10px;
   padding: .75rem;
   background: var(--bs-body-bg);
+}
+
+/* Barra de rolagem sempre visível no modal: com a barra de sobreposição do
+   sistema não dá para saber que a tabela do edital continua abaixo, e o
+   conteúdo aqui costuma passar de cem linhas. */
+#modal-trecho .modal-body {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bs-secondary-color) transparent;
+}
+
+#modal-trecho .modal-body::-webkit-scrollbar {
+  width: 12px;
+}
+
+#modal-trecho .modal-body::-webkit-scrollbar-thumb {
+  background: var(--bs-secondary-color);
+  border-radius: 6px;
+  border: 3px solid var(--bs-body-bg);
+}
+
+#modal-trecho .modal-body::-webkit-scrollbar-track {
+  background: var(--bs-secondary-bg);
+  border-radius: 6px;
 }
 
 .dou-trecho mark {
@@ -1260,10 +1282,42 @@
   margin: 0;
 }
 
+/* No modal este bloco é movido para o rodapé fixo, que já tem borda própria —
+   por isso a borda e o respiro ficam só quando ele está no fluxo do corpo. */
 .dou-trecho__pe {
   display: flex;
   flex-wrap: wrap;
   gap: .4rem;
   padding-top: .35rem;
   border-top: 1px solid var(--bs-border-color);
+}
+
+.modal-footer > .dou-trecho__pe {
+  border-top: 0;
+  padding-top: 0;
+  width: 100%;
+}
+
+/* O bloco recortado do inteiro teor, dentro do modal. Herda o estilo de
+   tabela e parágrafo de .dou-texto — é o mesmo da página da matéria, que é
+   justamente o ponto.
+
+   Sem rolagem própria: o modal já é `modal-dialog-scrollable`, e um segundo
+   container rolável dentro dele escondia a barra — o navegador desenhava a
+   barra de sobreposição do container interno, que só aparece com o ponteiro em
+   cima. Numa tabela de 103 linhas, ninguém via que havia mais abaixo. Uma área
+   de rolagem só, a do corpo do modal. */
+.dou-trecho__html {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 10px;
+  padding: .75rem;
+  font-size: .88rem;
+}
+
+.dou-trecho__html > table:first-child {
+  margin-top: 0;
+}
+
+.dou-trecho__html p:last-child {
+  margin-bottom: 0;
 }

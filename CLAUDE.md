@@ -328,16 +328,25 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
 - **O volume é espasmódico**: 32 dos 41 alertas caíram num único dia e os
   outros seis tiveram de 1 a 3; 28 dos 41 vieram do Ministério da Previdência
   Social, em DO3. Qualquer digest ou tela nova tem de aguentar os dois extremos.
-- **"Ver trecho" tem dois modos** (`trechos_do_alerta`): recorte em volta de
-  cada CNPJ, ou o **inteiro teor marcado** quando os recortes somariam ≥80% do
-  texto. O segundo é o edital-tabela do CRPS — 103 CNPJs lado a lado em 9 mil
-  caracteres, onde as janelas se sobrepõem e recortar devolveria mais texto que
-  o original. O fragmento é buscado por `fetch` num modal único da página: os
-  30 inteiros teores de uma página passariam de 60 KB cada. `marcar_identificadores`
-  (em `dou_search_service`) marca todas as ocorrências numa varredura, ordenando
-  os achados para não aninhar marca dentro de marca — e o escape vem do
-  `destacar`, **nunca depois**, porque o texto do DOU tem `<` de verdade e o
-  fragmento entra no template com `| safe`.
+- **"Ver trecho" recorta o HTML, não o texto** (`trechos_do_alerta`): pega os
+  **blocos** do `texto_html` que citam o cliente — `<tr>` na tabela, `<p>` na
+  prosa — sanitiza (`sanitizar_html`) e marca (`grifar_html`), a mesma dupla da
+  página da matéria. 28 das 41 matérias com alerta têm tabela, e a linha do
+  edital do CRPS traz processo, ano, CNPJ, instância e o **resultado**
+  ("Indeferimento Total") — em texto corrido isso vira paredão. O bloco é o
+  `<tr>`, nunca o `<p>` da célula, senão sairia só o número sem as colunas que
+  interessam; `<tr>` solto é embrulhado em `<table>`, senão não renderiza. O
+  recorte em texto puro (`trecho_do_identificador`) ficou de reserva, para
+  matéria capturada sem `texto_html`.
+- O fragmento é buscado por `fetch` num modal único da página — os 30 inteiros
+  teores de uma listagem passariam de 60 KB cada. **Uma área de rolagem só**: o
+  modal é `modal-dialog-scrollable` e um segundo container rolável dentro dele
+  escondia a barra (o navegador desenha a de sobreposição do container interno,
+  que só aparece com o ponteiro em cima). As ações vêm no fragmento e o JS as
+  move para o `.modal-footer` fixo — no fim do corpo, uma tabela de 103 linhas
+  as empurraria para fora do alcance.
+- O escape vem do `destacar`/`grifar_html`, **nunca depois**: o texto do DOU tem
+  `<` de verdade e o fragmento entra no template com `| safe`.
 
 ### Timezone
 

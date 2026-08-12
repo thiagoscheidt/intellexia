@@ -25,12 +25,14 @@ import logging
 from collections import defaultdict
 from datetime import datetime
 
+from bs4 import BeautifulSoup
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.models import (db, Client, DouArticle, DouClientAlert,
                         DouClientAlertMatch)
 from app.services import dou_search_service as busca_service
+from app.services.dou_xml_parser import grifar_html, sanitizar_html
 
 logger = logging.getLogger(__name__)
 
@@ -314,53 +316,139 @@ def cnpjs_invalidos(law_firm_id: int):
 
 # -------------------------------------------------------------------- trecho
 
-# Acima disto os trechos passam a somar mais que o próprio texto e não vale
-# recortar: é o caso do edital-tabela do CRPS, onde 103 CNPJs ficam lado a lado
-# em 9 mil caracteres e as janelas se sobrepõem quase inteiras.
-LIMIAR_TEXTO_INTEIRO = 0.8
+# Elementos que valem como bloco ao recortar o HTML. `tr` na frente porque num
+# edital-tabela o CNPJ está dentro de <td><p>, e parar no <p> devolveria só a
+# célula do número — sem processo, instância nem resultado, que é o que o
+# advogado veio ver.
+_BLOCOS_HTML = ('tr', 'li', 'p')
 
 
-def trechos_do_alerta(alerta, maximo: int = 40) -> dict:
+def _bloco_do_no(no):
+    """Sobe do nó de texto até o bloco que dá contexto ao número."""
+    linha, menor = None, None
+    for pai in no.parents:
+        nome = getattr(pai, 'name', None)
+        if nome == 'tr':
+            linha = pai                       # a linha inteira vence a célula
+        elif nome in ('li', 'p') and menor is None:
+            menor = pai
+    return linha or menor
+
+
+def _blocos_com_cnpj(sopa, cnpjs):
+    """Blocos do HTML que citam algum dos CNPJs, em ordem de documento."""
+    alvos = set(cnpjs)
+    marcados = set()
+    for no in sopa.find_all(string=True):
+        achados = busca_service.extrair_cnpjs(str(no))
+        if achados and not alvos.isdisjoint(achados):
+            bloco = _bloco_do_no(no)
+            if bloco is not None:
+                marcados.add(id(bloco))
+    if not marcados:
+        return []
+    # find_all devolve em ordem de documento e não repete o <p> aninhado num
+    # <tr> já marcado: só o id do bloco escolhido está no conjunto.
+    return [el for el in sopa.find_all(_BLOCOS_HTML) if id(el) in marcados]
+
+
+def _montar_html(blocos) -> str:
+    """Junta os blocos num HTML renderizável, preservando a ordem.
+
+    ``<tr>`` solto não vira tabela: sem o ``<table>`` em volta o navegador
+    descarta a marcação e a linha sai como texto corrido. Corridas de linhas
+    consecutivas viram uma tabela só, para o edital não sair fatiado em uma
+    tabela por linha.
+    """
+    partes, linhas = [], []
+    for bloco in blocos:
+        if getattr(bloco, 'name', None) == 'tr':
+            linhas.append(str(bloco))
+            continue
+        if linhas:
+            partes.append('<table>' + ''.join(linhas) + '</table>')
+            linhas = []
+        partes.append(str(bloco))
+    if linhas:
+        partes.append('<table>' + ''.join(linhas) + '</table>')
+    return ''.join(partes)
+
+
+def _termos_de_grifo(cnpjs):
+    """O CNPJ nas duas grafias: o DOU escreve pontuado, o banco guarda cru."""
+    termos = []
+    for digitos in cnpjs:
+        termos.append(formatar_cnpj(digitos))
+        termos.append(digitos)
+    return termos
+
+
+def trechos_do_alerta(alerta, maximo: int = 200) -> dict:
     """O que o modal "ver trecho" mostra.
 
-    Devolve ``{'modo', 'itens', 'restantes', 'inteiro'}``:
+    Devolve ``{'modo', 'html', 'blocos', 'restantes', 'itens'}``:
 
-    * ``modo='trechos'`` — um recorte por CNPJ, em volta da citação. É o caso
-      comum: a matéria fala do cliente numa frase, e a frase é o que interessa.
-    * ``modo='inteiro'`` — o texto todo com as ocorrências marcadas, quando os
-      recortes somariam quase o texto inteiro.
+    * ``modo='html'`` — os blocos do inteiro teor que citam o cliente, com a
+      formatação original. É o caminho normal: 28 das 41 matérias com alerta
+      têm tabela, e a linha do edital do CRPS traz processo, ano, CNPJ,
+      instância e o resultado ("Indeferimento Total") — em texto corrido isso
+      vira um paredão ilegível.
+    * ``modo='trechos'`` — recorte de texto puro em volta de cada citação.
+      Reserva para matéria capturada sem ``texto_html``.
 
-    O ``<mark>`` sai daqui já escapado por ``destacar``: o texto do DOU tem
-    ``<`` de verdade, e inserir a tag antes de escapar deixaria o conteúdo
-    virar elemento na página.
+    ``maximo`` é teto de blocos, não meta: o maior edital medido tem 103 linhas
+    e cabe inteiro (~34 KB numa busca sob demanda). Cortar em 60 escondia a
+    decisão de 43 estabelecimentos do cliente, que é justamente o que ele veio
+    ler.
+
+    Sanitizar antes de marcar, sempre: o conteúdo vem do documento publicado,
+    e ``grifar_html`` marca, não protege.
     """
     artigo = alerta.article
+    cnpjs = [m.cnpj for m in alerta.matches]
+
+    bruto = (artigo.texto_html or '') if artigo else ''
+    if bruto.strip():
+        sopa = BeautifulSoup(sanitizar_html(bruto), 'html.parser')
+        blocos = _blocos_com_cnpj(sopa, cnpjs)
+        if blocos:
+            escolhidos = blocos[:maximo]
+            return {
+                'modo': 'html',
+                'html': grifar_html(_montar_html(escolhidos),
+                                    _termos_de_grifo(cnpjs)),
+                'blocos': len(escolhidos),
+                'restantes': max(0, len(blocos) - len(escolhidos)),
+                'itens': [],
+            }
+
+    # Sem HTML — ou com HTML onde o número não caiu em bloco nenhum — vale o
+    # recorte de texto puro, que é o que sempre existe.
     texto = (artigo.texto or '') if artigo else ''
     if not texto:
-        return {'modo': 'vazio', 'itens': [], 'restantes': 0, 'inteiro': None}
+        return {'modo': 'vazio', 'html': None, 'blocos': 0, 'restantes': 0,
+                'itens': []}
 
     itens = []
     for m in alerta.matches_ordenados:
         recorte = busca_service.trecho_do_identificador(texto, m.cnpj)
-        if not recorte:
-            continue
-        itens.append({
-            'cnpj': m.cnpj,
-            'cnpj_formatado': m.cnpj_formatado,
-            'cliente': m.client,
-            'tipo': m.match_type,
-            'html': busca_service.destacar(recorte),
-        })
+        if recorte:
+            itens.append({
+                'cnpj': m.cnpj,
+                'cnpj_formatado': m.cnpj_formatado,
+                'cliente': m.client,
+                'tipo': m.match_type,
+                'html': busca_service.destacar(recorte),
+            })
 
-    soma = sum(len(i['html']) for i in itens)
-    if not itens or soma >= len(texto) * LIMIAR_TEXTO_INTEIRO:
-        marcado = busca_service.marcar_identificadores(
-            texto, [m.cnpj for m in alerta.matches])
-        return {'modo': 'inteiro', 'itens': [], 'restantes': 0,
-                'inteiro': busca_service.destacar(marcado)}
+    if not itens:
+        return {'modo': 'inteiro', 'html': None, 'blocos': 0, 'restantes': 0,
+                'itens': [],
+                'inteiro': busca_service.destacar(
+                    busca_service.marcar_identificadores(texto, cnpjs))}
 
-    return {'modo': 'trechos', 'itens': itens[:maximo],
-            'restantes': max(0, len(itens) - maximo), 'inteiro': None}
+    return {'modo': 'trechos', 'html': None, 'blocos': 0,
+            'itens': itens[:maximo], 'restantes': max(0, len(itens) - maximo)}
 
 
 # -------------------------------------------------------------------- ações
