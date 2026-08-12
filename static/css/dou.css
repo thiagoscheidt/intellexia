@@ -20,6 +20,8 @@
   --dou-s2: #3f8f83;
   --dou-s3: #b07d33;
   --dou-trilho: var(--bs-secondary-bg);
+  --dou-fap: #c62828;
+  --dou-fap-ink: #fff;
 }
 
 [data-bs-theme="dark"] .dou-page {
@@ -27,6 +29,8 @@
   --dou-s2: #5fb3a5;
   --dou-s3: #d3a259;
   --dou-trilho: rgba(255, 255, 255, .08);
+  --dou-fap: #e86a6a;
+  --dou-fap-ink: #1a1010;
 }
 
 /* Linha de metadados do acervo — período coberto, contagens. Uma linha
@@ -1361,34 +1365,39 @@
   margin-top: .45rem;
 }
 
-/* Tag do tipo do alerta. Sólida e acromática de propósito: nesta linha a cor
-   pertence ao desfecho (verde no deferimento, cinza no resto), e uma tag
-   colorida competiria com ela. Invertida em relação ao fundo, funciona nos
-   dois temas sem precisar de par de tokens. */
-/* Escopado sob .dou-page de propósito: o app declara `[data-bs-theme="dark"] a`
-   com especificidade (0,1,1), que vencia o `color` de uma classe só — a tag
-   saía branca com texto lavanda no tema escuro, ilegível. */
+/* Badge do tipo do alerta: pílula vermelha, a cor de urgência do app. Vem
+   antes do título, que é onde o olho cai na linha.
+
+   O par de tokens existe porque um vermelho só não serve nos dois temas: no
+   escuro ele precisa clarear para não sumir no fundo, e aí o texto branco cai
+   para 3,8:1 — abaixo do mínimo de 4,5 para texto pequeno. Fundo claro leva
+   texto branco; fundo vermelho-claro leva texto quase preto.
+
+   Escopado sob .dou-page de propósito: o app declara `[data-bs-theme="dark"] a`
+   com especificidade (0,1,1), que vencia o `color` de uma classe só — a versão
+   anterior saía com texto lavanda no tema escuro, ilegível. */
 .dou-page .dou-tag-fap {
   display: inline-flex;
   align-items: center;
   gap: .25rem;
   vertical-align: 2px;
-  margin-right: .4rem;
-  padding: .1rem .45rem;
-  border-radius: 5px;
-  background: var(--bs-emphasis-color);
-  color: var(--bs-body-bg);
+  margin-right: .45rem;
+  padding: .12rem .55rem;
+  border-radius: 999px;
+  background: var(--dou-fap);
+  color: var(--dou-fap-ink);
   font-size: .68rem;
-  font-weight: 800;
-  letter-spacing: .06em;
+  font-weight: 700;
+  letter-spacing: .05em;
   text-decoration: none;
-  transition: opacity .15s ease;
+  white-space: nowrap;
+  transition: filter .15s ease;
 }
 
 .dou-page .dou-tag-fap:hover,
 .dou-page .dou-tag-fap:focus-visible {
-  color: var(--bs-body-bg);
-  opacity: .8;
+  color: var(--dou-fap-ink);
+  filter: brightness(1.12);
 }
 
 /* Deferimento é ganho de causa e indeferimento é prazo para recorrer: a cor
