@@ -4129,6 +4129,21 @@ class DouClientAlert(db.Model):
         ordenados = self.matches_ordenados
         return ordenados[0].cnpj if ordenados else None
 
+    @property
+    def pagina_no_diario(self):
+        """A página da folha assinada, ou None quando não dá para abri-la.
+
+        Precisa das duas coisas: a matéria dizer em que página está e a seção
+        ter o PDF assinado em disco. Sem uma delas o leitor devolveria 404 —
+        as seções extras (DO*E) nunca têm PDF próprio, e a edição do dia às
+        vezes ainda não teve o dele baixado.
+        """
+        artigo = self.article
+        if not (artigo and artigo.pagina_num):
+            return None
+        edicao = artigo.edition
+        return artigo.pagina_num if (edicao and edicao.pdf_disponivel) else None
+
     def __repr__(self):
         return (f'<DouClientAlert firm={self.law_firm_id} art={self.article_id} '
                 f'{self.match_type} x{self.clients_count}>')

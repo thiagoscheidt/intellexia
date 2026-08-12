@@ -238,6 +238,31 @@ def test_tela():
         check('o link da matéria leva o CNPJ para grifar',
               '/dou/materia/' in html and 'q=' in html)
 
+        # "Ver no Diário" abre a folha assinada. O caminho alternativo (texto)
+        # não aparece no acervo atual — as 41 matérias com alerta têm PDF —,
+        # então a regra é exercitada direto na propriedade.
+        import re as _re
+        from types import SimpleNamespace as _NS
+        pagina_de = DouClientAlert.pagina_no_diario.fget
+        check('sem página registrada não há folha para abrir',
+              pagina_de(_NS(article=_NS(pagina_num=None, edition=None))) is None)
+        check('sem PDF assinado na seção também não',
+              pagina_de(_NS(article=_NS(pagina_num=5,
+                                        edition=_NS(pdf_disponivel=False)))) is None)
+        check('com os dois, a folha é a página da matéria',
+              pagina_de(_NS(article=_NS(pagina_num=5,
+                                        edition=_NS(pdf_disponivel=True)))) == 5)
+        check('sem matéria não quebra',
+              pagina_de(_NS(article=None)) is None)
+
+        para_folha = _re.findall(
+            r'href="(/dou/edicao/[\d-]+/pagina/\d+[^"]*)"[^>]*>\s*Ver no Di', html)
+        check('"Ver no Diário" leva à folha assinada, não ao texto',
+              bool(para_folha), 'nenhum botão apontando para o leitor')
+        if para_folha:
+            check('e o endereço da folha responde',
+                  c.get(para_folha[0]).status_code == 200, para_folha[0])
+
         check('filtro por tipo responde',
               c.get('/dou/alertas?tipo=exato').status_code == 200)
         check('filtro por seção responde',

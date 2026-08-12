@@ -178,11 +178,22 @@
         {% if a.match_type == 'raiz' %}
         <span class="dou-selo dou-selo--filial" title="Nenhum CNPJ cadastrado bate; o que casou é outro estabelecimento do mesmo grupo">outra filial</span>
         {% endif %}
+        {# "No Diário" é a folha assinada mesmo. Sem PDF da seção — ou sem
+           página registrada na matéria — o leitor daria 404, então a saída é
+           o inteiro teor em texto. #}
+        {% if a.pagina_no_diario %}
         <a class="btn btn-outline-primary btn-sm"
-           href="{{ url_for('dou.materia', article_id=a.article_id, q=a.cnpj_destaque or none) }}"
-           title="Abrir a matéria com o CNPJ grifado no texto e na folha">
+           href="{{ url_for('dou.leitor', data_str=a.pub_date.isoformat(), numero=a.pagina_no_diario, secao=a.pub_name) }}"
+           title="Abrir a folha assinada da página {{ a.pagina_no_diario }}, em tela cheia">
           Ver no Diário
         </a>
+        {% else %}
+        <a class="btn btn-outline-primary btn-sm"
+           href="{{ url_for('dou.materia', article_id=a.article_id, q=a.cnpj_destaque or none) }}"
+           title="Esta seção não tem PDF assinado; abre o inteiro teor em texto">
+          Ver no Diário
+        </a>
+        {% endif %}
         <button type="button" class="btn btn-outline-secondary btn-sm dou-ver-trecho"
                 data-url="{{ url_for('dou.alerta_trecho', alerta_id=a.id) }}"
                 title="Ler aqui mesmo o pedaço da matéria que cita o cliente">

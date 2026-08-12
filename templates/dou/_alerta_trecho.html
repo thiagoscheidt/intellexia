@@ -72,8 +72,8 @@
        class="btn btn-outline-primary btn-sm">
       <i class="bi bi-file-text me-1"></i>Abrir a matéria inteira
     </a>
-    {% if alerta.article and alerta.article.pagina_num and alerta.pub_date %}
-    <a href="{{ url_for('dou.leitor', data_str=alerta.pub_date.isoformat(), numero=alerta.article.pagina_num, secao=alerta.pub_name) }}"
+    {% if alerta.pagina_no_diario %}
+    <a href="{{ url_for('dou.leitor', data_str=alerta.pub_date.isoformat(), numero=alerta.pagina_no_diario, secao=alerta.pub_name) }}"
        class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-journal-text me-1"></i>Ver a folha assinada
     </a>

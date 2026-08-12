@@ -269,8 +269,10 @@ def listar(law_firm_id: int, status=None, tipo=None, secao=None,
     dividem a mesma ``pub_date``, e empate no critério faz LIMIT/OFFSET pular e
     repetir linha sem avisar — a mesma regra da paginação das tools do MCP.
     """
+    # A edição vem junto porque cada linha decide o destino de "Ver no Diário"
+    # pelo `pdf_disponivel` dela; sem isto seriam 30 consultas por página.
     query = _base(law_firm_id).options(
-        joinedload(DouClientAlert.article),
+        joinedload(DouClientAlert.article).joinedload(DouArticle.edition),
         joinedload(DouClientAlert.matches).joinedload(DouClientAlertMatch.client),
     )
     if status:
