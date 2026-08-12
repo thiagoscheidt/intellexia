@@ -606,6 +606,14 @@ def test_resultado_fap():
         check('favorável e contrário têm cores diferentes',
               'dou-resultado--sim' in html and 'dou-resultado--nao' in html)
 
+        # A tag de tipo: só nas linhas de FAP, e clicável para filtrar
+        check('a tag FAP aparece nas linhas com decisão',
+              html.count('dou-tag-fap') == html.count('dou-alerta--resultado'),
+              f"{html.count('dou-tag-fap')} tags para "
+              f"{html.count('dou-alerta--resultado')} linhas com decisão")
+        check('a tag leva ao filtro de resultado',
+              f'fap={alertas.FAP_QUALQUER}' in html)
+
         check('o filtro de resultado está na barra',
               'name="fap"' in html and 'Resultado FAP' in html)
         check('e oferece os recortes e as decisões exatas',

@@ -174,6 +174,16 @@
       </div>
 
       <div class="dou-alerta__corpo">
+        {# A tag do tipo vem antes do título, que é onde o olho cai. Sólida e
+           sem matiz de propósito: a cor desta linha é do desfecho (verde para
+           deferimento, cinza para o resto), e uma tag colorida disputaria com
+           ela. Clicar filtra, como o tile. #}
+        {% if a.tem_resultado %}
+        <a class="dou-tag-fap" href="{{ url_for('dou.alertas', status=f_status, fap=FAP_QUALQUER) }}"
+           title="Esta matéria julga recurso FAP de estabelecimento do cliente — clique para ver só estas">
+          <i class="bi bi-gavel"></i>FAP
+        </a>
+        {% endif %}
         <a class="dou-alerta__ident {{ 'dou-alerta__ident--vazio' if not (a.article and a.article.identifica) }}"
            href="{{ url_for('dou.materia', article_id=a.article_id, q=a.cnpj_destaque or none) }}">
           {{ a.article.identifica if a.article and a.article.identifica
@@ -212,9 +222,6 @@
            um por um não responderia nada. #}
         {% if a.tem_resultado %}
         <div class="dou-alerta__resultados">
-          <span class="dou-resultado-rot">
-            <i class="bi bi-gavel"></i>Resultado FAP
-          </span>
           {% for decisao, quantos, favoravel in a.resultados %}
           <span class="dou-resultado {{ 'dou-resultado--sim' if favoravel else 'dou-resultado--nao' }}"
                 title="{{ quantos }} estabelecimento(s) com {{ decisao }}">

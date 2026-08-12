@@ -367,7 +367,12 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
   ganhamos), `indeferimento` (prazo correndo) e a **decisão exata**, oferecida
   só quando existe na carteira. `indeferimento` é `NOT ilike('deferimento%')`
   e não `ilike('indeferimento%')`: diligência e prejudicado também não são
-  ganho de causa.
+  ganho de causa. A linha leva a **tag `FAP`** antes do título — sólida e
+  **acromática** de propósito, porque nessa linha a cor pertence ao desfecho
+  (verde no deferimento, cinza no resto) e uma tag colorida competiria com ela;
+  clicar nela filtra. A regra é escopada em `.dou-page .dou-tag-fap`: o app
+  declara `[data-bs-theme="dark"] a` com especificidade (0,1,1), que vencia o
+  `color` de uma classe só e deixava a tag branca com texto lavanda no escuro.
   O `texto_html` só é lido para matéria que já casou, e só quando tem `<table` —
   é LONGTEXT, e são ~8 matérias por dia contra as milhares da edição.
 
