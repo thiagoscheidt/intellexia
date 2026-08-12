@@ -152,10 +152,17 @@
             </p>
 
             <p style="margin:0 0 18px 0;color:{{ SUAVE }};font-size:13px;">
-              {{ digest.totais.vencendo }} procuração(ões) exigindo atenção nos próximos
-              {{ digest.janela_dias }} dias
-              {%- if digest.totais.novas %} · {{ digest.totais.novas }} cadastrada(s) no período{% endif %}.
+              {%- if digest.totais.novas -%}
+                {{ digest.totais.novas }} procuração(ões) cadastrada(s) no período ·
+              {%- endif %}
+              {{ digest.totais.vencendo }} exigindo atenção nos próximos
+              {{ digest.janela_dias }} dias.
             </p>
+
+            {# A novidade vem antes da cobrança: é o que se lê primeiro. #}
+            {{ bloco('🆕 Últimas procurações cadastradas', digest.ultimas,
+                     digest.ultimas|length, 0,
+                     FUNDO, TEAL, BORDA, BORDA, TEXTO, SUAVE, false) }}
 
             {{ bloco('⛔ Vencidas e ainda sem renovação', digest.vencidas,
                      digest.totais.vencidas, digest.restantes.vencidas,
@@ -168,10 +175,6 @@
             {{ bloco('🟠 Vencem em 8 a ' ~ digest.janela_dias ~ ' dias', digest.vence_30,
                      digest.totais.vence_30, digest.restantes.vence_30,
                      AMBAR_BG, AMBAR_TX, AMBAR_BD, BORDA, TEXTO, SUAVE, true) }}
-
-            {{ bloco('🆕 Últimas procurações cadastradas', digest.ultimas,
-                     digest.ultimas|length, 0,
-                     FUNDO, TEAL, BORDA, BORDA, TEXTO, SUAVE, false) }}
 
             {% if not digest.totais.total and not digest.ultimas %}
             <div style="background:{{ FUNDO }};border:1px solid {{ BORDA }};border-radius:6px;padding:12px;color:{{ SUAVE }};font-size:13px;">
