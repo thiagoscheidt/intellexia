@@ -221,13 +221,15 @@
       <!--begin::User Menu Dropdown-->
       <li class="nav-item dropdown user-menu">
         <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown">
-          {{ user_avatar(32, 16, 'user-image text-bg-primary fw-semibold') }}
+          {{ user_avatar(session.get('user_picture'), session.get('user_name'), 32, 16,
+          'user-image text-bg-primary fw-semibold') }}
           <span class="d-none d-md-inline">{{ session.get('user_name', 'Usuário') }}</span>
         </a>
         <ul class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
           <!--begin::User Image-->
           <li class="user-header text-bg-primary">
-            {{ user_avatar(90, 32, 'bg-white text-primary fw-bold') }}
+            {{ user_avatar(session.get('user_picture'), session.get('user_name'), 90, 32,
+            'bg-white text-primary fw-bold') }}
             <p>
               {{ session.get('user_name', 'Usuário') }}
               <small>{{ session.get('user_email', '') }}</small>

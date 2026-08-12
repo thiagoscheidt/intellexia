@@ -156,6 +156,7 @@ def get_users_activity(law_firm_id: int) -> list[dict]:
             'id': user.id,
             'name': user.name,
             'email': user.email,
+            'picture': user.google_picture_url,
             'role': user.role,
             'is_active': user.is_active,
             'last_login': user.last_login,

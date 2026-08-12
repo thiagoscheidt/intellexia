@@ -1,4 +1,5 @@
 {% extends 'layout/base.html' %}
+{% from 'partials/user_avatar.html' import user_avatar %}
 
 {% block title %}Administração - Atividade de Usuários{% endblock %}
 {% block page_title %}Administração | Atividade de Usuários{% endblock %}
@@ -102,8 +103,13 @@
                             {% for u in users_activity %}
                             <tr>
                                 <td>
-                                    <div class="fw-semibold">{{ u.name }}</div>
-                                    <small class="text-muted">{{ u.email }}</small>
+                                    <div class="d-flex align-items-center gap-2">
+                                        {{ user_avatar(u.picture, u.name, 36, 15, seed=u.id) }}
+                                        <div>
+                                            <div class="fw-semibold">{{ u.name }}</div>
+                                            <small class="text-muted">{{ u.email }}</small>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td><span class="badge bg-secondary text-uppercase">{{ u.role }}</span></td>
                                 <td>

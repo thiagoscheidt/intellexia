@@ -18,7 +18,8 @@ from flask import render_template, render_template_string, session
 
 from main import app
 from app.blueprints import auth
-from app.models import db, LawFirm, User
+from app.models import db, LawFirm, User, UserPageVisit
+from app.services import access_audit_service
 from app.services.google_oauth import sanitize_picture_url
 
 FOTO = 'https://lh3.googleusercontent.com/a/ACg8ocKexemplo=s96-c'
@@ -73,7 +74,7 @@ def _render_macro(picture):
             session['user_picture'] = picture
         return render_template_string(
             "{% from 'partials/user_avatar.html' import user_avatar %}"
-            "{{ user_avatar(32, 14) }}"
+            "{{ user_avatar(session.get('user_picture'), session.get('user_name'), 32, 14) }}"
         )
 
 
@@ -154,6 +155,15 @@ def _setup_usuario():
     return firm, user
 
 
+def _limpar(firm, user):
+    """Remove as fixtures. As visitas saem antes: o middleware grava uma linha em
+    user_page_visits a cada GET das telas, e a FK barraria o delete do usuário."""
+    UserPageVisit.query.filter_by(user_id=user.id).delete(synchronize_session=False)
+    db.session.delete(user)
+    db.session.delete(firm)
+    db.session.commit()
+
+
 def _callback_com_claims(claims):
     """Roda o callback do Google com um client falso e devolve a sessão."""
     original = auth.google_client
@@ -201,9 +211,7 @@ def test_callback_grava_a_foto():
             check('URL de host estranho é descartada',
                   gravado.google_picture_url is None, repr(gravado.google_picture_url))
         finally:
-            db.session.delete(user)
-            db.session.delete(firm)
-            db.session.commit()
+            _limpar(user=user, firm=firm)
 
 
 def test_login_por_senha_mantem_a_foto():
@@ -218,9 +226,91 @@ def test_login_por_senha_mantem_a_foto():
                 check('a sessão do login por senha também traz a foto',
                       session.get('user_picture') == FOTO, repr(session.get('user_picture')))
         finally:
-            db.session.delete(user)
-            db.session.delete(firm)
-            db.session.commit()
+            _limpar(user=user, firm=firm)
+
+
+def _render_para_outro(picture, nome, seed=None):
+    """Avatar de outra pessoa: nada vem da sessão."""
+    with app.test_request_context('/'):
+        return render_template_string(
+            "{% from 'partials/user_avatar.html' import user_avatar %}"
+            "{{ user_avatar(foto, nome, 32, 14, seed=semente) }}",
+            foto=picture, nome=nome, semente=seed,
+        )
+
+
+def test_avatar_de_outro_usuario():
+    print('\n8. Avatar de outra pessoa (listas administrativas)')
+    html = _render_para_outro(FOTO, 'Marina Alves')
+    check('usa a foto recebida, não a da sessão', f'src="{FOTO}"' in html, html)
+    check('a inicial vem do nome recebido', re.search(r'>\s*M\s*<', html) is not None, html)
+
+    html = _render_para_outro(None, 'Marina Alves')
+    check('sem foto, mostra a inicial do nome', re.search(r'>\s*M\s*<', html) is not None, html)
+    check('sem foto, não renderiza <img>', '<img' not in html, html)
+
+    vazio = _render_para_outro(None, '')
+    check('nome vazio não quebra a macro', re.search(r'>\s*U\s*<', vazio) is not None, vazio)
+
+
+def test_cor_da_inicial_por_usuario():
+    print('\n9. Cor da inicial é estável por usuário')
+    cores = {seed: _render_para_outro(None, 'Marina', seed=seed) for seed in (7, 8, 9)}
+    check('mesma semente devolve sempre a mesma cor',
+          _render_para_outro(None, 'Marina', seed=7) == cores[7])
+    classes = [re.search(r'text-bg-([a-z]+)', html).group(1)
+               for html in cores.values() if re.search(r'text-bg-([a-z]+)', html)]
+    check('cada semente pinta uma cor da paleta', len(classes) == 3, str(classes))
+    check('sementes vizinhas não caem na mesma cor', len(set(classes)) == 3, str(classes))
+    check('sem semente, a paleta vem de extra_classes',
+          'text-bg-' not in _render_para_outro(None, 'Marina'))
+
+
+def test_servico_expoe_a_foto():
+    print('\n10. get_users_activity expõe a foto')
+    with app.app_context():
+        firm, user = _setup_usuario()
+        user.google_picture_url = FOTO
+        db.session.commit()
+        try:
+            linhas = access_audit_service.get_users_activity(firm.id)
+            linha = next((l for l in linhas if l['id'] == user.id), None)
+            check('o usuário aparece na atividade', linha is not None)
+            check('o dict traz a foto', (linha or {}).get('picture') == FOTO,
+                  repr((linha or {}).get('picture')))
+        finally:
+            _limpar(user=user, firm=firm)
+
+
+def test_telas_administrativas():
+    print('\n11. Telas de Usuários e de Atividade mostram o avatar')
+    with app.app_context():
+        firm, user = _setup_usuario()
+        user.google_picture_url = FOTO
+        db.session.commit()
+        firm_id, user_id, role = firm.id, user.id, user.role
+        perms = user.get_module_permissions()
+        try:
+            with app.test_client() as c:
+                with c.session_transaction() as sessao:
+                    sessao.update({'user_id': user_id, 'law_firm_id': firm_id,
+                                   'user_role': role, 'user_module_permissions': perms,
+                                   'user_name': 'Thiago Teste', 'user_picture': FOTO})
+                usuarios = c.get('/admin/users/')
+                auditoria = c.get('/admin/access-audit/')
+
+            check('Usuários responde 200', usuarios.status_code == 200, str(usuarios.status_code))
+            corpo = usuarios.get_data(as_text=True)
+            check('Usuários mostra a foto na linha', corpo.count(f'src="{FOTO}"') >= 2,
+                  f'ocorrências: {corpo.count(chr(34) + FOTO + chr(34))} (header + linha)')
+
+            check('Atividade responde 200', auditoria.status_code == 200,
+                  str(auditoria.status_code))
+            corpo = auditoria.get_data(as_text=True)
+            check('Atividade mostra a foto na linha', corpo.count(f'src="{FOTO}"') >= 2,
+                  f'ocorrências: {corpo.count(chr(34) + FOTO + chr(34))} (header + linha)')
+        finally:
+            _limpar(user=user, firm=firm)
 
 
 def main():
@@ -234,6 +324,10 @@ def main():
     test_header_usa_a_macro()
     test_callback_grava_a_foto()
     test_login_por_senha_mantem_a_foto()
+    test_avatar_de_outro_usuario()
+    test_cor_da_inicial_por_usuario()
+    test_servico_expoe_a_foto()
+    test_telas_administrativas()
     print('\n' + '=' * 60)
     if _falhas:
         print(f'❌ {len(_falhas)} falha(s): ' + ', '.join(_falhas))

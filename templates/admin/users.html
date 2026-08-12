@@ -1,4 +1,5 @@
 {% extends 'layout/base.html' %}
+{% from 'partials/user_avatar.html' import user_avatar %}
 
 {% block title %}Administração - Usuários{% endblock %}
 {% block page_title %}Administração | Usuários{% endblock %}
@@ -39,7 +40,12 @@
                         <tbody>
                             {% for user in users %}
                             <tr>
-                                <td>{{ user.name }}</td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        {{ user_avatar(user.google_picture_url, user.name, 32, 14, seed=user.id) }}
+                                        <span>{{ user.name }}</span>
+                                    </div>
+                                </td>
                                 <td>{{ user.email }}</td>
                                 <td><span class="badge bg-secondary text-uppercase">{{ user.role }}</span></td>
                                 <td>

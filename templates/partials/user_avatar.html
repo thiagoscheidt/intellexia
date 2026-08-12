@@ -1,30 +1,38 @@
 {#
-  Avatar do usuário: foto do Google quando houver, inicial em círculo quando não.
+  Avatar de um usuário: foto do Google quando houver, inicial em círculo quando não.
+
+  Foto e nome são sempre explícitos — a macro serve tanto o usuário logado
+  (a header passa o que está na sessão) quanto listas de outras pessoas
+  (Administração de Usuários, Atividade de Usuários).
 
   A inicial fica sempre no DOM (escondida quando há foto) porque o `onerror` da
   imagem precisa de algo para revelar: a URL do CDN pode virar 404 se a pessoa
   trocar a foto entre um login e outro, e há rede de escritório que bloqueia
   googleusercontent.com. Sem esse par, o avatar viraria ícone quebrado.
 
-  size / font_size em px; extra_classes vai nos dois elementos, para que a troca
-  no onerror não mude tamanho nem posição. A paleta (bg/cor/peso) vem de
-  extra_classes: a header usa dois esquemas diferentes.
-
   A inicial é escondida por `d-none`, nunca por style="display:none": as
   utilities de display do Bootstrap são `!important`, então estilo inline sem
   `!important` perde para o `d-inline-flex` do próprio span e os dois avatares
   aparecem lado a lado. `d-none` funciona porque vem depois na folha de estilo.
+
+  size / font_size em px; extra_classes vai nos dois elementos, para que a troca
+  no onerror não mude tamanho nem posição.
+
+  A paleta da inicial vem de `extra_classes` (a header usa dois esquemas) ou,
+  em lista, de `seed`: passando o id do usuário, cada pessoa ganha sempre a
+  mesma cor e a tabela não vira uma parede de círculos idênticos.
 #}
-{% macro user_avatar(size, font_size, extra_classes='') -%}
-{%- set foto = session.get('user_picture') -%}
-{%- set inicial = (session.get('user_name', 'U')[:1] or 'U') | upper -%}
+{% macro user_avatar(picture, name, size, font_size, extra_classes='', seed=None) -%}
+{%- set inicial = ((name or 'U')[:1] or 'U') | upper -%}
 {%- set dimensao = 'width: %dpx; height: %dpx;' % (size, size) -%}
-{%- if foto %}
-<img src="{{ foto }}" alt="" referrerpolicy="no-referrer" width="{{ size }}" height="{{ size }}"
+{%- set paleta = ['primary', 'success', 'danger', 'warning', 'info', 'dark', 'secondary'] -%}
+{%- set cor = ('text-bg-' ~ paleta[seed % (paleta | length)] ~ ' fw-semibold') if seed is not none else '' -%}
+{%- if picture %}
+<img src="{{ picture }}" alt="" referrerpolicy="no-referrer" width="{{ size }}" height="{{ size }}"
   class="rounded-circle shadow {{ extra_classes }}" style="{{ dimensao }} object-fit: cover;"
   onerror="this.nextElementSibling.classList.remove('d-none'); this.style.display='none';">
 {%- endif %}
 <span
-  class="rounded-circle shadow d-inline-flex align-items-center justify-content-center{% if foto %} d-none{% endif %} {{ extra_classes }}"
+  class="rounded-circle shadow d-inline-flex align-items-center justify-content-center{% if picture %} d-none{% endif %} {{ cor }} {{ extra_classes }}"
   style="{{ dimensao }} font-size: {{ font_size }}px;">{{ inicial }}</span>
 {%- endmacro %}
