@@ -134,7 +134,21 @@ dicionário no serviço, para o template não decidir nomenclatura.
 | `vencidas` | `hoje - 30 <= data_fim < hoje`, **exceto** as com renovação (ver abaixo) |
 | `vence_7` | `hoje <= data_fim <= hoje + 7` |
 | `vence_30` | `hoje + 7 < data_fim <= hoje + 30` |
-| `novas` | histórico `change_type='created'` com `synced_at > since` |
+| `ultimas` | as 5 mais recentes por `data_cadastro`, com `is_nova` nas do período |
+
+**A fonte de "novas" é `data_cadastro`, não o histórico** (corrigido depois do primeiro
+envio real). O histórico só conhece o que apareceu depois que este código entrou no ar: numa
+base já sincronizada — 2.829 procurações e zero linhas de histórico — toda procuração
+existente casa por protocolo no primeiro run e vira `unchanged`, nunca `created`. O bloco
+ficaria vazio por semanas, até surgir uma procuração inédita. `data_cadastro` (a data em que
+o **portal FAP** registrou a procuração) está preenchida em 100% das linhas, vale
+retroativamente e é a verdade da origem. A comparação com a janela passa por `_sp_naive()`:
+`data_cadastro` vem em horário de Brasília e `last_sent_at` em UTC — comparar direto engoliria
+3 h de cadastros a cada envio.
+
+**Blocos longos são cortados no corpo** (`LIMITE_POR_BLOCO = 10`, `LIMITE_ULTIMAS = 5`): o
+primeiro envio real trazia 88 cartões. O total continua inteiro no cabeçalho de cada bloco e
+nos contadores; o excedente vira "e mais N não listada(s)" com link para o painel.
 
 Mais `'ultima_sincronizacao'` (o maior `last_synced_at` do escritório) e
 `'sync_atrasado'` (bool, `> 24 h`).

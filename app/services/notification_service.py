@@ -510,6 +510,7 @@ def send_procuracoes_digest(law_firm_id: int, force: bool = False,
         partes.append(f"{totais['vencendo']} vencendo")
     if totais['novas']:
         partes.append(f"{totais['novas']} nova" + ('s' if totais['novas'] > 1 else ''))
+    # "novas" aqui é cadastro no portal (data_cadastro), não estreia no nosso banco.
     resumo = ' · '.join(partes) or 'sem pendências'
     hoje = datetime.now(SP_TZ).strftime('%d/%m/%Y')
     prefix = '[TESTE] ' if is_test else ''

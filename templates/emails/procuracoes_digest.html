@@ -11,8 +11,10 @@
 
   Contexto: digest, law_firm, periodo_inicio, gerado_em, is_test.
   digest.vencidas[] / vence_7[] / vence_30[]: protocolo, outorgante, cnpj_raiz,
-      tipo, data_inicio, data_fim, dias
-  digest.novas[]: protocolo, outorgante, cnpj_raiz, tipo, situacao, data_inicio, data_fim
+      tipo, data_inicio, data_fim, dias — já cortados em LIMITE_POR_BLOCO;
+      digest.restantes[bloco] diz quantos ficaram de fora.
+  digest.ultimas[]: as últimas cadastradas no portal (data_cadastro), com is_nova
+      marcando as que entraram no período.
   digest.ultima_sincronizacao (datetime|None), digest.sync_atrasado (bool)
 #}
 {%- set BORDA = '#dee2e6' -%}
@@ -42,17 +44,20 @@
   {%- endif -%}
 {%- endmacro -%}
 
-{%- macro bloco(titulo, itens, bg, tx, bd, BORDA, TEXTO, SUAVE, vencendo) -%}
+{%- macro bloco(titulo, itens, total, restantes, bg, tx, bd, BORDA, TEXTO, SUAVE, vencendo) -%}
 {%- if itens -%}
 <div style="background:{{ bg }};border:1px solid {{ bd }};border-radius:8px;padding:12px 14px;margin:0 0 16px 0;">
   <div style="color:{{ tx }};font-size:14px;font-weight:700;margin-bottom:10px;">
-    {{ titulo }} ({{ itens|length }})
+    {{ titulo }} ({{ total }})
   </div>
   {% for item in itens %}
   <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
          style="margin:0 0 8px 0;border:1px solid {{ BORDA }};border-radius:8px;background:#ffffff;">
     <tr>
       <td style="padding:11px 14px;font-size:13px;">
+        {% if item.is_nova %}
+        <span style="display:inline-block;background:#198754;color:#ffffff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;margin:0 0 6px 0;">Nova</span>
+        {% endif %}
         <div style="color:{{ TEXTO }};font-weight:700;font-size:14px;">{{ item.outorgante }}</div>
         <div style="color:{{ SUAVE }};font-size:12px;margin-top:2px;">
           Protocolo {{ item.protocolo }}{% if item.cnpj_raiz %} · CNPJ {{ fmt_cnpj_raiz(item.cnpj_raiz) }}{% endif %}
@@ -63,13 +68,21 @@
             Fim da vigência: <strong>{{ item.data_fim }}</strong>
             <span style="color:{{ tx }};font-weight:600;">({{ prazo(item) }})</span>
           {% else %}
-            Vigência: {{ item.data_inicio }} a {{ item.data_fim }} · <strong>{{ item.situacao }}</strong>
+            Cadastrada em <strong>{{ item.data_cadastro }}</strong> ·
+            vigência {{ item.data_inicio }} a {{ item.data_fim }} · {{ item.situacao }}
           {% endif %}
         </div>
       </td>
     </tr>
   </table>
   {% endfor %}
+  {% if restantes %}
+  <div style="color:{{ tx }};font-size:12px;padding-top:2px;">
+    e mais {{ restantes }} não listada(s) aqui —
+    <a href="{{ url_for('fap_panel.procuracoes_page', vencendo_em=digest.janela_dias, _external=True) }}"
+       style="color:{{ tx }};font-weight:600;">ver no painel</a>.
+  </div>
+  {% endif %}
 </div>
 {%- endif -%}
 {%- endmacro -%}
@@ -141,24 +154,28 @@
             <p style="margin:0 0 18px 0;color:{{ SUAVE }};font-size:13px;">
               {{ digest.totais.vencendo }} procuração(ões) exigindo atenção nos próximos
               {{ digest.janela_dias }} dias
-              {%- if digest.totais.novas %} · {{ digest.totais.novas }} nova(s) no período{% endif %}.
+              {%- if digest.totais.novas %} · {{ digest.totais.novas }} cadastrada(s) no período{% endif %}.
             </p>
 
             {{ bloco('⛔ Vencidas e ainda sem renovação', digest.vencidas,
+                     digest.totais.vencidas, digest.restantes.vencidas,
                      VERMELHO_BG, VERMELHO_TX, VERMELHO_BD, BORDA, TEXTO, SUAVE, true) }}
 
             {{ bloco('🔴 Vencem em até 7 dias', digest.vence_7,
+                     digest.totais.vence_7, digest.restantes.vence_7,
                      VERMELHO_BG, VERMELHO_TX, VERMELHO_BD, BORDA, TEXTO, SUAVE, true) }}
 
             {{ bloco('🟠 Vencem em 8 a ' ~ digest.janela_dias ~ ' dias', digest.vence_30,
+                     digest.totais.vence_30, digest.restantes.vence_30,
                      AMBAR_BG, AMBAR_TX, AMBAR_BD, BORDA, TEXTO, SUAVE, true) }}
 
-            {{ bloco('🆕 Novas procurações no período', digest.novas,
+            {{ bloco('🆕 Últimas procurações cadastradas', digest.ultimas,
+                     digest.ultimas|length, 0,
                      FUNDO, TEAL, BORDA, BORDA, TEXTO, SUAVE, false) }}
 
-            {% if not digest.totais.total %}
+            {% if not digest.totais.total and not digest.ultimas %}
             <div style="background:{{ FUNDO }};border:1px solid {{ BORDA }};border-radius:6px;padding:12px;color:{{ SUAVE }};font-size:13px;">
-              Nenhuma procuração vencendo nos próximos {{ digest.janela_dias }} dias e nenhuma nova no período.
+              Nenhuma procuração vencendo nos próximos {{ digest.janela_dias }} dias e nenhuma cadastrada no período.
             </div>
             {% endif %}
 

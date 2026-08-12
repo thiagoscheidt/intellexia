@@ -67,7 +67,8 @@ class FakeService:
 
 def procuracao(protocolo, situacao='DEFERIDA', data_fim='2027-01-01',
                nome='EMPRESA TESTE LTDA', cnpj_raiz='19630496',
-               tipo='PROCURACAO_FAP', data_inicio='2025-01-01'):
+               tipo='PROCURACAO_FAP', data_inicio='2025-01-01',
+               data_cadastro='2025-01-01T10:00:00Z'):
     return {
         'protocolo': protocolo,
         'tipoProcuracao': {'codigo': tipo, 'descricao': 'Procuração FAP'},
@@ -78,7 +79,7 @@ def procuracao(protocolo, situacao='DEFERIDA', data_fim='2027-01-01',
         'nomeEmpresaOutorgante': nome,
         'cpfOutorgado': 12345678901,
         'cnpjRaizOutorgado': None,
-        'dataCadastro': '2025-01-01T10:00:00Z',
+        'dataCadastro': data_cadastro,
     }
 
 
@@ -204,8 +205,6 @@ def teste_digest_faixas(fid):
     check('V-PENDENTE' not in protos('vence_7'), 'PENDENTE não entra nos vencimentos')
     check('V-ANTIGA' not in protos('vencidas'), 'vencida há muito tempo sai da lista')
     check('R-VELHA' not in protos('vencidas'), 'vencida com renovação é suprimida')
-    check(digest['totais']['novas'] == len(items), 'todas contam como novas no período',
-          f"novas={digest['totais']['novas']}")
     check(digest['has_novidades'], 'has_novidades verdadeiro')
 
     # Sem novidade no período, mas com vencimento na janela: ainda deve enviar.
@@ -215,8 +214,63 @@ def teste_digest_faixas(fid):
     check(digest2['has_novidades'], 'vencimento sozinho ainda dispara o resumo')
 
 
+def teste_ultimas_cadastradas(fid):
+    print('\n[6] Últimas cadastradas vêm de data_cadastro, não do histórico')
+    limpar(fid)
+    from datetime import timezone as _tz
+    agora_sp = datetime.now()
+
+    def cadastro(horas_atras):
+        return (agora_sp - timedelta(hours=horas_atras)).isoformat()
+
+    # Nenhuma linha de histórico é criada para estas: o cenário reproduz a base
+    # já sincronizada pelo código antigo, onde o bloco lia histórico e vinha vazio.
+    items = [
+        procuracao('C-HOJE',    cnpj_raiz='11111111', data_cadastro=cadastro(2)),
+        procuracao('C-ONTEM',   cnpj_raiz='22222222', data_cadastro=cadastro(20)),
+        procuracao('C-ANTIGA',  cnpj_raiz='33333333', data_cadastro='2024-03-01T09:00:00'),
+    ]
+    svc_mod.sync_procuracoes(FakeService(items), fid)
+    FapWebProcuracaoChangeHistory.query.filter_by(law_firm_id=fid).delete()
+    db.session.commit()
+    check(len(historico(fid)) == 0, 'cenário sem histórico (base pré-existente)')
+
+    digest = svc_mod.build_procuracoes_digest(fid, since=_utcnow() - timedelta(days=1))
+
+    ultimas = [i['protocolo'] for i in digest['ultimas']]
+    check(len(ultimas) == 3, 'bloco preenchido mesmo sem histórico', str(ultimas))
+    check(ultimas[0] == 'C-HOJE', 'ordenado da mais recente', str(ultimas))
+    check(digest['totais']['novas'] == 2, 'conta as cadastradas nas últimas 24 h',
+          f"novas={digest['totais']['novas']}")
+
+    por_proto = {i['protocolo']: i for i in digest['ultimas']}
+    check(por_proto['C-HOJE']['is_nova'], 'a de hoje marcada como nova')
+    check(not por_proto['C-ANTIGA']['is_nova'], 'a antiga aparece sem marca de nova')
+
+
+def teste_corte_dos_blocos(fid):
+    print('\n[7] Blocos longos são cortados no corpo do e-mail')
+    limpar(fid)
+    hoje = date.today()
+    quantidade = svc_mod.LIMITE_POR_BLOCO + 4
+    items = [
+        procuracao(f'L-{i}', data_fim=(hoje + timedelta(days=3)).isoformat(),
+                   cnpj_raiz=str(90000000 + i))
+        for i in range(quantidade)
+    ]
+    svc_mod.sync_procuracoes(FakeService(items), fid)
+
+    digest = svc_mod.build_procuracoes_digest(fid, since=_utcnow() - timedelta(minutes=5))
+    check(len(digest['vence_7']) == svc_mod.LIMITE_POR_BLOCO, 'lista cortada no limite',
+          f"{len(digest['vence_7'])}")
+    check(digest['totais']['vence_7'] == quantidade, 'total permanece inteiro',
+          f"{digest['totais']['vence_7']}")
+    check(digest['restantes']['vence_7'] == 4, 'restantes informa o que ficou de fora',
+          f"{digest['restantes']['vence_7']}")
+
+
 def teste_alerta_fora_do_cron_horario(fid):
-    print('\n[6] Alerta não é varrido pelo cron horário')
+    print('\n[8] Alerta não é varrido pelo cron horário')
     setting = notification_service.get_or_create_setting(
         fid, NotificationSetting.TYPE_PROCURACOES_ALERT
     )
@@ -241,7 +295,7 @@ def teste_alerta_fora_do_cron_horario(fid):
 
 
 def teste_falha_na_busca(fid):
-    print('\n[7] Falha na busca não toca no banco')
+    print('\n[9] Falha na busca não toca no banco')
     antes_proc = FapWebProcuracao.query.filter_by(law_firm_id=fid).count()
     antes_hist = len(historico(fid))
 
@@ -257,7 +311,7 @@ def teste_falha_na_busca(fid):
 
 
 def teste_render_dos_emails(fid):
-    print('\n[8] E-mails renderizam')
+    print('\n[10] E-mails renderizam')
     since = _utcnow() - timedelta(days=1)
 
     html_alerta, _ = notification_service.render_procuracoes_alert(fid, since=since, is_test=True)
@@ -285,6 +339,8 @@ def main():
             teste_mudanca_de_situacao(fid)
             teste_mudanca_nao_alertavel(fid)
             teste_digest_faixas(fid)
+            teste_ultimas_cadastradas(fid)
+            teste_corte_dos_blocos(fid)
             teste_alerta_fora_do_cron_horario(fid)
             teste_falha_na_busca(fid)
             teste_render_dos_emails(fid)

@@ -27,6 +27,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 from app.models import db, FapWebProcuracao, FapWebProcuracaoChangeHistory
+from app.utils.timezone import SP_TZ
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,11 @@ SITUACAO_VIGENTE = 'DEFERIDA'
 
 # Considera a captura atrasada a partir daqui (rodapé de saúde do e-mail).
 SYNC_ATRASO_HORAS = 24
+
+# Corte do corpo do e-mail. O total continua inteiro no resumo e nos contadores;
+# o que passa disso vira "e mais N" com link para o painel.
+LIMITE_POR_BLOCO = 10
+LIMITE_ULTIMAS = 5
 
 
 # ---------------------------------------------------------------------------
@@ -413,31 +419,7 @@ def build_procuracoes_digest(law_firm_id: int, since: datetime, hoje: date | Non
     vence_30 = [_linha_procuracao(r, hoje) for r in vigentes
                 if limite_urgente < r.data_fim <= limite_futuro]
 
-    novas_rows = (
-        FapWebProcuracaoChangeHistory.query
-        .filter(
-            FapWebProcuracaoChangeHistory.law_firm_id == law_firm_id,
-            FapWebProcuracaoChangeHistory.change_type == 'created',
-            FapWebProcuracaoChangeHistory.synced_at > since,
-        )
-        .order_by(
-            FapWebProcuracaoChangeHistory.synced_at.desc(),
-            FapWebProcuracaoChangeHistory.id.desc(),
-        )
-        .all()
-    )
-
-    novas = []
-    for row in novas_rows:
-        valores = _loads(row.new_values)
-        item = _identificacao(row)
-        item.update({
-            'tipo': valores.get('tipo_procuracao_descricao') or valores.get('tipo_procuracao_codigo') or '—',
-            'situacao': valores.get('situacao_descricao') or valores.get('situacao_codigo') or '—',
-            'data_inicio': _fmt_valor('data_inicio', valores.get('data_inicio')),
-            'data_fim': _fmt_valor('data_fim', valores.get('data_fim')),
-        })
-        novas.append(item)
+    ultimas, novas_no_periodo = _ultimas_cadastradas(law_firm_id, since, hoje)
 
     ultima = ultima_sincronizacao(law_firm_id)
     atrasado = (
@@ -449,16 +431,25 @@ def build_procuracoes_digest(law_firm_id: int, since: datetime, hoje: date | Non
         'vencidas': len(vencidas),
         'vence_7': len(vence_7),
         'vence_30': len(vence_30),
-        'novas': len(novas),
+        'novas': novas_no_periodo,
         'vencendo': len(vencidas) + len(vence_7) + len(vence_30),
     }
     totais['total'] = totais['vencendo'] + totais['novas']
 
+    # Blocos longos são cortados no corpo do e-mail — 88 cartões ninguém lê. O
+    # total continua inteiro no resumo e o restante fica a um clique no painel.
+    restantes = {
+        'vencidas': max(0, len(vencidas) - LIMITE_POR_BLOCO),
+        'vence_7': max(0, len(vence_7) - LIMITE_POR_BLOCO),
+        'vence_30': max(0, len(vence_30) - LIMITE_POR_BLOCO),
+    }
+
     return {
-        'vencidas': vencidas,
-        'vence_7': vence_7,
-        'vence_30': vence_30,
-        'novas': novas,
+        'vencidas': vencidas[:LIMITE_POR_BLOCO],
+        'vence_7': vence_7[:LIMITE_POR_BLOCO],
+        'vence_30': vence_30[:LIMITE_POR_BLOCO],
+        'ultimas': ultimas,
+        'restantes': restantes,
         'totais': totais,
         'ultima_sincronizacao': ultima,
         'sync_atrasado': atrasado,
@@ -467,3 +458,58 @@ def build_procuracoes_digest(law_firm_id: int, since: datetime, hoje: date | Non
         # justamente o aviso mais importante — exigir novidade o silenciaria.
         'has_novidades': totais['total'] > 0,
     }
+
+
+def _sp_naive(momento: datetime) -> datetime:
+    """UTC naive → hora de São Paulo, naive.
+
+    ``data_cadastro`` vem do portal em horário de Brasília; a janela do e-mail
+    vem de ``last_sent_at``, em UTC. Comparar as duas direto engoliria 3 h de
+    cadastros a cada envio.
+    """
+    return momento.replace(tzinfo=timezone.utc).astimezone(SP_TZ).replace(tzinfo=None)
+
+
+def _ultimas_cadastradas(law_firm_id: int, since: datetime, hoje: date) -> tuple[list, int]:
+    """As últimas procurações cadastradas no portal, e quantas são do período.
+
+    A fonte é ``data_cadastro`` — quando o **portal FAP** registrou a procuração
+    —, não o histórico de sincronização. O histórico só conhece o que apareceu
+    depois que este código entrou no ar: numa base já sincronizada, toda
+    procuração existente casa por protocolo no primeiro run e nenhuma vira
+    ``created``, então o bloco ficaria vazio por semanas. ``data_cadastro`` vale
+    retroativamente e é a verdade da origem.
+    """
+    corte = _sp_naive(since)
+
+    recentes = (
+        FapWebProcuracao.query
+        .filter(
+            FapWebProcuracao.law_firm_id == law_firm_id,
+            FapWebProcuracao.data_cadastro.isnot(None),
+        )
+        .order_by(FapWebProcuracao.data_cadastro.desc(), FapWebProcuracao.id.desc())
+        .limit(LIMITE_ULTIMAS)
+        .all()
+    )
+
+    novas_no_periodo = (
+        FapWebProcuracao.query
+        .filter(
+            FapWebProcuracao.law_firm_id == law_firm_id,
+            FapWebProcuracao.data_cadastro >= corte,
+        )
+        .count()
+    )
+
+    itens = []
+    for rec in recentes:
+        item = _linha_procuracao(rec, hoje)
+        item.update({
+            'situacao': rec.situacao_descricao or rec.situacao_codigo or '—',
+            'data_cadastro': rec.data_cadastro.strftime('%d/%m/%Y'),
+            'is_nova': rec.data_cadastro >= corte,
+        })
+        itens.append(item)
+
+    return itens, novas_no_periodo
