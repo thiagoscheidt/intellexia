@@ -109,6 +109,12 @@ def notifications():
     radar_digest = notification_service.get_or_create_setting(
         session.get('law_firm_id'), NotificationSetting.TYPE_RADAR_DIGEST
     )
+    procuracoes_alert = notification_service.get_or_create_setting(
+        session.get('law_firm_id'), NotificationSetting.TYPE_PROCURACOES_ALERT
+    )
+    procuracoes_digest = notification_service.get_or_create_setting(
+        session.get('law_firm_id'), NotificationSetting.TYPE_PROCURACOES_DIGEST
+    )
 
     firm_users = (User.query
                   .filter_by(law_firm_id=session.get('law_firm_id'), is_active=True)
@@ -121,6 +127,8 @@ def notifications():
         fap_digest=fap_digest,
         communications_digest=communications_digest,
         radar_digest=radar_digest,
+        procuracoes_alert=procuracoes_alert,
+        procuracoes_digest=procuracoes_digest,
         smtp_configured=email_service.is_configured(),
         smtp_config=email_service.get_config(),
         weekday_labels=notification_service.WEEKDAY_LABELS,
@@ -150,6 +158,49 @@ def notifications_radar_digest_post():
     return _save_digest_setting(NotificationSetting.TYPE_RADAR_DIGEST)
 
 
+@settings_bp.route('/notifications/procuracoes-digest', methods=['POST'])
+@require_law_firm
+def notifications_procuracoes_digest_post():
+    """Salvar a configuração do resumo diário de procurações (apenas admin)."""
+    return _save_digest_setting(NotificationSetting.TYPE_PROCURACOES_DIGEST)
+
+
+@settings_bp.route('/notifications/procuracoes-alert', methods=['POST'])
+@require_law_firm
+def notifications_procuracoes_alert_post():
+    """Salvar a configuração do alerta de procurações (apenas admin).
+
+    Notificação de evento: o form não traz frequência, horário nem dia da semana
+    — quem dispara é o script de sincronização das procurações.
+    """
+    return _save_event_setting(NotificationSetting.TYPE_PROCURACOES_ALERT)
+
+
+def _validate_recipients_form():
+    """Destinatários + switch do form, comuns a todos os cards de notificação.
+
+    Retorna ``(recipients, is_enabled, None)`` ou ``(None, None, resposta_de_erro)``.
+    """
+    raw_recipients = request.form.get('recipients') or ''
+    recipients = email_service.normalize_recipients(raw_recipients)
+    informed = [r for r in re.split(r'[,;\s]+', raw_recipients) if r.strip()]
+    invalid = [r for r in informed if not email_service.is_valid_email(r)]
+    if invalid:
+        return None, None, (jsonify({
+            "success": False,
+            "message": f"E-mail(s) inválido(s): {', '.join(invalid[:3])}",
+        }), 400)
+
+    is_enabled = (request.form.get('is_enabled') or '').lower() in ('1', 'true', 'on', 'yes')
+    if is_enabled and not recipients:
+        return None, None, (jsonify({
+            "success": False,
+            "message": "Informe ao menos um destinatário para ativar o envio",
+        }), 400)
+
+    return recipients, is_enabled, None
+
+
 def _save_digest_setting(notification_type):
     """Validação e persistência comuns aos cards de notificação periódica."""
     if session.get('user_role') != 'admin':
@@ -171,28 +222,49 @@ def _save_digest_setting(notification_type):
     if send_weekday is None:
         return jsonify({"success": False, "message": "Dia da semana inválido"}), 400
 
-    raw_recipients = request.form.get('recipients') or ''
-    recipients = email_service.normalize_recipients(raw_recipients)
-    informed = [r for r in re.split(r'[,;\s]+', raw_recipients) if r.strip()]
-    invalid = [r for r in informed if not email_service.is_valid_email(r)]
-    if invalid:
-        return jsonify({
-            "success": False,
-            "message": f"E-mail(s) inválido(s): {', '.join(invalid[:3])}",
-        }), 400
-
-    is_enabled = (request.form.get('is_enabled') or '').lower() in ('1', 'true', 'on', 'yes')
-    if is_enabled and not recipients:
-        return jsonify({
-            "success": False,
-            "message": "Informe ao menos um destinatário para ativar o envio",
-        }), 400
+    recipients, is_enabled, error = _validate_recipients_form()
+    if error:
+        return error
 
     try:
         setting.is_enabled = is_enabled
         setting.frequency = frequency
         setting.send_hour = send_hour
         setting.send_weekday = send_weekday
+        setting.set_recipients(recipients)
+        setting.updated_at = datetime.now()
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Configuração de notificação salva com sucesso!",
+            "recipients": recipients,
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": f"Erro ao salvar: {str(e)}"}), 500
+
+
+def _save_event_setting(notification_type):
+    """Persistência dos cards de notificação por evento (sem agendamento).
+
+    Salva apenas o switch e os destinatários; frequência, horário e dia da
+    semana ficam nos defaults do modelo porque não têm efeito nesses tipos.
+    """
+    if session.get('user_role') != 'admin':
+        return jsonify({"success": False, "message": "Acesso negado"}), 403
+
+    setting = notification_service.get_or_create_setting(
+        session.get('law_firm_id'), notification_type
+    )
+
+    recipients, is_enabled, error = _validate_recipients_form()
+    if error:
+        return error
+
+    try:
+        setting.is_enabled = is_enabled
         setting.set_recipients(recipients)
         setting.updated_at = datetime.now()
 
@@ -225,6 +297,20 @@ def notifications_fap_digest_send_now():
 def notifications_communications_digest_send_now():
     """Envia o resumo de Comunicações DJEN de teste (mesmas regras do Resumo FAP)."""
     return _send_digest_test(notification_service.send_communications_digest)
+
+
+@settings_bp.route('/notifications/procuracoes-digest/send-now', methods=['POST'])
+@require_law_firm
+def notifications_procuracoes_digest_send_now():
+    """Envia o resumo de procurações de teste para o admin logado ou usuário informado."""
+    return _send_digest_test(notification_service.send_procuracoes_digest)
+
+
+@settings_bp.route('/notifications/procuracoes-alert/send-now', methods=['POST'])
+@require_law_firm
+def notifications_procuracoes_alert_send_now():
+    """Envia o alerta de procurações de teste para o admin logado ou usuário informado."""
+    return _send_digest_test(notification_service.send_procuracoes_alert)
 
 
 @settings_bp.route('/notifications/radar-digest/send-now', methods=['POST'])

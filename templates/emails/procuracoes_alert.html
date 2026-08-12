@@ -1,0 +1,174 @@
+{#
+  Alerta de mudança em procuração eletrônica do FAP Web.
+
+  Disparado pelo script de sincronização das procurações a cada execução que
+  encontre novidade — não pelo cron horário das notificações.
+
+  Restrições de cliente de e-mail: sem Bootstrap, sem <style> externo — tudo em
+  tabelas com CSS inline.
+
+  Contexto: alerta, law_firm, periodo_inicio, gerado_em, is_test.
+  alerta.novas[]:     protocolo, outorgante, cnpj_raiz, tipo, situacao, data_inicio, data_fim
+  alerta.alteradas[]: protocolo, outorgante, cnpj_raiz, mudancas[{campo, de, para}]
+  Os links usam url_for(_external=True) — o serviço renderiza com base_url=APP_PUBLIC_URL.
+#}
+{%- set BORDA = '#dee2e6' -%}
+{%- set TEXTO = '#212529' -%}
+{%- set SUAVE = '#6c757d' -%}
+{%- set FUNDO = '#f8f9fa' -%}
+{%- set TEAL = '#0f766e' -%}
+{%- set ALERTA_BG = '#fff3cd' -%}
+{%- set ALERTA_TX = '#664d03' -%}
+{%- set ALERTA_BD = '#ffe69c' -%}
+
+{%- macro fmt_cnpj_raiz(raiz) -%}
+  {%- if raiz -%}
+    {%- set s = raiz|string -%}
+    {%- if s|length >= 8 -%}{{ s[:2] }}.{{ s[2:5] }}.{{ s[5:8] }}{%- else -%}{{ s }}{%- endif -%}
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro cartao_cabecalho(item, SUAVE, TEXTO) -%}
+<div style="color:{{ TEXTO }};font-weight:700;font-size:14px;">{{ item.outorgante }}</div>
+<div style="color:{{ SUAVE }};font-size:12px;margin-top:2px;">
+  Protocolo {{ item.protocolo }}{% if item.cnpj_raiz %} · CNPJ {{ fmt_cnpj_raiz(item.cnpj_raiz) }}{% endif %}
+</div>
+{%- endmacro -%}
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="background:#eef1f5;margin:0;padding:24px 12px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="720"
+             style="max-width:720px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+
+        <!-- Cabeçalho -->
+        <tr>
+          <td style="background:{{ TEAL }};padding:20px 24px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td width="52" valign="middle">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" valign="middle" width="48" height="48"
+                          style="background:#ffffff;border-radius:10px;">
+                        <img src="cid:logo" width="34" alt="IntellexIA" style="display:block;border:0;">
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:12px;">
+                  <div style="color:#ffffff;font-size:18px;font-weight:700;">Procurações FAP — mudança detectada</div>
+                  <div style="color:#ccfbf1;font-size:13px;">Sincronização com o portal FAP Web</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        {% if is_test %}
+        <tr>
+          <td style="background:{{ ALERTA_BG }};color:{{ ALERTA_TX }};padding:10px 24px;font-size:13px;font-weight:600;">
+            E-mail de teste — enviado só para você, sem afetar o controle de envios.
+          </td>
+        </tr>
+        {% endif %}
+
+        <tr>
+          <td style="padding:24px;">
+            <p style="margin:0 0 4px 0;color:{{ TEXTO }};font-size:14px;">
+              {% if law_firm %}{{ law_firm.trade_name or law_firm.name }}{% endif %}
+            </p>
+            <p style="margin:0 0 24px 0;color:{{ SUAVE }};font-size:13px;">
+              Período: desde {{ periodo_inicio|datetime_sp if periodo_inicio else '—' }} ·
+              Gerado em {{ gerado_em.strftime('%d/%m/%Y %H:%M') }}
+            </p>
+
+            {% if alerta.novas %}
+            <h2 style="margin:0 0 12px 0;color:{{ TEXTO }};font-size:16px;">
+              Novas procurações
+              <span style="color:{{ SUAVE }};font-weight:400;font-size:14px;">({{ alerta.totais.novas }})</span>
+            </h2>
+            {% for item in alerta.novas %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                   style="margin:0 0 10px 0;border:1px solid {{ BORDA }};border-radius:8px;">
+              <tr>
+                <td style="padding:12px 14px;font-size:13px;">
+                  <span style="display:inline-block;background:#198754;color:#ffffff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;margin:0 0 6px 0;">Nova</span>
+                  {{ cartao_cabecalho(item, SUAVE, TEXTO) }}
+                  <div style="color:{{ TEXTO }};font-size:13px;margin-top:8px;">
+                    {{ item.tipo }} · <strong>{{ item.situacao }}</strong>
+                  </div>
+                  <div style="color:{{ SUAVE }};font-size:12px;margin-top:2px;">
+                    Vigência: {{ item.data_inicio }} a {{ item.data_fim }}
+                  </div>
+                </td>
+              </tr>
+            </table>
+            {% endfor %}
+            {% endif %}
+
+            {% if alerta.alteradas %}
+            <h2 style="margin:{{ '20px' if alerta.novas else '0' }} 0 12px 0;color:{{ TEXTO }};font-size:16px;">
+              Procurações alteradas
+              <span style="color:{{ SUAVE }};font-weight:400;font-size:14px;">({{ alerta.totais.alteradas }})</span>
+            </h2>
+            {% for item in alerta.alteradas %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                   style="margin:0 0 10px 0;border:1px solid {{ ALERTA_BD }};border-radius:8px;background:#fffdf5;">
+              <tr>
+                <td style="padding:12px 14px;font-size:13px;">
+                  {{ cartao_cabecalho(item, SUAVE, TEXTO) }}
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                         style="margin-top:8px;">
+                    {% for m in item.mudancas %}
+                    <tr>
+                      <td style="padding:3px 0;color:{{ SUAVE }};font-size:12px;width:150px;" valign="top">{{ m.campo }}</td>
+                      <td style="padding:3px 0;color:{{ TEXTO }};font-size:13px;">
+                        <span style="color:{{ SUAVE }};text-decoration:line-through;">{{ m.de }}</span>
+                        <span style="color:{{ SUAVE }};">&nbsp;→&nbsp;</span>
+                        <strong>{{ m.para }}</strong>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </table>
+                </td>
+              </tr>
+            </table>
+            {% endfor %}
+            {% endif %}
+
+            {% if not alerta.novas and not alerta.alteradas %}
+            <div style="background:{{ FUNDO }};border:1px solid {{ BORDA }};border-radius:6px;padding:12px;color:{{ SUAVE }};font-size:13px;">
+              Nenhuma mudança em procurações no período.
+            </div>
+            {% endif %}
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td align="center" style="padding:18px 0 0 0;">
+                  <a href="{{ url_for('fap_panel.procuracoes_page', _external=True) }}"
+                     style="display:inline-block;background:{{ TEAL }};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:6px;">
+                    Abrir o painel de procurações
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Rodapé -->
+        <tr>
+          <td style="background:{{ FUNDO }};border-top:1px solid {{ BORDA }};padding:16px 24px;color:{{ SUAVE }};font-size:12px;">
+            <p style="margin:0 0 4px 0;">
+              Você recebe este e-mail porque está na lista de destinatários do alerta de procurações
+              {% if law_firm %} de {{ law_firm.trade_name or law_firm.name }}{% endif %}.
+              Para deixar de receber, fale com o administrador do escritório.
+            </p>
+            <p style="margin:0;">IntellexIA · mensagem automática, não responda.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

@@ -1,0 +1,196 @@
+{#
+  Resumo diário de procurações eletrônicas do FAP Web.
+
+  Enviado pelo cron horário de notificações no horário configurado. Diferente
+  dos demais digests, sai enquanto houver qualquer item nos blocos, mesmo sem
+  novidade no período — um vencimento próximo sem evento novo é o aviso mais
+  importante.
+
+  Restrições de cliente de e-mail: sem Bootstrap, sem <style> externo — tudo em
+  tabelas com CSS inline.
+
+  Contexto: digest, law_firm, periodo_inicio, gerado_em, is_test.
+  digest.vencidas[] / vence_7[] / vence_30[]: protocolo, outorgante, cnpj_raiz,
+      tipo, data_inicio, data_fim, dias
+  digest.novas[]: protocolo, outorgante, cnpj_raiz, tipo, situacao, data_inicio, data_fim
+  digest.ultima_sincronizacao (datetime|None), digest.sync_atrasado (bool)
+#}
+{%- set BORDA = '#dee2e6' -%}
+{%- set TEXTO = '#212529' -%}
+{%- set SUAVE = '#6c757d' -%}
+{%- set FUNDO = '#f8f9fa' -%}
+{%- set TEAL = '#0f766e' -%}
+{%- set VERMELHO_BG = '#f8d7da' -%}
+{%- set VERMELHO_TX = '#842029' -%}
+{%- set VERMELHO_BD = '#f5c2c7' -%}
+{%- set AMBAR_BG = '#fff3cd' -%}
+{%- set AMBAR_TX = '#664d03' -%}
+{%- set AMBAR_BD = '#ffe69c' -%}
+
+{%- macro fmt_cnpj_raiz(raiz) -%}
+  {%- if raiz -%}
+    {%- set s = raiz|string -%}
+    {%- if s|length >= 8 -%}{{ s[:2] }}.{{ s[2:5] }}.{{ s[5:8] }}{%- else -%}{{ s }}{%- endif -%}
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro prazo(item) -%}
+  {%- if item.dias is none -%}—
+  {%- elif item.dias < 0 -%}venceu há {{ -item.dias }} dia{{ 's' if item.dias < -1 }}
+  {%- elif item.dias == 0 -%}vence hoje
+  {%- else -%}em {{ item.dias }} dia{{ 's' if item.dias > 1 }}
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro bloco(titulo, itens, bg, tx, bd, BORDA, TEXTO, SUAVE, vencendo) -%}
+{%- if itens -%}
+<div style="background:{{ bg }};border:1px solid {{ bd }};border-radius:8px;padding:12px 14px;margin:0 0 16px 0;">
+  <div style="color:{{ tx }};font-size:14px;font-weight:700;margin-bottom:10px;">
+    {{ titulo }} ({{ itens|length }})
+  </div>
+  {% for item in itens %}
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+         style="margin:0 0 8px 0;border:1px solid {{ BORDA }};border-radius:8px;background:#ffffff;">
+    <tr>
+      <td style="padding:11px 14px;font-size:13px;">
+        <div style="color:{{ TEXTO }};font-weight:700;font-size:14px;">{{ item.outorgante }}</div>
+        <div style="color:{{ SUAVE }};font-size:12px;margin-top:2px;">
+          Protocolo {{ item.protocolo }}{% if item.cnpj_raiz %} · CNPJ {{ fmt_cnpj_raiz(item.cnpj_raiz) }}{% endif %}
+        </div>
+        <div style="color:{{ SUAVE }};font-size:12px;margin-top:6px;">{{ item.tipo }}</div>
+        <div style="color:{{ TEXTO }};font-size:13px;margin-top:4px;">
+          {% if vencendo %}
+            Fim da vigência: <strong>{{ item.data_fim }}</strong>
+            <span style="color:{{ tx }};font-weight:600;">({{ prazo(item) }})</span>
+          {% else %}
+            Vigência: {{ item.data_inicio }} a {{ item.data_fim }} · <strong>{{ item.situacao }}</strong>
+          {% endif %}
+        </div>
+      </td>
+    </tr>
+  </table>
+  {% endfor %}
+</div>
+{%- endif -%}
+{%- endmacro -%}
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="background:#eef1f5;margin:0;padding:24px 12px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="720"
+             style="max-width:720px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+
+        <!-- Cabeçalho -->
+        <tr>
+          <td style="background:{{ TEAL }};padding:20px 24px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td width="52" valign="middle">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" valign="middle" width="48" height="48"
+                          style="background:#ffffff;border-radius:10px;">
+                        <img src="cid:logo" width="34" alt="IntellexIA" style="display:block;border:0;">
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:12px;">
+                  <div style="color:#ffffff;font-size:18px;font-weight:700;">Procurações FAP — resumo do dia</div>
+                  <div style="color:#ccfbf1;font-size:13px;">Vigências chegando ao fim e procurações novas</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        {% if is_test %}
+        <tr>
+          <td style="background:{{ AMBAR_BG }};color:{{ AMBAR_TX }};padding:10px 24px;font-size:13px;font-weight:600;">
+            E-mail de teste — enviado só para você, sem afetar o agendamento.
+          </td>
+        </tr>
+        {% endif %}
+
+        {% if digest.sync_atrasado %}
+        <tr>
+          <td style="background:{{ VERMELHO_BG }};color:{{ VERMELHO_TX }};padding:12px 24px;font-size:13px;">
+            <strong>⚠ A sincronização com o FAP Web está parada.</strong>
+            {% if digest.ultima_sincronizacao %}
+              A última conferência foi em {{ digest.ultima_sincronizacao|datetime_sp }}.
+            {% else %}
+              Nenhuma conferência registrada até agora.
+            {% endif %}
+            Enquanto isso, a ausência de novidades abaixo não significa que nada mudou —
+            verifique a sessão FAP (<code>FAP_AUTH_JSON</code>) no servidor.
+          </td>
+        </tr>
+        {% endif %}
+
+        <tr>
+          <td style="padding:24px;">
+            <p style="margin:0 0 4px 0;color:{{ TEXTO }};font-size:14px;">
+              {% if law_firm %}{{ law_firm.trade_name or law_firm.name }}{% endif %}
+            </p>
+            <p style="margin:0 0 20px 0;color:{{ SUAVE }};font-size:13px;">
+              Período: desde {{ periodo_inicio|datetime_sp if periodo_inicio else '—' }} ·
+              Gerado em {{ gerado_em.strftime('%d/%m/%Y %H:%M') }}
+            </p>
+
+            <p style="margin:0 0 18px 0;color:{{ SUAVE }};font-size:13px;">
+              {{ digest.totais.vencendo }} procuração(ões) exigindo atenção nos próximos
+              {{ digest.janela_dias }} dias
+              {%- if digest.totais.novas %} · {{ digest.totais.novas }} nova(s) no período{% endif %}.
+            </p>
+
+            {{ bloco('⛔ Vencidas e ainda sem renovação', digest.vencidas,
+                     VERMELHO_BG, VERMELHO_TX, VERMELHO_BD, BORDA, TEXTO, SUAVE, true) }}
+
+            {{ bloco('🔴 Vencem em até 7 dias', digest.vence_7,
+                     VERMELHO_BG, VERMELHO_TX, VERMELHO_BD, BORDA, TEXTO, SUAVE, true) }}
+
+            {{ bloco('🟠 Vencem em 8 a ' ~ digest.janela_dias ~ ' dias', digest.vence_30,
+                     AMBAR_BG, AMBAR_TX, AMBAR_BD, BORDA, TEXTO, SUAVE, true) }}
+
+            {{ bloco('🆕 Novas procurações no período', digest.novas,
+                     FUNDO, TEAL, BORDA, BORDA, TEXTO, SUAVE, false) }}
+
+            {% if not digest.totais.total %}
+            <div style="background:{{ FUNDO }};border:1px solid {{ BORDA }};border-radius:6px;padding:12px;color:{{ SUAVE }};font-size:13px;">
+              Nenhuma procuração vencendo nos próximos {{ digest.janela_dias }} dias e nenhuma nova no período.
+            </div>
+            {% endif %}
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td align="center" style="padding:12px 0 0 0;">
+                  <a href="{{ url_for('fap_panel.procuracoes_page', vencendo_em=digest.janela_dias, _external=True) }}"
+                     style="display:inline-block;background:{{ TEAL }};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:6px;">
+                    Ver as procurações vencendo
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Rodapé -->
+        <tr>
+          <td style="background:{{ FUNDO }};border-top:1px solid {{ BORDA }};padding:16px 24px;color:{{ SUAVE }};font-size:12px;">
+            <p style="margin:0 0 4px 0;">
+              Última sincronização com o FAP Web:
+              <strong>{{ digest.ultima_sincronizacao|datetime_sp if digest.ultima_sincronizacao else 'nunca' }}</strong>.
+            </p>
+            <p style="margin:0 0 4px 0;">
+              Você recebe este e-mail porque está na lista de destinatários do resumo de procurações
+              {% if law_firm %} de {{ law_firm.trade_name or law_firm.name }}{% endif %}.
+              Para deixar de receber, fale com o administrador do escritório.
+            </p>
+            <p style="margin:0;">IntellexIA · mensagem automática, não responda.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

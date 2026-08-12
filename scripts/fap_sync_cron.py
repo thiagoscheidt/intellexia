@@ -5,7 +5,7 @@ Sincronização automática do Painel FAP — script para rodar via cron.
 Sequência de execução:
   1. Verifica sessão FAP (aborta se expirada)
   2. Sincroniza empresas (upsert FapCompany)
-  3. Sincroniza procurações (upsert FapWebProcuracao)
+  3. Sincroniza procurações (delega a fap_procuracoes_service) + alerta por e-mail
   4. Contestações — Fase 1: busca em paralelo (várias empresas ao mesmo tempo)
                    Fase 2: grava no banco sequencialmente (upsert FapWebContestacao)
   5. Download — fila única global: baixa em paralelo todos os PDFs sem arquivo local
@@ -36,7 +36,7 @@ import json
 import os
 import sys
 import time
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
 
 # Garante que o projeto raiz esteja no path
@@ -183,70 +183,41 @@ def sync_companies(svc, db, FapCompany, law_firm_id: int) -> int:
 # Sync de procurações
 # ---------------------------------------------------------------------------
 
-def sync_procuracoes(svc, db, FapWebProcuracao, law_firm_id: int) -> dict:
+def sync_procuracoes(svc, law_firm_id: int) -> dict:
+    """Delega ao serviço e, ao fim, dispara o alerta de mudança.
+
+    A regra vive em ``app/services/fap_procuracoes_service.py``, compartilhada com
+    ``scripts/fap_procuracoes_sync.py`` e com a rota do painel.
+
+    Este cron **também** notifica, de propósito: se o cron dedicado não estiver
+    instalado no servidor, o alerta ainda sai uma vez por dia em vez de nunca.
+    Não duplica e-mail — a janela ``last_sent_at`` já foi avançada pela execução
+    dedicada, então a segunda chamada não encontra novidade.
+    """
+    from app.services import notification_service
+    from app.services.fap_procuracoes_service import sync_procuracoes as _sync
+
     _log("  → Buscando procurações no portal FAP...")
-    result = svc.fetch_procuracoes()
-    if not result.ok:
-        _log(f"  ✗ Falha ao buscar procurações: {result.message}")
-        return {'created': 0, 'updated': 0}
+    stats = _sync(svc, law_firm_id)
+    if not stats['ok']:
+        _log(f"  ✗ Falha ao buscar procurações: {stats['message']}")
+        return stats
 
-    items = result.data if isinstance(result.data, list) else []
-    now = datetime.now()
-    created = 0
-    updated = 0
+    _log(
+        f"  ✓ Procurações: {stats['created']} criadas, {stats['updated']} alteradas, "
+        f"{stats['unchanged']} sem mudança (total {stats['total']})"
+    )
 
-    def _parse_date(s):
-        if not s:
-            return None
+    if stats['alertaveis']:
         try:
-            return date.fromisoformat(s[:10])
-        except Exception:
-            return None
+            result = notification_service.send_procuracoes_alert(law_firm_id)
+            _log(f"  · Alerta de procurações: {result['status']} — {result['message']}")
+        except Exception as e:
+            from app.models import db
+            db.session.rollback()
+            _log(f"  ! Falha ao enviar o alerta de procurações: {e}")
 
-    def _parse_datetime(s):
-        if not s:
-            return None
-        try:
-            return datetime.fromisoformat(s.replace('Z', '+00:00').split('+')[0])
-        except Exception:
-            return None
-
-    for item in items:
-        protocolo = str(item.get('protocolo') or '').strip()
-        if not protocolo:
-            continue
-
-        tipo = item.get('tipoProcuracao') or {}
-        sit = item.get('situacao') or {}
-
-        fields = dict(
-            tipo_procuracao_codigo=tipo.get('codigo'),
-            tipo_procuracao_descricao=tipo.get('descricao'),
-            situacao_codigo=sit.get('codigo'),
-            situacao_descricao=sit.get('descricao'),
-            data_inicio=_parse_date(item.get('dataInicio')),
-            data_fim=_parse_date(item.get('dataFim')),
-            cnpj_raiz_outorgante=str(item['cnpjRaizOutorgante']) if item.get('cnpjRaizOutorgante') is not None else None,
-            nome_empresa_outorgante=item.get('nomeEmpresaOutorgante'),
-            cpf_outorgado=str(item['cpfOutorgado']) if item.get('cpfOutorgado') is not None else None,
-            cnpj_raiz_outorgado=str(item['cnpjRaizOutorgado']) if item.get('cnpjRaizOutorgado') is not None else None,
-            data_cadastro=_parse_datetime(item.get('dataCadastro')),
-            raw_data=json.dumps(item, ensure_ascii=False),
-            last_synced_at=now,
-        )
-
-        existing = FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id, protocolo=protocolo).first()
-        if existing:
-            for k, v in fields.items():
-                setattr(existing, k, v)
-            updated += 1
-        else:
-            db.session.add(FapWebProcuracao(law_firm_id=law_firm_id, protocolo=protocolo, **fields))
-            created += 1
-
-    db.session.commit()
-    _log(f"  ✓ Procurações: {created} criadas, {updated} atualizadas (total {len(items)})")
-    return {'created': created, 'updated': updated}
+    return stats
 
 
 # ---------------------------------------------------------------------------
@@ -629,8 +600,7 @@ def main() -> None:
     from main import app
     from app.models import (
         db, LawFirm, FapCompany, FapWebContestacao,
-        FapWebContestacaoChangeHistory, FapWebProcuracao,
-        FapAutoImportedContestacao,
+        FapWebContestacaoChangeHistory, FapAutoImportedContestacao,
     )
 
     years = _get_sync_years()
@@ -658,7 +628,7 @@ def main() -> None:
         # 5. Sincroniza procurações
         _log("\n[2/3] Sincronizando procurações...")
         try:
-            sync_procuracoes(svc, db, FapWebProcuracao, law_firm_id)
+            sync_procuracoes(svc, law_firm_id)
         except Exception as e:
             _log(f"  ✗ Erro ao sincronizar procurações: {e}")
             db.session.rollback()

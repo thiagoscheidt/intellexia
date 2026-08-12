@@ -2766,9 +2766,63 @@ class FapWebProcuracao(db.Model):
     updated_at     = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
+    change_history = db.relationship(
+        'FapWebProcuracaoChangeHistory',
+        back_populates='procuracao',
+        cascade='all, delete-orphan',
+        lazy='dynamic',
+    )
 
     def __repr__(self):
         return f'<FapWebProcuracao protocolo={self.protocolo} outorgante={self.cnpj_raiz_outorgante}>'
+
+
+class FapWebProcuracaoChangeHistory(db.Model):
+    """Histórico de mudanças detectadas na sincronização das procurações FAP.
+
+    Espelha ``FapWebContestacaoChangeHistory``. É a fonte das duas notificações
+    de procurações: a janela é ``synced_at``, e ``is_alertavel`` marca as linhas
+    que merecem e-mail (situação e vigência) — as demais ficam só como auditoria.
+    """
+
+    __tablename__ = 'fap_web_procuracoes_change_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    procuracao_db_id = db.Column(
+        db.Integer,
+        db.ForeignKey('fap_web_procuracoes.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+
+    protocolo = db.Column(db.String(50), nullable=False, index=True)
+
+    # Desnormalizados de propósito: o e-mail monta a lista sem JOIN.
+    cnpj_raiz_outorgante    = db.Column(db.String(20), index=True)
+    nome_empresa_outorgante = db.Column(db.String(500))
+
+    change_type    = db.Column(db.String(30), nullable=False, default='updated', index=True)
+    changed_fields = db.Column(db.Text)
+    old_values     = db.Column(db.Text)
+    new_values     = db.Column(db.Text)
+
+    # A mudança cruza ALERT_FIELDS? Gravado aqui para o e-mail não precisar
+    # abrir o JSON de changed_fields linha a linha.
+    is_alertavel = db.Column(db.Boolean, nullable=False, default=False, index=True)
+
+    synced_at  = db.Column(db.DateTime, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm   = db.relationship('LawFirm')
+    procuracao = db.relationship('FapWebProcuracao', back_populates='change_history')
+
+    def __repr__(self):
+        return (
+            f'<FapWebProcuracaoChangeHistory protocolo={self.protocolo} '
+            f'change_type={self.change_type} synced_at={self.synced_at}>'
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3504,6 +3558,9 @@ class NotificationSetting(db.Model):
     TYPE_FAP_DIGEST = 'fap_digest'
     TYPE_COMMUNICATIONS_DIGEST = 'communications_digest'
     TYPE_RADAR_DIGEST = 'radar_digest'
+    # Evento: disparado pelo script de sync das procurações, não pelo cron horário.
+    TYPE_PROCURACOES_ALERT = 'procuracoes_alert'
+    TYPE_PROCURACOES_DIGEST = 'procuracoes_digest'
 
     FREQUENCY_DAILY = 'daily'
     FREQUENCY_WEEKLY = 'weekly'

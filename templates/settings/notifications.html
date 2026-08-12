@@ -342,6 +342,174 @@
           </form>
         </div>
 
+        <!-- Card: Alerta de procurações (evento — sem agendamento) -->
+        <div class="card card-outline mt-4" style="border-top-color:#0f766e;">
+          <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h3 class="card-title mb-0">
+              <i class="bi bi-file-earmark-check me-2" style="color:#0f766e;"></i>Procurações FAP — alerta de mudança
+            </h3>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch" id="procalert_is_enabled" name="is_enabled"
+                {% if procuracoes_alert.is_enabled %}checked{% endif %}>
+              <label class="form-check-label" for="procalert_is_enabled" id="procalert_enabledLabel">
+                {{ 'Ativo' if procuracoes_alert.is_enabled else 'Inativo' }}
+              </label>
+            </div>
+          </div>
+
+          <form id="procAlertForm" method="POST" action="{{ url_for('settings.notifications_procuracoes_alert_post') }}">
+            <div class="card-body">
+              <p class="text-muted mb-4">
+                E-mail disparado <strong>assim que a sincronização com o FAP Web encontrar novidade</strong>:
+                procuração nova, mudança de situação (por exemplo, de Pendente para Deferida) ou
+                alteração da vigência. Correções cadastrais sem efeito jurídico ficam registradas
+                no histórico, mas não geram e-mail.
+              </p>
+
+              <div class="alert alert-light border d-flex align-items-start gap-2">
+                <i class="bi bi-lightning-charge text-warning mt-1"></i>
+                <div class="small mb-0">
+                  <strong>Não tem horário.</strong> A frequência é a do cron de sincronização de
+                  procurações no servidor (<code>scripts/fap_procuracoes_sync.py</code>). Em cada
+                  execução sai no máximo um e-mail, e só quando houve mudança de verdade.
+                </div>
+              </div>
+
+              <h5 class="mb-3"><i class="bi bi-people me-2"></i>Destinatários</h5>
+              <div class="mb-3">
+                <label for="procalert_recipients" class="form-label">E-mails</label>
+                <textarea class="form-control" id="procalert_recipients" name="recipients" rows="3"
+                  placeholder="fulano@escritorio.com.br">{{ procuracoes_alert.get_recipients()|join(', ') }}</textarea>
+                <small class="text-muted">Separe por vírgula, ponto e vírgula ou quebra de linha.</small>
+              </div>
+
+              {% if procuracoes_alert.last_sent_at %}
+              <div class="alert alert-light border mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                Último envio: <strong>{{ procuracoes_alert.last_sent_at|datetime_sp }}</strong>.
+                O próximo alerta traz o que mudou a partir dessa data — se um envio falhar,
+                o período é reenviado na execução seguinte.
+              </div>
+              {% else %}
+              <div class="alert alert-light border mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                Nenhum envio ainda. O primeiro alerta cobre as últimas 24 horas.
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="card-footer d-flex flex-wrap gap-2">
+              <button type="submit" class="btn btn-primary" id="procalert_submitBtn">
+                <i class="bi bi-save me-2"></i>
+                <span id="procalert_btnText">Salvar Alterações</span>
+              </button>
+              <button type="button" class="btn btn-outline-secondary" id="procalert_sendNowBtn"
+                {% if not smtp_configured %}disabled{% endif %}
+                title="Envia um e-mail de teste só para você, sem afetar o controle de envios">
+                <i class="bi bi-send me-2"></i>
+                <span id="procalert_sendNowText">Enviar teste para mim</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Card: Resumo diário de procurações -->
+        <div class="card card-outline mt-4" style="border-top-color:#0f766e;">
+          <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h3 class="card-title mb-0">
+              <i class="bi bi-calendar-check me-2" style="color:#0f766e;"></i>Procurações FAP — resumo do dia
+            </h3>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch" id="procdig_is_enabled" name="is_enabled"
+                {% if procuracoes_digest.is_enabled %}checked{% endif %}>
+              <label class="form-check-label" for="procdig_is_enabled" id="procdig_enabledLabel">
+                {{ 'Ativo' if procuracoes_digest.is_enabled else 'Inativo' }}
+              </label>
+            </div>
+          </div>
+
+          <form id="procDigestForm" method="POST" action="{{ url_for('settings.notifications_procuracoes_digest_post') }}">
+            <div class="card-body">
+              <p class="text-muted mb-4">
+                E-mail com as procurações <strong>chegando ao fim da vigência</strong> (vencidas sem
+                renovação, vencendo em até 7 dias e em 8 a 30 dias) e as <strong>novas do período</strong>.
+                Diferente dos demais resumos, este é enviado enquanto houver procuração vencendo na
+                janela — mesmo sem novidade —, porque é justamente esse o aviso que não pode faltar.
+              </p>
+
+              <h5 class="mb-3"><i class="bi bi-clock me-2"></i>Quando enviar</h5>
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="procdig_frequency" class="form-label">Frequência</label>
+                    <select class="form-select" id="procdig_frequency" name="frequency">
+                      <option value="daily" {% if procuracoes_digest.frequency == 'daily' %}selected{% endif %}>Diário</option>
+                      <option value="weekly" {% if procuracoes_digest.frequency == 'weekly' %}selected{% endif %}>Semanal</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="col-md-4" id="procdig_weekdayGroup">
+                  <div class="mb-3">
+                    <label for="procdig_send_weekday" class="form-label">Dia da semana</label>
+                    <select class="form-select" id="procdig_send_weekday" name="send_weekday">
+                      {% for label in weekday_labels %}
+                      <option value="{{ loop.index0 }}" {% if procuracoes_digest.send_weekday == loop.index0 %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="procdig_send_hour" class="form-label">Horário</label>
+                    <select class="form-select" id="procdig_send_hour" name="send_hour">
+                      {% for h in range(24) %}
+                      <option value="{{ h }}" {% if procuracoes_digest.send_hour == h %}selected{% endif %}>{{ '%02d:00'|format(h) }}</option>
+                      {% endfor %}
+                    </select>
+                    <small class="text-muted">Horário de Brasília</small>
+                  </div>
+                </div>
+              </div>
+
+              <hr>
+
+              <h5 class="mb-3"><i class="bi bi-people me-2"></i>Destinatários</h5>
+              <div class="mb-3">
+                <label for="procdig_recipients" class="form-label">E-mails</label>
+                <textarea class="form-control" id="procdig_recipients" name="recipients" rows="3"
+                  placeholder="fulano@escritorio.com.br">{{ procuracoes_digest.get_recipients()|join(', ') }}</textarea>
+                <small class="text-muted">Separe por vírgula, ponto e vírgula ou quebra de linha.</small>
+              </div>
+
+              {% if procuracoes_digest.last_sent_at %}
+              <div class="alert alert-light border mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                Último envio: <strong>{{ procuracoes_digest.last_sent_at|datetime_sp }}</strong>.
+                O bloco "novas" do próximo e-mail cobre o que entrou a partir dessa data.
+              </div>
+              {% else %}
+              <div class="alert alert-light border mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                Nenhum envio ainda. O primeiro e-mail considera novas as das últimas 24 horas (diário) ou 7 dias (semanal).
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="card-footer d-flex flex-wrap gap-2">
+              <button type="submit" class="btn btn-primary" id="procdig_submitBtn">
+                <i class="bi bi-save me-2"></i>
+                <span id="procdig_btnText">Salvar Alterações</span>
+              </button>
+              <button type="button" class="btn btn-outline-secondary" id="procdig_sendNowBtn"
+                {% if not smtp_configured %}disabled{% endif %}
+                title="Envia um e-mail de teste só para você, sem afetar o agendamento">
+                <i class="bi bi-send me-2"></i>
+                <span id="procdig_sendNowText">Enviar teste para mim</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
       </div>
 
       <div class="col-lg-3">
@@ -573,6 +741,70 @@
           radarSendNowText.textContent = 'Enviar teste para mim';
         });
     });
+
+    // --- Cards de procurações ---------------------------------------------
+    // Mesma mecânica dos anteriores, num helper: são dois cards, e o do alerta
+    // não tem agendamento (passa hasSchedule=false, sem o grupo de dia da semana).
+    function wireNotificationCard(prefix, formId, sendUrl, hasSchedule) {
+      const form = document.getElementById(formId);
+      const submitBtn = document.getElementById(prefix + '_submitBtn');
+      const btnText = document.getElementById(prefix + '_btnText');
+      const enabledCheck = document.getElementById(prefix + '_is_enabled');
+      const enabledLabel = document.getElementById(prefix + '_enabledLabel');
+      const sendBtn = document.getElementById(prefix + '_sendNowBtn');
+      const sendText = document.getElementById(prefix + '_sendNowText');
+
+      if (hasSchedule) {
+        const freq = document.getElementById(prefix + '_frequency');
+        const weekdayGroup = document.getElementById(prefix + '_weekdayGroup');
+        const syncWeekday = () => {
+          weekdayGroup.style.display = freq.value === 'weekly' ? '' : 'none';
+        };
+        freq.addEventListener('change', syncWeekday);
+        syncWeekday();
+      }
+
+      enabledCheck.addEventListener('change', function () {
+        enabledLabel.textContent = this.checked ? 'Ativo' : 'Inativo';
+      });
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        submitBtn.disabled = true;
+        btnText.textContent = 'Salvando...';
+
+        const formData = new FormData(form);
+        formData.set('is_enabled', enabledCheck.checked ? '1' : '0');
+
+        fetch(form.action, { method: 'POST', body: formData })
+          .then(response => response.json())
+          .then(data => showAlert(data.message, data.success ? 'success' : 'danger'))
+          .catch(() => showAlert('Erro de comunicação com o servidor.', 'danger'))
+          .finally(() => {
+            submitBtn.disabled = false;
+            btnText.textContent = 'Salvar Alterações';
+          });
+      });
+
+      sendBtn.addEventListener('click', function () {
+        sendBtn.disabled = true;
+        sendText.textContent = 'Enviando...';
+
+        fetch(sendUrl, { method: 'POST' })
+          .then(response => response.json())
+          .then(data => showAlert(data.message, data.success ? 'success' : 'danger'))
+          .catch(() => showAlert('Erro de comunicação com o servidor.', 'danger'))
+          .finally(() => {
+            sendBtn.disabled = false;
+            sendText.textContent = 'Enviar teste para mim';
+          });
+      });
+    }
+
+    wireNotificationCard('procalert', 'procAlertForm',
+      '{{ url_for("settings.notifications_procuracoes_alert_send_now") }}', false);
+    wireNotificationCard('procdig', 'procDigestForm',
+      '{{ url_for("settings.notifications_procuracoes_digest_send_now") }}', true);
   });
 </script>
 {% endblock %}

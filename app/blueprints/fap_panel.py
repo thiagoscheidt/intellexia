@@ -52,6 +52,7 @@ from app.models import (
 )
 from app.services import fap_group_service
 from app.services import fap_group_import_service
+from app.services import fap_procuracoes_service
 from app.services.fap_web_service import (
     FapWebAuthPayload, FapWebService, build_fap_service, resolve_fap_auth,
 )
@@ -2199,8 +2200,11 @@ def sync_summary():
 def sync_procuracoes():
     """AJAX — Busca as procurações eletrônicas do portal FAP e persiste no banco.
 
+    A regra vive em ``app/services/fap_procuracoes_service.py``, compartilhada com
+    ``scripts/fap_procuracoes_sync.py`` e com a etapa do cron completo.
+
     Response JSON:
-        { "ok": true, "total": 42, "created": 10, "updated": 32 }
+        { "ok": true, "total": 42, "created": 10, "updated": 2, "unchanged": 30 }
     """
     law_firm_id = get_current_law_firm_id()
 
@@ -2212,86 +2216,25 @@ def sync_procuracoes():
             'message': 'Dados de autenticação não encontrados. Salve a sessão FAP ou configure FAP_AUTH_JSON no servidor.',
         }), 400
 
-    result = service.fetch_procuracoes()
-    if not result.ok:
-        expired = getattr(result, 'expired', False)
-        payload = {'ok': False, 'message': result.message}
-        if expired:
-            payload['expired'] = True
-        return jsonify(payload), 502
-
-    items = result.data if isinstance(result.data, list) else []
-    now = datetime.now()
-    created = 0
-    updated = 0
-
     try:
-        for item in items:
-            protocolo = str(item.get('protocolo') or '').strip()
-            if not protocolo:
-                continue
-
-            tipo   = item.get('tipoProcuracao') or {}
-            sit    = item.get('situacao') or {}
-
-            # Datas
-            from datetime import date as _date
-            def _parse_date(s):
-                if not s:
-                    return None
-                try:
-                    return _date.fromisoformat(s[:10])
-                except Exception:
-                    return None
-
-            def _parse_datetime(s):
-                if not s:
-                    return None
-                try:
-                    return datetime.fromisoformat(s.replace('Z', '+00:00').split('+')[0])
-                except Exception:
-                    return None
-
-            existing = FapWebProcuracao.query.filter_by(
-                law_firm_id=law_firm_id,
-                protocolo=protocolo,
-            ).first()
-
-            fields = dict(
-                tipo_procuracao_codigo    = tipo.get('codigo'),
-                tipo_procuracao_descricao = tipo.get('descricao'),
-                situacao_codigo           = sit.get('codigo'),
-                situacao_descricao        = sit.get('descricao'),
-                data_inicio               = _parse_date(item.get('dataInicio')),
-                data_fim                  = _parse_date(item.get('dataFim')),
-                cnpj_raiz_outorgante      = str(item['cnpjRaizOutorgante']) if item.get('cnpjRaizOutorgante') is not None else None,
-                nome_empresa_outorgante   = item.get('nomeEmpresaOutorgante'),
-                cpf_outorgado             = str(item['cpfOutorgado']) if item.get('cpfOutorgado') is not None else None,
-                cnpj_raiz_outorgado       = str(item['cnpjRaizOutorgado']) if item.get('cnpjRaizOutorgado') is not None else None,
-                data_cadastro             = _parse_datetime(item.get('dataCadastro')),
-                raw_data                  = json.dumps(item, ensure_ascii=False),
-                last_synced_at            = now,
-            )
-
-            if existing:
-                for k, v in fields.items():
-                    setattr(existing, k, v)
-                updated += 1
-            else:
-                rec = FapWebProcuracao(
-                    law_firm_id=law_firm_id,
-                    protocolo=protocolo,
-                    **fields,
-                )
-                db.session.add(rec)
-                created += 1
-
-        db.session.commit()
+        stats = fap_procuracoes_service.sync_procuracoes(service, law_firm_id)
     except Exception as e:
         db.session.rollback()
         return jsonify({'ok': False, 'message': f'Erro ao salvar no banco: {str(e)}'}), 500
 
-    return jsonify({'ok': True, 'total': len(items), 'created': created, 'updated': updated})
+    if not stats['ok']:
+        payload = {'ok': False, 'message': stats['message']}
+        if stats['expired']:
+            payload['expired'] = True
+        return jsonify(payload), 502
+
+    return jsonify({
+        'ok': True,
+        'total': stats['total'],
+        'created': stats['created'],
+        'updated': stats['updated'],
+        'unchanged': stats['unchanged'],
+    })
 
 
 @fap_panel_bp.route('/sync/procuracoes/list', methods=['GET'])

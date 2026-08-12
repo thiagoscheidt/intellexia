@@ -84,6 +84,14 @@ def build_procuracoes_digest(law_firm_id: int, since: datetime) -> dict
 def ultima_sincronizacao(law_firm_id: int) -> datetime | None
 ```
 
+**Instantes em UTC** (`_utcnow()`), não `datetime.now()`. Descoberto na implementação:
+`main.py` define `TZ=America/Sao_Paulo`, então `datetime.now()` devolve hora local — 3 h
+atrás do UTC em que `NotificationSetting.last_sent_at` é gravado. Como `synced_at` é a coluna
+comparada com essa janela, gravá-la em hora local deixaria a janela 3 h no futuro: nenhuma
+mudança seria alertada até o relógio local ultrapassar o `last_sent_at`, e o alerta "imediato"
+sairia em rajadas de 3 em 3 horas. Datas de vigência seguem em data local (`date.today()`) —
+`data_fim` é data comercial brasileira, não instante.
+
 **`sync_procuracoes`** — retorna
 `{'ok', 'total', 'created', 'updated', 'unchanged', 'alertaveis', 'expired', 'message'}`.
 
