@@ -328,6 +328,16 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
 - **O volume é espasmódico**: 32 dos 41 alertas caíram num único dia e os
   outros seis tiveram de 1 a 3; 28 dos 41 vieram do Ministério da Previdência
   Social, em DO3. Qualquer digest ou tela nova tem de aguentar os dois extremos.
+- **"Ver trecho" tem dois modos** (`trechos_do_alerta`): recorte em volta de
+  cada CNPJ, ou o **inteiro teor marcado** quando os recortes somariam ≥80% do
+  texto. O segundo é o edital-tabela do CRPS — 103 CNPJs lado a lado em 9 mil
+  caracteres, onde as janelas se sobrepõem e recortar devolveria mais texto que
+  o original. O fragmento é buscado por `fetch` num modal único da página: os
+  30 inteiros teores de uma página passariam de 60 KB cada. `marcar_identificadores`
+  (em `dou_search_service`) marca todas as ocorrências numa varredura, ordenando
+  os achados para não aninhar marca dentro de marca — e o escape vem do
+  `destacar`, **nunca depois**, porque o texto do DOU tem `<` de verdade e o
+  fragmento entra no template com `| safe`.
 
 ### Timezone
 

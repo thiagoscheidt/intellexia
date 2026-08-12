@@ -473,6 +473,42 @@ def trecho_do_identificador(texto: str | None, digitos: str,
     return None
 
 
+def marcar_identificadores(texto: str | None, digitos) -> str | None:
+    """Marca **toda** ocorrência dos números pedidos, numa varredura só.
+
+    Diferente de ``trecho_do_identificador``, que recorta em volta da primeira
+    ocorrência de um número: aqui o texto sai inteiro, com todas as ocorrências
+    marcadas. Serve para o edital-tabela, onde os CNPJs ficam lado a lado e
+    recortar janela por número devolveria mais texto que o original.
+    """
+    if not texto:
+        return None
+    alvos = {d for d in (digitos or ()) if d}
+    if not alvos:
+        return texto
+
+    achados = []
+    for regex in (_RE_CNPJ, _RE_PROCESSO, _RE_CNPJ_DIGITOS):
+        for achado in regex.finditer(texto):
+            if so_digitos(achado.group()) in alvos:
+                achados.append((achado.start(), achado.end()))
+    if not achados:
+        return texto
+
+    # Os três regex podem casar o mesmo pedaço; ordenar e descartar sobreposição
+    # evita marca dentro de marca.
+    achados.sort()
+    saida, cursor = [], 0
+    for inicio, fim in achados:
+        if inicio < cursor:
+            continue
+        saida.append(texto[cursor:inicio])
+        saida.append(MARCA_INI + texto[inicio:fim] + MARCA_FIM)
+        cursor = fim
+    saida.append(texto[cursor:])
+    return ''.join(saida)
+
+
 def _formatar_hit(hit: dict, tipo: str = 'texto', normalizado: str = '') -> dict:
     """Achata o resultado do Meilisearch no que a tela precisa."""
     destacado = hit.get('_formatted') or {}

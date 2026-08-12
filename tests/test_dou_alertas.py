@@ -315,6 +315,95 @@ def test_chip_da_header():
               'alerta(s) de cliente não lido(s)' not in html)
 
 
+def test_trecho():
+    """O modal "ver trecho": recorte por CNPJ, inteiro teor no edital-tabela."""
+    print('\n7. Trecho da matéria')
+    from app.services import dou_search_service as busca
+
+    # --- marcação de todas as ocorrências, sem marca dentro de marca
+    marcado = busca.marcar_identificadores(
+        'Contrato com 33.592.510/0001-54 e com 33.592.510/0021-06 hoje',
+        ['33592510000154', '33592510002106'])
+    check('marca as duas ocorrências', marcado.count(busca.MARCA_INI) == 2, marcado)
+    check('não marca quem não foi pedido',
+          busca.marcar_identificadores('CNPJ 33.592.510/0001-54',
+                                       ['11222333000181']).count(busca.MARCA_INI) == 0)
+    check('texto sem alvo volta inteiro',
+          busca.marcar_identificadores('sem número', []) == 'sem número')
+    check('texto vazio não quebra', busca.marcar_identificadores(None, ['x']) is None)
+
+    # --- o HTML do DOU não pode virar elemento na página: o fragmento entra
+    # no template com `| safe`, então o escape tem de acontecer aqui.
+    perigoso = busca.destacar('<script>alert(1)</script> e '
+                              + busca.MARCA_INI + '33.592.510/0001-54' + busca.MARCA_FIM)
+    check('o script do texto é escapado', '<script>' not in perigoso, perigoso[:60])
+    check('e a marca vira <mark> de verdade', '<mark>' in perigoso)
+
+    with app.app_context():
+        pequeno = DouClientAlert.query.filter_by(clients_count=1).first()
+        grande = (DouClientAlert.query
+                  .order_by(DouClientAlert.clients_count.desc()).first())
+        if pequeno is None or grande is None:
+            print('  ⏭️  sem alertas para exercitar — pulando')
+            return
+
+        um = alertas.trechos_do_alerta(pequeno)
+        check('uma citação vira recorte, não o texto todo',
+              um['modo'] == 'trechos' and len(um['itens']) == 1, str(um['modo']))
+        if um['itens']:
+            check('o recorte traz o CNPJ marcado',
+                  '<mark>' in um['itens'][0]['html'], um['itens'][0]['html'][:80])
+            check('o recorte é menor que a matéria',
+                  len(um['itens'][0]['html']) < len(pequeno.article.texto or ''),
+                  f"{len(um['itens'][0]['html'])} vs {len(pequeno.article.texto or '')}")
+
+        muitos = alertas.trechos_do_alerta(grande)
+        if grande.clients_count > 20:
+            check('o edital-tabela cai no inteiro teor, não em N recortes',
+                  muitos['modo'] == 'inteiro', str(muitos['modo']))
+            check('e todas as citações vêm marcadas',
+                  (muitos['inteiro'] or '').count('<mark>') == grande.clients_count,
+                  f"{(muitos['inteiro'] or '').count('<mark>')} vs {grande.clients_count}")
+            check('o inteiro teor não é maior que o texto com as marcas',
+                  len(muitos['inteiro'] or '') < len(grande.article.texto or '') * 2)
+
+        usuario = User.query.filter_by(role='admin').first()
+        user_id, firm_id = usuario.id, usuario.law_firm_id
+        id_pequeno, id_grande = pequeno.id, grande.id
+
+    with app.test_client() as c:
+        with c.session_transaction() as sessao:
+            sessao['user_id'] = user_id
+            sessao['law_firm_id'] = firm_id
+            sessao['user_role'] = 'admin'
+
+        resposta = c.get(f'/dou/alertas/{id_pequeno}/trecho')
+        html = resposta.get_data(as_text=True)
+        check('a rota do trecho responde', resposta.status_code == 200,
+              str(resposta.status_code))
+        check('devolve fragmento, não a página inteira',
+              '<html' not in html.lower() and 'dou-trecho' in html)
+        check('o fragmento leva a matéria inteira e a folha',
+              '/dou/materia/' in html and '/pagina/' in html)
+
+        grandes = c.get(f'/dou/alertas/{id_grande}/trecho').get_data(as_text=True)
+        check('o edital-tabela vem com o bloco rolável',
+              'dou-trecho__texto--inteiro' in grandes)
+
+        check('trecho de alerta inexistente dá 404',
+              c.get('/dou/alertas/99999999/trecho').status_code == 404)
+
+        lista = c.get('/dou/alertas').get_data(as_text=True)
+        check('o botão fica ao lado de "Ver no Diário"',
+              'dou-ver-trecho' in lista and 'Ver no Diário' in lista)
+        check('a lista tem um modal só, não um por linha',
+              lista.count('id="modal-trecho"') == 1,
+              f"{lista.count('id=\"modal-trecho\"')} modais")
+        check('o inteiro teor não é embutido na lista',
+              'dou-trecho__texto' not in lista,
+              'a página carregaria 30 matérias de uma vez')
+
+
 def main():
     print('=' * 60)
     print('TESTES DOS ALERTAS DE CLIENTE NO DIÁRIO OFICIAL')
@@ -326,6 +415,7 @@ def main():
     test_reprocessar_nao_duplica()
     test_tela()
     test_chip_da_header()
+    test_trecho()
 
     print('\n' + '=' * 60)
     if _falhas:

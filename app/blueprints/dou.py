@@ -397,6 +397,19 @@ def _alerta_do_escritorio(alerta_id):
             .filter_by(id=alerta_id, law_firm_id=law_firm_id).first_or_404())
 
 
+@dou_bp.route('/alertas/<int:alerta_id>/trecho')
+def alerta_trecho(alerta_id):
+    """Fragmento HTML com o texto em volta do CNPJ do cliente, para o modal.
+
+    Buscado sob demanda: a página lista 30 alertas e o inteiro teor de um
+    edital passa de 60 KB — embutir os 30 de uma vez faria a tela pesar mais
+    que o acervo do dia.
+    """
+    alerta = _alerta_do_escritorio(alerta_id)
+    return render_template('dou/_alerta_trecho.html', alerta=alerta,
+                           trecho=alert_service.trechos_do_alerta(alerta))
+
+
 @dou_bp.route('/alertas/<int:alerta_id>/lida', methods=['POST'])
 def alerta_marcar(alerta_id):
     alerta = _alerta_do_escritorio(alerta_id)

@@ -1159,3 +1159,111 @@
   font-variant-numeric: tabular-nums;
   align-self: center;
 }
+
+/* ------------------------------------------------ modal "ver trecho" */
+
+.dou-trecho {
+  display: flex;
+  flex-direction: column;
+  gap: .85rem;
+}
+
+.dou-trecho__ident {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.dou-trecho__meta,
+.dou-trecho__orgao {
+  font-size: .78rem;
+  color: var(--bs-secondary-color);
+}
+
+.dou-trecho__ementa {
+  font-size: .86rem;
+  border-left: 3px solid var(--bs-border-color);
+  padding-left: .75rem;
+  color: var(--bs-body-color);
+}
+
+.dou-trecho__rot {
+  display: block;
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--bs-secondary-color);
+}
+
+.dou-trecho__lista {
+  display: flex;
+  flex-direction: column;
+  gap: .7rem;
+}
+
+.dou-trecho__item {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 10px;
+  padding: .6rem .75rem;
+}
+
+.dou-trecho__quem {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  margin-bottom: .35rem;
+}
+
+.dou-trecho__cnpj {
+  font-size: .76rem;
+  color: var(--bs-secondary-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.dou-trecho__aviso {
+  font-size: .7rem;
+  color: var(--bs-secondary-color);
+  font-style: italic;
+}
+
+/* O texto do DOU vem sem quebra de parágrafo confiável; `pre-wrap` preserva o
+   que existe sem inventar. A quebra em qualquer ponto é para o número de
+   processo colado, que estoura a largura do modal. */
+.dou-trecho__texto {
+  margin: 0;
+  font-size: .87rem;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Inteiro teor do edital-tabela: rola dentro do próprio bloco para o modal não
+   virar uma página de 9 mil caracteres. */
+.dou-trecho__texto--inteiro {
+  max-height: 55vh;
+  overflow-y: auto;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 10px;
+  padding: .75rem;
+  background: var(--bs-body-bg);
+}
+
+.dou-trecho mark {
+  padding: 0 .15em;
+  border-radius: 3px;
+}
+
+.dou-trecho__nota,
+.dou-trecho__restantes {
+  font-size: .8rem;
+  color: var(--bs-secondary-color);
+  margin: 0;
+}
+
+.dou-trecho__pe {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding-top: .35rem;
+  border-top: 1px solid var(--bs-border-color);
+}

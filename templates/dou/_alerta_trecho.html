@@ -1,0 +1,82 @@
+{# Corpo do modal "ver trecho". Fragmento: entregue por fetch, sem layout. #}
+<div class="dou-trecho">
+
+  <div class="dou-trecho__cabeca">
+    <div>
+      <div class="dou-trecho__ident">
+        {{ alerta.article.identifica if alerta.article and alerta.article.identifica
+           else 'Matéria sem identificação no XML' }}
+      </div>
+      <div class="dou-trecho__meta">
+        {{ alerta.pub_name }}
+        {%- if alerta.pub_date %} · {{ alerta.pub_date.strftime('%d/%m/%Y') }}{% endif %}
+        {%- if alerta.article and alerta.article.pagina %} · pág. {{ alerta.article.pagina }}{% endif %}
+      </div>
+      {% if alerta.article and alerta.article.orgao_hierarquia %}
+      <div class="dou-trecho__orgao">{{ alerta.article.orgao_hierarquia }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if alerta.article and alerta.article.ementa %}
+  <div class="dou-trecho__ementa">
+    <span class="dou-trecho__rot">Ementa</span>
+    {{ alerta.article.ementa }}
+  </div>
+  {% endif %}
+
+  {% if trecho.modo == 'trechos' %}
+  <div class="dou-trecho__lista">
+    {% for item in trecho.itens %}
+    <div class="dou-trecho__item">
+      <div class="dou-trecho__quem">
+        <span class="dou-chip {{ 'dou-chip--exato' if item.tipo == 'exato' }}">
+          {{ item.cliente.name if item.cliente else '—' }}
+        </span>
+        <span class="dou-trecho__cnpj">{{ item.cnpj_formatado }}</span>
+        {% if item.tipo == 'raiz' %}
+        <span class="dou-trecho__aviso">não é o CNPJ cadastrado — mesma raiz</span>
+        {% endif %}
+      </div>
+      {# O <mark> já vem escapado pelo serviço; sem `safe` ele apareceria como
+         texto literal na tela. #}
+      <p class="dou-trecho__texto">…{{ item.html | safe }}…</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% if trecho.restantes %}
+  <p class="dou-trecho__restantes">
+    Mais {{ trecho.restantes }} citação(ões) nesta matéria.
+  </p>
+  {% endif %}
+
+  {% elif trecho.modo == 'inteiro' %}
+  {# Edital-tabela: os CNPJs ficam lado a lado e recortar janela por número
+     devolveria mais texto que o original. Vai o inteiro teor, marcado. #}
+  <p class="dou-trecho__nota">
+    <i class="bi bi-info-circle me-1"></i>
+    As {{ alerta.clients_count }} citações ficam próximas umas das outras — é uma
+    lista. Abaixo, o inteiro teor com elas destacadas.
+  </p>
+  <p class="dou-trecho__texto dou-trecho__texto--inteiro">{{ trecho.inteiro | safe }}</p>
+
+  {% else %}
+  <p class="dou-trecho__nota">
+    <i class="bi bi-dash-circle me-1"></i>
+    Esta matéria foi capturada sem texto — só o fac-símile tem o conteúdo.
+  </p>
+  {% endif %}
+
+  <div class="dou-trecho__pe">
+    <a href="{{ url_for('dou.materia', article_id=alerta.article_id, q=alerta.cnpj_destaque or none) }}"
+       class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-file-text me-1"></i>Abrir a matéria inteira
+    </a>
+    {% if alerta.article and alerta.article.pagina_num and alerta.pub_date %}
+    <a href="{{ url_for('dou.leitor', data_str=alerta.pub_date.isoformat(), numero=alerta.article.pagina_num, secao=alerta.pub_name) }}"
+       class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-journal-text me-1"></i>Ver a folha assinada
+    </a>
+    {% endif %}
+  </div>
+</div>

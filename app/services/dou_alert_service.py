@@ -310,6 +310,57 @@ def cnpjs_invalidos(law_firm_id: int):
     return Carteira(law_firm_id).invalidos
 
 
+# -------------------------------------------------------------------- trecho
+
+# Acima disto os trechos passam a somar mais que o próprio texto e não vale
+# recortar: é o caso do edital-tabela do CRPS, onde 103 CNPJs ficam lado a lado
+# em 9 mil caracteres e as janelas se sobrepõem quase inteiras.
+LIMIAR_TEXTO_INTEIRO = 0.8
+
+
+def trechos_do_alerta(alerta, maximo: int = 40) -> dict:
+    """O que o modal "ver trecho" mostra.
+
+    Devolve ``{'modo', 'itens', 'restantes', 'inteiro'}``:
+
+    * ``modo='trechos'`` — um recorte por CNPJ, em volta da citação. É o caso
+      comum: a matéria fala do cliente numa frase, e a frase é o que interessa.
+    * ``modo='inteiro'`` — o texto todo com as ocorrências marcadas, quando os
+      recortes somariam quase o texto inteiro.
+
+    O ``<mark>`` sai daqui já escapado por ``destacar``: o texto do DOU tem
+    ``<`` de verdade, e inserir a tag antes de escapar deixaria o conteúdo
+    virar elemento na página.
+    """
+    artigo = alerta.article
+    texto = (artigo.texto or '') if artigo else ''
+    if not texto:
+        return {'modo': 'vazio', 'itens': [], 'restantes': 0, 'inteiro': None}
+
+    itens = []
+    for m in alerta.matches_ordenados:
+        recorte = busca_service.trecho_do_identificador(texto, m.cnpj)
+        if not recorte:
+            continue
+        itens.append({
+            'cnpj': m.cnpj,
+            'cnpj_formatado': m.cnpj_formatado,
+            'cliente': m.client,
+            'tipo': m.match_type,
+            'html': busca_service.destacar(recorte),
+        })
+
+    soma = sum(len(i['html']) for i in itens)
+    if not itens or soma >= len(texto) * LIMIAR_TEXTO_INTEIRO:
+        marcado = busca_service.marcar_identificadores(
+            texto, [m.cnpj for m in alerta.matches])
+        return {'modo': 'inteiro', 'itens': [], 'restantes': 0,
+                'inteiro': busca_service.destacar(marcado)}
+
+    return {'modo': 'trechos', 'itens': itens[:maximo],
+            'restantes': max(0, len(itens) - maximo), 'inteiro': None}
+
+
 # -------------------------------------------------------------------- ações
 
 def marcar(alerta, usuario, lido: bool = True) -> None:

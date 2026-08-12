@@ -183,6 +183,11 @@
            title="Abrir a matéria com o CNPJ grifado no texto e na folha">
           Ver no Diário
         </a>
+        <button type="button" class="btn btn-outline-secondary btn-sm dou-ver-trecho"
+                data-url="{{ url_for('dou.alerta_trecho', alerta_id=a.id) }}"
+                title="Ler aqui mesmo o pedaço da matéria que cita o cliente">
+          Ver trecho
+        </button>
         <form method="post" action="{{ url_for('dou.alerta_marcar', alerta_id=a.id) }}">
           <input type="hidden" name="voltar" value="{{ request.full_path }}">
           <input type="hidden" name="lido" value="{{ '0' if a.status == 'lido' else '1' }}">
@@ -236,5 +241,64 @@
   </div>
 </div>
 
+{# Um modal só para a página inteira: o conteúdo é buscado no clique. Embutir
+   os 30 inteiros teores de uma página faria a tela pesar mais que o acervo do
+   dia — o edital de lista sozinho passa de 60 KB. #}
+<div class="modal fade" id="modal-trecho" tabindex="-1" aria-hidden="true"
+     aria-labelledby="modal-trecho-titulo">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h6 class="modal-title" id="modal-trecho-titulo">
+          <i class="bi bi-quote me-1"></i>Trecho da matéria
+        </h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"
+                aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body" id="modal-trecho-corpo">
+        <div class="text-center text-muted py-4">
+          <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+          Carregando…
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const modalEl = document.getElementById('modal-trecho');
+    const corpo = document.getElementById('modal-trecho-corpo');
+    if (!modalEl || !corpo) return;
+
+    const carregando = corpo.innerHTML;
+    const modal = new bootstrap.Modal(modalEl);
+
+    // Delegação no container: a lista é repaginada por link, e um listener por
+    // botão teria de ser religado a cada troca de página.
+    document.addEventListener('click', function (evento) {
+      const botao = evento.target.closest('.dou-ver-trecho');
+      if (!botao) return;
+
+      corpo.innerHTML = carregando;
+      modal.show();
+
+      fetch(botao.dataset.url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (resposta) {
+          if (!resposta.ok) throw new Error(resposta.status);
+          return resposta.text();
+        })
+        .then(function (html) { corpo.innerHTML = html; })
+        .catch(function () {
+          corpo.innerHTML =
+            '<p class="text-danger mb-0">Não foi possível carregar o trecho. ' +
+            'Tente de novo, ou abra a matéria inteira.</p>';
+        });
+    });
+  })();
+</script>
 {% endblock %}
