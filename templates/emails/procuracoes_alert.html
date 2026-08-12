@@ -10,6 +10,8 @@
   Contexto: alerta, law_firm, periodo_inicio, gerado_em, is_test.
   alerta.novas[]:     protocolo, outorgante, cnpj_raiz, tipo, situacao, data_inicio, data_fim
   alerta.alteradas[]: protocolo, outorgante, cnpj_raiz, mudancas[{campo, de, para}]
+  alerta.ultimas[]:   contexto — últimas cadastradas no portal (data_cadastro),
+                      já sem as que aparecem em novas. Não conta como novidade.
   Os links usam url_for(_external=True) — o serviço renderiza com base_url=APP_PUBLIC_URL.
 #}
 {%- set BORDA = '#dee2e6' -%}
@@ -142,6 +144,29 @@
             <div style="background:{{ FUNDO }};border:1px solid {{ BORDA }};border-radius:6px;padding:12px;color:{{ SUAVE }};font-size:13px;">
               Nenhuma mudança em procurações no período.
             </div>
+            {% endif %}
+
+            {# Contexto do que mudou — não conta como novidade, ver build_procuracoes_alert. #}
+            {% if alerta.ultimas %}
+            <h2 style="margin:20px 0 4px 0;color:{{ TEXTO }};font-size:16px;">Últimas procurações cadastradas</h2>
+            <p style="margin:0 0 12px 0;color:{{ SUAVE }};font-size:12px;">
+              As mais recentes no portal FAP, por data de cadastro.
+            </p>
+            {% for item in alerta.ultimas %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                   style="margin:0 0 8px 0;border:1px solid {{ BORDA }};border-radius:8px;">
+              <tr>
+                <td style="padding:11px 14px;font-size:13px;">
+                  {{ cartao_cabecalho(item, SUAVE, TEXTO) }}
+                  <div style="color:{{ SUAVE }};font-size:12px;margin-top:6px;">{{ item.tipo }}</div>
+                  <div style="color:{{ TEXTO }};font-size:13px;margin-top:4px;">
+                    Cadastrada em <strong>{{ item.data_cadastro }}</strong> ·
+                    vigência {{ item.data_inicio }} a {{ item.data_fim }} · {{ item.situacao }}
+                  </div>
+                </td>
+              </tr>
+            </table>
+            {% endfor %}
             {% endif %}
 
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">

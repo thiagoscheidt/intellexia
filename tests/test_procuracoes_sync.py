@@ -247,9 +247,37 @@ def teste_ultimas_cadastradas(fid):
     check(por_proto['C-HOJE']['is_nova'], 'a de hoje marcada como nova')
     check(not por_proto['C-ANTIGA']['is_nova'], 'a antiga aparece sem marca de nova')
 
+    # O alerta leva o mesmo contexto, mas ele não pode disparar o e-mail:
+    # numa base povoada "ultimas" existe sempre, e contá-la faria o alerta
+    # sair a cada execução do cron.
+    alerta = svc_mod.build_procuracoes_alert(fid, since=_utcnow() - timedelta(days=1))
+    check(len(alerta['ultimas']) == 3, 'alerta também traz as últimas cadastradas',
+          str([i['protocolo'] for i in alerta['ultimas']]))
+    check(alerta['totais']['total'] == 0, 'sem mudança no período')
+    check(not alerta['has_novidades'], 'ultimas sozinhas NÃO disparam o alerta')
+
+
+def teste_alerta_sem_duplicar_nova(fid):
+    print('\n[7] Alerta não repete a mesma procuração em novas e em últimas')
+    limpar(fid)
+    agora_sp = datetime.now()
+    recem = (agora_sp - timedelta(hours=1)).isoformat()
+
+    svc_mod.sync_procuracoes(
+        FakeService([procuracao('D-1', cnpj_raiz='81111111', data_cadastro=recem)]), fid
+    )
+
+    alerta = svc_mod.build_procuracoes_alert(fid, since=_utcnow() - timedelta(hours=2))
+    em_novas = [i['protocolo'] for i in alerta['novas']]
+    em_ultimas = [i['protocolo'] for i in alerta['ultimas']]
+
+    check('D-1' in em_novas, 'aparece como nova', str(em_novas))
+    check('D-1' not in em_ultimas, 'não se repete no bloco de contexto', str(em_ultimas))
+    check(alerta['has_novidades'], 'mudança real dispara o alerta')
+
 
 def teste_corte_dos_blocos(fid):
-    print('\n[7] Blocos longos são cortados no corpo do e-mail')
+    print('\n[8] Blocos longos são cortados no corpo do e-mail')
     limpar(fid)
     hoje = date.today()
     quantidade = svc_mod.LIMITE_POR_BLOCO + 4
@@ -270,7 +298,7 @@ def teste_corte_dos_blocos(fid):
 
 
 def teste_alerta_fora_do_cron_horario(fid):
-    print('\n[8] Alerta não é varrido pelo cron horário')
+    print('\n[9] Alerta não é varrido pelo cron horário')
     setting = notification_service.get_or_create_setting(
         fid, NotificationSetting.TYPE_PROCURACOES_ALERT
     )
@@ -295,7 +323,7 @@ def teste_alerta_fora_do_cron_horario(fid):
 
 
 def teste_falha_na_busca(fid):
-    print('\n[9] Falha na busca não toca no banco')
+    print('\n[10] Falha na busca não toca no banco')
     antes_proc = FapWebProcuracao.query.filter_by(law_firm_id=fid).count()
     antes_hist = len(historico(fid))
 
@@ -311,7 +339,7 @@ def teste_falha_na_busca(fid):
 
 
 def teste_render_dos_emails(fid):
-    print('\n[10] E-mails renderizam')
+    print('\n[11] E-mails renderizam')
     since = _utcnow() - timedelta(days=1)
 
     html_alerta, _ = notification_service.render_procuracoes_alert(fid, since=since, is_test=True)
@@ -340,6 +368,7 @@ def main():
             teste_mudanca_nao_alertavel(fid)
             teste_digest_faixas(fid)
             teste_ultimas_cadastradas(fid)
+            teste_alerta_sem_duplicar_nova(fid)
             teste_corte_dos_blocos(fid)
             teste_alerta_fora_do_cron_horario(fid)
             teste_falha_na_busca(fid)

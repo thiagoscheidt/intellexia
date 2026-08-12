@@ -279,12 +279,17 @@ def _identificacao(row) -> dict:
     }
 
 
-def build_procuracoes_alert(law_firm_id: int, since: datetime) -> dict:
+def build_procuracoes_alert(law_firm_id: int, since: datetime, hoje: date | None = None) -> dict:
     """Procurações novas e alteradas na janela — corpo do alerta imediato.
 
     Lê só o histórico com ``is_alertavel=True``: mudança cadastral irrelevante
     fica gravada, mas não vira e-mail.
+
+    Leva junto ``ultimas`` (as últimas cadastradas no portal) como contexto do
+    que mudou. Elas **não** entram em ``has_novidades``: existem sempre numa base
+    povoada, e contá-las faria o alerta disparar a cada execução do cron.
     """
+    hoje = hoje or date.today()
     rows = (
         FapWebProcuracaoChangeHistory.query
         .filter(
@@ -343,10 +348,19 @@ def build_procuracoes_alert(law_firm_id: int, since: datetime) -> dict:
         'alteradas': len(alteradas),
         'total': len(novas) + len(alteradas),
     }
+
+    # Contexto: as últimas cadastradas no portal, menos as que já estão em
+    # "novas" — senão a mesma procuração apareceria duas vezes no e-mail.
+    ultimas, _ = _ultimas_cadastradas(law_firm_id, since, hoje)
+    ja_listadas = {item['protocolo'] for item in novas}
+    ultimas = [item for item in ultimas if item['protocolo'] not in ja_listadas]
+
     return {
         'novas': novas,
         'alteradas': alteradas,
+        'ultimas': ultimas,
         'totais': totais,
+        # Só mudança dispara o alerta. "ultimas" é contexto e existe sempre.
         'has_novidades': totais['total'] > 0,
     }
 
