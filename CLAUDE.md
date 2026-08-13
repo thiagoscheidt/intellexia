@@ -198,7 +198,7 @@ Decorator `@require_law_firm` garante que há escritório na sessão.
 
 SMTP configurado **só via `.env`** (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `SMTP_USE_TLS`) — senha nunca vai para o banco. Sem configuração, `email_service.send_email()` apenas loga e retorna `False` (degradação graciosa).
 
-- **Config por escritório**: tabela genérica `notification_settings`, uma linha por `(law_firm_id, notification_type)`. Tela admin-only em `/settings/notifications`, um card por tipo. Novo tipo de notificação = novo `notification_type` + função `send_<tipo>` registrada em `notification_service.SENDERS` — sem schema novo. Tipos atuais: `fap_digest` (Resumo FAP), `communications_digest` (Comunicações DJEN), `radar_digest` (Radar da Mesa de Trabalho), `procuracoes_digest` (resumo diário de procurações FAP) e `procuracoes_alert` (alerta de mudança em procuração).
+- **Config por escritório**: tabela genérica `notification_settings`, uma linha por `(law_firm_id, notification_type)`. Tela admin-only em `/settings/notifications`, um card por tipo. Novo tipo de notificação = novo `notification_type` + função `send_<tipo>` registrada em `notification_service.SENDERS` — sem schema novo. Tipos atuais: `fap_digest` (Resumo FAP), `communications_digest` (Comunicações DJEN), `radar_digest` (Radar da Mesa de Trabalho), `procuracoes_digest` (resumo diário de procurações FAP), `procuracoes_alert` (alerta de mudança em procuração) e `dou_digest` (clientes citados no Diário Oficial).
 - **Notificação de evento vs. agendada**: os tipos em `notification_service.EVENT_TYPES` (hoje só `procuracoes_alert`) são disparados pelo script que produz o dado, não pelo cron horário — e por isso são **excluídos de `due_settings`**. Sem essa exclusão o `send_notifications.py` os reenviaria no `send_hour` (default 8h), duplicando o e-mail. O card desse tipo na tela não tem frequência/horário e salva por `_save_event_setting`, não por `_save_digest_setting` (que exigiria os campos de agendamento e recusaria o form).
 - **Instantes comparados com `last_sent_at` têm de estar em UTC.** O `main.py` define `TZ=America/Sao_Paulo`, então `datetime.now()` devolve hora local — 3 h atrás do UTC em que `last_sent_at` é gravado. Gravar a coluna de janela (`synced_at`, `created_at` usados como corte) em hora local deixa a janela no futuro e a notificação só sai em rajadas atrasadas. `fap_procuracoes_service._utcnow()` é o padrão a seguir.
 - **Resumo do Radar**: reusa `process_radar_service` (fonte única do widget Radar do Painel de Processos). O e-mail mostra o **estado atual** do Radar (pendências abertas), mas só dispara quando há item novo desde o último envio (`has_novidades = novos > 0`). Decisões/sentenças aparecem destacadas — critério via `datajud_snapshot_service.DECISION_WORDS`, o mesmo do radar da tela. O digest de Comunicações também marca `is_decision`/`decisoes` com essa lista.
@@ -336,6 +336,19 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
 - **O volume é espasmódico**: 32 dos 41 alertas caíram num único dia e os
   outros seis tiveram de 1 a 3; 28 dos 41 vieram do Ministério da Previdência
   Social, em DO3. Qualquer digest ou tela nova tem de aguentar os dois extremos.
+- **E-mail diário (`dou_digest`)**: `build_digest` tem **duas janelas
+  diferentes, de propósito**. O *conteúdo* é fixo nas **3 últimas edições
+  publicadas** (`datas_do_digest`, lido de `dou_editions` e não dos alertas,
+  para o dia sem citação aparecer); o *gatilho* é o `last_sent_at`. Sem a trava
+  do gatilho o mesmo e-mail sairia toda manhã até a edição sair da janela — por
+  isso cada empresa e o total carregam `novos`, e o selo **NOVO** é o que separa
+  o que chegou hoje do que já foi lido. Agrupado por **nome de empresa**: o dia
+  de 32 matérias e 1.320 decisões vira **7 linhas** (Itaú 16 matérias/786 CNPJs,
+  Santander 12/509…). O assunto leva o desfecho, não a contagem — "250
+  deferimentos FAP" faz abrir, "3 novidades" não. **`created_at` do alerta é
+  gravado em UTC** (`_utcnow`), não no default local do modelo: `last_sent_at` é
+  UTC e a hora local está 3 h atrás, o que faria o alerta das últimas 3 horas
+  parecer mais velho que a marca d'água e ser pulado em silêncio.
 - **"Ver trecho" recorta o HTML, não o texto** (`trechos_do_alerta`): pega os
   **blocos** do `texto_html` que citam o cliente — `<tr>` na tabela, `<p>` na
   prosa — sanitiza (`sanitizar_html`) e marca (`grifar_html`), a mesma dupla da

@@ -3561,6 +3561,7 @@ class NotificationSetting(db.Model):
     # Evento: disparado pelo script de sync das procurações, não pelo cron horário.
     TYPE_PROCURACOES_ALERT = 'procuracoes_alert'
     TYPE_PROCURACOES_DIGEST = 'procuracoes_digest'
+    TYPE_DOU_DIGEST = 'dou_digest'
 
     FREQUENCY_DAILY = 'daily'
     FREQUENCY_WEEKLY = 'weekly'

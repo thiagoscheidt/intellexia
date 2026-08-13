@@ -656,6 +656,129 @@ def test_resultado_fap():
               c.get('/dou/alertas?status=todos&fap=xpto').status_code == 200)
 
 
+def test_digest_diario():
+    """O e-mail das últimas 3 edições, agrupado por empresa."""
+    print('\n9. Resumo diário por e-mail')
+    from datetime import datetime, timedelta, timezone
+    from app.models import NotificationSetting
+    from app.services import notification_service as notif
+
+    check('o tipo está no SENDERS',
+          NotificationSetting.TYPE_DOU_DIGEST in notif.SENDERS)
+    check('e não é notificação de evento (quem dispara é o cron)',
+          NotificationSetting.TYPE_DOU_DIGEST not in notif.EVENT_TYPES)
+
+    with app.app_context():
+        usuario = User.query.filter_by(role='admin').first()
+        if usuario is None:
+            print('  ⏭️  nenhum usuário admin — pulando')
+            return
+        firm_id = usuario.law_firm_id
+
+        datas = alertas.datas_do_digest()
+        check('a janela é de 3 edições publicadas', len(datas) <= 3 and datas,
+              str(datas))
+        check('e vem da mais recente para a mais antiga',
+              datas == sorted(datas, reverse=True), str(datas))
+
+        agora = datetime.now(timezone.utc).replace(tzinfo=None)
+        d = alertas.build_digest(firm_id, since=agora - timedelta(days=365))
+
+        if not d['empresas']:
+            print('  ⏭️  nenhum alerta nas últimas edições — pulando o conteúdo')
+            return
+
+        check('o digest cobre só as datas da janela',
+              all(a.pub_date in datas for a in
+                  DouClientAlert.query.filter(
+                      DouClientAlert.law_firm_id == firm_id,
+                      DouClientAlert.pub_date.in_(datas)).all()))
+        check('agrupa por empresa, não por matéria',
+              len(d['empresas']) < d['total'] or d['total'] <= 1,
+              f"{len(d['empresas'])} empresas para {d['total']} matérias")
+        check('nenhuma empresa aparece duas vezes',
+              len({e['nome'] for e in d['empresas']}) == len(d['empresas']))
+        check('a soma das matérias por empresa cobre os alertas',
+              sum(e['materias'] for e in d['empresas']) >= d['total'])
+
+        check('quem teve recurso julgado vem primeiro',
+              [e['tem_fap'] for e in d['empresas']]
+              == sorted((e['tem_fap'] for e in d['empresas']), reverse=True),
+              str([(e['nome'][:14], e['tem_fap']) for e in d['empresas']]))
+
+        com_fap = [e for e in d['empresas'] if e['tem_fap']]
+        if com_fap:
+            check('o total de deferimentos fecha com as empresas',
+                  d['deferimentos'] == sum(e['deferimentos'] for e in d['empresas']))
+            check('deferimento vem antes de indeferimento nas pílulas',
+                  com_fap[0]['decisoes'][0][2] is True
+                  or all(not fav for _, _, fav in com_fap[0]['decisoes']),
+                  str(com_fap[0]['decisoes']))
+
+        check(f'nenhuma empresa passa de {alertas.DIGEST_EXEMPLOS} exemplos',
+              all(len(e['exemplos']) <= alertas.DIGEST_EXEMPLOS for e in d['empresas']))
+        check('o que sobra é contado em "restantes"',
+              all(e['restantes'] >= 0 for e in d['empresas']))
+
+        # Exemplo bom é o que o leitor reconhece
+        identificados = [e for e in d['empresas']
+                         if any(x['identificada'] for x in e['exemplos'])]
+        com_identificavel = [
+            e for e in d['empresas']
+            if e['materias'] > len([x for x in e['exemplos'] if not x['identificada']])
+        ]
+        check('exemplo com identificação vem antes do "sem identificação"',
+              all(not e['exemplos'] or e['exemplos'][0]['identificada']
+                  for e in identificados),
+              'a primeira linha de alguma empresa é "Matéria sem identificação"')
+
+        # A janela do gatilho é outra: sem alerta novo, não sai e-mail
+        futuro = alertas.build_digest(firm_id, since=agora + timedelta(days=1))
+        check('sem alerta novo desde o último envio, não há novidade',
+              futuro['novos'] == 0 and not futuro['has_novidades'],
+              f"novos={futuro['novos']}")
+        check('mas o conteúdo das 3 edições continua lá',
+              futuro['total'] == d['total'],
+              'a janela do conteúdo é fixa, só o gatilho olha o last_sent_at')
+
+        # created_at em UTC — a armadilha que o CLAUDE.md documenta
+        recente = (DouClientAlert.query
+                   .filter(DouClientAlert.law_firm_id == firm_id)
+                   .order_by(DouClientAlert.id.desc()).first())
+        if recente and recente.created_at:
+            local = datetime.now()
+            check('created_at é UTC, não hora local (senão o digest pula alerta)',
+                  abs((recente.created_at - local).total_seconds()) > 3000
+                  or recente.created_at > local,
+                  f'{recente.created_at} vs local {local}')
+
+        html, digest = notif.render_dou_digest(
+            firm_id, since=agora - timedelta(days=365), is_test=True)
+
+    check('o e-mail renderiza', len(html) > 500, f'{len(html)} bytes')
+    check('sem Bootstrap nem <style> — cliente de e-mail não roda CSS externo',
+          '<style' not in html.lower() and 'bootstrap' not in html.lower())
+    check('links absolutos, não relativos',
+          'href="http' in html and 'href="/dou' not in html)
+    check('o desfecho FAP vem antes das empresas',
+          'Recursos FAP julgados' not in html
+          or html.index('Recursos FAP julgados') < html.index('estabelecimento(s) citado(s)'))
+    check('o rodapé explica a repetição das 3 edições',
+          'últimas edições publicadas' in html and 'NOVO' in html)
+
+    assunto = notif._dou_digest_subject(digest, is_test=True)
+    check('o assunto leva o desfecho, não só a contagem',
+          'deferimento' in assunto.lower() or 'citado' in assunto.lower()
+          or 'FAP' in assunto, assunto)
+    check('e marca o teste', assunto.startswith('[TESTE]'), assunto)
+
+    # Sem destinatário não envia — e não avança a janela à toa
+    with app.app_context():
+        resultado = notif.send_dou_digest(firm_id, dry_run=True)
+    check('sem destinatário configurado, o envio é pulado',
+          resultado['status'] in ('skipped', 'dry_run'), str(resultado)[:90])
+
+
 def main():
     print('=' * 60)
     print('TESTES DOS ALERTAS DE CLIENTE NO DIÁRIO OFICIAL')
@@ -669,6 +792,7 @@ def main():
     test_chip_da_header()
     test_trecho()
     test_resultado_fap()
+    test_digest_diario()
 
     print('\n' + '=' * 60)
     if _falhas:

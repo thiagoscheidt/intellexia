@@ -115,6 +115,9 @@ def notifications():
     procuracoes_digest = notification_service.get_or_create_setting(
         session.get('law_firm_id'), NotificationSetting.TYPE_PROCURACOES_DIGEST
     )
+    dou_digest = notification_service.get_or_create_setting(
+        session.get('law_firm_id'), NotificationSetting.TYPE_DOU_DIGEST
+    )
 
     firm_users = (User.query
                   .filter_by(law_firm_id=session.get('law_firm_id'), is_active=True)
@@ -129,6 +132,7 @@ def notifications():
         radar_digest=radar_digest,
         procuracoes_alert=procuracoes_alert,
         procuracoes_digest=procuracoes_digest,
+        dou_digest=dou_digest,
         smtp_configured=email_service.is_configured(),
         smtp_config=email_service.get_config(),
         weekday_labels=notification_service.WEEKDAY_LABELS,
@@ -163,6 +167,13 @@ def notifications_radar_digest_post():
 def notifications_procuracoes_digest_post():
     """Salvar a configuração do resumo diário de procurações (apenas admin)."""
     return _save_digest_setting(NotificationSetting.TYPE_PROCURACOES_DIGEST)
+
+
+@settings_bp.route('/notifications/dou-digest', methods=['POST'])
+@require_law_firm
+def notifications_dou_digest_post():
+    """Salvar a configuração dos alertas do Diário Oficial (apenas admin)."""
+    return _save_digest_setting(NotificationSetting.TYPE_DOU_DIGEST)
 
 
 @settings_bp.route('/notifications/procuracoes-alert', methods=['POST'])
@@ -318,6 +329,13 @@ def notifications_procuracoes_alert_send_now():
 def notifications_radar_digest_send_now():
     """Envia o Resumo do Radar de teste (mesmas regras do Resumo FAP)."""
     return _send_digest_test(notification_service.send_radar_digest)
+
+
+@settings_bp.route('/notifications/dou-digest/send-now', methods=['POST'])
+@require_law_firm
+def notifications_dou_digest_send_now():
+    """Envia os alertas do DOU de teste (mesmas regras do Resumo FAP)."""
+    return _send_digest_test(notification_service.send_dou_digest)
 
 
 def _send_digest_test(sender):

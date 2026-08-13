@@ -1,0 +1,200 @@
+{#
+  E-mail dos alertas de cliente no Diário Oficial da União.
+
+  Restrições de cliente de e-mail: sem Bootstrap, sem <style> externo — tudo em
+  tabelas com CSS inline. Links via url_for(_external=True); o serviço renderiza
+  com base_url=APP_PUBLIC_URL.
+
+  A janela do conteúdo é fixa nos últimos 3 diários, então parte do que está
+  aqui já foi enviada ontem: o selo NOVO é o que separa uma coisa da outra.
+
+  Contexto: digest, law_firm, gerado_em, is_test.
+  digest: datas[], total, novos, com_fap, deferimentos, indeferimentos,
+          empresas[] {nome, client_id, materias, cnpjs, novos, tem_fap,
+                      deferimentos, indeferimentos, decisoes[(txt, qtd, fav)],
+                      exemplos[], restantes}
+#}
+{%- set BORDA = '#dee2e6' -%}
+{%- set TEXTO = '#212529' -%}
+{%- set SUAVE = '#6c757d' -%}
+{%- set FUNDO = '#f8f9fa' -%}
+{%- set DOURADO = '#8a6d1f' -%}
+{%- set VERDE_BG = '#d1e7dd' -%}
+{%- set VERDE_TX = '#0a3622' -%}
+{%- set CINZA_BG = '#e9ecef' -%}
+{%- set CINZA_TX = '#41464b' -%}
+{%- set VERMELHO = '#c62828' -%}
+{%- set ALERTA_BG = '#fff3cd' -%}
+{%- set ALERTA_TX = '#664d03' -%}
+
+{%- macro pilula(texto, bg, cor) -%}
+<span style="display:inline-block;background:{{ bg }};color:{{ cor }};font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;margin:0 4px 3px 0;">{{ texto }}</span>
+{%- endmacro -%}
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="background:#eef1f5;margin:0;padding:24px 12px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="720"
+             style="max-width:720px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+
+        <!-- Cabeçalho -->
+        <tr>
+          <td style="background:{{ DOURADO }};padding:20px 24px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td width="52" valign="middle">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" valign="middle" width="48" height="48"
+                          style="background:#ffffff;border-radius:10px;">
+                        <img src="cid:logo" width="34" alt="IntellexIA" style="display:block;border:0;">
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:12px;">
+                  <div style="color:#ffffff;font-size:18px;font-weight:700;">Diário Oficial — clientes citados</div>
+                  <div style="color:#f2e6c8;font-size:13px;">
+                    {% if digest.datas %}
+                    {{ digest.datas | length }} edição(ões):
+                    {% for d in digest.datas %}{{ d.strftime('%d/%m') }}{% if not loop.last %} · {% endif %}{% endfor %}
+                    {% else %}Sem edição capturada no período{% endif %}
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        {% if is_test %}
+        <tr>
+          <td style="background:{{ ALERTA_BG }};color:{{ ALERTA_TX }};padding:10px 24px;font-size:13px;font-weight:600;">
+            E-mail de teste — enviado só para você, sem afetar o agendamento.
+          </td>
+        </tr>
+        {% endif %}
+
+        <tr>
+          <td style="padding:24px;">
+
+            {# O desfecho do FAP vem antes de tudo: é o que faz o e-mail valer.
+               Deferimento é ganho de causa; indeferimento é prazo correndo. #}
+            {% if digest.com_fap %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                   style="margin:0 0 20px 0;border:1px solid {{ BORDA }};border-radius:8px;background:{{ FUNDO }};">
+              <tr>
+                <td style="padding:14px 18px;">
+                  <div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:{{ SUAVE }};text-transform:uppercase;margin-bottom:8px;">
+                    Recursos FAP julgados
+                  </div>
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td style="padding-right:26px;">
+                        <div style="font-size:26px;font-weight:700;color:{{ VERDE_TX }};line-height:1.1;">{{ digest.deferimentos }}</div>
+                        <div style="font-size:12px;color:{{ SUAVE }};">deferimentos — o FAP cai</div>
+                      </td>
+                      <td style="padding-right:26px;">
+                        <div style="font-size:26px;font-weight:700;color:{{ TEXTO }};line-height:1.1;">{{ digest.indeferimentos }}</div>
+                        <div style="font-size:12px;color:{{ SUAVE }};">indeferimentos — prazo para recorrer</div>
+                      </td>
+                      <td>
+                        <div style="font-size:26px;font-weight:700;color:{{ TEXTO }};line-height:1.1;">{{ digest.com_fap }}</div>
+                        <div style="font-size:12px;color:{{ SUAVE }};">matéria(s) de julgamento</div>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+            {% endif %}
+
+            <p style="margin:0 0 16px 0;font-size:14px;color:{{ TEXTO }};">
+              <strong>{{ digest.total }}</strong> matéria(s) citam
+              <strong>{{ digest.empresas | length }}</strong> cliente(s) da carteira
+              {%- if digest.novos and digest.novos < digest.total %},
+              sendo <strong>{{ digest.novos }}</strong> desde o último e-mail{% endif %}.
+            </p>
+
+            {% for e in digest.empresas %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                   style="margin:0 0 12px 0;border:1px solid {{ BORDA }};border-radius:8px;{% if e.tem_fap %}border-left:4px solid {{ VERMELHO }};{% endif %}">
+              <tr>
+                <td style="padding:13px 16px;">
+                  <div style="font-size:14px;font-weight:700;color:{{ TEXTO }};margin-bottom:3px;">
+                    {% if e.tem_fap %}{{ pilula('FAP', VERMELHO, '#ffffff') }}{% endif %}
+                    {{ e.nome }}
+                    {% if e.novos %}{{ pilula('NOVO', '#0d6efd', '#ffffff') }}{% endif %}
+                  </div>
+                  <div style="font-size:12px;color:{{ SUAVE }};margin-bottom:7px;">
+                    {{ e.materias }} matéria(s) · {{ e.cnpjs }} estabelecimento(s) citado(s)
+                  </div>
+
+                  {% if e.decisoes %}
+                  <div style="margin-bottom:8px;">
+                    {% for decisao, quantos, favoravel in e.decisoes %}
+                      {{ pilula(quantos ~ ' ' ~ decisao,
+                                VERDE_BG if favoravel else CINZA_BG,
+                                VERDE_TX if favoravel else CINZA_TX) }}
+                    {% endfor %}
+                  </div>
+                  {% endif %}
+
+                  {% for x in e.exemplos %}
+                  <div style="font-size:12.5px;color:{{ TEXTO }};margin:0 0 3px 0;">
+                    <span style="color:{{ SUAVE }};">{{ x.pub_date.strftime('%d/%m') if x.pub_date }} ·
+                      {{ x.pub_name }}{% if x.pagina %} p.{{ x.pagina }}{% endif %} ·</span>
+                    <a href="{{ url_for('dou.materia', article_id=x.article_id, _external=True) }}"
+                       style="color:#0d6efd;text-decoration:none;">{{ x.identifica }}</a>
+                  </div>
+                  {% endfor %}
+                  {% if e.restantes %}
+                  <div style="font-size:12px;color:{{ SUAVE }};margin-top:4px;">
+                    e mais {{ e.restantes }} matéria(s)
+                    {%- if e.client_id %} —
+                    <a href="{{ url_for('dou.alertas', status='todos', cliente=e.client_id, _external=True) }}"
+                       style="color:#0d6efd;text-decoration:none;">ver todas</a>{% endif %}
+                  </div>
+                  {% endif %}
+                </td>
+              </tr>
+            </table>
+            {% else %}
+            <p style="margin:0;font-size:14px;color:{{ SUAVE }};">
+              Nenhum cliente da carteira foi citado nas últimas edições.
+            </p>
+            {% endfor %}
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:18px;">
+              <tr>
+                <td align="center">
+                  <a href="{{ url_for('dou.alertas', _external=True) }}"
+                     style="display:inline-block;background:{{ DOURADO }};color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:6px;">
+                    Abrir os alertas do Diário Oficial
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Rodapé -->
+        <tr>
+          <td style="background:{{ FUNDO }};border-top:1px solid {{ BORDA }};padding:16px 24px;color:{{ SUAVE }};font-size:12px;">
+            <p style="margin:0 0 4px 0;">
+              O resumo cobre as {{ digest.datas | length or 3 }} últimas edições publicadas, então
+              parte do conteúdo pode ter vindo no e-mail anterior — o selo <strong>NOVO</strong>
+              marca o que entrou desde então.
+            </p>
+            <p style="margin:0 0 4px 0;">
+              Você recebe este e-mail porque está na lista de destinatários dos alertas do
+              Diário Oficial{% if law_firm %} de {{ law_firm.trade_name or law_firm.name }}{% endif %}.
+              Para deixar de receber, fale com o administrador do escritório.
+            </p>
+            <p style="margin:0;">IntellexIA · mensagem automática, não responda.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

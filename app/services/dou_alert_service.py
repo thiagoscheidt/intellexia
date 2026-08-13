@@ -23,15 +23,15 @@ neste arquivo:
 
 import logging
 import unicodedata
-from collections import defaultdict
-from datetime import datetime
+from collections import Counter, defaultdict
+from datetime import datetime, timezone
 
 from bs4 import BeautifulSoup
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from app.models import (db, Client, DouArticle, DouClientAlert,
-                        DouClientAlertMatch)
+                        DouClientAlertMatch, DouEdition)
 from app.services import dou_search_service as busca_service
 from app.services.dou_xml_parser import grifar_html, sanitizar_html
 
@@ -79,6 +79,19 @@ def cnpj_valido(digitos: str | None) -> bool:
         if int(d[tam]) != (0 if resto < 2 else 11 - resto):
             return False
     return True
+
+
+def _utcnow() -> datetime:
+    """Agora em UTC, naive — a base de ``created_at`` e da janela do e-mail.
+
+    O ``main.py`` define ``TZ=America/Sao_Paulo``, então ``datetime.now()``
+    devolve hora local, três horas atrás do UTC. A janela do digest é o
+    ``NotificationSetting.last_sent_at``, que é UTC: gravar ``created_at`` em
+    hora local faria o alerta das últimas três horas parecer mais velho que a
+    marca d'água e ser **pulado em silêncio**. Mesma regra do
+    ``fap_procuracoes_service``.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _sem_acento(valor: str | None) -> str:
@@ -278,9 +291,12 @@ def _gerar_para_materias(materias, carteiras=None) -> int:
                             for _, t in por_cnpj.values())
 
             if alerta is None:
+                # created_at em UTC, não no default local do modelo: é ele que
+                # a janela do e-mail compara com last_sent_at.
                 alerta = DouClientAlert(law_firm_id=law_firm_id,
                                         article_id=article_id,
-                                        status=DouClientAlert.STATUS_NEW)
+                                        status=DouClientAlert.STATUS_NEW,
+                                        created_at=_utcnow())
                 db.session.add(alerta)
                 gerados += 1
 
@@ -593,6 +609,137 @@ def trechos_do_alerta(alerta, maximo: int = 200) -> dict:
 
     return {'modo': 'trechos', 'html': None, 'blocos': 0,
             'itens': itens[:maximo], 'restantes': max(0, len(itens) - maximo)}
+
+
+# -------------------------------------------------------------------- digest
+
+DIGEST_EDICOES = 3     # janela do e-mail: os últimos N diários publicados
+DIGEST_EXEMPLOS = 3    # matérias citadas por empresa, antes do "+N"
+
+
+def datas_do_digest(quantas: int = DIGEST_EDICOES):
+    """As últimas ``quantas`` datas com edição publicada, da mais recente.
+
+    Sai de ``dou_editions`` e não dos alertas: "os últimos 3 diários" inclui o
+    dia em que nada casou — e é isso que diferencia "não saiu nada para os
+    clientes" de "a captura não rodou".
+    """
+    linhas = (db.session.query(DouEdition.data_publicacao)
+              .filter(DouEdition.status == DouEdition.STATUS_PARSED,
+                      DouEdition.qtd_materias > 0)
+              .distinct()
+              .order_by(DouEdition.data_publicacao.desc())
+              .limit(max(quantas, 1)).all())
+    return [d for (d,) in linhas]
+
+
+def build_digest(law_firm_id: int, since=None, quantas_edicoes: int = DIGEST_EDICOES):
+    """O conteúdo do e-mail diário de alertas do DOU.
+
+    A janela é **fixa nos últimos N diários**, então o mesmo alerta aparece em
+    mais de um e-mail. Por isso cada empresa e o total carregam ``novos`` — o
+    que entrou depois de ``since`` (o ``last_sent_at``): sem essa marca, o
+    leitor não distingue o que chegou hoje do que já leu ontem, e um digest que
+    se repete inteiro ensina a ser ignorado.
+
+    Agrupado por **nome** de empresa, não por ``client_id``: a carteira tem um
+    cadastro por estabelecimento, e um edital do CRPS que julga 786 CNPJs do
+    Itaú tem de virar uma linha, não 786.
+    """
+    datas = datas_do_digest(quantas_edicoes)
+    vazio = {'datas': datas, 'total': 0, 'novos': 0, 'materias': 0,
+             'deferimentos': 0, 'indeferimentos': 0, 'empresas': [],
+             'com_fap': 0, 'has_novidades': False}
+    if not datas:
+        return vazio
+
+    alertas = (DouClientAlert.query
+               .options(joinedload(DouClientAlert.article),
+                        joinedload(DouClientAlert.matches)
+                        .joinedload(DouClientAlertMatch.client))
+               .filter(DouClientAlert.law_firm_id == law_firm_id,
+                       DouClientAlert.pub_date.in_(datas))
+               .order_by(DouClientAlert.pub_date.desc(),
+                         DouClientAlert.clients_count.desc()).all())
+    if not alertas:
+        return vazio
+
+    empresas = {}
+    for alerta in alertas:
+        novo = bool(since and alerta.created_at and alerta.created_at > since)
+        decisoes_do_alerta = defaultdict(Counter)
+        for m in alerta.matches:
+            if m.resultado and m.client:
+                decisoes_do_alerta[m.client.name][m.resultado] += 1
+
+        for cliente, tipo, estabelecimentos in alerta.clientes_citados:
+            nome = cliente.name if cliente else '—'
+            dados = empresas.setdefault(nome, {
+                'nome': nome, 'client_id': cliente.id if cliente else None,
+                'materias': 0, 'cnpjs': 0, 'novos': 0,
+                'decisoes': Counter(), 'exemplos': [],
+            })
+            dados['materias'] += 1
+            dados['cnpjs'] += estabelecimentos
+            dados['novos'] += 1 if novo else 0
+            dados['decisoes'].update(decisoes_do_alerta.get(nome, Counter()))
+            identifica = (alerta.article.identifica if alerta.article else None) or ''
+            dados['exemplos'].append({
+                'article_id': alerta.article_id,
+                'identifica': identifica.strip() or 'Matéria sem identificação',
+                'identificada': bool(identifica.strip()),
+                'pub_name': alerta.pub_name,
+                'pagina': alerta.article.pagina if alerta.article else None,
+                'pub_date': alerta.pub_date,
+                'tem_resultado': alerta.tem_resultado,
+                'estabelecimentos': estabelecimentos,
+                'novo': novo,
+            })
+
+    lista = []
+    for dados in empresas.values():
+        decisoes = [
+            (decisao, qtd, _sem_acento(decisao).startswith('deferimento'))
+            for decisao, qtd in dados['decisoes'].most_common()
+        ]
+        # Deferimento primeiro: é a notícia boa, e é o que se procura na lista.
+        decisoes.sort(key=lambda t: (not t[2], -t[1], t[0]))
+        dados['decisoes'] = decisoes
+        dados['deferimentos'] = sum(q for _, q, fav in decisoes if fav)
+        dados['indeferimentos'] = sum(q for _, q, fav in decisoes if not fav)
+        dados['tem_fap'] = bool(decisoes)
+        # Exemplo bom é o que o leitor reconhece: identificação na frente de
+        # tudo. Sete das dezesseis matérias do CRPS vêm sem `identifica` no
+        # XML, e três linhas "Matéria sem identificação" não ajudam ninguém.
+        # Depois vem o que tem decisão, e então o que cita mais
+        # estabelecimentos — nessa ordem porque é a ordem do que se procura.
+        dados['exemplos'].sort(key=lambda e: (not e['identificada'],
+                                              not e['tem_resultado'],
+                                              -e['estabelecimentos'],
+                                              -(e['pub_date'].toordinal()
+                                                if e['pub_date'] else 0)))
+        dados['restantes'] = max(0, len(dados['exemplos']) - DIGEST_EXEMPLOS)
+        dados['exemplos'] = dados['exemplos'][:DIGEST_EXEMPLOS]
+        lista.append(dados)
+
+    # Quem teve recurso julgado primeiro; depois, quem foi mais citado.
+    lista.sort(key=lambda d: (not d['tem_fap'], -d['cnpjs'], d['nome']))
+
+    novos = sum(1 for a in alertas
+                if since and a.created_at and a.created_at > since)
+    return {
+        'datas': datas,
+        'total': len(alertas),
+        'novos': novos if since else len(alertas),
+        'materias': len(alertas),
+        'com_fap': sum(1 for a in alertas if a.tem_resultado),
+        'deferimentos': sum(d['deferimentos'] for d in lista),
+        'indeferimentos': sum(d['indeferimentos'] for d in lista),
+        'empresas': lista,
+        # Sem alerta novo não sai e-mail: com janela fixa de 3 diários, o
+        # conteúdo se repetiria todo dia até a edição sair da janela.
+        'has_novidades': (novos > 0) if since else bool(alertas),
+    }
 
 
 # -------------------------------------------------------------------- ações

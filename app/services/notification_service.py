@@ -536,12 +536,111 @@ def send_procuracoes_digest(law_firm_id: int, force: bool = False,
 
 
 # Tipo → função de envio. Novos tipos entram aqui.
+def render_dou_digest(law_firm_id: int, since: datetime, is_test: bool = False) -> tuple[str, dict]:
+    """Renderiza o HTML dos alertas do DOU. Retorna (html, digest)."""
+    from flask import current_app, render_template
+    from app.services import dou_alert_service
+
+    digest = dou_alert_service.build_digest(law_firm_id, since=since)
+    law_firm = LawFirm.query.get(law_firm_id)
+
+    with current_app.test_request_context(base_url=app_public_url()):
+        html = render_template(
+            'emails/dou_digest.html',
+            digest=digest,
+            law_firm=law_firm,
+            gerado_em=datetime.now(SP_TZ),
+            is_test=is_test,
+        )
+    return html, digest
+
+
+def _dou_digest_subject(digest: dict, is_test: bool = False) -> str:
+    """O assunto carrega o desfecho, não a contagem.
+
+    "3 novidades" não diz nada; "18 deferimentos FAP" faz abrir o e-mail. Sem
+    decisão no período, a contagem de empresas é o que sobra de concreto.
+    """
+    empresas = len(digest.get('empresas') or [])
+    deferimentos = digest.get('deferimentos', 0)
+    if deferimentos:
+        resumo = f'{deferimentos} deferimento' + ('s' if deferimentos > 1 else '') + ' FAP'
+    elif digest.get('com_fap'):
+        resumo = f"{digest['com_fap']} recurso(s) FAP julgado(s)"
+    elif empresas:
+        resumo = f'{empresas} cliente' + ('s' if empresas > 1 else '') + ' citado(s)'
+    else:
+        resumo = 'sem citações'
+    hoje = datetime.now(SP_TZ).strftime('%d/%m/%Y')
+    prefix = '[TESTE] ' if is_test else ''
+    return f'{prefix}Diário Oficial — {resumo} ({hoje})'
+
+
+def send_dou_digest(law_firm_id: int, force: bool = False,
+                    override_recipients: list[str] | None = None,
+                    dry_run: bool = False) -> dict:
+    """Envia o resumo dos alertas do DOU de um escritório.
+
+    A janela do **conteúdo** é fixa nos últimos 3 diários publicados; a do
+    **gatilho** é o ``last_sent_at``. As duas são diferentes de propósito: o
+    e-mail mostra o período inteiro para dar contexto, mas só sai quando entrou
+    alerta novo — com janela fixa, sem essa trava ele se repetiria toda manhã
+    até a edição sair dos três dias.
+    """
+    setting = get_or_create_setting(law_firm_id, NotificationSetting.TYPE_DOU_DIGEST)
+    is_test = override_recipients is not None
+
+    recipients = email_service.normalize_recipients(
+        override_recipients if is_test else setting.get_recipients()
+    )
+    if not recipients:
+        return {'status': 'skipped', 'message': 'Nenhum destinatário válido configurado.'}
+
+    now_utc = _utcnow()
+    since = _digest_window_start(setting, now_utc)
+
+    html, digest = render_dou_digest(law_firm_id, since=since, is_test=is_test)
+    totais = {'total': digest['total'], 'novos': digest['novos'],
+              'com_fap': digest['com_fap'], 'deferimentos': digest['deferimentos'],
+              'indeferimentos': digest['indeferimentos'],
+              'empresas': len(digest['empresas'])}
+
+    if not digest['has_novidades'] and not force:
+        setting.last_sent_at = now_utc
+        db.session.commit()
+        return {'status': 'skipped',
+                'message': 'Nenhum alerta novo no período — nenhum e-mail enviado.',
+                'totais': totais}
+
+    subject = _dou_digest_subject(digest, is_test=is_test)
+
+    if dry_run:
+        return {'status': 'dry_run',
+                'message': f'(dry-run) enviaria para {len(recipients)} destinatário(s).',
+                'subject': subject, 'totais': totais, 'recipients': recipients}
+
+    sent = email_service.send_email(recipients, subject, html, inline_images=_logo_bytes())
+    if not sent:
+        # Não avança a janela: a próxima execução tenta de novo o mesmo período.
+        return {'status': 'failed',
+                'message': 'Falha no envio (verifique a configuração SMTP e os logs).',
+                'totais': totais}
+
+    if not is_test:
+        setting.last_sent_at = now_utc
+        db.session.commit()
+
+    return {'status': 'sent', 'message': f'Resumo enviado para {len(recipients)} destinatário(s).',
+            'totais': totais, 'recipients': recipients}
+
+
 SENDERS = {
     NotificationSetting.TYPE_FAP_DIGEST: send_fap_digest,
     NotificationSetting.TYPE_COMMUNICATIONS_DIGEST: send_communications_digest,
     NotificationSetting.TYPE_RADAR_DIGEST: send_radar_digest,
     NotificationSetting.TYPE_PROCURACOES_DIGEST: send_procuracoes_digest,
     NotificationSetting.TYPE_PROCURACOES_ALERT: send_procuracoes_alert,
+    NotificationSetting.TYPE_DOU_DIGEST: send_dou_digest,
 }
 
 
