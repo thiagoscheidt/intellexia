@@ -733,8 +733,17 @@ def build_digest(law_firm_id: int, since=None, quantas_edicoes: int = DIGEST_EDI
         'novos': novos if since else len(alertas),
         'materias': len(alertas),
         'com_fap': sum(1 for a in alertas if a.tem_resultado),
+        # Cada linha do edital é um processo de um estabelecimento — medido:
+        # 1.320 linhas, 1.320 números de processo distintos, nenhum CNPJ
+        # repetido na mesma matéria. Por isso a unidade é "recurso", não
+        # "deferimento": o leitor precisa saber de que se está contando.
         'deferimentos': sum(d['deferimentos'] for d in lista),
         'indeferimentos': sum(d['indeferimentos'] for d in lista),
+        # O número que abre o bloco é este, não os milhares: quantos clientes
+        # tiveram recurso julgado e quantos ganharam alguma coisa. É pequeno,
+        # cabe na cabeça e é sobre ele que se age.
+        'clientes_com_fap': sum(1 for d in lista if d['tem_fap']),
+        'clientes_com_deferimento': sum(1 for d in lista if d['deferimentos']),
         'empresas': lista,
         # Sem alerta novo não sai e-mail: com janela fixa de 3 diários, o
         # conteúdo se repetiria todo dia até a edição sair da janela.

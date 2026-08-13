@@ -710,6 +710,19 @@ def test_digest_diario():
         if com_fap:
             check('o total de deferimentos fecha com as empresas',
                   d['deferimentos'] == sum(e['deferimentos'] for e in d['empresas']))
+            # O bloco do topo abre por cliente, não pelos milhares: "5 clientes,
+            # 4 com deferimento" cabe na cabeça; "250 e 1.070" sozinhos não
+            # dizem de quê. A unidade é o recurso — cada linha do edital tem
+            # número de processo próprio (medido: 1.320 linhas, 1.320 processos).
+            check('conta quantos clientes tiveram recurso julgado',
+                  d['clientes_com_fap'] == len(com_fap),
+                  f"{d['clientes_com_fap']} vs {len(com_fap)}")
+            check('e quantos deles ganharam alguma coisa',
+                  d['clientes_com_deferimento']
+                  == sum(1 for e in com_fap if e['deferimentos']),
+                  str(d['clientes_com_deferimento']))
+            check('quem ganhou é subconjunto de quem foi julgado',
+                  d['clientes_com_deferimento'] <= d['clientes_com_fap'])
             check('deferimento vem antes de indeferimento nas pílulas',
                   com_fap[0]['decisoes'][0][2] is True
                   or all(not fav for _, _, fav in com_fap[0]['decisoes']),
@@ -763,6 +776,17 @@ def test_digest_diario():
     check('o desfecho FAP vem antes das empresas',
           'Recursos FAP julgados' not in html
           or html.index('Recursos FAP julgados') < html.index('estabelecimento(s) citado(s)'))
+    if digest['com_fap']:
+        check('o bloco abre pela frase, não pelos milhares',
+              'recurso julgado' in html and 'deferimento' in html,
+              'o número solto não diz de que se está contando')
+        check('a unidade dos números é o recurso',
+              'recursos deferidos' in html or 'recurso deferido' in html)
+        check('explica o que é um recurso, uma vez só',
+              html.count('processo de <strong>um estabelecimento</strong>') == 1)
+        if digest['indeferimentos'] >= 1000:
+            check('milhar sai com separador — "1070" lê como código',
+                  f"{digest['indeferimentos']:,}".replace(',', '.') in html)
     check('o rodapé explica a repetição das 3 edições',
           'últimas edições publicadas' in html and 'NOVO' in html)
 

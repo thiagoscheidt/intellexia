@@ -78,32 +78,48 @@
         <tr>
           <td style="padding:24px;">
 
-            {# O desfecho do FAP vem antes de tudo: é o que faz o e-mail valer.
-               Deferimento é ganho de causa; indeferimento é prazo correndo. #}
+            {# O desfecho do FAP abre o e-mail. A frase vem antes dos números:
+               "5 clientes, 4 com deferimento" cabe na cabeça e é sobre isso
+               que se age; "250 e 1.070" sozinhos não dizem de quê. A unidade é
+               o recurso — medido, cada linha do edital tem processo próprio. #}
             {% if digest.com_fap %}
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
                    style="margin:0 0 20px 0;border:1px solid {{ BORDA }};border-radius:8px;background:{{ FUNDO }};">
               <tr>
                 <td style="padding:14px 18px;">
-                  <div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:{{ SUAVE }};text-transform:uppercase;margin-bottom:8px;">
+                  <div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:{{ SUAVE }};text-transform:uppercase;margin-bottom:6px;">
                     Recursos FAP julgados
+                  </div>
+                  <div style="font-size:16px;color:{{ TEXTO }};margin-bottom:12px;">
+                    <strong>{{ digest.clientes_com_fap }}</strong>
+                    {{ 'cliente teve' if digest.clientes_com_fap == 1 else 'clientes tiveram' }}
+                    recurso julgado
+                    {%- if digest.clientes_com_deferimento %},
+                    <strong style="color:{{ VERDE_TX }};">{{ digest.clientes_com_deferimento }}</strong>
+                    {{ 'com deferimento' if digest.clientes_com_deferimento == 1 else 'deles com algum deferimento' }}
+                    {%- else %}, nenhum com deferimento{% endif %}.
                   </div>
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                     <tr>
-                      <td style="padding-right:26px;">
-                        <div style="font-size:26px;font-weight:700;color:{{ VERDE_TX }};line-height:1.1;">{{ digest.deferimentos }}</div>
-                        <div style="font-size:12px;color:{{ SUAVE }};">deferimentos — o FAP cai</div>
+                      <td style="padding:6px 14px;background:{{ VERDE_BG }};border-radius:6px;">
+                        <span style="font-size:19px;font-weight:700;color:{{ VERDE_TX }};">{{ '{:,}'.format(digest.deferimentos).replace(',', '.') }}</span>
+                        <span style="font-size:13px;color:{{ VERDE_TX }};">
+                          {{ 'recurso deferido' if digest.deferimentos == 1 else 'recursos deferidos' }}</span>
                       </td>
-                      <td style="padding-right:26px;">
-                        <div style="font-size:26px;font-weight:700;color:{{ TEXTO }};line-height:1.1;">{{ digest.indeferimentos }}</div>
-                        <div style="font-size:12px;color:{{ SUAVE }};">indeferimentos — prazo para recorrer</div>
-                      </td>
-                      <td>
-                        <div style="font-size:26px;font-weight:700;color:{{ TEXTO }};line-height:1.1;">{{ digest.com_fap }}</div>
-                        <div style="font-size:12px;color:{{ SUAVE }};">matéria(s) de julgamento</div>
+                      <td style="width:8px;"></td>
+                      <td style="padding:6px 14px;background:{{ CINZA_BG }};border-radius:6px;">
+                        <span style="font-size:19px;font-weight:700;color:{{ CINZA_TX }};">{{ '{:,}'.format(digest.indeferimentos).replace(',', '.') }}</span>
+                        <span style="font-size:13px;color:{{ CINZA_TX }};">
+                          {{ 'indeferido' if digest.indeferimentos == 1 else 'indeferidos' }}</span>
                       </td>
                     </tr>
                   </table>
+                  {# A explicação fica embaixo, uma vez, em vez de colada em
+                     cada número — os rótulos ficavam mais longos que os dados. #}
+                  <div style="font-size:11.5px;color:{{ SUAVE }};margin-top:10px;line-height:1.5;">
+                    Cada recurso é o processo de <strong>um estabelecimento</strong>.
+                    Deferimento reduz o FAP daquele CNPJ; indeferimento abre prazo para recorrer.
+                  </div>
                 </td>
               </tr>
             </table>

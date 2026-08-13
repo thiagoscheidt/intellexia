@@ -345,7 +345,14 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
   o que chegou hoje do que já foi lido. Agrupado por **nome de empresa**: o dia
   de 32 matérias e 1.320 decisões vira **7 linhas** (Itaú 16 matérias/786 CNPJs,
   Santander 12/509…). O assunto leva o desfecho, não a contagem — "250
-  deferimentos FAP" faz abrir, "3 novidades" não. **`created_at` do alerta é
+  deferimentos FAP" faz abrir, "3 novidades" não. **O bloco do topo abre por
+  cliente, não pelos milhares**: "5 clientes tiveram recurso julgado, 4 deles
+  com algum deferimento" cabe na cabeça e é sobre isso que se age; "250 e
+  1.070" sozinhos não dizem de quê estão contando. A unidade é o **recurso** e
+  não "deferimento": medido no acervo, as 1.320 linhas de edital têm 1.320
+  números de processo distintos e nenhum CNPJ repetido na mesma matéria — cada
+  linha é o processo de um estabelecimento. A explicação disso fica uma vez sob
+  o bloco, não colada em cada número. **`created_at` do alerta é
   gravado em UTC** (`_utcnow`), não no default local do modelo: `last_sent_at` é
   UTC e a hora local está 3 h atrás, o que faria o alerta das últimas 3 horas
   parecer mais velho que a marca d'água e ser pulado em silêncio.
