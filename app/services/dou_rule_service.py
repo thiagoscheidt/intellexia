@@ -26,7 +26,8 @@ import re
 import unicodedata
 from types import SimpleNamespace
 
-from app.services.dou_search_service import orgao_raiz
+from app.services.dou_search_service import (MARCA_FIM, MARCA_INI, destacar,
+                                             orgao_raiz)
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,10 @@ MODO_LABELS = {
 
 # Sonda menor que isto não peneira nada — vale mais varrer tudo.
 MIN_SONDA = 3
+
+# Janela do trecho mostrado nos exemplos do teste. Uma linha na tela: oito
+# trechos de três linhas empilhariam ~500 px e a lista deixaria de ser varrível.
+TAM_TRECHO = 180
 
 # Janela do teste e do backfill ao salvar: o que foi visto é o que chega.
 DIAS_TESTE = 7
@@ -118,6 +123,98 @@ def casa_texto(texto_normalizado: str, padroes: list) -> bool:
     if not padroes:
         return True
     return all(p.search(texto_normalizado) for p in padroes)
+
+
+def _normalizar_com_mapa(valor: str | None):
+    """``(normalizado, mapa)`` — ``mapa[i]`` é o índice de ``i`` no original.
+
+    O casamento acontece no texto normalizado, mas o trecho que se mostra tem
+    de sair do texto **original**, com acento e caixa. Usar o offset do
+    normalizado direto no original quase sempre funciona — o NFKD preserva o
+    comprimento em letra acentuada —, mas não em ligadura (``ﬁ`` → ``fi``) nem
+    em caractere de compatibilidade (``º`` → ``o``): um deles antes do achado
+    desloca o recorte. O mapa é exato e custa uma passada.
+    """
+    saida, mapa = [], []
+    for indice, ch in enumerate(valor or ''):
+        for decomposto in unicodedata.normalize('NFKD', ch):
+            if unicodedata.combining(decomposto):
+                continue
+            saida.append(decomposto.lower())
+            mapa.append(indice)
+    return ''.join(saida), mapa
+
+
+def trecho_do_casamento(materia, padroes: list,
+                        janela: int = TAM_TRECHO) -> str | None:
+    """O texto em volta do achado, com a marca do módulo de busca.
+
+    Devolve o recorte **do texto original** — com acento e caixa — usando as
+    sentinelas ``MARCA_INI``/``MARCA_FIM``. Quem escapa e converte em ``<mark>``
+    é ``dou_search_service.destacar``, sempre nessa ordem: o texto do DOU tem
+    ``<`` de verdade, e marcar antes de escapar deixaria virar elemento.
+
+    A janela é centrada no achado, não no começo da matéria: num edital de 10
+    mil caracteres, mostrar o início não diria nada sobre por que a regra casou.
+
+    Sem padrão (regra só de órgão/seção) não há o que grifar, e o começo da
+    matéria é o que responde "do que isto trata" — os títulos do DOU são
+    genéricos e boa parte das matérias vem sem identificação nenhuma.
+    """
+    corpo = corpus(materia).strip()
+    if not corpo:
+        return None
+
+    if not padroes:
+        # Sem o `identifica`: ele já é a linha de cima do exemplo, e repeti-lo
+        # gastaria a única linha do trecho com o que a pessoa acabou de ler.
+        conteudo = ' '.join(filter(None, (
+            (getattr(materia, 'ementa', None) or '').strip(),
+            (getattr(materia, 'texto', None) or '').strip()))).strip()
+        conteudo = conteudo or corpo
+        return conteudo[:janela] + ('…' if len(conteudo) > janela else '')
+
+    normalizado, mapa = _normalizar_com_mapa(corpo)
+    achados = []
+    for padrao in padroes:
+        achado = padrao.search(normalizado)
+        if achado:
+            achados.append(achado)
+    if not achados:
+        return None
+
+    # O primeiro achado ancora a janela; num modo "todas as palavras" é o que
+    # deixa o começo do contexto legível.
+    principal = min(achados, key=lambda a: a.start())
+    inicio_o = mapa[principal.start()]
+    fim_o = mapa[principal.end() - 1] + 1
+
+    folga = max(janela - (fim_o - inicio_o), 0) // 2
+    corte_ini = max(0, inicio_o - folga)
+    corte_fim = min(len(corpo), fim_o + folga)
+
+    # Marca toda ocorrência que caia na janela, não só a que a ancorou: com o
+    # termo repetido, grifar uma e deixar a vizinha limpa parece defeito.
+    marcas = []
+    for padrao in padroes:
+        for achado in padrao.finditer(normalizado):
+            ini, fim = mapa[achado.start()], mapa[achado.end() - 1] + 1
+            if ini >= corte_ini and fim <= corte_fim:
+                marcas.append((ini, fim))
+    marcas.sort()
+
+    partes, cursor = [], corte_ini
+    for ini, fim in marcas:
+        if ini < cursor:
+            continue          # sobreposição: nunca marca dentro de marca
+        partes.append(corpo[cursor:ini])
+        partes.append(MARCA_INI + corpo[ini:fim] + MARCA_FIM)
+        cursor = fim
+    partes.append(corpo[cursor:corte_fim])
+
+    trecho = ''.join(partes)
+    return (('…' if corte_ini > 0 else '') + trecho
+            + ('…' if corte_fim < len(corpo) else ''))
 
 
 # ------------------------------------------------------------------ colheita
@@ -302,6 +399,10 @@ def testar(termo, modo=MODO_FRASE, secoes=None, orgao=None,
     casadas = [m for m in candidatas if m.id in achados]
     casadas.sort(key=lambda m: (m.pub_date or datas[-1], m.id), reverse=True)
 
+    # O trecho sai só dos exemplos que vão para a tela: recortar as 4.626
+    # matérias de "licitação" para mostrar oito seria trabalho jogado fora.
+    padroes = compilar(termo, modo)
+
     total = len(casadas)
     por_dia = round(total / len(datas), 1)
     return {
@@ -320,5 +421,8 @@ def testar(termo, modo=MODO_FRASE, secoes=None, orgao=None,
             'pagina': m.pagina_num,
             'identifica': m.identifica or '(sem identificação)',
             'orgao': orgao_raiz(m.orgao_hierarquia) or '',
+            # Já escapado e com <mark>: o JS injeta como HTML. O escape vem do
+            # `destacar`, nunca depois — o texto do DOU tem `<` de verdade.
+            'trecho': destacar(trecho_do_casamento(m, padroes)),
         } for m in casadas[:exemplos]],
     }

@@ -439,6 +439,17 @@ Tela em `/dou/regras`; o motor de casamento é módulo à parte do
 - **O teste chama o mesmo `casar()` da colheita**, de propósito: implementações
   separadas divergiriam e o número mostrado viraria mentira — destruindo a peça
   que resolve o volume.
+- **Cada exemplo do teste mostra o trecho onde casou**
+  (`trecho_do_casamento`), com a janela centrada no achado — num edital de 10
+  mil caracteres o começo da matéria não diria nada sobre o porquê do acerto.
+  O casamento roda no texto normalizado, então o recorte usa um **mapa de
+  índices** de volta ao original (`_normalizar_com_mapa`): o `NFKD` preserva o
+  comprimento em letra acentuada, mas não em ligadura (`ﬁ`→`fi`) nem em
+  compatibilidade (`º`→`o`), e um desses antes do achado deslocaria o recorte.
+  O trecho sai do servidor **já escapado e com `<mark>`** (`MARCA_INI` →
+  `destacar`), e o JS o injeta como HTML — passá-lo pelo `escapar()` da tela
+  mostraria `&lt;mark&gt;`. Regra sem termo mostra o início do **texto**, nunca
+  o `identifica`, que já é a linha de cima do exemplo.
 - **A peneira SQL** faz o teste caber num botão: `LIKE` com a **maior corrida
   sem acento** do termo (`licitação` → `licita`, `Fator Acidentário de
   Prevenção` → `fator acident`). Esse pedaço está literalmente no texto, então

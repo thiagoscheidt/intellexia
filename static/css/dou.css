@@ -1541,11 +1541,35 @@ a.dou-tile:hover {
 }
 
 .dou-exemplos li {
-  padding: .18rem 0;
+  padding: .35rem 0;
   border-top: 1px solid var(--bs-border-color-translucent);
+}
+
+.dou-exemplo__ident,
+.dou-exemplo__trecho {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Uma linha só: oito trechos de três linhas empilhariam ~500 px e a lista de
+   exemplos deixaria de ser varrível. A janela do recorte é centrada no achado,
+   então a marca cai perto do meio e sobrevive às reticências das pontas. */
+.dou-exemplo__trecho {
+  font-size: .8rem;
+  color: var(--bs-secondary-color);
+  padding-left: .75rem;
+  border-left: 2px solid var(--bs-border-color);
+  margin-top: .15rem;
+}
+
+/* O <mark> do Bootstrap tem fundo amarelo e padding grande; aqui ele divide
+   uma linha apertada com texto cinza, e só o peso já resolve o destaque. */
+.dou-exemplo__trecho mark {
+  background: transparent;
+  color: var(--bs-emphasis-color);
+  font-weight: 600;
+  padding: 0;
 }
 
 /* Chip do motivo de palavra-chave, ao lado dos chips de empresa. Cor própria,

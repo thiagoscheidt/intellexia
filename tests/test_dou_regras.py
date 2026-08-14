@@ -248,6 +248,68 @@ def test_janela_do_teste():
               materias_na_janela > 0)
 
 
+def test_trecho_do_casamento():
+    """O recorte do teste tem de mostrar onde casou, não o começo da matéria."""
+    print('\n7c. Trecho do casamento')
+
+    from app.services.dou_search_service import MARCA_INI, MARCA_FIM
+
+    class M:
+        identifica = 'PORTARIA Nº 1'
+        ementa = ''
+        texto = ('Considerando o disposto no artigo primeiro. ' * 12
+                 + 'Trata do Fator Acidentário de Prevenção da empresa. '
+                 + 'E segue por mais um bom tanto de texto. ' * 12)
+
+    padroes = regras.compilar('Fator Acidentário de Prevenção', regras.MODO_FRASE)
+    t = regras.trecho_do_casamento(M(), padroes, janela=180)
+    check('recorta em volta do achado, não do começo',
+          'Fator Acidentário de Prevenção' in t and not t.startswith('Considerando o disposto no artigo primeiro. Considerando'),
+          repr(t[:80]))
+    check('marca o termo', MARCA_INI in t and MARCA_FIM in t, repr(t[:120]))
+    check('cabe na janela', len(t) < 320, str(len(t)))
+
+    # O offset vem do texto normalizado; sem o mapa de índices, um caractere de
+    # compatibilidade antes do achado (º, ﬁ) desloca o recorte.
+    class MCompat:
+        identifica = ''
+        ementa = ''
+        texto = 'O 1º ofício e a ﬁcha do contribuinte. Trata do FAP da empresa aqui.'
+
+    t2 = regras.trecho_do_casamento(MCompat(), regras.compilar('FAP'), janela=180)
+    check('o mapa de índices mantém o recorte alinhado',
+          f'{MARCA_INI}FAP{MARCA_FIM}' in t2, repr(t2))
+
+    # Acento: o termo casa sem acento, mas o recorte devolve o texto original.
+    class MAcento:
+        identifica = ''
+        ementa = ''
+        texto = 'Trata da CONTRIBUIÇÃO previdenciária da empresa.'
+
+    t3 = regras.trecho_do_casamento(MAcento(), regras.compilar('contribuicao'),
+                                    janela=180)
+    check('a marca preserva a grafia original, com acento',
+          f'{MARCA_INI}CONTRIBUIÇÃO{MARCA_FIM}' in t3, repr(t3))
+
+    # Regra sem termo (só órgão): mostra o começo, sem prometer destaque — e
+    # sem repetir o `identifica`, que já é a linha de cima do exemplo.
+    t4 = regras.trecho_do_casamento(M(), [], janela=120)
+    check('sem termo, mostra o início da matéria',
+          t4.startswith('Considerando o disposto'), repr(t4[:60]))
+    check('e não repete o identifica da linha de cima',
+          'PORTARIA Nº 1' not in t4, repr(t4[:60]))
+    check('e sem marca nenhuma', MARCA_INI not in t4)
+
+    # Matéria sem texto não pode quebrar o teste da regra.
+    class MVazia:
+        identifica = None
+        ementa = None
+        texto = None
+
+    check('matéria sem texto devolve None',
+          regras.trecho_do_casamento(MVazia(), padroes) is None)
+
+
 def test_veredito():
     """Os cortes são ancorados na carteira real (~6 alertas/dia), não chutados."""
     print('\n8. Veredito de volume')
@@ -292,6 +354,7 @@ def main():
     test_casar()
     test_peneira_e_superconjunto()
     test_janela_do_teste()
+    test_trecho_do_casamento()
     test_veredito()
     test_validacao()
 

@@ -563,6 +563,16 @@ def test_tela_de_regras():
         check('teste traz total, nível e exemplos',
               all(k in dados for k in ('total', 'nivel', 'por_dia', 'exemplos')),
               str(sorted(dados))[:120])
+        if dados.get('exemplos'):
+            primeiro = dados['exemplos'][0]
+            check('o exemplo traz o trecho do casamento', 'trecho' in primeiro,
+                  str(sorted(primeiro)))
+            # Já escapado e com <mark>: o JS injeta como HTML, então o servidor
+            # é o último ponto onde o escape pode acontecer.
+            check('e o trecho vem grifado e escapado',
+                  '<mark>' in (primeiro['trecho'] or '')
+                  and '<script' not in (primeiro['trecho'] or ''),
+                  repr((primeiro['trecho'] or '')[:80]))
 
         resposta = c.post('/dou/regras/nova',
                           data={'nome': '', 'termo': '', 'modo': 'frase'},

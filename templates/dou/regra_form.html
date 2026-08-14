@@ -183,10 +183,16 @@
         'órgão, ou use frase exata.</div>';
     }
 
+    // `x.trecho` já vem escapado do servidor, com <mark> — passá-lo pelo
+    // escapar() daqui mostraria "&lt;mark&gt;" na tela. Todo o resto é texto
+    // cru e continua sendo escapado aqui.
     html += '<ul class="dou-exemplos mt-3">' + d.exemplos.map(function (x) {
-      return '<li><span class="text-muted">' + escapar(x.pub_date) + ' ' +
-        escapar(x.pub_name) + (x.pagina ? ' p.' + escapar(x.pagina) : '') +
-        ' · </span>' + escapar(x.identifica) + '</li>';
+      return '<li><div class="dou-exemplo__ident"><span class="text-muted">' +
+        escapar(x.pub_date) + ' ' + escapar(x.pub_name) +
+        (x.pagina ? ' p.' + escapar(x.pagina) : '') + ' · </span>' +
+        escapar(x.identifica) + '</div>' +
+        (x.trecho ? '<div class="dou-exemplo__trecho">' + x.trecho + '</div>' : '') +
+        '</li>';
     }).join('') + '</ul></div>';
     return html;
   }
