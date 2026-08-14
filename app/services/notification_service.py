@@ -563,12 +563,19 @@ def _dou_digest_subject(digest: dict, is_test: bool = False) -> str:
     """
     empresas = len(digest.get('empresas') or [])
     deferimentos = digest.get('deferimentos', 0)
+    regras = digest.get('regras') or []
     if deferimentos:
         resumo = f'{deferimentos} deferimento' + ('s' if deferimentos > 1 else '') + ' FAP'
     elif digest.get('com_fap'):
         resumo = f"{digest['com_fap']} recurso(s) FAP julgado(s)"
     elif empresas:
         resumo = f'{empresas} cliente' + ('s' if empresas > 1 else '') + ' citado(s)'
+    elif regras and digest.get('novos_por_regra'):
+        # Sem cliente citado no período, o assunto vira o tema vigiado que
+        # trouxe novidade — continua sendo o desfecho, não a contagem.
+        principal = regras[0]
+        quantos = principal['novos'] or principal['materias']
+        resumo = f"{principal['nome']} ({quantos} nova(s))"
     else:
         resumo = 'sem citações'
     hoje = datetime.now(SP_TZ).strftime('%d/%m/%Y')

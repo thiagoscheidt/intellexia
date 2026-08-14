@@ -814,14 +814,17 @@ def build_digest(law_firm_id: int, since=None, quantas_edicoes: int = DIGEST_EDI
     datas = datas_do_digest(quantas_edicoes)
     vazio = {'datas': datas, 'total': 0, 'novos': 0, 'materias': 0,
              'deferimentos': 0, 'indeferimentos': 0, 'empresas': [],
-             'com_fap': 0, 'has_novidades': False}
+             'com_fap': 0, 'clientes_com_fap': 0, 'clientes_com_deferimento': 0,
+             'regras': [], 'novos_por_regra': 0, 'has_novidades': False}
     if not datas:
         return vazio
 
     alertas = (DouClientAlert.query
                .options(joinedload(DouClientAlert.article),
                         joinedload(DouClientAlert.matches)
-                        .joinedload(DouClientAlertMatch.client))
+                        .joinedload(DouClientAlertMatch.client),
+                        joinedload(DouClientAlert.rule_hits)
+                        .joinedload(DouAlertRuleHit.rule))
                .filter(DouClientAlert.law_firm_id == law_firm_id,
                        DouClientAlert.pub_date.in_(datas))
                .order_by(DouClientAlert.pub_date.desc(),
@@ -829,9 +832,31 @@ def build_digest(law_firm_id: int, since=None, quantas_edicoes: int = DIGEST_EDI
     if not alertas:
         return vazio
 
-    empresas = {}
+    empresas, por_regra = {}, {}
     for alerta in alertas:
         novo = bool(since and alerta.created_at and alerta.created_at > since)
+
+        # Palavra-chave agrupa por regra, como as empresas por nome: é o nome
+        # que a pessoa reconhece. Mesma varredura, não uma segunda consulta.
+        for regra in alerta.regras_citadas:
+            item = por_regra.setdefault(regra.id, {
+                'rule_id': regra.id, 'nome': regra.nome,
+                'materias': 0, 'novos': 0, 'exemplos': [],
+            })
+            item['materias'] += 1
+            item['novos'] += 1 if novo else 0
+            if len(item['exemplos']) < DIGEST_EXEMPLOS:
+                identifica = ((alerta.article.identifica if alerta.article
+                               else None) or '').strip()
+                item['exemplos'].append({
+                    'article_id': alerta.article_id,
+                    'identifica': identifica or 'Matéria sem identificação',
+                    'pub_name': alerta.pub_name,
+                    'pagina': alerta.article.pagina if alerta.article else None,
+                    'pub_date': alerta.pub_date,
+                    'novo': novo,
+                })
+
         decisoes_do_alerta = defaultdict(Counter)
         for m in alerta.matches:
             if m.resultado and m.client:
@@ -890,8 +915,14 @@ def build_digest(law_firm_id: int, since=None, quantas_edicoes: int = DIGEST_EDI
     # Quem teve recurso julgado primeiro; depois, quem foi mais citado.
     lista.sort(key=lambda d: (not d['tem_fap'], -d['cnpjs'], d['nome']))
 
+    # Quem trouxe novidade primeiro; depois, quem pegou mais matéria.
+    regras_ordenadas = sorted(por_regra.values(),
+                              key=lambda r: (-r['novos'], -r['materias'], r['nome']))
+
     novos = sum(1 for a in alertas
                 if since and a.created_at and a.created_at > since)
+    novos_por_regra = (sum(r['novos'] for r in regras_ordenadas) if since
+                       else sum(r['materias'] for r in regras_ordenadas))
     return {
         'datas': datas,
         'total': len(alertas),
@@ -910,9 +941,17 @@ def build_digest(law_firm_id: int, since=None, quantas_edicoes: int = DIGEST_EDI
         'clientes_com_fap': sum(1 for d in lista if d['tem_fap']),
         'clientes_com_deferimento': sum(1 for d in lista if d['deferimentos']),
         'empresas': lista,
+        # Um e-mail por manhã, não dois: a palavra-chave é um bloco a mais no
+        # mesmo digest, com a mesma janela e o mesmo selo NOVO.
+        'regras': regras_ordenadas,
+        'novos_por_regra': novos_por_regra,
         # Sem alerta novo não sai e-mail: com janela fixa de 3 diários, o
-        # conteúdo se repetiria todo dia até a edição sair da janela.
-        'has_novidades': (novos > 0) if since else bool(alertas),
+        # conteúdo se repetiria todo dia até a edição sair da janela. A
+        # novidade que vem só de regra também acorda o e-mail — senão um dia
+        # sem citação de cliente e com portaria nova sairia como "nada a
+        # relatar".
+        'has_novidades': ((novos > 0 or novos_por_regra > 0) if since
+                          else bool(alertas)),
     }
 
 

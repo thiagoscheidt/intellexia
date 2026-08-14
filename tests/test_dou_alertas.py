@@ -817,6 +817,64 @@ def test_digest_diario():
         agora = datetime.now(timezone.utc).replace(tzinfo=None)
         d = alertas.build_digest(firm_id, since=agora - timedelta(days=365))
 
+        # --- bloco de palavras-chave -----------------------------------
+        check('o digest traz o bloco de regras', 'regras' in d,
+              str(sorted(d))[:160])
+        check('e o contador de novidade da origem regra', 'novos_por_regra' in d)
+        check('sem regra cadastrada, o bloco vem vazio (não some do contrato)',
+              isinstance(d['regras'], list))
+
+        # Uma regra de verdade, ancorada numa palavra rara da própria matéria —
+        # ver a nota em test_origem_e_regra sobre o "ministério" que virou carga.
+        alvo = next((a for a in DouClientAlert.query
+                     .filter(DouClientAlert.law_firm_id == firm_id,
+                             DouClientAlert.pub_date.in_(datas)).all()), None)
+        if alvo is not None:
+            artigo = DouArticle.query.get(alvo.article_id)
+            palavras = re.findall(r'[A-Za-zÀ-ÿ]{14,}', artigo.texto or '')
+            if palavras:
+                regra = DouAlertRule(law_firm_id=firm_id, nome='Digest de teste',
+                                     termo=max(palavras, key=len), modo='frase',
+                                     ativo=True)
+                db.session.add(regra)
+                db.session.commit()
+                rid = regra.id
+                try:
+                    alertas.gerar_para_datas([alvo.pub_date])
+                    db.session.commit()
+                    db.session.expire_all()
+                    dd = alertas.build_digest(firm_id,
+                                              since=agora - timedelta(days=365))
+                    nomes = [r['nome'] for r in dd['regras']]
+                    check('a regra que casou aparece no bloco',
+                          'Digest de teste' in nomes, str(nomes))
+                    linha = next(r for r in dd['regras']
+                                 if r['nome'] == 'Digest de teste')
+                    check('com contagem e exemplos',
+                          linha['materias'] > 0 and linha['exemplos'])
+                    check('exemplo não passa de DIGEST_EXEMPLOS',
+                          len(linha['exemplos']) <= alertas.DIGEST_EXEMPLOS)
+                    check('novidade só de regra acorda o e-mail',
+                          dd['has_novidades'] and dd['novos_por_regra'] > 0,
+                          f"novos={dd['novos']} regra={dd['novos_por_regra']}")
+                    html, _ = notif.render_dou_digest(
+                        firm_id, agora - timedelta(days=365))
+                    check('o bloco renderiza no e-mail',
+                          'Palavras-chave que você vigia' in html
+                          and 'Digest de teste' in html)
+                finally:
+                    r = DouAlertRule.query.get(rid)
+                    if r is not None:
+                        for hit in list(r.hits):
+                            alvo_h = hit.alert
+                            if alvo_h is not None and len(alvo_h.rule_hits) == 1:
+                                if alvo_h.matches:
+                                    alvo_h.tem_regra = False
+                                else:
+                                    db.session.delete(alvo_h)
+                        db.session.delete(r)
+                        db.session.commit()
+
         if not d['empresas']:
             print('  ⏭️  nenhum alerta nas últimas edições — pulando o conteúdo')
             return
