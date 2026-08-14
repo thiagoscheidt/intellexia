@@ -119,6 +119,61 @@ def test_modelo():
           r.resumo_do_casamento)
 
 
+class FakeMateria:
+    """Matéria sem banco — o casamento não precisa de ORM."""
+
+    def __init__(self, id, texto='', identifica='', ementa='',
+                 pub_name='DO1', orgao_hierarquia=''):
+        self.id, self.texto, self.identifica = id, texto, identifica
+        self.ementa, self.pub_name = ementa, pub_name
+        self.orgao_hierarquia = orgao_hierarquia
+
+
+class FakeRegra:
+    def __init__(self, id, termo=None, modo=regras.MODO_FRASE,
+                 secoes=None, orgao=None):
+        self.id, self.termo, self.modo = id, termo, modo
+        self.lista_secoes = secoes or []
+        self.orgao_raiz = orgao
+
+
+def test_casar():
+    print('\n6. Colheita')
+
+    materias = [
+        FakeMateria(1, texto='decisão sobre o FAP da empresa', pub_name='DO1',
+                    orgao_hierarquia='Ministério da Previdência Social/CRPS'),
+        FakeMateria(2, texto='convênio com a FAPESP', pub_name='DO3',
+                    orgao_hierarquia='Ministério da Educação'),
+        FakeMateria(3, texto='ata da reunião', identifica='PORTARIA CRPS Nº 9',
+                    pub_name='DO1',
+                    orgao_hierarquia='Ministério da Previdência Social'),
+    ]
+
+    achados = regras.casar([FakeRegra(10, termo='FAP')], materias)
+    check('casa só a matéria certa', achados == {1: [10]}, str(achados))
+
+    achados = regras.casar([FakeRegra(11, termo='CRPS')], materias)
+    check('o corpus inclui identifica', achados == {3: [11]}, str(achados))
+
+    achados = regras.casar([FakeRegra(12, termo='FAP', secoes=['DO3'])], materias)
+    check('seção recorta', achados == {}, str(achados))
+
+    achados = regras.casar(
+        [FakeRegra(13, orgao='Ministério da Previdência Social')], materias)
+    check('regra só de órgão casa pela raiz, não pela hierarquia inteira',
+          achados == {1: [13], 3: [13]}, str(achados))
+
+    achados = regras.casar([FakeRegra(14, termo='FAP'),
+                            FakeRegra(15, termo='decisão')], materias)
+    check('duas regras na mesma matéria dão uma entrada com dois ids',
+          achados == {1: [14, 15]}, str(achados))
+
+    check('sem regra, nada casa', regras.casar([], materias) == {})
+    check('sem matéria, nada casa',
+          regras.casar([FakeRegra(16, termo='FAP')], []) == {})
+
+
 def main():
     print('=' * 60)
     print('TESTES DAS REGRAS DE PALAVRA-CHAVE DO DIÁRIO OFICIAL')
@@ -129,6 +184,7 @@ def main():
     test_modos()
     test_sonda()
     test_modelo()
+    test_casar()
 
     print('\n' + '=' * 60)
     if _falhas:

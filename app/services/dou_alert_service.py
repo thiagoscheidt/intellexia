@@ -24,14 +24,15 @@ neste arquivo:
 import logging
 import unicodedata
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, time, timezone
 
 from bs4 import BeautifulSoup
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
-from app.models import (db, Client, DouArticle, DouClientAlert,
-                        DouClientAlertMatch, DouEdition)
+from app.models import (db, Client, DouAlertRule, DouAlertRuleHit, DouArticle,
+                        DouClientAlert, DouClientAlertMatch, DouEdition)
+from app.services import dou_rule_service as rule_service
 from app.services import dou_search_service as busca_service
 from app.services.dou_xml_parser import grifar_html, sanitizar_html
 
@@ -193,30 +194,42 @@ def carteiras_ativas() -> dict[int, Carteira]:
 
 # ------------------------------------------------------------------ geração
 
-def gerar_para_edicao(edition, carteiras=None) -> int:
+# As colunas da varredura. `texto` é o único LONGTEXT aqui de propósito:
+# `texto_html` e `raw_xml` são três campos gigantes por linha que ninguém usa no
+# casamento. `identifica`, `ementa` e `orgao_hierarquia` entraram com as regras
+# de palavra-chave — são String, e o corpus da regra depende delas.
+_COLUNAS_DA_VARREDURA = (
+    DouArticle.id, DouArticle.texto, DouArticle.pub_date, DouArticle.pub_name,
+    DouArticle.identifica, DouArticle.ementa, DouArticle.orgao_hierarquia,
+)
+
+
+def gerar_para_edicao(edition, carteiras=None, regras=None, podar=True) -> int:
     """Gera/atualiza os alertas das matérias de uma edição. Devolve quantos.
 
     Não comita: quem chama decide. Nunca levanta — o alerta é derivado, e uma
     falha aqui não pode derrubar a captura, mesma regra do índice de busca.
     """
     try:
-        materias = (db.session.query(DouArticle.id, DouArticle.texto,
-                                     DouArticle.pub_date, DouArticle.pub_name)
+        materias = (db.session.query(*_COLUNAS_DA_VARREDURA)
                     .filter(DouArticle.edition_id == edition.id).all())
         if not materias:
             return 0
-        return _gerar_para_materias(materias, carteiras)
+        return _gerar_para_materias(materias, carteiras, regras, podar)
     except Exception:  # noqa: BLE001 — alerta não derruba a captura
         logger.exception('DOU: falha ao gerar alertas da edição %s', edition.id)
         return 0
 
 
-def gerar_para_datas(datas, carteiras=None) -> int:
-    """Varredura retroativa: gera alertas das matérias de uma lista de datas."""
-    materias = (db.session.query(DouArticle.id, DouArticle.texto,
-                                 DouArticle.pub_date, DouArticle.pub_name)
+def gerar_para_datas(datas, carteiras=None, regras=None, podar=True) -> int:
+    """Varredura retroativa: gera alertas das matérias de uma lista de datas.
+
+    ``podar=False`` para varredura parcial — o backfill de **uma** regra nova,
+    que não conhece as outras origens do alerta e por isso só pode acrescentar.
+    """
+    materias = (db.session.query(*_COLUNAS_DA_VARREDURA)
                 .filter(DouArticle.pub_date.in_(list(datas))).all())
-    return _gerar_para_materias(materias, carteiras)
+    return _gerar_para_materias(materias, carteiras, regras, podar)
 
 
 def _decisoes_por_cnpj(article_id: int, cnpjs) -> dict:
@@ -250,21 +263,47 @@ def _decisoes_por_cnpj(article_id: int, cnpjs) -> dict:
     return decisoes
 
 
-def _gerar_para_materias(materias, carteiras=None) -> int:
-    """O laço de casamento. ``materias`` é a tupla enxuta, não o modelo inteiro.
+def _gerar_para_materias(materias, carteiras=None, regras=None,
+                         podar: bool = True) -> int:
+    """O laço de casamento. ``materias`` são Rows enxutas, não o modelo inteiro.
 
     Carregar o ORM completo aqui traria ``raw_xml`` e ``texto_html`` junto — três
     campos LONGTEXT por linha que ninguém usa no casamento.
+
+    Duas origens desembocam no mesmo alerta: o CNPJ da carteira e as regras de
+    palavra-chave. **A matéria que casa as duas continua sendo um alerta só** —
+    em registros separados ela apareceria duas vezes na tela e duas no e-mail.
+
+    O laço percorre a união dos escritórios: um escritório pode ter regra sem
+    ter carteira válida, e vice-versa.
+
+    ``podar`` distingue a varredura **completa** (a do cron e a do backfill
+    geral, que enxerga todas as origens e portanto pode remover o que deixou de
+    valer) da **parcial** — o backfill de uma regra recém-criada, que só conhece
+    aquela regra. Sem essa distinção, criar uma regra apagaria os hits das
+    outras regras do mesmo alerta e derrubaria alerta de cliente que a regra
+    nova não casou.
     """
     if carteiras is None:
         carteiras = carteiras_ativas()
-    if not carteiras:
+    if regras is None:
+        regras = rule_service.regras_ativas()
+
+    firmas = sorted(set(carteiras) | set(regras))
+    if not firmas or not materias:
         return 0
 
+    ids = [m.id for m in materias]
+    cache_corpus = {}        # normalização compartilhada entre escritórios
+    ids_que_casaram = set()  # regras que pegaram algo, para o last_match_at
     gerados = 0
-    for law_firm_id, carteira in carteiras.items():
+
+    for law_firm_id in firmas:
+        carteira = carteiras.get(law_firm_id)
+        hits_por_materia = rule_service.casar(
+            regras.get(law_firm_id) or [], materias, cache_corpus)
+
         # Os alertas já existentes desta leva, para o upsert não duplicar
-        ids = [m[0] for m in materias]
         existentes = {}
         for pedaco in range(0, len(ids), 500):
             for alerta in (DouClientAlert.query
@@ -273,66 +312,117 @@ def _gerar_para_materias(materias, carteiras=None) -> int:
                            .all()):
                 existentes[alerta.article_id] = alerta
 
-        for article_id, texto, pub_date, pub_name in materias:
-            casados = carteira.casar(texto)
-            alerta = existentes.get(article_id)
+        for materia in materias:
+            casados = carteira.casar(materia.texto) if carteira else []
+            rule_ids = hits_por_materia.get(materia.id) or []
+            ids_que_casaram.update(rule_ids)
+            alerta = existentes.get(materia.id)
 
-            if not casados:
-                # A matéria pode ter sido republicada sem o CNPJ; o alerta
-                # antigo deixa de valer.
-                if alerta is not None:
+            if not casados and not rule_ids:
+                # A matéria pode ter sido republicada sem o CNPJ, ou a regra
+                # que a trouxe pode ter sido desligada; o alerta deixa de valer.
+                # Numa varredura parcial não há como saber disso — ela só
+                # acrescenta.
+                if podar and alerta is not None:
                     db.session.delete(alerta)
                 continue
 
             # Um cliente citado por dois estabelecimentos aparece uma vez por
             # CNPJ — é o CNPJ que identifica o estabelecimento no DOU.
             por_cnpj = {cnpj: (cliente, tipo) for cnpj, cliente, tipo in casados}
-            tem_exato = any(t == DouClientAlert.MATCH_EXACT
-                            for _, t in por_cnpj.values())
 
             if alerta is None:
                 # created_at em UTC, não no default local do modelo: é ele que
                 # a janela do e-mail compara com last_sent_at.
                 alerta = DouClientAlert(law_firm_id=law_firm_id,
-                                        article_id=article_id,
+                                        article_id=materia.id,
                                         status=DouClientAlert.STATUS_NEW,
                                         created_at=_utcnow())
                 db.session.add(alerta)
                 gerados += 1
 
-            decisoes = _decisoes_por_cnpj(article_id, set(por_cnpj))
-
             # Reprocessamento mantém a triagem: quem já leu o alerta não deve
             # vê-lo voltar por causa de uma republicação que não mudou nada.
-            alerta.pub_date = pub_date
-            alerta.pub_name = pub_name
-            alerta.clients_count = len(por_cnpj)
-            alerta.match_type = (DouClientAlert.MATCH_EXACT if tem_exato
-                                 else DouClientAlert.MATCH_ROOT)
-            alerta.tem_resultado = bool(decisoes)
+            alerta.pub_date = materia.pub_date
+            alerta.pub_name = materia.pub_name
 
-            # Casa CNPJ a CNPJ em vez de limpar e reinserir. Um `clear()`
-            # seguido de append emitia os INSERT antes dos DELETE no mesmo
-            # flush e estourava a chave única (alert_id, cnpj) — e ainda
-            # reescreveria as 103 linhas de um edital de lista a cada
-            # reprocessamento, para nada.
-            atuais = {m.cnpj: m for m in alerta.matches}
-            for cnpj in list(atuais):
-                if cnpj not in por_cnpj:
-                    alerta.matches.remove(atuais.pop(cnpj))
-            for cnpj, (cliente, tipo) in sorted(por_cnpj.items()):
-                existente = atuais.get(cnpj)
-                if existente is None:
-                    alerta.matches.append(DouClientAlertMatch(
-                        law_firm_id=law_firm_id, client_id=cliente.id,
-                        cnpj=cnpj, match_type=tipo,
-                        resultado=decisoes.get(cnpj)))
+            # Os campos de cliente só são reescritos quando este escritório tem
+            # carteira nesta varredura. Sem a guarda, o backfill de uma regra
+            # nova (que passa `carteiras={}` de propósito, para não refazer os
+            # CNPJs) zeraria o clients_count de todo alerta de cliente que a
+            # regra também casasse.
+            if carteira is not None:
+                decisoes = _decisoes_por_cnpj(materia.id, set(por_cnpj))
+                alerta.clients_count = len(por_cnpj)
+                alerta.tem_resultado = bool(decisoes)
+                if por_cnpj:
+                    tem_exato = any(t == DouClientAlert.MATCH_EXACT
+                                    for _, t in por_cnpj.values())
+                    alerta.match_type = (DouClientAlert.MATCH_EXACT if tem_exato
+                                         else DouClientAlert.MATCH_ROOT)
                 else:
-                    existente.client_id = cliente.id
-                    existente.match_type = tipo
-                    existente.resultado = decisoes.get(cnpj)
+                    # Alerta só de palavra-chave não tem CNPJ nenhum; declarar
+                    # 'exato' aqui poluiria o filtro e o contador da tela.
+                    alerta.match_type = None
 
+                # Casa CNPJ a CNPJ em vez de limpar e reinserir. Um `clear()`
+                # seguido de append emitia os INSERT antes dos DELETE no mesmo
+                # flush e estourava a chave única (alert_id, cnpj) — e ainda
+                # reescreveria as 103 linhas de um edital de lista a cada
+                # reprocessamento, para nada.
+                atuais = {m.cnpj: m for m in alerta.matches}
+                for cnpj in list(atuais):
+                    if cnpj not in por_cnpj:
+                        alerta.matches.remove(atuais.pop(cnpj))
+                for cnpj, (cliente, tipo) in sorted(por_cnpj.items()):
+                    existente = atuais.get(cnpj)
+                    if existente is None:
+                        alerta.matches.append(DouClientAlertMatch(
+                            law_firm_id=law_firm_id, client_id=cliente.id,
+                            cnpj=cnpj, match_type=tipo,
+                            resultado=decisoes.get(cnpj)))
+                    else:
+                        existente.client_id = cliente.id
+                        existente.match_type = tipo
+                        existente.resultado = decisoes.get(cnpj)
+
+            # O mesmo cuidado nos hits, e pela mesma razão: a unique é
+            # (alert_id, rule_id). Na varredura parcial só acrescenta — remover
+            # apagaria o hit das outras regras, que esta passagem nem viu.
+            atuais_hits = {h.rule_id: h for h in alerta.rule_hits}
+            if podar:
+                for rule_id in list(atuais_hits):
+                    if rule_id not in rule_ids:
+                        alerta.rule_hits.remove(atuais_hits.pop(rule_id))
+            for rule_id in rule_ids:
+                if rule_id not in atuais_hits:
+                    alerta.rule_hits.append(DouAlertRuleHit(
+                        law_firm_id=law_firm_id, rule_id=rule_id))
+            alerta.tem_regra = bool(atuais_hits) or bool(rule_ids)
+
+    _marcar_ultimo_casamento(regras, materias, ids_que_casaram)
     return gerados
+
+
+def _marcar_ultimo_casamento(regras, materias, casados_ids) -> None:
+    """``last_match_at`` das regras que casaram — responde "essa pega algo?".
+
+    Guarda a data da **matéria**, não o instante da execução: um backfill de
+    julho rodado hoje não pode fazer a regra parecer viva. E só as que casaram
+    de fato — marcar toda regra ativa esvaziaria o sentido da coluna.
+    """
+    if not materias or not casados_ids:
+        return
+    ultima = max((m.pub_date for m in materias if m.pub_date), default=None)
+    if not ultima:
+        return
+    quando = datetime.combine(ultima, time.min)
+    for lista in (regras or {}).values():
+        for regra in lista:
+            if regra.id not in casados_ids:
+                continue
+            if regra.last_match_at is None or regra.last_match_at < quando:
+                regra.last_match_at = quando
 
 
 # ------------------------------------------------------------------ consulta

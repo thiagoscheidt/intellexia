@@ -154,17 +154,21 @@ def ingest_date(data: date, secoes=None, with_pdf: bool = True,
         'alertas': 0, 'inalterado': True, 'detalhes': [],
     }
 
-    # A carteira de CNPJs é carregada uma vez para a data inteira, não por
-    # seção: são 500+ clientes, e reler isso seis vezes por dia é desperdício.
-    # Falhar aqui deixa `carteiras` vazio e a captura segue sem alerta.
-    carteiras = None
+    # A carteira de CNPJs e as regras de palavra-chave são carregadas uma vez
+    # para a data inteira, não por seção: são 500+ clientes, e reler isso seis
+    # vezes por dia é desperdício. Falhar aqui deixa as duas vazias e a captura
+    # segue sem alerta.
+    carteiras = regras_de_alerta = None
     if not dry_run:
         try:
             from app.services import dou_alert_service
+            from app.services import dou_rule_service
             carteiras = dou_alert_service.carteiras_ativas()
+            regras_de_alerta = dou_rule_service.regras_ativas()
         except Exception:  # noqa: BLE001 — alerta não derruba a captura
-            logger.exception('DOU: não foi possível carregar as carteiras de CNPJ')
-            carteiras = {}
+            logger.exception('DOU: não foi possível carregar carteiras/regras de alerta')
+            carteiras = carteiras or {}
+            regras_de_alerta = regras_de_alerta or {}
 
     for secao in secoes:
         try:
@@ -258,7 +262,8 @@ def ingest_date(data: date, secoes=None, with_pdf: bool = True,
             # nunca dono dela. gerar_para_edicao trata a própria falha e
             # devolve 0, então um erro aqui não desfaz a edição já commitada.
             from app.services import dou_alert_service
-            novos = dou_alert_service.gerar_para_edicao(edition, carteiras)
+            novos = dou_alert_service.gerar_para_edicao(edition, carteiras,
+                                                        regras_de_alerta)
             if novos:
                 try:
                     db.session.commit()

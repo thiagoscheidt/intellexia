@@ -118,3 +118,69 @@ def casa_texto(texto_normalizado: str, padroes: list) -> bool:
     if not padroes:
         return True
     return all(p.search(texto_normalizado) for p in padroes)
+
+
+# ------------------------------------------------------------------ colheita
+
+def regras_ativas() -> dict:
+    """``{law_firm_id: [DouAlertRule]}`` — só as ligadas, para a colheita."""
+    from app.models import DouAlertRule
+
+    por_firma = {}
+    for regra in DouAlertRule.query.filter(DouAlertRule.ativo.is_(True)).all():
+        por_firma.setdefault(regra.law_firm_id, []).append(regra)
+    return por_firma
+
+
+def corpus(materia) -> str:
+    """O texto em que a regra procura: identifica + ementa + texto.
+
+    Não existe a opção "procurar só no título" porque não existe título: medido
+    no acervo, ``titulo`` está vazio em **100%** das matérias e ``ementa`` em
+    **98%**. O DOU põe o cabeçalho ("PORTARIA Nº 1.234, DE ...") em
+    ``identifica`` e todo o resto em ``texto``.
+    """
+    return ' '.join(filter(None, (getattr(materia, 'identifica', None),
+                                  getattr(materia, 'ementa', None),
+                                  getattr(materia, 'texto', None))))
+
+
+def _preparar(regras):
+    """[(regra, padroes, secoes, orgao_normalizado)] — compila uma vez só."""
+    return [(regra,
+             compilar(regra.termo, regra.modo),
+             set(regra.lista_secoes),
+             normalizar(regra.orgao_raiz) if regra.orgao_raiz else None)
+            for regra in regras]
+
+
+def casar(regras, materias, cache=None) -> dict:
+    """``{article_id: [rule_id]}``. Não toca o banco nem grava nada.
+
+    O corpus normalizado é memorizado por matéria: sem isso, dez regras
+    normalizariam os mesmos 34 MB dez vezes. O ``cache`` pode vir de fora para
+    dois escritórios com regras diferentes dividirem o mesmo trabalho.
+
+    Recorte barato antes do caro: seção e órgão descartam a matéria antes de
+    qualquer normalização de texto.
+    """
+    if not regras or not materias:
+        return {}
+    cache = {} if cache is None else cache
+    preparadas = _preparar(regras)
+
+    achados = {}
+    for materia in materias:
+        for regra, padroes, secoes, orgao in preparadas:
+            if secoes and (materia.pub_name or '').upper() not in secoes:
+                continue
+            if orgao and normalizar(orgao_raiz(materia.orgao_hierarquia)) != orgao:
+                continue
+            if padroes:
+                corpo = cache.get(materia.id)
+                if corpo is None:
+                    corpo = cache[materia.id] = normalizar(corpus(materia))
+                if not casa_texto(corpo, padroes):
+                    continue
+            achados.setdefault(materia.id, []).append(regra.id)
+    return achados
