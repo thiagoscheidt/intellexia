@@ -55,6 +55,11 @@ _RESULTADOS = (
 
 # Recortes do filtro de resultado. Além destes, o valor pode ser a decisão
 # exata ("Indeferimento Total"), para quem já sabe o que procura.
+# De onde veio o alerta: o CNPJ da carteira ou uma regra de palavra-chave. Um
+# alerta pode ter as duas origens — é a mesma matéria, com dois motivos.
+ORIGEM_CLIENTE = 'cliente'
+ORIGEM_REGRA = 'regra'
+
 FAP_QUALQUER = 'com'          # houve decisão, qualquer que seja
 FAP_FAVORAVEL = 'deferimento'  # onde ganhamos
 FAP_CONTRA = 'indeferimento'   # onde há prazo correndo
@@ -448,17 +453,22 @@ def resumo(law_firm_id: int) -> dict:
         dados['total'] += qtd
         if status == DouClientAlert.STATUS_NEW:
             dados['nao_lidos'] += qtd
+        # `elif` e não `else`: com match_type nulo (alerta só de palavra-chave)
+        # o `else` contaria como "outra filial do grupo", que é falso.
         if tipo == DouClientAlert.MATCH_EXACT:
             dados['exatos'] += qtd
-        else:
+        elif tipo == DouClientAlert.MATCH_ROOT:
             dados['raiz'] += qtd
     dados['com_resultado'] = _base(law_firm_id).filter(
         DouClientAlert.tem_resultado.is_(True)).count()
+    dados['por_regra'] = _base(law_firm_id).filter(
+        DouClientAlert.tem_regra.is_(True)).count()
     return dados
 
 
 def listar(law_firm_id: int, status=None, tipo=None, secao=None,
-           client_id=None, fap=None, page: int = 1, por_pagina: int = 30):
+           client_id=None, fap=None, origem=None, rule_id=None,
+           page: int = 1, por_pagina: int = 30):
     """Página de alertas, do mais recente para o mais antigo.
 
     Dentro do dia, **quem traz decisão de recurso vem primeiro**: é desfecho,
@@ -474,7 +484,17 @@ def listar(law_firm_id: int, status=None, tipo=None, secao=None,
     query = _base(law_firm_id).options(
         joinedload(DouClientAlert.article).joinedload(DouArticle.edition),
         joinedload(DouClientAlert.matches).joinedload(DouClientAlertMatch.client),
+        joinedload(DouClientAlert.rule_hits).joinedload(DouAlertRuleHit.rule),
     )
+    if origem == ORIGEM_REGRA:
+        query = query.filter(DouClientAlert.tem_regra.is_(True))
+    elif origem == ORIGEM_CLIENTE:
+        query = query.filter(DouClientAlert.clients_count > 0)
+    if rule_id:
+        query = query.filter(DouClientAlert.id.in_(
+            db.session.query(DouAlertRuleHit.alert_id)
+            .filter(DouAlertRuleHit.law_firm_id == law_firm_id,
+                    DouAlertRuleHit.rule_id == rule_id)))
     if status:
         query = query.filter(DouClientAlert.status == status)
     if tipo:
@@ -541,6 +561,21 @@ def clientes_com_alerta(law_firm_id: int):
               .order_by(Client.name, Client.cnpj).all())
     return [(cid, nome, formatar_cnpj(busca_service.so_digitos(cnpj)) or cnpj, qtd)
             for cid, nome, cnpj, qtd in linhas]
+
+
+def regras_com_alerta(law_firm_id: int):
+    """``[(rule_id, nome, qtd)]`` — só regra que já rendeu alerta.
+
+    Como no filtro de cliente: oferecer opção que não devolve nada é convidar
+    para uma tela vazia.
+    """
+    linhas = (db.session.query(DouAlertRuleHit.rule_id, DouAlertRule.nome,
+                               func.count(func.distinct(DouAlertRuleHit.alert_id)))
+              .join(DouAlertRule, DouAlertRule.id == DouAlertRuleHit.rule_id)
+              .filter(DouAlertRuleHit.law_firm_id == law_firm_id)
+              .group_by(DouAlertRuleHit.rule_id, DouAlertRule.nome)
+              .order_by(DouAlertRule.nome).all())
+    return [(rid, nome, qtd) for rid, nome, qtd in linhas]
 
 
 def cnpjs_invalidos(law_firm_id: int):
@@ -624,13 +659,44 @@ def _montar_html(blocos) -> str:
     return ''.join(partes)
 
 
-def _termos_de_grifo(cnpjs):
-    """O CNPJ nas duas grafias: o DOU escreve pontuado, o banco guarda cru."""
+def _termos_de_grifo(alerta):
+    """O que o modal marca: o CNPJ nas duas grafias e o termo de cada regra.
+
+    O CNPJ vai pontuado e cru porque o DOU escreve com pontuação e o banco
+    guarda só dígitos. O termo da regra entra como foi cadastrado — quem escapa
+    é o ``grifar_html``, sempre antes de marcar.
+    """
     termos = []
-    for digitos in cnpjs:
-        termos.append(formatar_cnpj(digitos))
-        termos.append(digitos)
-    return termos
+    for m in alerta.matches:
+        termos.append(formatar_cnpj(m.cnpj))
+        termos.append(m.cnpj)
+    for regra in alerta.regras_citadas:
+        if regra.termo:
+            termos.append(regra.termo)
+    return [t for t in termos if t]
+
+
+def _blocos_com_termos(sopa, termos):
+    """Blocos cujo texto contém algum dos termos, sem acento e sem caixa.
+
+    Irmã de ``_blocos_com_cnpj``, para o alerta que veio só de palavra-chave:
+    ali não há CNPJ para ancorar o recorte, e o que interessa é o parágrafo (ou
+    a linha da tabela) em que o termo aparece.
+    """
+    alvos = [rule_service.normalizar(t) for t in termos if t]
+    alvos = [a for a in alvos if a]
+    if not alvos:
+        return []
+    vistos, blocos = set(), []
+    for no in sopa.find_all(string=True):
+        texto = rule_service.normalizar(str(no))
+        if not any(alvo in texto for alvo in alvos):
+            continue
+        bloco = _bloco_do_no(no)
+        if bloco is not None and id(bloco) not in vistos:
+            vistos.add(id(bloco))
+            blocos.append(bloco)
+    return blocos
 
 
 def trechos_do_alerta(alerta, maximo: int = 200) -> dict:
@@ -646,6 +712,10 @@ def trechos_do_alerta(alerta, maximo: int = 200) -> dict:
     * ``modo='trechos'`` — recorte de texto puro em volta de cada citação.
       Reserva para matéria capturada sem ``texto_html``.
 
+    No alerta que veio só de palavra-chave não há CNPJ para ancorar o recorte:
+    o bloco é o que contém o **termo** da regra. O resto do caminho é idêntico —
+    sanitizar, montar, grifar —, muda só o que se procura e o que se marca.
+
     ``maximo`` é teto de blocos, não meta: o maior edital medido tem 103 linhas
     e cabe inteiro (~34 KB numa busca sob demanda). Cortar em 60 escondia a
     decisão de 43 estabelecimentos do cliente, que é justamente o que ele veio
@@ -656,17 +726,20 @@ def trechos_do_alerta(alerta, maximo: int = 200) -> dict:
     """
     artigo = alerta.article
     cnpjs = [m.cnpj for m in alerta.matches]
+    termos_de_regra = [r.termo for r in alerta.regras_citadas if r.termo]
+    grifos = _termos_de_grifo(alerta)
 
     bruto = (artigo.texto_html or '') if artigo else ''
     if bruto.strip():
         sopa = BeautifulSoup(sanitizar_html(bruto), 'html.parser')
-        blocos = _blocos_com_cnpj(sopa, cnpjs)
+        blocos = _blocos_com_cnpj(sopa, cnpjs) if cnpjs else []
+        if not blocos:
+            blocos = _blocos_com_termos(sopa, termos_de_regra)
         if blocos:
             escolhidos = blocos[:maximo]
             return {
                 'modo': 'html',
-                'html': grifar_html(_montar_html(escolhidos),
-                                    _termos_de_grifo(cnpjs)),
+                'html': grifar_html(_montar_html(escolhidos), grifos),
                 'blocos': len(escolhidos),
                 'restantes': max(0, len(blocos) - len(escolhidos)),
                 'itens': [],
@@ -694,8 +767,10 @@ def trechos_do_alerta(alerta, maximo: int = 200) -> dict:
     if not itens:
         return {'modo': 'inteiro', 'html': None, 'blocos': 0, 'restantes': 0,
                 'itens': [],
-                'inteiro': busca_service.destacar(
-                    busca_service.marcar_identificadores(texto, cnpjs))}
+                'inteiro': grifar_html(
+                    busca_service.destacar(
+                        busca_service.marcar_identificadores(texto, cnpjs)),
+                    termos_de_regra)}
 
     return {'modo': 'trechos', 'html': None, 'blocos': 0,
             'itens': itens[:maximo], 'restantes': max(0, len(itens) - maximo)}

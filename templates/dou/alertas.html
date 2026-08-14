@@ -47,14 +47,20 @@
     </div>
   </div>
 
-  {% if resumo.nao_lidos %}
-  <form method="post" action="{{ url_for('dou.alertas_marcar_todas') }}">
-    <input type="hidden" name="voltar" value="{{ request.full_path }}">
-    <button class="btn btn-outline-secondary btn-sm" type="submit">
-      <i class="bi bi-check2-all me-1"></i>Marcar todos como lidos
-    </button>
-  </form>
-  {% endif %}
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    {% if resumo.nao_lidos %}
+    <form method="post" action="{{ url_for('dou.alertas_marcar_todas') }}">
+      <input type="hidden" name="voltar" value="{{ request.full_path }}">
+      <button class="btn btn-outline-secondary btn-sm" type="submit">
+        <i class="bi bi-check2-all me-1"></i>Marcar todos como lidos
+      </button>
+    </form>
+    {% endif %}
+    <a href="{{ url_for('dou.regras') }}" class="btn btn-outline-secondary btn-sm"
+       title="Vigiar temas, nomes fora da carteira ou um órgão inteiro">
+      <i class="bi bi-search me-1"></i>Regras de palavra-chave
+    </a>
+  </div>
 </div>
 
 {# Cliente sem CNPJ válido não é vigiado, e isso não pode ser silencioso: a
@@ -143,11 +149,38 @@
           {% endfor %}
         </select>
       </div>
+      {# Origem e regra ficam juntos: são a mesma pergunta em duas
+         profundidades — "por que este alerta existe?" e "por qual regra?". #}
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Origem</label>
+        <select name="origem" class="form-select form-select-sm">
+          <option value="">Cliente e palavra-chave</option>
+          <option value="{{ ORIGEM_CLIENTE }}" {{ 'selected' if f_origem == ORIGEM_CLIENTE }}>
+            Só CNPJ de cliente
+          </option>
+          <option value="{{ ORIGEM_REGRA }}" {{ 'selected' if f_origem == ORIGEM_REGRA }}>
+            Só palavra-chave ({{ resumo.por_regra }})
+          </option>
+        </select>
+      </div>
+      {% if regras %}
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1">Regra</label>
+        <select name="regra" class="form-select form-select-sm">
+          <option value="">Todas as regras</option>
+          {% for rid, nome, quantos in regras %}
+          <option value="{{ rid }}" {{ 'selected' if rid == f_regra }}>
+            {{ nome }} ({{ quantos }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
       <div class="col-auto">
         <button type="submit" class="btn btn-primary btn-sm">
           <i class="bi bi-funnel me-1"></i>Filtrar
         </button>
-        {% if f_tipo or f_secao or f_cliente or f_fap %}
+        {% if f_tipo or f_secao or f_cliente or f_fap or f_origem or f_regra %}
         <a href="{{ url_for('dou.alertas', status=f_status) }}"
            class="btn btn-outline-secondary btn-sm">Limpar</a>
         {% endif %}
@@ -220,9 +253,23 @@
             + {{ citados | length - 3 }} empresa(s)
           </span>
           {% endif %}
+          {# Motivo de palavra-chave ao lado dos de cliente: é a mesma matéria,
+             com dois motivos. Cor própria, nunca o vermelho — esse continua
+             exclusivo do desfecho FAP. Clicar filtra por aquela regra. #}
+          {% for regra in a.regras_citadas %}
+          <a class="dou-chip dou-chip--regra"
+             href="{{ url_for('dou.alertas', status=f_status, regra=regra.id) }}"
+             title="Casou a regra: {{ regra.resumo_do_casamento }}">
+            <i class="bi bi-search"></i>{{ regra.nome }}
+          </a>
+          {% endfor %}
+          {# Só quando há CNPJ: no alerta que veio de palavra-chave o "0 CNPJs"
+             seria ruído — não é uma contagem que baixou, é outra origem. #}
+          {% if a.clients_count %}
           <span class="dou-alerta__cnpjs" title="CNPJs distintos citados nesta matéria">
             {{ a.clients_count }} CNPJ{{ 's' if a.clients_count != 1 }}
           </span>
+          {% endif %}
         </div>
 
         {# O desfecho do recurso, contado por decisão. Um edital julga dezenas
@@ -287,11 +334,11 @@
       <div class="btn-group btn-group-sm">
         {% if alertas.has_prev %}
         <a class="btn btn-outline-secondary"
-           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, fap=f_fap or none, page=alertas.prev_num) }}">Anterior</a>
+           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, fap=f_fap or none, origem=f_origem or none, regra=f_regra or none, page=alertas.prev_num) }}">Anterior</a>
         {% endif %}
         {% if alertas.has_next %}
         <a class="btn btn-outline-secondary"
-           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, fap=f_fap or none, page=alertas.next_num) }}">Próxima</a>
+           href="{{ url_for('dou.alertas', status=f_status, tipo=f_tipo, secao=f_secao, cliente=f_cliente, fap=f_fap or none, origem=f_origem or none, regra=f_regra or none, page=alertas.next_num) }}">Próxima</a>
         {% endif %}
       </div>
     </div>

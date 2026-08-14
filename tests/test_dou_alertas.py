@@ -7,14 +7,16 @@ Usa app.test_client() no padrão dos demais testes de rota do projeto.
     uv run python tests/test_dou_alertas.py
 """
 
+import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from main import app
-from app.models import (db, User, Client, DouArticle, DouEdition,
-                        DouClientAlert, DouClientAlertMatch)
+from app.models import (db, User, Client, DouAlertRule, DouAlertRuleHit,
+                        DouArticle, DouEdition, DouClientAlert,
+                        DouClientAlertMatch)
 from app.services import dou_alert_service as alertas
 
 _falhas = []
@@ -656,6 +658,137 @@ def test_resultado_fap():
               c.get('/dou/alertas?status=todos&fap=xpto').status_code == 200)
 
 
+def test_origem_e_regra():
+    """A matéria que casa CNPJ e regra continua sendo um alerta só.
+
+    Cria uma regra de verdade, colhe, confere e desfaz — o cenário roda contra
+    o acervo do banco de desenvolvimento, como os demais testes do arquivo.
+    """
+    print('\n10. Origem: cliente, regra, ou as duas')
+
+    with app.app_context():
+        alerta_cliente = (DouClientAlert.query
+                          .filter(DouClientAlert.clients_count > 0).first())
+        if alerta_cliente is None:
+            print('  ⏭️  nenhum alerta de cliente no banco — pulando')
+            return
+        firma = alerta_cliente.law_firm_id
+        data = alerta_cliente.pub_date
+        # Um termo que existe na matéria que já é alerta de cliente: é assim
+        # que se prova que as duas origens dão UM alerta, não dois.
+        #
+        # **Precisa ser uma palavra rara.** A primeira versão usava
+        # "ministério", que casou 500 das ~3.000 matérias do dia: o teste virou
+        # carga, estourou o tempo, foi morto no meio e o `finally` não rodou —
+        # deixando duas regras e 500 alertas no banco de desenvolvimento. A
+        # palavra mais longa da própria matéria é rara por construção.
+        artigo = DouArticle.query.get(alerta_cliente.article_id)
+        palavras = re.findall(r'[A-Za-zÀ-ÿ]{14,}', artigo.texto or '')
+        if not palavras:
+            print('  ⏭️  matéria sem palavra longa para ancorar o teste — pulando')
+            return
+        termo = max(palavras, key=len)
+
+        regra = DouAlertRule(law_firm_id=firma, nome='Regra de teste',
+                             termo=termo, modo='frase', ativo=True)
+        desligada = DouAlertRule(law_firm_id=firma, nome='Desligada',
+                                 termo=termo, modo='frase', ativo=False)
+        db.session.add_all([regra, desligada])
+        db.session.commit()
+        rule_id, off_id = regra.id, desligada.id
+
+        try:
+            alertas.gerar_para_datas([data])
+            db.session.commit()
+            db.session.expire_all()
+
+            alerta = DouClientAlert.query.get(alerta_cliente.id)
+            check('cliente + regra continua sendo UM alerta',
+                  DouClientAlert.query.filter_by(
+                      law_firm_id=firma,
+                      article_id=alerta.article_id).count() == 1)
+            check('com os dois motivos', alerta.clients_count > 0 and alerta.tem_regra,
+                  f'clientes={alerta.clients_count} regra={alerta.tem_regra}')
+            check('o match_type de cliente sobrevive', alerta.match_type is not None)
+            check('regra desligada não colhe',
+                  off_id not in [h.rule_id for h in alerta.rule_hits],
+                  str([h.rule_id for h in alerta.rule_hits]))
+
+            # Reprocessar não duplica hit nem apaga a triagem.
+            alerta.status = DouClientAlert.STATUS_READ
+            db.session.commit()
+            alertas.gerar_para_datas([data])
+            db.session.commit()
+            db.session.expire_all()
+            alerta = DouClientAlert.query.get(alerta_cliente.id)
+            check('reprocessar não duplica hit',
+                  len([h for h in alerta.rule_hits if h.rule_id == rule_id]) == 1)
+            check('reprocessar preserva a triagem',
+                  alerta.status == DouClientAlert.STATUS_READ)
+            alerta.status = DouClientAlert.STATUS_NEW
+            db.session.commit()
+
+            # Filtros de origem
+            so_regra = alertas.listar(firma, status=None,
+                                      origem=alertas.ORIGEM_REGRA)
+            check('origem=regra só traz quem tem regra',
+                  so_regra.total and all(a.tem_regra for a in so_regra.items),
+                  f'{so_regra.total} alerta(s)')
+            so_cliente = alertas.listar(firma, status=None,
+                                        origem=alertas.ORIGEM_CLIENTE)
+            check('origem=cliente só traz quem tem CNPJ',
+                  all(a.clients_count > 0 for a in so_cliente.items))
+
+            por_regra = alertas.listar(firma, status=None, rule_id=rule_id)
+            check('filtro por regra recorta',
+                  por_regra.total and all(
+                      rule_id in [h.rule_id for h in a.rule_hits]
+                      for a in por_regra.items),
+                  f'{por_regra.total} alerta(s)')
+
+            # Tenant: nenhum alerta de outro escritório entra
+            outros = alertas.listar(firma + 999, status=None,
+                                    origem=alertas.ORIGEM_REGRA)
+            check('regra não vaza para outro escritório', outros.total == 0)
+
+            disponiveis = alertas.regras_com_alerta(firma)
+            check('a regra aparece no filtro com a contagem',
+                  any(r[0] == rule_id and r[2] > 0 for r in disponiveis),
+                  str(disponiveis))
+
+            # Grifo
+            termos = alertas._termos_de_grifo(alerta)
+            check('o grifo inclui o termo da regra', termo in termos,
+                  str(termos[:4]))
+            trecho = alertas.trechos_do_alerta(alerta)
+            check('o trecho continua saindo', trecho['modo'] != 'vazio',
+                  trecho['modo'])
+        finally:
+            # Desfaz o cenário: a regra sai, os hits caem por cascade e o
+            # tem_regra dos alertas que sobrevivem pelo CNPJ é zerado.
+            for rid in (rule_id, off_id):
+                r = DouAlertRule.query.get(rid)
+                if r is None:
+                    continue
+                for hit in list(r.hits):
+                    alvo = hit.alert
+                    if alvo is not None and len(alvo.rule_hits) == 1:
+                        if alvo.matches:
+                            alvo.tem_regra = False
+                        else:
+                            db.session.delete(alvo)
+                db.session.delete(r)
+            db.session.commit()
+
+        sujos = (db.session.query(DouClientAlert.id)
+                 .outerjoin(DouAlertRuleHit,
+                            DouAlertRuleHit.alert_id == DouClientAlert.id)
+                 .filter(DouClientAlert.tem_regra.is_(True),
+                         DouAlertRuleHit.id.is_(None)).count())
+        check('limpeza não deixa alerta com tem_regra e zero hits',
+              sujos == 0, f'{sujos} alerta(s)')
+
+
 def test_digest_diario():
     """O e-mail das últimas 3 edições, agrupado por empresa."""
     print('\n9. Resumo diário por e-mail')
@@ -816,6 +949,7 @@ def main():
     test_chip_da_header()
     test_trecho()
     test_resultado_fap()
+    test_origem_e_regra()
     test_digest_diario()
 
     print('\n' + '=' * 60)

@@ -1510,3 +1510,43 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Chip do motivo de palavra-chave, ao lado dos chips de empresa. Cor própria,
+   nunca o vermelho: esse continua exclusivo do desfecho FAP, que é a pergunta
+   de maior valor da tela e não pode disputar atenção com a origem do alerta.
+
+   Par de tokens claro/escuro pela mesma razão do badge FAP: no escuro a cor
+   precisa clarear para não sumir no fundo, e o texto tem de escurecer junto —
+   senão o contraste cai abaixo dos 4,5:1 exigidos para texto pequeno.
+
+   Escopado em `.dou-page` porque o app declara `[data-bs-theme="dark"] a` com
+   especificidade (0,1,1), que venceria uma classe só — e o chip é um <a>. */
+.dou-page {
+  --dou-regra-bg: #e7e3f7;
+  --dou-regra-ink: #40317a;
+  --dou-regra-borda: #c9c0ea;
+}
+
+[data-bs-theme="dark"] .dou-page {
+  --dou-regra-bg: #2e2748;
+  --dou-regra-ink: #d3caf5;
+  --dou-regra-borda: #4a3f75;
+}
+
+.dou-page .dou-chip--regra {
+  background: var(--dou-regra-bg);
+  color: var(--dou-regra-ink);
+  border-color: var(--dou-regra-borda);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dou-page .dou-chip--regra:hover {
+  filter: brightness(1.06);
+}
+
+.dou-page .dou-chip--regra i {
+  font-size: .68rem;
+  margin-right: .2rem;
+  opacity: .75;
+}
