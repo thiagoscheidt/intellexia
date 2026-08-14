@@ -84,12 +84,12 @@
              nada pendente, o clique vai para o acervo, que é o que se quer ler. #}
           <a class="module-counter-chip"
             href="{{ url_for('dou.alertas') if dou_alertas_nao_lidos else (url_for('dou.captura') if dou_health and dou_health.badge else url_for('dou.edicoes')) }}"
-            title="Diário Oficial{% if dou_alertas_nao_lidos %} — {{ dou_alertas_nao_lidos }} alerta(s) de cliente não lido(s){% endif %}{% if dou_health and dou_health.com_erro %} — {{ dou_health.com_erro }} edição(ões) com falha na captura{% endif %}{% if dou_health and dou_health.parada %} — nada capturado desde {{ dou_health.ultima_data.strftime('%d/%m/%Y') if dou_health.ultima_data else '—' }}{% endif %}{% if dou_health and not dou_health.badge and not dou_alertas_nao_lidos %} — captura em dia{% if dou_health.ultima_data %}, última em {{ dou_health.ultima_data.strftime('%d/%m/%Y') }}{% endif %}{% endif %}">
+            title="Diário Oficial{% if dou_alertas_nao_lidos %} — {{ dou_alertas_nao_lidos }} alerta(s) não lido(s){% endif %}{% if dou_health and dou_health.com_erro %} — {{ dou_health.com_erro }} edição(ões) com falha na captura{% endif %}{% if dou_health and dou_health.parada %} — nada capturado desde {{ dou_health.ultima_data.strftime('%d/%m/%Y') if dou_health.ultima_data else '—' }}{% endif %}{% if dou_health and not dou_health.badge and not dou_alertas_nao_lidos %} — captura em dia{% if dou_health.ultima_data %}, última em {{ dou_health.ultima_data.strftime('%d/%m/%Y') }}{% endif %}{% endif %}">
             <i class="bi bi-newspaper"></i>
             <span class="mc-label">Diário Oficial</span>
             {% if dou_alertas_nao_lidos %}
             <span class="badge rounded-pill text-bg-primary"
-              title="{{ dou_alertas_nao_lidos }} matéria(s) citando cliente, a ler">{{
+              title="{{ dou_alertas_nao_lidos }} matéria(s) a ler — cliente citado ou palavra-chave vigiada">{{
               dou_alertas_nao_lidos if dou_alertas_nao_lidos < 100 else '99+' }}</span>
             {% endif %}
             {% if dou_health and dou_health.com_erro %}

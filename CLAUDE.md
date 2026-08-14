@@ -144,7 +144,7 @@ intellexia/
 | `admin_users` | — | Gerenciamento de usuários (admin-only) |
 | `access_audit` | `/admin/access-audit` | Atividade de usuários (admin-only): último login, telas acessadas, online agora. Visitas de tela agregadas por dia em `user_page_visits`, gravadas pelo middleware no mesmo commit de `last_activity` |
 | `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
-| `dou` | `/dou` | **Diário Oficial**: acervo do DOU capturado do INLABS (Imprensa Nacional). Captura diária dos ZIPs de XML das seções `DO1 DO2 DO3 DO1E DO2E DO3E` mais os PDFs assinados, quebrando cada edição matéria a matéria. Acervo em três níveis — edições por data (espelha a listagem do INLABS, com o PDF assinado) → edição do dia (aba por seção, salto para o dia vizinho **do acervo**, busca em título/ementa, filtro por órgão-raiz e tipo, atalho por linha para a **folha** daquela página) → matéria (o inteiro teor, em texto) — mais o **leitor** e a tela de captura (cobertura, falhas, reprocesso). O **leitor** (`/dou/edicao/<data>/pagina/<n>?secao=DO1`) é a folha assinada em tela cheia, no modelo do visualizador da Imprensa Nacional: aba por caderno, `‹ ›`, "ir para a página" e **Sumário da edição** (`_sumario_da_edicao`: órgão-raiz → primeira página, conferido linha a linha contra o `<select>` do portal oficial). **O texto do ato não entra no leitor** — a folha é A3 e qualquer coisa dividindo espaço com ela fica ilegível; a ponte de volta é a lista de matérias da página, no rodapé. O "ir para" é GET sem JavaScript e **redireciona para o endereço canônico** `/pagina/<n>`, para o que fica na barra do navegador ser copiável. A folha do leitor vem de `/dou/edicao/<id>/pagina/<n>.pdf`, **uma página por vez** (`_entregar_recorte(..., vizinhas=False)`) — no leitor o `›` já leva à seguinte, e mandar três fazia a folha escolhida dividir a tela com duas que ninguém pediu; a tela da matéria continua com as vizinhas (`/dou/materia/<id>/pagina.pdf`), porque um edital começa numa página e termina na outra. `_total_paginas` lê o `page_count` do PDF a cada requisição (1–4 ms mesmo nos 44 MB da Seção 3 — não vale coluna no banco). Órgão é sempre recortado na **raiz** da hierarquia (`dou_search_service.orgao_raiz`), no filtro, no agrupamento e no sumário: a hierarquia completa tem ~104 valores por seção contra ~27 raízes, e agrupar por ela dava 36 grupos para 50 linhas. **Alertas** (`/dou/alertas`) cruzam os CNPJs dos clientes com cada matéria capturada — ver a seção "Alertas de cliente no DOU" |
+| `dou` | `/dou` | **Diário Oficial**: acervo do DOU capturado do INLABS (Imprensa Nacional). Captura diária dos ZIPs de XML das seções `DO1 DO2 DO3 DO1E DO2E DO3E` mais os PDFs assinados, quebrando cada edição matéria a matéria. Acervo em três níveis — edições por data (espelha a listagem do INLABS, com o PDF assinado) → edição do dia (aba por seção, salto para o dia vizinho **do acervo**, busca em título/ementa, filtro por órgão-raiz e tipo, atalho por linha para a **folha** daquela página) → matéria (o inteiro teor, em texto) — mais o **leitor** e a tela de captura (cobertura, falhas, reprocesso). O **leitor** (`/dou/edicao/<data>/pagina/<n>?secao=DO1`) é a folha assinada em tela cheia, no modelo do visualizador da Imprensa Nacional: aba por caderno, `‹ ›`, "ir para a página" e **Sumário da edição** (`_sumario_da_edicao`: órgão-raiz → primeira página, conferido linha a linha contra o `<select>` do portal oficial). **O texto do ato não entra no leitor** — a folha é A3 e qualquer coisa dividindo espaço com ela fica ilegível; a ponte de volta é a lista de matérias da página, no rodapé. O "ir para" é GET sem JavaScript e **redireciona para o endereço canônico** `/pagina/<n>`, para o que fica na barra do navegador ser copiável. A folha do leitor vem de `/dou/edicao/<id>/pagina/<n>.pdf`, **uma página por vez** (`_entregar_recorte(..., vizinhas=False)`) — no leitor o `›` já leva à seguinte, e mandar três fazia a folha escolhida dividir a tela com duas que ninguém pediu; a tela da matéria continua com as vizinhas (`/dou/materia/<id>/pagina.pdf`), porque um edital começa numa página e termina na outra. `_total_paginas` lê o `page_count` do PDF a cada requisição (1–4 ms mesmo nos 44 MB da Seção 3 — não vale coluna no banco). Órgão é sempre recortado na **raiz** da hierarquia (`dou_search_service.orgao_raiz`), no filtro, no agrupamento e no sumário: a hierarquia completa tem ~104 valores por seção contra ~27 raízes, e agrupar por ela dava 36 grupos para 50 linhas. **Alertas** (`/dou/alertas`) têm duas origens no mesmo registro: os CNPJs da carteira cruzados com cada matéria capturada (seção "Alertas de cliente no DOU") e as **regras de palavra-chave** configuradas em `/dou/regras` (seção "Alertas por palavra-chave no DOU"). A matéria que casa as duas é **um** alerta com dois motivos |
 | `communications` | `/comunicacoes` | **Monitoramento de Processos**: comunicações processuais por fonte de informação (`ProcessCommunication.source` — hoje só `comunica_pje`; novas fontes = nova constante `SOURCE_*` + rótulo em `SOURCE_LABELS`). Radar por OAB, inteiro teor, controle de lidas, descoberta automática de processos. O nome de exibição é "Monitoramento de Processos"; endpoint/URL/módulo permanecem `communications` |
 
 ### Documentação do usuário (Manual + Assistente "pergunte ao manual")
@@ -403,6 +403,84 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
   O `texto_html` só é lido para matéria que já casou, e só quando tem `<table` —
   é LONGTEXT, e são ~8 matérias por dia contra as milhares da edição.
 
+### Alertas por palavra-chave no DOU (`dou_rule_service`)
+
+A segunda origem do alerta, ao lado do CNPJ. O alerta por CNPJ só pega cliente
+**cadastrado e citado nominalmente**; ficava de fora justamente o que muda o
+jogo antes de virar processo — portaria que altera a metodologia do FAP, pauta
+de julgamento do CRPS, revisão do NTEP. Nada disso escreve CNPJ de ninguém.
+Tela em `/dou/regras`; o motor de casamento é módulo à parte do
+`dou_alert_service`, que continua sendo o dono único do registro de alerta.
+
+- **O motor é próprio, não o Meilisearch**, embora o acervo já esteja indexado.
+  O índice busca com tolerância a erro e trata o termo como prefixo: medido em
+  7 dias, `FAP` devolve **92** matérias pelo índice e **12** pelo motor — as 80
+  de diferença são **FAPED (82×), FAPEG (34×), FAPESP, FAPEMIG, FAPERJ**,
+  fundações de amparo à pesquisa. Para busca isso é recall; para alerta são 80
+  falsos positivos que fazem desligar a regra e nunca mais voltar. De quebra o
+  alerta não passa a depender do índice, que já era invariante do módulo.
+- **Não existe modo OU.** É ele o 107×: sem aspas, `Fator Acidentário de
+  Prevenção` casa "Fator" e "Prevenção" sozinhos e devolve **748** contra **7**.
+  Quem quiser OU cria duas regras — e aí vê o volume de cada uma separado.
+- **Não existe "procurar só no título".** Medido: `titulo` está vazio em
+  **100%** do acervo e `ementa` em **98%** — o DOU põe o cabeçalho em
+  `identifica` e todo o resto em `texto`. O corpus é `identifica + ementa +
+  texto`, sem knob.
+- **A fronteira é `(?<!\w)`/`(?!\w)`, nunca `\b`**: um termo que começa ou
+  termina em pontuação ("art. 22") faria o `\b` exigir uma transição que não
+  existe, e a regra nunca casaria.
+- **O teste antes de salvar é a peça central**, porque o problema do recurso é
+  volume, não casamento: `licitação` geraria **660 alertas/dia** contra os ~6
+  da carteira inteira de clientes. A tela roda a regra no acervo e mostra o
+  número **antes** do botão Salvar. Avisa e deixa salvar (decisão do produto):
+  há caso legítimo de volume alto, e limitar a colheita deixaria um buraco
+  silencioso, pior que ruído. Os cortes do veredito (`CORTE_OK`, `CORTE_ALTO`)
+  são ancorados nos ~6 alertas/dia reais, não chutados.
+- **O teste chama o mesmo `casar()` da colheita**, de propósito: implementações
+  separadas divergiriam e o número mostrado viraria mentira — destruindo a peça
+  que resolve o volume.
+- **A peneira SQL** faz o teste caber num botão: `LIKE` com a **maior corrida
+  sem acento** do termo (`licitação` → `licita`, `Fator Acidentário de
+  Prevenção` → `fator acident`). Esse pedaço está literalmente no texto, então
+  é superconjunto seguro — quem contém `\bfap\b` contém `fap` — e vale igual no
+  SQLite e no MySQL **sem depender de collation**. De 12 s para 0,5–1,9 s. O
+  `LIKE` cobre os **três** campos do corpus: peneirar só `texto` perderia a
+  matéria cujo termo está no cabeçalho, e aí o teste mostraria menos do que
+  chegaria.
+- **A janela do teste é de edições publicadas, não de dias corridos.** Com o
+  acervo indo até 11/08 e "hoje" em 14/08, os "7 dias" pegavam duas datas — uma
+  com 356 matérias em vez das ~3.000 — e `licitação` anunciava **110/dia**
+  quando o real é **660**. Seis vezes menos, em silêncio, no número que decide
+  se a pessoa salva a regra; fim de semana faz o mesmo buraco toda semana. Sem
+  edição capturada, `testar` devolve `nivel='sem_acervo'`: dizer "0 alertas"
+  acusaria o termo por um problema que é do acervo.
+- **A unidade continua sendo a matéria.** `dou_alert_rule_hits` é tabela filha,
+  e a matéria que casa CNPJ **e** regra é **um** alerta com dois motivos — a
+  mesma lição do 32×. `match_type` virou nullable: alerta só de palavra-chave
+  não tem CNPJ, e declarar `'exato'` poluiria filtro e contador (por isso o
+  `resumo` usa `elif`, não `else`).
+- **`dou_alert_rules` e `dou_alert_rule_hits` têm `law_firm_id`**, como as
+  tabelas de alerta: o acervo é público, o que se decide vigiar é do escritório.
+  A regra é do escritório e guarda **quem a criou** — sem dono registrado,
+  ninguém se sente responsável por desligar a que faz ruído; editar e excluir
+  são do dono ou de admin.
+- **`podar` separa a varredura completa da parcial.** O backfill de uma regra
+  recém-criada (`carteiras={}`, `podar=False`) conhece uma origem só: sem essa
+  distinção ele apagaria os hits das outras regras do mesmo alerta e derrubaria
+  alerta de cliente que a regra nova não casou.
+- **Excluir a regra também zera `tem_regra`** dos alertas que sobrevivem pelo
+  CNPJ: a coluna é denormalizada e não cai com o cascade dos hits.
+- Ao salvar, a regra gera sozinha os alertas das últimas `DIAS_TESTE` edições —
+  o que foi testado é o que aparece; o acervo inteiro fica num botão à parte.
+- Na tela de alertas, o chip da regra tem **cor própria e nunca o vermelho**,
+  que continua exclusivo do desfecho FAP. O "ver trecho" reaproveita o caminho
+  inteiro (`sanitizar_html` → montar → `grifar_html`); muda só o que se procura
+  (`_blocos_com_termos` quando não há CNPJ) e o que se marca.
+- No e-mail é **um bloco a mais no mesmo `dou_digest`, não um segundo e-mail**,
+  com a mesma janela de 3 edições e o mesmo selo NOVO. `has_novidades` também
+  acorda pela regra — senão um dia sem citação de cliente e com portaria nova
+  sairia como "nada a relatar".
+
 ### Timezone
 
 Todas as datas de exibição usam `America/Sao_Paulo`. Filtros Jinja: `datetime_sp`, `date_sp`. Helper: `app.utils.timezone.now_sp()`. Datetimes sem `tzinfo` são tratados como UTC antes da conversão.
@@ -549,7 +627,8 @@ FapReview.revision [POST]
 | `dou_xml_parser`                       | XML do DOU → dicts. Função pura, sem rede/banco/Flask — a peça que muda se a Imprensa Nacional alterar o schema |
 | `dou_ingestion_service`                | Ingestão do DOU: download → disco → parse → upsert → auditoria. Dedup por chave da matéria, janela de reverificação e retenção de PDF — fonte única da tela e do cron |
 | `dou_search_service`                   | Busca no acervo do DOU (Meilisearch): extração e normalização de CNPJ/processo, indexação e consulta com facetas — fonte única da tela de busca |
-| `dou_alert_service`                    | Alertas de cliente no DOU: validação de CNPJ (mod 11), carteira do escritório, casamento exato e por raiz, geração e triagem — fonte única da tela `/dou/alertas`, do gancho na ingestão e do backfill |
+| `dou_alert_service`                    | Alertas no DOU: validação de CNPJ (mod 11), carteira do escritório, casamento exato e por raiz, gravação dos hits de regra, geração e triagem — fonte única da tela `/dou/alertas`, do gancho na ingestão, do digest e do backfill |
+| `dou_rule_service`                     | Regras de palavra-chave do DOU: normalização, casamento por fronteira de palavra (sem modo OU), peneira SQL e o teste antes de salvar — **não sabe o que é alerta**, devolve `{article_id: [rule_id]}`. Ver a seção "Alertas por palavra-chave no DOU" |
 | `process_radar_service`                | Radar da Mesa de Trabalho (providências IA + publicações não lidas + movimentação DataJud) — fonte única do widget do Painel de Processos (`build_radar`) e do e-mail Resumo do Radar (`build_radar_digest`) |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |
