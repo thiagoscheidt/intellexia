@@ -4043,6 +4043,13 @@ class DouClientAlert(db.Model):
 
     Chave única ``(law_firm_id, article_id)``: reprocessar uma data atualiza a
     linha em vez de duplicar, mesma regra do upsert de matéria.
+
+    Desde os alertas por palavra-chave a tabela guarda alerta que **não** é de
+    cliente (``matches`` vazio, ``match_type`` nulo, ``rule_hits`` preenchido).
+    O nome ``dou_client_alerts`` ficou: renomear em produção, com FK apontando
+    para ela e a filha ``dou_client_alert_matches`` junto, é risco sem ganho
+    visível. A matéria que casa CNPJ **e** regra continua sendo um alerta só,
+    com dois motivos.
     """
     __tablename__ = 'dou_client_alerts'
     __table_args__ = (
@@ -4073,8 +4080,10 @@ class DouClientAlert(db.Model):
     pub_name = db.Column(db.String(10), index=True)
 
     # 'exato' quando ao menos um casamento é exato; 'raiz' quando todos são de
-    # outra filial. É o que decide o selo da linha e o filtro.
-    match_type = db.Column(db.String(10), nullable=False, default=MATCH_EXACT)
+    # outra filial. É o que decide o selo da linha e o filtro. **Nulo** quando o
+    # alerta veio só de regra de palavra-chave — não há CNPJ nenhum, e declarar
+    # 'exato' ali poluiria o filtro e o contador da tela.
+    match_type = db.Column(db.String(10), default=MATCH_EXACT)
     clients_count = db.Column(db.Integer, nullable=False, default=0)
 
     status = db.Column(db.String(20), nullable=False, default=STATUS_NEW, index=True)
@@ -4083,6 +4092,10 @@ class DouClientAlert(db.Model):
     # alerta de maior valor do módulo — desfecho, não notícia — e por isso vira
     # coluna: badge, filtro e ordenação precisam dele sem abrir a tabela filha.
     tem_resultado = db.Column(db.Boolean, nullable=False, default=False, index=True)
+
+    # A matéria casou alguma regra de palavra-chave do escritório. Denormalizado
+    # pelo mesmo motivo que `tem_resultado`: filtro e chip sem abrir a filha.
+    tem_regra = db.Column(db.Boolean, nullable=False, default=False, index=True)
 
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
@@ -4093,6 +4106,14 @@ class DouClientAlert(db.Model):
     read_by = db.relationship('User')
     matches = db.relationship('DouClientAlertMatch', back_populates='alert',
                               cascade='all, delete-orphan', lazy='selectin')
+    rule_hits = db.relationship('DouAlertRuleHit', back_populates='alert',
+                                cascade='all, delete-orphan', lazy='selectin')
+
+    @property
+    def regras_citadas(self):
+        """As regras que fizeram esta matéria virar alerta, por nome."""
+        return sorted((h.rule for h in self.rule_hits if h.rule),
+                      key=lambda r: r.nome or '')
 
     @property
     def matches_ordenados(self):
@@ -4230,6 +4251,116 @@ class DouClientAlertMatch(db.Model):
 
     def __repr__(self):
         return f'<DouClientAlertMatch {self.cnpj} {self.match_type}>'
+
+
+class DouAlertRule(db.Model):
+    """Tabela dou_alert_rules - o que o escritório vigia no DOU por texto.
+
+    Complementa o alerta por CNPJ, que só dispara para cliente cadastrado e
+    citado nominalmente. Fica de fora justamente o que muda o jogo antes de
+    virar processo: portaria que altera a metodologia do FAP, pauta de
+    julgamento do CRPS, revisão do NTEP. Nada disso escreve CNPJ de ninguém.
+
+    **Tem law_firm_id**, ao contrário do acervo: o DOU é catálogo público, mas
+    o que se decide vigiar é do escritório.
+
+    A regra é do escritório e **guarda quem a criou**: sem dono registrado,
+    ninguém se sente responsável por desligar a que está fazendo ruído. Editar
+    e excluir são do dono ou de admin; criar e ver, de qualquer um do módulo.
+
+    Pelo menos um entre ``termo`` e ``orgao_raiz`` — regra sem nenhum dos dois
+    casaria a edição inteira, 3.005 matérias por dia. A validação fica em
+    ``dou_rule_service.validar``, junto do resto das regras de negócio.
+    """
+    __tablename__ = 'dou_alert_rules'
+    __table_args__ = (
+        db.Index('ix_dou_alert_rules_firm_ativo', 'law_firm_id', 'ativo'),
+    )
+
+    MODO_FRASE = 'frase'
+    MODO_PALAVRAS = 'palavras'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'),
+                            nullable=False, index=True)
+
+    # Rótulo humano: é ele que aparece no chip do alerta e na linha do e-mail.
+    nome = db.Column(db.String(120), nullable=False)
+
+    # Nulo = regra só de órgão/seção ("tudo que sair do CRPS").
+    termo = db.Column(db.String(200))
+    modo = db.Column(db.String(10), nullable=False, default=MODO_FRASE)
+
+    # CSV 'DO1,DO3'; nulo = todas as seções.
+    secoes = db.Column(db.String(60))
+    # Raiz da hierarquia, como no filtro e na faceta da busca; nulo = todos.
+    orgao_raiz = db.Column(db.String(255))
+
+    ativo = db.Column(db.Boolean, nullable=False, default=True, index=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    # Responde "essa regra não pega nada há 40 dias" sem varrer os alertas.
+    last_match_at = db.Column(db.DateTime)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    created_by = db.relationship('User')
+    hits = db.relationship('DouAlertRuleHit', back_populates='rule',
+                           cascade='all, delete-orphan')
+
+    @property
+    def lista_secoes(self):
+        """['DO1', 'DO3'] — vazio quer dizer todas, nunca nenhuma."""
+        return [s.strip().upper() for s in (self.secoes or '').split(',') if s.strip()]
+
+    @property
+    def resumo_do_casamento(self):
+        """O que a regra casa, em uma linha, para a lista e o chip."""
+        partes = []
+        if self.termo:
+            rotulo = ('frase exata' if self.modo == self.MODO_FRASE
+                      else 'todas as palavras')
+            partes.append(f'"{self.termo}" ({rotulo})')
+        if self.orgao_raiz:
+            partes.append(self.orgao_raiz)
+        if self.lista_secoes:
+            partes.append(' · '.join(self.lista_secoes))
+        return ' — '.join(partes) or 'tudo'
+
+    def __repr__(self):
+        return f'<DouAlertRule firm={self.law_firm_id} {self.nome!r}>'
+
+
+class DouAlertRuleHit(db.Model):
+    """Tabela dou_alert_rule_hits - a regra que fez a matéria virar alerta.
+
+    Tabela filha, e não coluna no alerta, porque **a unidade do alerta continua
+    sendo a matéria**. Uma portaria pode disparar três regras do escritório; por
+    par (regra, matéria) ela viraria três linhas na tela e três no e-mail. É a
+    mesma lição que rendeu 41 alertas em vez de 1.333 (32x) no alerta de CNPJ.
+    """
+    __tablename__ = 'dou_alert_rule_hits'
+    __table_args__ = (
+        db.UniqueConstraint('alert_id', 'rule_id', name='uq_dou_rule_hits_alert_rule'),
+        db.Index('ix_dou_rule_hits_firm_rule', 'law_firm_id', 'rule_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    alert_id = db.Column(db.Integer,
+                         db.ForeignKey('dou_client_alerts.id', ondelete='CASCADE'),
+                         nullable=False, index=True)
+    rule_id = db.Column(db.Integer,
+                        db.ForeignKey('dou_alert_rules.id', ondelete='CASCADE'),
+                        nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'),
+                            nullable=False, index=True)
+
+    alert = db.relationship('DouClientAlert', back_populates='rule_hits')
+    rule = db.relationship('DouAlertRule', back_populates='hits')
+
+    def __repr__(self):
+        return f'<DouAlertRuleHit alerta={self.alert_id} regra={self.rule_id}>'
 
 
 class DouSyncRun(db.Model):

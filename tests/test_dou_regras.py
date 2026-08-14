@@ -86,6 +86,39 @@ def test_sonda():
                         'Fator Acidentário de Prevenção')))
 
 
+def test_modelo():
+    """As colunas de que a tela e o filtro dependem, sem abrir a filha."""
+    print('\n5. Modelo')
+
+    from app.models import DouAlertRule, DouAlertRuleHit, DouClientAlert
+
+    colunas = {c.name for c in DouAlertRule.__table__.columns}
+    check('regra tem law_firm_id (a regra é do escritório)',
+          'law_firm_id' in colunas)
+    check('regra tem dono registrado', 'created_by_id' in colunas)
+    check('regra tem last_match_at', 'last_match_at' in colunas)
+
+    unicas = [tuple(sorted(c.columns.keys()))
+              for c in DouAlertRuleHit.__table__.constraints
+              if c.__class__.__name__ == 'UniqueConstraint']
+    check('hit é único por (alerta, regra)',
+          ('alert_id', 'rule_id') in unicas, str(unicas))
+
+    check('alerta tem tem_regra',
+          'tem_regra' in {c.name for c in DouClientAlert.__table__.columns})
+    check('match_type é nullable (alerta só de regra não tem CNPJ)',
+          DouClientAlert.__table__.columns['match_type'].nullable)
+
+    r = DouAlertRule(nome='x', termo='FAP', modo='frase', secoes='DO1,DO3')
+    check('lista_secoes separa o CSV', r.lista_secoes == ['DO1', 'DO3'],
+          str(r.lista_secoes))
+    check('sem seções, lista vazia',
+          DouAlertRule(nome='x', termo='FAP').lista_secoes == [])
+    check('resumo_do_casamento descreve a regra',
+          'FAP' in r.resumo_do_casamento and 'DO1' in r.resumo_do_casamento,
+          r.resumo_do_casamento)
+
+
 def main():
     print('=' * 60)
     print('TESTES DAS REGRAS DE PALAVRA-CHAVE DO DIÁRIO OFICIAL')
@@ -95,6 +128,7 @@ def main():
     test_acento_e_caixa()
     test_modos()
     test_sonda()
+    test_modelo()
 
     print('\n' + '=' * 60)
     if _falhas:
