@@ -519,7 +519,7 @@ def test_leitor_da_edicao():
 
 def test_tela_de_regras():
     """A tela onde o escritório configura o que vigiar por palavra-chave."""
-    print('\n11. Regras de palavra-chave')
+    print('\n11. O que vigiar (regras de palavra-chave)')
 
     endpoints = {r.endpoint for r in app.url_map.iter_rules()}
     for esperado in ('dou.regras', 'dou.regra_nova', 'dou.regra_editar',
@@ -539,6 +539,17 @@ def test_tela_de_regras():
             sessao['user_id'] = user_id
             sessao['law_firm_id'] = firm_id
             sessao['user_role'] = 'admin'
+
+        # As duas telas de entrada do módulo levam ao que vigiar e aos alertas:
+        # a configuração só serve se for encontrável de onde a pessoa já está.
+        edicoes = c.get('/dou/').get_data(as_text=True)
+        check('edições levam aos alertas',
+              '/dou/alertas' in edicoes and 'Alertas' in edicoes)
+        check('edições levam a "O que vigiar"',
+              '/dou/regras' in edicoes and 'O que vigiar' in edicoes)
+        alertas_html = c.get('/dou/alertas').get_data(as_text=True)
+        check('alertas levam a "O que vigiar" em destaque',
+              'dou-cta' in alertas_html and 'O que vigiar' in alertas_html)
 
         resposta = c.get('/dou/regras')
         html = resposta.get_data(as_text=True)

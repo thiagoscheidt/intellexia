@@ -1,7 +1,7 @@
 {% extends "layout/base.html" %}
 {% from "partials/page_hero.html" import page_hero %}
 
-{% block title %}Regras de palavra-chave no DOU{% endblock %}
+{% block title %}O que vigiar no Diário Oficial{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
@@ -11,12 +11,12 @@
 <div class="dou-page">
 
 {{ page_hero(
-     'Regras de palavra-chave',
-     'O que o escritório vigia no Diário Oficial por texto, órgão ou seção',
-     'bi bi-search',
+     'O que vigiar',
+     'Temas, nomes e órgãos que o escritório acompanha no Diário Oficial',
+     'bi bi-binoculars',
      [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
       {'label': 'Alertas', 'href': url_for('dou.alertas')},
-      {'label': 'Regras', 'active': True}]) }}
+      {'label': 'O que vigiar', 'active': True}]) }}
 
 {# Mesma faixa de topo da tela de alertas: números à esquerda, ação à direita.
    Só aparece com regra cadastrada — três zeros não dizem nada. #}

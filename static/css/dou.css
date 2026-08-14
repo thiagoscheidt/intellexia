@@ -518,6 +518,62 @@
   box-shadow: 0 6px 14px rgba(var(--bs-primary-rgb), .28);
 }
 
+/* Variante vazada, para a mesma barra ter mais de uma ação em destaque sem
+   duas cores sólidas disputando. Mesma geometria do `.dou-cta` de propósito:
+   misturar btn-sm do Bootstrap com o cta desalinha a barra por 2 px. */
+/* Escopado em `.dou-page a` porque o app declara `[data-bs-theme="dark"] a`
+   com especificidade (0,1,1), que vence o `color` de uma classe só — a mesma
+   armadilha do badge FAP. Sem isto o texto do botão sólido virava #a5b4fc
+   sobre o próprio azul: **2,24:1** medido, contra os 4,5 exigidos. */
+.dou-page a.dou-cta {
+  color: #fff;
+}
+
+/* No escuro o app troca --bs-primary por um índigo claro (#6366f1), em que
+   texto branco não alcança o mínimo. O sólido escurece o fundo em vez de
+   clarear o texto: aqui ele é o botão de maior destaque da barra e precisa
+   continuar sendo lido como cheio. */
+[data-bs-theme="dark"] .dou-page a.dou-cta:not(.dou-cta--vazado) {
+  background: #3730a3;
+  border-color: #3730a3;
+}
+
+.dou-page a.dou-cta--vazado {
+  /* `--bs-primary` puro dá 4,27:1 sobre o fundo claro do painel — reprova por
+     pouco, e por pouco é reprovado do mesmo jeito. O token de ênfase existe
+     para texto sobre fundo sutil e vira claro sozinho no tema escuro. */
+  color: var(--bs-primary-text-emphasis);
+  background: transparent;
+  border-color: var(--bs-primary-border-subtle);
+}
+
+.dou-page a.dou-cta--vazado:hover,
+.dou-page a.dou-cta--vazado:focus-visible {
+  color: var(--bs-primary-text-emphasis);
+  background: var(--bs-primary-bg-subtle);
+  box-shadow: none;
+}
+
+/* Contador dentro do botão. Só aparece com pendência — número que nunca desce
+   ao lado de uma ação ensina a ignorar o botão. */
+.dou-cta__n {
+  display: inline-block;
+  min-width: 1.35rem;
+  padding: 0 .35rem;
+  border-radius: 999px;
+  background: var(--bs-primary);
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 700;
+  line-height: 1.35rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.dou-cta:not(.dou-cta--vazado) .dou-cta__n {
+  background: rgba(255, 255, 255, .22);
+}
+
 /* Faixa de convite: navegar por data resolve "ler a edição de hoje", mas quem
    procura um assunto ou um cliente precisa da busca — e não descobriria isso
    só por um botão pequeno na barra. */

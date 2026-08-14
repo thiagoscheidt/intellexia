@@ -405,6 +405,12 @@ carteira de clientes com o texto de cada matéria capturada. Fonte única da tel
 
 ### Alertas por palavra-chave no DOU (`dou_rule_service`)
 
+Na tela a área se chama **"O que vigiar"** — rota, endpoint e módulo continuam
+`regras`. O nome de exibição fala do propósito e não do mecanismo, e não promete
+configurar o alerta por CNPJ, que nasce da carteira de clientes e não se mexe
+ali. Botão em `/dou` (junto com **Alertas**, que leva a fila de não lidos) e em
+`/dou/alertas`, sempre com o ícone `bi-binoculars`.
+
 A segunda origem do alerta, ao lado do CNPJ. O alerta por CNPJ só pega cliente
 **cadastrado e citado nominalmente**; ficava de fora justamente o que muda o
 jogo antes de virar processo — portaria que altera a metodologia do FAP, pauta
@@ -483,6 +489,15 @@ Tela em `/dou/regras`; o motor de casamento é módulo à parte do
   CNPJ: a coluna é denormalizada e não cai com o cascade dos hits.
 - Ao salvar, a regra gera sozinha os alertas das últimas `DIAS_TESTE` edições —
   o que foi testado é o que aparece; o acervo inteiro fica num botão à parte.
+- **`.dou-cta` precisa de `.dou-page a.dou-cta` para o `color` valer.** O app
+  declara `[data-bs-theme="dark"] a` com especificidade (0,1,1), que vencia o
+  `color: #fff` de uma classe só: no tema escuro o texto do botão sólido virava
+  `#a5b4fc` sobre o próprio azul — **2,24:1 medido**, contra os 4,5 exigidos.
+  É a mesma armadilha do badge FAP. No escuro o sólido também escurece o fundo
+  (`#3730a3`) em vez de clarear o texto, porque ali `--bs-primary` é um índigo
+  claro. A variante `--vazado` usa `--bs-primary-text-emphasis` e não
+  `--bs-primary`: o segundo dá **4,27:1** sobre o painel claro, e reprovar por
+  pouco é reprovar.
 - Na tela de alertas, o chip da regra tem **cor própria e nunca o vermelho**,
   que continua exclusivo do desfecho FAP. O "ver trecho" reaproveita o caminho
   inteiro (`sanitizar_html` → montar → `grifar_html`); muda só o que se procura

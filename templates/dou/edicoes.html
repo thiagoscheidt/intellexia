@@ -33,10 +33,27 @@
     {{ 'matéria' if total_materias == 1 else 'matérias' }}
     {% endif %}
   </div>
-  <div class="d-flex align-items-center gap-2">
+  {# Ordem por valor: buscar é a ação de maior alcance; os alertas são a fila
+     de trabalho de quem já vigia alguém; "O que vigiar" configura essa fila; o
+     estado da captura é diagnóstico e fica por último, discreto. Só a busca é
+     sólida — duas cores cheias na mesma barra não dizem o que olhar primeiro. #}
+  <div class="d-flex align-items-center gap-2 flex-wrap">
     <a href="{{ url_for('dou.busca') }}" class="dou-cta">
       <i class="bi bi-search"></i>
       <span>Buscar no Diário</span>
+    </a>
+    <a href="{{ url_for('dou.alertas') }}" class="dou-cta dou-cta--vazado"
+       title="Matérias que citam CNPJ da carteira ou casam uma palavra vigiada">
+      <i class="bi bi-bell"></i>
+      <span>Alertas</span>
+      {% if dou_alertas_nao_lidos %}
+      <span class="dou-cta__n">{{ dou_alertas_nao_lidos if dou_alertas_nao_lidos < 100 else '99+' }}</span>
+      {% endif %}
+    </a>
+    <a href="{{ url_for('dou.regras') }}" class="dou-cta dou-cta--vazado"
+       title="Configurar o que o escritório vigia por palavra-chave, órgão ou seção">
+      <i class="bi bi-binoculars"></i>
+      <span>O que vigiar</span>
     </a>
     <a href="{{ url_for('dou.captura') }}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-activity me-1"></i>Estado da captura

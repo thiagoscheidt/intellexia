@@ -47,6 +47,9 @@
     </div>
   </div>
 
+  {# "Marcar todos" é ação em lote e fica discreta; "O que vigiar" é o passo
+     seguinte natural de quem está lendo alertas — quem sente falta de algo
+     aqui vai justamente configurar o que falta ser vigiado. #}
   <div class="d-flex gap-2 align-items-center flex-wrap">
     {% if resumo.nao_lidos %}
     <form method="post" action="{{ url_for('dou.alertas_marcar_todas') }}">
@@ -56,9 +59,10 @@
       </button>
     </form>
     {% endif %}
-    <a href="{{ url_for('dou.regras') }}" class="btn btn-outline-secondary btn-sm"
-       title="Vigiar temas, nomes fora da carteira ou um órgão inteiro">
-      <i class="bi bi-search me-1"></i>Regras de palavra-chave
+    <a href="{{ url_for('dou.regras') }}" class="dou-cta"
+       title="Configurar o que o escritório vigia por palavra-chave, órgão ou seção">
+      <i class="bi bi-binoculars"></i>
+      <span>O que vigiar</span>
     </a>
   </div>
 </div>

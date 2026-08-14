@@ -17,9 +17,9 @@
 {{ page_hero(
      'Editar regra' if regra else 'Nova regra',
      'Teste no acervo antes de salvar — o que você vir aqui é o que vai chegar',
-     'bi bi-search',
+     'bi bi-binoculars',
      [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
-      {'label': 'Regras', 'href': url_for('dou.regras')},
+      {'label': 'O que vigiar', 'href': url_for('dou.regras')},
       {'label': 'Editar' if regra else 'Nova', 'active': True}]) }}
 
 {% set v_nome = (campos.nome if campos else (regra.nome if regra else '')) %}
