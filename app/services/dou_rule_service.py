@@ -24,7 +24,6 @@ módulo: o índice serve à tela de busca; o alerta não pode depender dele.
 import logging
 import re
 import unicodedata
-from datetime import date, timedelta
 from types import SimpleNamespace
 
 from app.services.dou_search_service import orgao_raiz
@@ -58,6 +57,7 @@ NIVEL_VAZIO = 'vazio'
 NIVEL_OK = 'ok'
 NIVEL_ALTO = 'alto'
 NIVEL_RUIDOSO = 'ruidoso'
+NIVEL_SEM_ACERVO = 'sem_acervo'   # não há edição capturada para testar contra
 
 
 def normalizar(valor: str | None) -> str:
@@ -184,3 +184,141 @@ def casar(regras, materias, cache=None) -> dict:
                     continue
             achados.setdefault(materia.id, []).append(regra.id)
     return achados
+
+
+# --------------------------------------------------------- testar uma regra
+
+def datas_do_teste(quantas: int = DIAS_TESTE):
+    """As últimas ``quantas`` datas **com edição capturada**, da mais nova.
+
+    A janela é de edições publicadas, não de dias de calendário — e a diferença
+    não é cosmética. Medido: com o acervo indo de 03/08 a 11/08 e "hoje" em
+    14/08, a janela de 7 dias corridos pegava só duas datas, uma delas com 356
+    matérias em vez das ~3.000 de sempre. O termo "licitação" achava 768
+    matérias, dividia por 7 e anunciava **110 por dia** quando o real é **660**.
+    Seis vezes menos, em silêncio, justamente no número que decide se a pessoa
+    salva a regra. Fim de semana e feriado produzem o mesmo buraco toda semana.
+    """
+    from app.models import DouEdition, db
+
+    linhas = (db.session.query(DouEdition.data_publicacao)
+              .distinct()
+              .order_by(DouEdition.data_publicacao.desc())
+              .limit(max(1, int(quantas or DIAS_TESTE))).all())
+    return [linha[0] for linha in linhas]
+
+
+def filtrar_candidatas(termo, secoes, orgao, datas=None):
+    """A query das matérias que **podem** casar — a peneira, não a resposta.
+
+    Varrer 7 dias em Python custa 9,1 s de carga mais 3,0 s de normalização.
+    Inaceitável num botão que a pessoa aperta várias vezes ajustando a regra.
+    A peneira derruba isso para 0,5–1,9 s.
+
+    O ``LIKE`` cobre os **três** campos do corpus. Peneirar só ``texto``
+    perderia a matéria cujo termo está no cabeçalho ("PORTARIA CRPS Nº 9"), e
+    aí o teste mostraria menos do que vai chegar — que é exatamente o defeito
+    que este recurso existe para evitar.
+
+    O recorte de órgão vai como prefixo da hierarquia, superconjunto da raiz:
+    quem decide continua sendo ``orgao_raiz`` em Python, um caminho só.
+    """
+    from app.models import DouArticle, db
+
+    query = db.session.query(
+        DouArticle.id, DouArticle.identifica, DouArticle.ementa,
+        DouArticle.texto, DouArticle.pub_date, DouArticle.pub_name,
+        DouArticle.pagina_num, DouArticle.orgao_hierarquia)
+    if datas is not None:
+        query = query.filter(DouArticle.pub_date.in_(list(datas)))
+    if secoes:
+        query = query.filter(DouArticle.pub_name.in_(list(secoes)))
+    if orgao:
+        query = query.filter(DouArticle.orgao_hierarquia.ilike(f'{orgao}%'))
+    probe = sonda(termo)
+    if probe:
+        alvo = f'%{probe}%'
+        query = query.filter(db.or_(DouArticle.texto.ilike(alvo),
+                                    DouArticle.identifica.ilike(alvo),
+                                    DouArticle.ementa.ilike(alvo)))
+    return query
+
+
+def nivel(por_dia: float) -> str:
+    """O veredito do volume. Ver CORTE_OK/CORTE_ALTO para a âncora."""
+    if por_dia <= 0:
+        return NIVEL_VAZIO
+    if por_dia <= CORTE_OK:
+        return NIVEL_OK
+    if por_dia <= CORTE_ALTO:
+        return NIVEL_ALTO
+    return NIVEL_RUIDOSO
+
+
+def validar(nome, termo, modo, secoes, orgao) -> list:
+    """Mensagens de erro; lista vazia quer dizer regra válida."""
+    erros = []
+    if not (nome or '').strip():
+        erros.append('Dê um nome à regra — é ele que aparece no alerta.')
+    if modo not in MODOS:
+        erros.append('Modo de casamento inválido.')
+    tem_termo = bool(compilar(termo, modo if modo in MODOS else MODO_FRASE))
+    if (termo or '').strip() and not tem_termo:
+        erros.append('A palavra-chave não tem nenhuma letra ou número.')
+    elif not tem_termo and not (orgao or '').strip():
+        erros.append('Informe uma palavra-chave ou um órgão — sem nenhum dos '
+                     'dois a regra casaria a edição inteira, cerca de 3.000 '
+                     'matérias por dia.')
+    return erros
+
+
+def testar(termo, modo=MODO_FRASE, secoes=None, orgao=None,
+           dias: int = DIAS_TESTE, exemplos: int = 8) -> dict:
+    """Quanto esta regra teria gerado nos últimos ``dias``, e alguns exemplos.
+
+    Usa o **mesmo** ``casar`` da colheita diária, de propósito: se o teste e a
+    colheita tivessem implementações separadas, elas divergiriam e o número
+    mostrado antes de salvar viraria mentira — destruindo justamente a peça que
+    resolve o problema de volume.
+    """
+    secoes = [s.strip().upper() for s in (secoes or []) if s and s.strip()]
+    orgao = (orgao or '').strip() or None
+
+    datas = datas_do_teste(dias)
+    if not datas:
+        # Sem edição capturada não há o que testar. Devolver "0 alertas" aqui
+        # acusaria o termo por um problema que é do acervo.
+        return {'total': 0, 'dias': 0, 'por_dia': 0.0, 'nivel': NIVEL_SEM_ACERVO,
+                'vezes_carteira': 0, 'exemplos': []}
+
+    candidatas = filtrar_candidatas(termo, secoes, orgao, datas).all()
+
+    # Regra ainda não salva: um objeto solto com a mesma superfície que `casar`
+    # consome. Assim o teste passa pelo caminho da colheita, não por um paralelo.
+    provisoria = SimpleNamespace(id=0, termo=termo, modo=modo,
+                                 lista_secoes=secoes, orgao_raiz=orgao)
+
+    achados = casar([provisoria], candidatas)
+    casadas = [m for m in candidatas if m.id in achados]
+    casadas.sort(key=lambda m: (m.pub_date or datas[-1], m.id), reverse=True)
+
+    total = len(casadas)
+    por_dia = round(total / len(datas), 1)
+    return {
+        'total': total,
+        'dias': len(datas),
+        'por_dia': por_dia,
+        'nivel': nivel(por_dia),
+        # Quantas vezes o volume da carteira inteira de clientes. É a frase que
+        # dói: "essa regra sozinha traria 100x o que já existe".
+        'vezes_carteira': (int(por_dia / ALERTAS_DIA_CARTEIRA)
+                           if por_dia > 2 * ALERTAS_DIA_CARTEIRA else 0),
+        'exemplos': [{
+            'id': m.id,
+            'pub_date': m.pub_date.strftime('%d/%m') if m.pub_date else '',
+            'pub_name': m.pub_name or '',
+            'pagina': m.pagina_num,
+            'identifica': m.identifica or '(sem identificação)',
+            'orgao': orgao_raiz(m.orgao_hierarquia) or '',
+        } for m in casadas[:exemplos]],
+    }

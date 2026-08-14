@@ -174,6 +174,111 @@ def test_casar():
           regras.casar([FakeRegra(16, termo='FAP')], []) == {})
 
 
+def test_peneira_e_superconjunto():
+    """A propriedade que autoriza a otimização — sem ela o teste mente.
+
+    O LIKE roda no banco e a regex decide; se a peneira deixar de fora algo que
+    a regex casaria, o "testar antes de salvar" mostraria menos do que vai
+    chegar. O caso perigoso é o termo que só aparece em `identifica`: peneirar
+    apenas `texto` perderia a matéria inteira.
+    """
+    print('\n7. A peneira SQL é superconjunto')
+
+    from main import app
+    from app.models import DouArticle, db
+
+    with app.app_context():
+        todos = db.session.query(DouArticle.id, DouArticle.identifica,
+                                 DouArticle.ementa, DouArticle.texto).all()
+        if not todos:
+            check('acervo vazio — nada a conferir', True)
+            return
+        for termo in ('FAP', 'Fator Acidentário de Prevenção', 'aposentadoria',
+                      'PORTARIA'):
+            if not regras.sonda(termo):
+                continue
+            peneirados = {r.id for r in
+                          regras.filtrar_candidatas(termo, [], None).all()}
+            padroes = regras.compilar(termo, regras.MODO_FRASE)
+            exatos = {m.id for m in todos
+                      if regras.casa_texto(regras.normalizar(regras.corpus(m)),
+                                           padroes)}
+            escaparam = exatos - peneirados
+            check(f'peneira de {termo!r} contém todos os casamentos',
+                  not escaparam,
+                  f'{len(escaparam)} de {len(exatos)} escapariam')
+
+
+def test_janela_do_teste():
+    """A janela é de edições publicadas, não de dias de calendário.
+
+    Com o acervo indo até 11/08 e "hoje" em 14/08, a janela de 7 dias corridos
+    pegava duas datas — uma delas com 356 matérias em vez das ~3.000 de sempre.
+    "licitação" achava 768, dividia por 7 e anunciava 110/dia quando o real é
+    660. Fim de semana e feriado produzem o mesmo buraco toda semana.
+    """
+    print('\n7b. Janela do teste')
+
+    from main import app
+    from app.models import DouArticle, db
+
+    with app.app_context():
+        datas = regras.datas_do_teste(7)
+        if not datas:
+            check('sem acervo, o teste diz que é do acervo',
+                  regras.testar('FAP')['nivel'] == regras.NIVEL_SEM_ACERVO)
+            return
+
+        check('a janela só traz data com edição', len(datas) <= 7 and all(datas))
+        check('vem da mais nova para a mais velha',
+              datas == sorted(datas, reverse=True), str(datas))
+
+        # O denominador tem de ser o número de edições, não o de dias corridos.
+        resultado = regras.testar('licitação', dias=7)
+        materias_na_janela = (db.session.query(DouArticle.id)
+                              .filter(DouArticle.pub_date.in_(datas)).count())
+        check('o denominador é o nº de edições da janela',
+              resultado['dias'] == len(datas),
+              f"dias={resultado['dias']} datas={len(datas)}")
+        check('por_dia bate com total/edições',
+              abs(resultado['por_dia']
+                  - round(resultado['total'] / len(datas), 1)) < 0.05,
+              str(resultado))
+        check('a janela cobre o acervo, não um pedaço dele',
+              materias_na_janela > 0)
+
+
+def test_veredito():
+    """Os cortes são ancorados na carteira real (~6 alertas/dia), não chutados."""
+    print('\n8. Veredito de volume')
+
+    check('zero é vazio', regras.nivel(0) == regras.NIVEL_VAZIO)
+    check('1/dia é ok', regras.nivel(1) == regras.NIVEL_OK)
+    check('5/dia ainda é ok', regras.nivel(5) == regras.NIVEL_OK)
+    check('6/dia é alto', regras.nivel(6) == regras.NIVEL_ALTO)
+    check('20/dia ainda é alto', regras.nivel(20) == regras.NIVEL_ALTO)
+    check('660/dia é ruidoso (o caso "licitação")',
+          regras.nivel(660) == regras.NIVEL_RUIDOSO)
+
+
+def test_validacao():
+    print('\n9. Validação da regra')
+
+    check('sem nome é recusada',
+          regras.validar('', 'FAP', regras.MODO_FRASE, [], None))
+    check('sem termo e sem órgão é recusada',
+          regras.validar('x', '', regras.MODO_FRASE, ['DO1'], None))
+    check('só órgão é aceita',
+          not regras.validar('x', '', regras.MODO_FRASE, [],
+                             'Ministério da Previdência Social'))
+    check('só termo é aceita',
+          not regras.validar('x', 'FAP', regras.MODO_FRASE, [], None))
+    check('modo inválido é recusado',
+          regras.validar('x', 'FAP', 'ou', [], None))
+    check('termo só de pontuação é recusado',
+          regras.validar('x', '...', regras.MODO_FRASE, [], None))
+
+
 def main():
     print('=' * 60)
     print('TESTES DAS REGRAS DE PALAVRA-CHAVE DO DIÁRIO OFICIAL')
@@ -185,6 +290,10 @@ def main():
     test_sonda()
     test_modelo()
     test_casar()
+    test_peneira_e_superconjunto()
+    test_janela_do_teste()
+    test_veredito()
+    test_validacao()
 
     print('\n' + '=' * 60)
     if _falhas:
