@@ -541,10 +541,12 @@ def test_tela_de_regras():
             sessao['user_role'] = 'admin'
 
         resposta = c.get('/dou/regras')
+        html = resposta.get_data(as_text=True)
         check('lista responde 200', resposta.status_code == 200,
               str(resposta.status_code))
-        check('tem o botão de nova regra',
-              'Nova regra' in resposta.get_data(as_text=True))
+        # Pelo link, não pelo rótulo: com a lista vazia o botão é "Criar a
+        # primeira regra" no estado vazio; com regras, "Nova regra" no topo.
+        check('leva à criação de regra', '/dou/regras/nova' in html)
 
         resposta = c.get('/dou/regras/nova')
         html = resposta.get_data(as_text=True)

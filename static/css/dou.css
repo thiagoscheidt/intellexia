@@ -1443,28 +1443,65 @@
 
 /* ------------------------------------------------------- regras de alerta */
 
-.dou-regra-form {
-  max-width: 780px;
-}
-
 /* Regra desligada continua legível — ela existe para ser religada, não é
    lixo. Opacidade baixa demais faria a pessoa perder a que quer voltar. */
 .dou-regra--off {
   opacity: .62;
 }
 
+/* Uma linha só, com reticências: o resumo pode ser longo ("frase exata" mais
+   órgão mais três seções) e quebrar em duas linhas desalinharia a tabela
+   inteira. A largura vem do <colgroup>, não daqui. */
 .dou-regra-resumo {
-  max-width: 34ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Tile que também é atalho não pode parecer link: sublinhado e azul dentro de
+   um painel de números lê como erro de estilo. Vale para qualquer <a.dou-tile>,
+   inclusive o de resultado FAP da tela de alertas. */
+a.dou-tile {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+a.dou-tile:hover {
+  border-color: var(--bs-primary-border-subtle);
+}
+
+/* Com um botão só à direita, o auto-fit do .dou-tiles espalha três tiles por
+   1.200 px e eles ficam ocos. Aqui o layout vira flex e cada tile se dimensiona
+   pelo conteúdo, com um piso — o grid do pai, encolhido para caber ao lado do
+   botão, resolvia para uma coluna só e empilhava os três. */
+.dou-tiles--compacto {
+  display: flex;
+  flex-wrap: wrap;
+  flex: 0 1 auto;
+}
+
+.dou-tiles--compacto .dou-tile {
+  min-width: 9rem;
+}
+
+/* O resultado do teste é um bloco dentro do card, não um card solto: a página
+   inteira já vive num `card border-0 shadow-sm`, como o resto do módulo. */
 .dou-teste-caixa {
   border: 1px solid var(--bs-border-color);
   border-radius: .5rem;
   padding: 1rem;
   background: var(--bs-tertiary-bg);
+}
+
+/* Estado antes do primeiro teste: ocupa o mesmo espaço do resultado, para o
+   formulário não pular de altura quando a resposta chega. */
+.dou-teste-vazio {
+  border: 1px dashed var(--bs-border-color);
+  border-radius: .5rem;
+  padding: 1rem;
+  color: var(--bs-secondary-color);
+  font-size: .875rem;
 }
 
 .dou-veredito {

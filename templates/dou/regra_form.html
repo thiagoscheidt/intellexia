@@ -16,7 +16,7 @@
 
 {{ page_hero(
      'Editar regra' if regra else 'Nova regra',
-     'Teste a regra no acervo antes de salvar — o que você vir aqui é o que vai chegar',
+     'Teste no acervo antes de salvar — o que você vir aqui é o que vai chegar',
      'bi bi-search',
      [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
       {'label': 'Regras', 'href': url_for('dou.regras')},
@@ -28,97 +28,106 @@
 {% set v_secoes = (campos.secoes if campos else (regra.lista_secoes if regra else [])) %}
 {% set v_orgao = (campos.orgao if campos else (regra.orgao_raiz if regra else '')) %}
 
-<div class="dou-regra-form">
-  <form method="post" id="form-regra">
+<form method="post" id="form-regra">
+  <div class="card border-0 shadow-sm">
+    <div class="card-body">
 
-    <div class="mb-3">
-      <label class="form-label" for="nome">Nome da regra</label>
-      <input name="nome" id="nome" class="form-control" maxlength="120" required
-             value="{{ v_nome or '' }}" placeholder="Julgamentos do CRPS">
-      <div class="form-text">É este nome que aparece no alerta e no e-mail diário.</div>
-    </div>
+      <div class="row g-3">
+        <div class="col-md-7">
+          <label class="form-label" for="nome">Nome da regra</label>
+          <input name="nome" id="nome" class="form-control" maxlength="120" required
+                 value="{{ v_nome or '' }}" placeholder="Julgamentos do CRPS">
+          <div class="form-text">É este nome que aparece no alerta e no e-mail diário.</div>
+        </div>
 
-    <div class="mb-3">
-      <label class="form-label" for="termo">Palavra-chave</label>
-      <input name="termo" id="termo" class="form-control" maxlength="200"
-             value="{{ v_termo or '' }}"
-             placeholder="Fator Acidentário de Prevenção">
-      <div class="form-text">
-        Opcional se você escolher um órgão. Não existe modo "ou": para vigiar
-        dois termos, crie <strong>duas regras</strong> — assim você vê o volume
-        de cada uma separado.
+        <div class="col-md-5">
+          <label class="form-label" for="orgao">Órgão</label>
+          <select name="orgao" id="orgao" class="form-select">
+            <option value="">Todos os órgãos</option>
+            {% for o in orgaos %}
+            <option value="{{ o }}" {{ 'selected' if o == v_orgao }}>{{ o }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">A forma mais eficaz de baixar o volume de uma regra.</div>
+        </div>
+
+        <div class="col-md-7">
+          <label class="form-label" for="termo">Palavra-chave</label>
+          <input name="termo" id="termo" class="form-control" maxlength="200"
+                 value="{{ v_termo or '' }}"
+                 placeholder="Fator Acidentário de Prevenção">
+          <div class="form-text">
+            Opcional se você escolher um órgão. Não existe modo "ou": para
+            vigiar dois termos, crie <strong>duas regras</strong> — assim você
+            vê o volume de cada uma separado.
+          </div>
+        </div>
+
+        <div class="col-md-5">
+          <label class="form-label d-block">Como casar</label>
+          <div class="btn-group w-100" role="group">
+            {% for m in MODOS %}
+            <input type="radio" class="btn-check" name="modo" value="{{ m }}"
+                   id="modo-{{ m }}" autocomplete="off" {{ 'checked' if v_modo == m }}>
+            <label class="btn btn-outline-primary" for="modo-{{ m }}">
+              {{ MODO_LABELS[m] }}</label>
+            {% endfor %}
+          </div>
+          <div class="form-text">
+            A palavra é casada inteira: <code>FAP</code> não pega
+            <code>FAPESP</code> nem <code>FAPEMIG</code>.
+          </div>
+        </div>
+
+        <div class="col-12">
+          <label class="form-label d-block mb-1">Seções</label>
+          <div class="d-flex flex-wrap gap-3">
+            {% for s in ['DO1', 'DO2', 'DO3', 'DO1E', 'DO2E', 'DO3E'] %}
+            <div class="form-check mb-0">
+              <input class="form-check-input" type="checkbox" name="secoes" value="{{ s }}"
+                     id="secao-{{ s }}" {{ 'checked' if s in v_secoes }}>
+              <label class="form-check-label" for="secao-{{ s }}">{{ s }}</label>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="form-text">Nenhuma marcada = todas as seções.</div>
+        </div>
       </div>
-    </div>
 
-    <div class="mb-3">
-      <label class="form-label d-block">Como casar</label>
-      {% for m in MODOS %}
-      <div class="form-check form-check-inline">
-        <input class="form-check-input" type="radio" name="modo" value="{{ m }}"
-               id="modo-{{ m }}" {{ 'checked' if v_modo == m }}>
-        <label class="form-check-label" for="modo-{{ m }}">{{ MODO_LABELS[m] }}</label>
-      </div>
-      {% endfor %}
-      <div class="form-text">
-        A palavra é casada inteira: <code>FAP</code> não pega
-        <code>FAPESP</code> nem <code>FAPEMIG</code>.
-      </div>
-    </div>
+      <hr class="my-4">
 
-    <div class="mb-3">
-      <label class="form-label d-block">Seções</label>
-      {% for s in ['DO1', 'DO2', 'DO3', 'DO1E', 'DO2E', 'DO3E'] %}
-      <div class="form-check form-check-inline">
-        <input class="form-check-input" type="checkbox" name="secoes" value="{{ s }}"
-               id="secao-{{ s }}" {{ 'checked' if s in v_secoes }}>
-        <label class="form-check-label" for="secao-{{ s }}">{{ s }}</label>
-      </div>
-      {% endfor %}
-      <div class="form-text">Nenhuma marcada = todas as seções.</div>
-    </div>
-
-    <div class="mb-4">
-      <label class="form-label" for="orgao">Órgão</label>
-      <select name="orgao" id="orgao" class="form-select">
-        <option value="">Todos os órgãos</option>
-        {% for o in orgaos %}
-        <option value="{{ o }}" {{ 'selected' if o == v_orgao }}>{{ o }}</option>
-        {% endfor %}
-      </select>
-      <div class="form-text">
-        Restringir por órgão é a forma mais eficaz de baixar o volume de uma
-        regra barulhenta.
-      </div>
-    </div>
-
-    <div class="dou-teste-caixa mb-4">
-      <div class="d-flex align-items-center gap-2 flex-wrap">
-        <button type="button" class="btn btn-outline-primary" id="btn-testar">
+      <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-testar">
           <i class="bi bi-play-fill me-1"></i>Testar regra
         </button>
         <span class="small text-muted">
           nas últimas {{ DIAS_TESTE }} edições capturadas
         </span>
       </div>
-      <div id="resultado-teste" class="mt-3"></div>
-    </div>
 
-    <div id="confirmar-ruido" class="alert alert-danger py-2 d-none">
-      <div class="form-check mb-0">
-        <input class="form-check-input" type="checkbox" id="ciente" name="ciente">
-        <label class="form-check-label" for="ciente">
-          Entendi o volume e quero salvar assim mesmo.
-        </label>
+      <div id="resultado-teste" class="dou-teste-vazio">
+        <i class="bi bi-clipboard-data me-1"></i>
+        Rode o teste para ver quantos alertas esta regra teria gerado.
       </div>
+
+      <div id="confirmar-ruido" class="alert alert-danger py-2 mt-3 mb-0 d-none">
+        <div class="form-check mb-0">
+          <input class="form-check-input" type="checkbox" id="ciente" name="ciente">
+          <label class="form-check-label" for="ciente">
+            Entendi o volume e quero salvar assim mesmo.
+          </label>
+        </div>
+      </div>
+
     </div>
 
-    <div class="d-flex gap-2">
-      <button class="btn btn-success" id="btn-salvar">
+    <div class="card-footer bg-transparent d-flex gap-2 py-3">
+      <button class="btn btn-success">
         <i class="bi bi-check-lg me-1"></i>Salvar</button>
       <a href="{{ url_for('dou.regras') }}" class="btn btn-outline-secondary">Cancelar</a>
     </div>
-  </form>
-</div>
+  </div>
+</form>
 
 </div>
 {% endblock %}
@@ -145,18 +154,22 @@
     return d.innerHTML;
   }
 
+  function aviso_simples(texto) {
+    return '<div class="dou-teste-caixa"><span class="dou-veredito ' +
+      'dou-veredito--secondary">' + texto + '</span></div>';
+  }
+
   function montar(d) {
     if (d.nivel === 'sem_acervo') {
-      return '<span class="dou-veredito dou-veredito--secondary">' +
-        'Não há edição capturada para testar — o problema é do acervo, não da regra.' +
-        '</span>';
+      return aviso_simples('Não há edição capturada para testar — o problema ' +
+        'é do acervo, não da regra.');
     }
     if (!d.total) {
-      return '<span class="dou-veredito dou-veredito--secondary">' +
-        'Não pegaria nada nas últimas ' + d.dias + ' edições — confira o termo.' +
-        '</span>';
+      return aviso_simples('Não pegaria nada nas últimas ' + d.dias +
+        ' edições — confira o termo.');
     }
-    let html = '<span class="dou-veredito dou-veredito--' + CORES[d.nivel] + '">' +
+    let html = '<div class="dou-teste-caixa">' +
+      '<span class="dou-veredito dou-veredito--' + CORES[d.nivel] + '">' +
       d.total + ' matéria(s) em ' + d.dias + ' edições — cerca de <strong>' +
       d.por_dia + ' por dia</strong></span>';
 
@@ -170,17 +183,19 @@
         'órgão, ou use frase exata.</div>';
     }
 
-    html += '<ul class="dou-exemplos mt-2">' + d.exemplos.map(function (x) {
+    html += '<ul class="dou-exemplos mt-3">' + d.exemplos.map(function (x) {
       return '<li><span class="text-muted">' + escapar(x.pub_date) + ' ' +
         escapar(x.pub_name) + (x.pagina ? ' p.' + escapar(x.pagina) : '') +
         ' · </span>' + escapar(x.identifica) + '</li>';
-    }).join('') + '</ul>';
+    }).join('') + '</ul></div>';
     return html;
   }
 
   btn.addEventListener('click', async function () {
     btn.disabled = true;
-    caixa.innerHTML = '<span class="text-muted">Testando…</span>';
+    caixa.className = '';
+    caixa.innerHTML = '<div class="dou-teste-caixa text-muted">' +
+      '<span class="spinner-border spinner-border-sm me-2"></span>Testando…</div>';
     try {
       const resposta = await fetch('{{ url_for("dou.regra_testar") }}', {
         method: 'POST',
@@ -195,8 +210,8 @@
       });
       const d = await resposta.json();
       if (!resposta.ok || d.erro) {
-        caixa.innerHTML = '<span class="text-danger">' +
-          escapar(d.erro || 'Não foi possível testar agora.') + '</span>';
+        caixa.innerHTML = aviso_simples(
+          escapar(d.erro || 'Não foi possível testar agora.'));
         return;
       }
       caixa.innerHTML = montar(d);
@@ -204,7 +219,7 @@
       aviso.classList.toggle('d-none', d.nivel !== 'ruidoso');
       if (d.nivel !== 'ruidoso') { ciente.checked = false; }
     } catch (e) {
-      caixa.innerHTML = '<span class="text-danger">Falha de rede ao testar.</span>';
+      caixa.innerHTML = aviso_simples('Falha de rede ao testar.');
     } finally {
       btn.disabled = false;
     }
