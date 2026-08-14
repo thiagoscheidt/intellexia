@@ -1440,3 +1440,73 @@
 .dou-trecho__html .dou-decisao--contra {
   color: var(--bs-secondary-color);
 }
+
+/* ------------------------------------------------------- regras de alerta */
+
+.dou-regra-form {
+  max-width: 780px;
+}
+
+/* Regra desligada continua legível — ela existe para ser religada, não é
+   lixo. Opacidade baixa demais faria a pessoa perder a que quer voltar. */
+.dou-regra--off {
+  opacity: .62;
+}
+
+.dou-regra-resumo {
+  max-width: 34ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dou-teste-caixa {
+  border: 1px solid var(--bs-border-color);
+  border-radius: .5rem;
+  padding: 1rem;
+  background: var(--bs-tertiary-bg);
+}
+
+.dou-veredito {
+  display: inline-block;
+  font-size: .95rem;
+  padding: .35rem .7rem;
+  border-radius: .4rem;
+}
+
+/* Um par de tokens por nível, como o badge FAP: no tema escuro a cor precisa
+   clarear para não sumir no fundo, e aí o texto tem de escurecer junto —
+   senão o contraste cai abaixo dos 4,5:1 exigidos para texto pequeno. */
+.dou-page {
+  --dou-ver-ok-bg: #d1e7dd;   --dou-ver-ok-ink: #0a3622;
+  --dou-ver-warn-bg: #fff3cd; --dou-ver-warn-ink: #664d03;
+  --dou-ver-dang-bg: #f8d7da; --dou-ver-dang-ink: #58151c;
+  --dou-ver-sec-bg: #e9ecef;  --dou-ver-sec-ink: #41464b;
+}
+
+[data-bs-theme="dark"] .dou-page {
+  --dou-ver-ok-bg: #0f5132;   --dou-ver-ok-ink: #d1e7dd;
+  --dou-ver-warn-bg: #664d03; --dou-ver-warn-ink: #ffecb5;
+  --dou-ver-dang-bg: #842029; --dou-ver-dang-ink: #f8d7da;
+  --dou-ver-sec-bg: #343a40;  --dou-ver-sec-ink: #dee2e6;
+}
+
+.dou-page .dou-veredito--success   { background: var(--dou-ver-ok-bg);   color: var(--dou-ver-ok-ink); }
+.dou-page .dou-veredito--warning   { background: var(--dou-ver-warn-bg); color: var(--dou-ver-warn-ink); }
+.dou-page .dou-veredito--danger    { background: var(--dou-ver-dang-bg); color: var(--dou-ver-dang-ink); }
+.dou-page .dou-veredito--secondary { background: var(--dou-ver-sec-bg);  color: var(--dou-ver-sec-ink); }
+
+.dou-exemplos {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: .85rem;
+}
+
+.dou-exemplos li {
+  padding: .18rem 0;
+  border-top: 1px solid var(--bs-border-color-translucent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

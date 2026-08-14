@@ -1,0 +1,228 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}{{ 'Editar regra' if regra else 'Nova regra' }} — DOU{% endblock %}
+
+{% block extra_css %}
+{# O base.html traz só o select2.min.css; o tema bootstrap-5 é folha à parte,
+   mesma receita da tela de alertas e da busca do DOU. #}
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dou-page">
+
+{{ page_hero(
+     'Editar regra' if regra else 'Nova regra',
+     'Teste a regra no acervo antes de salvar — o que você vir aqui é o que vai chegar',
+     'bi bi-search',
+     [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
+      {'label': 'Regras', 'href': url_for('dou.regras')},
+      {'label': 'Editar' if regra else 'Nova', 'active': True}]) }}
+
+{% set v_nome = (campos.nome if campos else (regra.nome if regra else '')) %}
+{% set v_termo = (campos.termo if campos else (regra.termo if regra else '')) %}
+{% set v_modo = (campos.modo if campos else (regra.modo if regra else MODOS[0])) %}
+{% set v_secoes = (campos.secoes if campos else (regra.lista_secoes if regra else [])) %}
+{% set v_orgao = (campos.orgao if campos else (regra.orgao_raiz if regra else '')) %}
+
+<div class="dou-regra-form">
+  <form method="post" id="form-regra">
+
+    <div class="mb-3">
+      <label class="form-label" for="nome">Nome da regra</label>
+      <input name="nome" id="nome" class="form-control" maxlength="120" required
+             value="{{ v_nome or '' }}" placeholder="Julgamentos do CRPS">
+      <div class="form-text">É este nome que aparece no alerta e no e-mail diário.</div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label" for="termo">Palavra-chave</label>
+      <input name="termo" id="termo" class="form-control" maxlength="200"
+             value="{{ v_termo or '' }}"
+             placeholder="Fator Acidentário de Prevenção">
+      <div class="form-text">
+        Opcional se você escolher um órgão. Não existe modo "ou": para vigiar
+        dois termos, crie <strong>duas regras</strong> — assim você vê o volume
+        de cada uma separado.
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label d-block">Como casar</label>
+      {% for m in MODOS %}
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="radio" name="modo" value="{{ m }}"
+               id="modo-{{ m }}" {{ 'checked' if v_modo == m }}>
+        <label class="form-check-label" for="modo-{{ m }}">{{ MODO_LABELS[m] }}</label>
+      </div>
+      {% endfor %}
+      <div class="form-text">
+        A palavra é casada inteira: <code>FAP</code> não pega
+        <code>FAPESP</code> nem <code>FAPEMIG</code>.
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label d-block">Seções</label>
+      {% for s in ['DO1', 'DO2', 'DO3', 'DO1E', 'DO2E', 'DO3E'] %}
+      <div class="form-check form-check-inline">
+        <input class="form-check-input" type="checkbox" name="secoes" value="{{ s }}"
+               id="secao-{{ s }}" {{ 'checked' if s in v_secoes }}>
+        <label class="form-check-label" for="secao-{{ s }}">{{ s }}</label>
+      </div>
+      {% endfor %}
+      <div class="form-text">Nenhuma marcada = todas as seções.</div>
+    </div>
+
+    <div class="mb-4">
+      <label class="form-label" for="orgao">Órgão</label>
+      <select name="orgao" id="orgao" class="form-select">
+        <option value="">Todos os órgãos</option>
+        {% for o in orgaos %}
+        <option value="{{ o }}" {{ 'selected' if o == v_orgao }}>{{ o }}</option>
+        {% endfor %}
+      </select>
+      <div class="form-text">
+        Restringir por órgão é a forma mais eficaz de baixar o volume de uma
+        regra barulhenta.
+      </div>
+    </div>
+
+    <div class="dou-teste-caixa mb-4">
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-primary" id="btn-testar">
+          <i class="bi bi-play-fill me-1"></i>Testar regra
+        </button>
+        <span class="small text-muted">
+          nas últimas {{ DIAS_TESTE }} edições capturadas
+        </span>
+      </div>
+      <div id="resultado-teste" class="mt-3"></div>
+    </div>
+
+    <div id="confirmar-ruido" class="alert alert-danger py-2 d-none">
+      <div class="form-check mb-0">
+        <input class="form-check-input" type="checkbox" id="ciente" name="ciente">
+        <label class="form-check-label" for="ciente">
+          Entendi o volume e quero salvar assim mesmo.
+        </label>
+      </div>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button class="btn btn-success" id="btn-salvar">
+        <i class="bi bi-check-lg me-1"></i>Salvar</button>
+      <a href="{{ url_for('dou.regras') }}" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+  </form>
+</div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const btn = document.getElementById('btn-testar');
+  const caixa = document.getElementById('resultado-teste');
+  const aviso = document.getElementById('confirmar-ruido');
+  const ciente = document.getElementById('ciente');
+  const form = document.getElementById('form-regra');
+
+  // Cores do veredito. O corte é ancorado no volume real: a carteira inteira
+  // de clientes gera ~6 alertas por dia.
+  const CORES = {
+    vazio: 'secondary', sem_acervo: 'secondary',
+    ok: 'success', alto: 'warning', ruidoso: 'danger'
+  };
+
+  function escapar(t) {
+    const d = document.createElement('div');
+    d.textContent = t == null ? '' : String(t);
+    return d.innerHTML;
+  }
+
+  function montar(d) {
+    if (d.nivel === 'sem_acervo') {
+      return '<span class="dou-veredito dou-veredito--secondary">' +
+        'Não há edição capturada para testar — o problema é do acervo, não da regra.' +
+        '</span>';
+    }
+    if (!d.total) {
+      return '<span class="dou-veredito dou-veredito--secondary">' +
+        'Não pegaria nada nas últimas ' + d.dias + ' edições — confira o termo.' +
+        '</span>';
+    }
+    let html = '<span class="dou-veredito dou-veredito--' + CORES[d.nivel] + '">' +
+      d.total + ' matéria(s) em ' + d.dias + ' edições — cerca de <strong>' +
+      d.por_dia + ' por dia</strong></span>';
+
+    if (d.nivel === 'alto') {
+      html += '<div class="small text-muted mt-2">Volume alto — considere ' +
+        'restringir por seção ou órgão, ou usar frase exata.</div>';
+    } else if (d.nivel === 'ruidoso') {
+      html += '<div class="small text-danger mt-2">Essa regra sozinha traria ' +
+        (d.vezes_carteira > 1 ? '<strong>' + d.vezes_carteira + 'x</strong> ' : '') +
+        'o que a carteira inteira de clientes traz. Restrinja por seção ou ' +
+        'órgão, ou use frase exata.</div>';
+    }
+
+    html += '<ul class="dou-exemplos mt-2">' + d.exemplos.map(function (x) {
+      return '<li><span class="text-muted">' + escapar(x.pub_date) + ' ' +
+        escapar(x.pub_name) + (x.pagina ? ' p.' + escapar(x.pagina) : '') +
+        ' · </span>' + escapar(x.identifica) + '</li>';
+    }).join('') + '</ul>';
+    return html;
+  }
+
+  btn.addEventListener('click', async function () {
+    btn.disabled = true;
+    caixa.innerHTML = '<span class="text-muted">Testando…</span>';
+    try {
+      const resposta = await fetch('{{ url_for("dou.regra_testar") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          termo: document.getElementById('termo').value,
+          modo: document.querySelector('input[name=modo]:checked').value,
+          secoes: Array.from(document.querySelectorAll('input[name=secoes]:checked'))
+                       .map(function (e) { return e.value; }),
+          orgao: document.getElementById('orgao').value
+        })
+      });
+      const d = await resposta.json();
+      if (!resposta.ok || d.erro) {
+        caixa.innerHTML = '<span class="text-danger">' +
+          escapar(d.erro || 'Não foi possível testar agora.') + '</span>';
+        return;
+      }
+      caixa.innerHTML = montar(d);
+      // Regra ruidosa não bloqueia — avisa e pede confirmação explícita.
+      aviso.classList.toggle('d-none', d.nivel !== 'ruidoso');
+      if (d.nivel !== 'ruidoso') { ciente.checked = false; }
+    } catch (e) {
+      caixa.innerHTML = '<span class="text-danger">Falha de rede ao testar.</span>';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // A confirmação só vale quando o aviso está à vista: quem nunca testou não
+  // pode ser barrado por uma caixa que ele não viu.
+  form.addEventListener('submit', function (e) {
+    if (!aviso.classList.contains('d-none') && !ciente.checked) {
+      e.preventDefault();
+      aviso.classList.add('border', 'border-danger');
+      ciente.focus();
+    }
+  });
+
+  if (window.jQuery && jQuery.fn.select2) {
+    jQuery('#orgao').select2({theme: 'bootstrap-5', width: '100%'});
+  }
+})();
+</script>
+{% endblock %}

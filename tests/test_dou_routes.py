@@ -517,6 +517,97 @@ def test_leitor_da_edicao():
               or f'/pagina/{pagina}?' in materia)
 
 
+def test_tela_de_regras():
+    """A tela onde o escritório configura o que vigiar por palavra-chave."""
+    print('\n11. Regras de palavra-chave')
+
+    endpoints = {r.endpoint for r in app.url_map.iter_rules()}
+    for esperado in ('dou.regras', 'dou.regra_nova', 'dou.regra_editar',
+                     'dou.regra_excluir', 'dou.regra_alternar',
+                     'dou.regra_testar', 'dou.regra_backfill'):
+        check(f'{esperado} existe', esperado in endpoints)
+
+    with app.app_context():
+        usuario = User.query.filter_by(role='admin').first()
+        if usuario is None:
+            print('  ⏭️  nenhum usuário admin no banco — pulando')
+            return
+        user_id, firm_id = usuario.id, usuario.law_firm_id
+
+    with app.test_client() as c:
+        with c.session_transaction() as sessao:
+            sessao['user_id'] = user_id
+            sessao['law_firm_id'] = firm_id
+            sessao['user_role'] = 'admin'
+
+        resposta = c.get('/dou/regras')
+        check('lista responde 200', resposta.status_code == 200,
+              str(resposta.status_code))
+        check('tem o botão de nova regra',
+              'Nova regra' in resposta.get_data(as_text=True))
+
+        resposta = c.get('/dou/regras/nova')
+        html = resposta.get_data(as_text=True)
+        check('formulário responde 200', resposta.status_code == 200)
+        check('oferece os dois modos',
+              'frase exata' in html and 'todas as palavras' in html)
+        check('avisa que não existe modo "ou"', 'duas regras' in html)
+
+        resposta = c.post('/dou/regras/testar',
+                          json={'termo': 'FAP', 'modo': 'frase',
+                                'secoes': [], 'orgao': ''})
+        check('teste responde JSON', resposta.is_json, resposta.content_type)
+        dados = resposta.get_json()
+        check('teste traz total, nível e exemplos',
+              all(k in dados for k in ('total', 'nivel', 'por_dia', 'exemplos')),
+              str(sorted(dados))[:120])
+
+        resposta = c.post('/dou/regras/nova',
+                          data={'nome': '', 'termo': '', 'modo': 'frase'},
+                          follow_redirects=True)
+        html = resposta.get_data(as_text=True)
+        check('regra sem nome e sem termo é recusada',
+              'palavra-chave ou um órgão' in html and 'nome à regra' in html)
+
+        # Ciclo completo: cria, aparece na lista, exclui.
+        resposta = c.post('/dou/regras/nova',
+                          data={'nome': 'Teste CRPS', 'termo': 'CRPS',
+                                'modo': 'frase'},
+                          follow_redirects=True)
+        html = resposta.get_data(as_text=True)
+        check('regra válida é criada', 'Teste CRPS' in html, html[-400:])
+
+        with app.app_context():
+            from app.models import DouAlertRule
+            criada = (DouAlertRule.query
+                      .filter_by(law_firm_id=firm_id, nome='Teste CRPS').first())
+        check('a regra guardou o dono',
+              criada is not None and criada.created_by_id == user_id)
+
+        if criada is not None:
+            rule_id = criada.id
+            c.post(f'/dou/regras/{rule_id}/excluir', follow_redirects=True)
+            with app.app_context():
+                from app.models import (DouAlertRule, DouAlertRuleHit,
+                                        DouClientAlert)
+                # No banco, não no HTML: a mensagem de sucesso repete o nome
+                # da regra, então procurá-lo na página nunca falharia.
+                check('regra sai do banco',
+                      DouAlertRule.query.get(rule_id) is None)
+                check('os hits caem por cascade',
+                      DouAlertRuleHit.query.filter_by(rule_id=rule_id).count() == 0)
+                # `tem_regra` é denormalizado e não cai com o cascade. Sem o
+                # ajuste, o alerta que sobrevive pelo CNPJ continuaria no
+                # filtro "origem: palavra-chave" sem motivo nenhum.
+                mentirosos = (db.session.query(DouClientAlert.id)
+                              .outerjoin(DouAlertRuleHit,
+                                         DouAlertRuleHit.alert_id == DouClientAlert.id)
+                              .filter(DouClientAlert.tem_regra.is_(True),
+                                      DouAlertRuleHit.id.is_(None)).count())
+                check('nenhum alerta fica com tem_regra e zero hits',
+                      mentirosos == 0, f'{mentirosos} alerta(s)')
+
+
 def main():
     print('=' * 60)
     print('TESTES DAS ROTAS DO DIÁRIO OFICIAL')
@@ -532,6 +623,7 @@ def main():
     test_contadores_de_saude()
     test_edicao_do_dia()
     test_leitor_da_edicao()
+    test_tela_de_regras()
 
     print('\n' + '=' * 60)
     if _falhas:

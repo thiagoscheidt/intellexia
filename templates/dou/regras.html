@@ -1,0 +1,115 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Regras de palavra-chave no DOU{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dou-page">
+
+{{ page_hero(
+     'Regras de palavra-chave',
+     'O que o escritório vigia no Diário Oficial por texto, órgão ou seção',
+     'bi bi-search',
+     [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
+      {'label': 'Alertas', 'href': url_for('dou.alertas')},
+      {'label': 'Regras', 'active': True}]) }}
+
+<div class="d-flex justify-content-between align-items-start mb-3 gap-3 flex-wrap">
+  <p class="text-muted small mb-0" style="max-width:60ch;">
+    Complementa o alerta por CNPJ, que só pega cliente cadastrado e citado
+    nominalmente. De fora ficava justamente o que muda o jogo antes de virar
+    processo: portaria que altera a metodologia do FAP, pauta de julgamento do
+    CRPS, revisão do NTEP — nada disso escreve CNPJ de ninguém.
+  </p>
+  <a href="{{ url_for('dou.regra_nova') }}" class="btn btn-success">
+    <i class="bi bi-plus-lg me-1"></i>Nova regra
+  </a>
+</div>
+
+{% if regras %}
+<div class="table-responsive">
+  <table class="table align-middle dou-tabela">
+    <thead>
+      <tr>
+        <th>Regra</th>
+        <th>O que casa</th>
+        <th>Criada por</th>
+        <th class="text-end">Alertas</th>
+        <th>Último</th>
+        <th class="text-end">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in regras %}
+      <tr class="{{ '' if r.ativo else 'dou-regra--off' }}">
+        <td>
+          <strong>{{ r.nome }}</strong>
+          {% if not r.ativo %}
+          <span class="badge bg-secondary ms-1">desligada</span>
+          {% endif %}
+        </td>
+        <td class="small text-muted dou-regra-resumo">{{ r.resumo_do_casamento }}</td>
+        <td class="small">{{ r.created_by.name if r.created_by else '—' }}</td>
+        <td class="text-end">
+          {% set n = contagem.get(r.id, 0) %}
+          {% if n %}
+          <a href="{{ url_for('dou.alertas', status='todos', regra=r.id) }}">{{ n }}</a>
+          {% else %}
+          <span class="text-muted">0</span>
+          {% endif %}
+        </td>
+        <td class="small text-muted">
+          {{ r.last_match_at | date_sp if r.last_match_at else 'nunca' }}
+        </td>
+        <td class="text-end text-nowrap">
+          {% if pode_editar(r) %}
+          <a href="{{ url_for('dou.regra_editar', rule_id=r.id) }}"
+             class="btn btn-sm btn-outline-secondary" title="Editar">
+            <i class="bi bi-pencil"></i></a>
+          <form method="post" class="d-inline"
+                action="{{ url_for('dou.regra_alternar', rule_id=r.id) }}">
+            <button class="btn btn-sm btn-outline-secondary"
+                    title="{{ 'Desligar a regra' if r.ativo else 'Ligar a regra' }}">
+              <i class="bi bi-{{ 'pause' if r.ativo else 'play' }}"></i></button>
+          </form>
+          <form method="post" class="d-inline"
+                action="{{ url_for('dou.regra_backfill', rule_id=r.id) }}">
+            <button class="btn btn-sm btn-outline-primary"
+                    title="Rodar esta regra em todo o acervo já capturado">
+              <i class="bi bi-arrow-repeat"></i></button>
+          </form>
+          <form method="post" class="d-inline"
+                action="{{ url_for('dou.regra_excluir', rule_id=r.id) }}"
+                onsubmit="return confirm('Excluir a regra &quot;{{ r.nome }}&quot;? Os alertas que só ela gerou saem junto.');">
+            <button class="btn btn-sm btn-outline-danger" title="Excluir">
+              <i class="bi bi-trash"></i></button>
+          </form>
+          {% else %}
+          <span class="small text-muted">só o dono ou um admin</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="text-center text-muted py-5">
+  <i class="bi bi-search fs-1 d-block mb-3 opacity-50"></i>
+  <p class="mb-2">Nenhuma regra ainda.</p>
+  <p class="small mb-4" style="max-width:52ch;margin:0 auto;">
+    Uma regra vigia um tema (<em>Fator Acidentário de Prevenção</em>), um nome
+    que ainda não está na carteira, ou um órgão inteiro. Antes de salvar, a tela
+    mostra quantos alertas ela teria gerado nas últimas {{ DIAS_TESTE }} edições.
+  </p>
+  <a href="{{ url_for('dou.regra_nova') }}" class="btn btn-success">
+    <i class="bi bi-plus-lg me-1"></i>Criar a primeira regra</a>
+</div>
+{% endif %}
+
+</div>
+{% endblock %}

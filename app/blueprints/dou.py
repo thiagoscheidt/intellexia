@@ -24,7 +24,7 @@ As tabelas do DOU não têm law_firm_id — é um catálogo público compartilha
 a proteção é a permissão de módulo, aplicada pelo middleware.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 from itertools import groupby
 from pathlib import Path
@@ -35,11 +35,12 @@ from sqlalchemy import func, or_
 from werkzeug.exceptions import HTTPException
 
 from app.models import (db, DouEdition, DouArticle, DouSyncRun, DouClientAlert,
-                        Client, User)
+                        DouAlertRule, DouAlertRuleHit, Client, User)
 
 from app.services import dou_ingestion_service as ingestion
 from app.services import dou_search_service as busca_service
 from app.services import dou_alert_service as alert_service
+from app.services import dou_rule_service as rule_service
 from app.services.dou_xml_parser import grifar_html, sanitizar_html
 
 dou_bp = Blueprint('dou', __name__, url_prefix='/dou')
@@ -441,6 +442,241 @@ def alertas_marcar_todas():
 
 def _usuario_atual():
     return User.query.get(session['user_id']) if session.get('user_id') else None
+
+
+# ------------------------------------------------------------------- regras
+
+def _regra_do_escritorio(rule_id):
+    """Carrega a regra garantindo o tenant — nunca por id solto."""
+    law_firm_id = session.get('law_firm_id')
+    if not law_firm_id:
+        abort(403)
+    return (DouAlertRule.query
+            .filter_by(id=rule_id, law_firm_id=law_firm_id).first_or_404())
+
+
+def _pode_editar(regra):
+    """Editar e excluir são do dono ou de admin — é o que dá sentido ao dono.
+
+    Sem responsável, ninguém se sente à vontade para desligar a regra que está
+    fazendo ruído na tela de todo mundo.
+    """
+    return (session.get('user_role') == 'admin'
+            or regra.created_by_id == session.get('user_id'))
+
+
+def _campos_do_form():
+    """Os campos da regra como vieram do formulário, já normalizados."""
+    return {
+        'nome': (request.form.get('nome') or '').strip(),
+        'termo': (request.form.get('termo') or '').strip(),
+        'modo': (request.form.get('modo') or rule_service.MODO_FRASE).strip(),
+        'secoes': [s.strip().upper()
+                   for s in request.form.getlist('secoes') if s.strip()],
+        'orgao': (request.form.get('orgao') or '').strip(),
+    }
+
+
+def _orgaos_para_regra():
+    """Os órgãos-raiz que existem no acervo, para o select do formulário.
+
+    Raiz e não hierarquia completa, como no filtro e na faceta da busca: a
+    hierarquia tem centenas de valores e não vira lista utilizável.
+    """
+    linhas = (db.session.query(DouArticle.orgao_hierarquia)
+              .filter(DouArticle.orgao_hierarquia.isnot(None))
+              .distinct().all())
+    raizes = {busca_service.orgao_raiz(linha[0]) for linha in linhas}
+    return sorted(r for r in raizes if r)
+
+
+def _backfill_da_regra(regra, dias=None) -> int:
+    """Gera os alertas desta regra na janela pedida (None = acervo inteiro).
+
+    ``carteiras={}`` e ``podar=False`` de propósito: esta varredura conhece uma
+    regra só, então não pode refazer os casamentos de CNPJ nem remover o que
+    não viu.
+    """
+    query = db.session.query(DouEdition.data_publicacao).distinct()
+    if dias:
+        query = (query.order_by(DouEdition.data_publicacao.desc())
+                 .limit(max(1, int(dias))))
+    datas = [linha[0] for linha in query.all()]
+    if not datas:
+        return 0
+    quantos = alert_service.gerar_para_datas(
+        datas, carteiras={}, regras={regra.law_firm_id: [regra]}, podar=False)
+    db.session.commit()
+    return quantos
+
+
+def _render_form(regra, campos=None):
+    return render_template('dou/regra_form.html', regra=regra, campos=campos,
+                           orgaos=_orgaos_para_regra(),
+                           MODOS=rule_service.MODOS,
+                           MODO_LABELS=rule_service.MODO_LABELS,
+                           DIAS_TESTE=rule_service.DIAS_TESTE)
+
+
+@dou_bp.route('/regras')
+def regras():
+    """O que o escritório vigia no DOU por texto, órgão ou seção.
+
+    Complementa o alerta por CNPJ, que só pega cliente cadastrado e citado
+    nominalmente — de fora ficava a portaria que muda a metodologia do FAP, a
+    pauta do CRPS, a revisão do NTEP. Nada disso escreve CNPJ.
+    """
+    law_firm_id = session.get('law_firm_id')
+    if not law_firm_id:
+        abort(403)
+
+    linhas = (DouAlertRule.query
+              .filter_by(law_firm_id=law_firm_id)
+              .order_by(DouAlertRule.ativo.desc(), DouAlertRule.nome).all())
+
+    # Quantos alertas cada regra rendeu — um GROUP BY, não N consultas.
+    contagem = dict(db.session.query(DouAlertRuleHit.rule_id, func.count())
+                    .filter(DouAlertRuleHit.law_firm_id == law_firm_id)
+                    .group_by(DouAlertRuleHit.rule_id).all())
+
+    return render_template('dou/regras.html', regras=linhas,
+                           contagem=contagem, pode_editar=_pode_editar,
+                           DIAS_TESTE=rule_service.DIAS_TESTE)
+
+
+@dou_bp.route('/regras/nova', methods=['GET', 'POST'])
+def regra_nova():
+    law_firm_id = session.get('law_firm_id')
+    if not law_firm_id:
+        abort(403)
+
+    if request.method == 'POST':
+        campos = _campos_do_form()
+        erros = rule_service.validar(**campos)
+        if erros:
+            for erro in erros:
+                flash(erro, 'danger')
+            return _render_form(None, campos)
+
+        regra = DouAlertRule(
+            law_firm_id=law_firm_id, nome=campos['nome'],
+            termo=campos['termo'] or None, modo=campos['modo'],
+            secoes=','.join(campos['secoes']) or None,
+            orgao_raiz=campos['orgao'] or None, ativo=True,
+            created_by_id=session.get('user_id'))
+        db.session.add(regra)
+        db.session.commit()
+
+        # Gera já os alertas da mesma janela que o teste mostrou: o que foi
+        # visto é o que aparece. Vale mesmo se a pessoa salvou sem testar — a
+        # janela é do desenho, não do clique.
+        quantos = _backfill_da_regra(regra, rule_service.DIAS_TESTE)
+        flash(f'Regra "{regra.nome}" criada — {quantos} alerta(s) das últimas '
+              f'{rule_service.DIAS_TESTE} edições.', 'success')
+        return redirect(url_for('dou.regras'))
+
+    return _render_form(None)
+
+
+@dou_bp.route('/regras/<int:rule_id>/editar', methods=['GET', 'POST'])
+def regra_editar(rule_id):
+    regra = _regra_do_escritorio(rule_id)
+    if not _pode_editar(regra):
+        abort(403)
+
+    if request.method == 'POST':
+        campos = _campos_do_form()
+        erros = rule_service.validar(**campos)
+        if erros:
+            for erro in erros:
+                flash(erro, 'danger')
+            return _render_form(regra, campos)
+
+        regra.nome = campos['nome']
+        regra.termo = campos['termo'] or None
+        regra.modo = campos['modo']
+        regra.secoes = ','.join(campos['secoes']) or None
+        regra.orgao_raiz = campos['orgao'] or None
+        db.session.commit()
+        quantos = _backfill_da_regra(regra, rule_service.DIAS_TESTE)
+        flash(f'Regra salva — {quantos} alerta(s) na janela.', 'success')
+        return redirect(url_for('dou.regras'))
+
+    return _render_form(regra)
+
+
+@dou_bp.route('/regras/<int:rule_id>/alternar', methods=['POST'])
+def regra_alternar(rule_id):
+    regra = _regra_do_escritorio(rule_id)
+    if not _pode_editar(regra):
+        abort(403)
+    regra.ativo = not regra.ativo
+    db.session.commit()
+    flash(f'Regra "{regra.nome}" {"ligada" if regra.ativo else "desligada"}.',
+          'success')
+    return redirect(url_for('dou.regras'))
+
+
+@dou_bp.route('/regras/<int:rule_id>/excluir', methods=['POST'])
+def regra_excluir(rule_id):
+    regra = _regra_do_escritorio(rule_id)
+    if not _pode_editar(regra):
+        abort(403)
+    nome = regra.nome
+
+    # Os hits caem por cascade, mas `tem_regra` é denormalizado e não cai
+    # sozinho: sem este ajuste o alerta que sobrevive pelo CNPJ continuaria
+    # aparecendo no filtro "origem: palavra-chave" sem motivo nenhum.
+    orfaos, sem_motivo = [], []
+    for hit in regra.hits:
+        alerta = hit.alert
+        if alerta is None or len(alerta.rule_hits) != 1:
+            continue          # o alerta ainda tem outra regra
+        if alerta.matches:
+            sem_motivo.append(alerta)   # sobrevive pelo CNPJ
+        else:
+            orfaos.append(alerta)       # sem origem nenhuma — sai da tela
+
+    db.session.delete(regra)
+    for alerta in sem_motivo:
+        alerta.tem_regra = False
+    for alerta in orfaos:
+        db.session.delete(alerta)
+    db.session.commit()
+    flash(f'Regra "{nome}" excluída — {len(orfaos)} alerta(s) removido(s).',
+          'success')
+    return redirect(url_for('dou.regras'))
+
+
+@dou_bp.route('/regras/testar', methods=['POST'])
+def regra_testar():
+    """O teste antes de salvar. JSON, porque a tela chama por fetch.
+
+    É a peça que impede a regra ruidosa: "licitação" avisa que traria 660
+    alertas por dia, contra os ~6 que a carteira inteira de clientes traz.
+    """
+    if not session.get('law_firm_id'):
+        abort(403)
+    dados = request.get_json(silent=True) or {}
+    try:
+        return rule_service.testar(
+            (dados.get('termo') or '').strip(),
+            (dados.get('modo') or rule_service.MODO_FRASE).strip(),
+            dados.get('secoes') or [],
+            (dados.get('orgao') or '').strip() or None)
+    except Exception:  # noqa: BLE001 — a tela mostra o erro, não um 500 cru
+        current_app.logger.exception('DOU: falha ao testar regra')
+        return {'erro': 'Não foi possível testar a regra agora.'}, 500
+
+
+@dou_bp.route('/regras/<int:rule_id>/acervo', methods=['POST'])
+def regra_backfill(rule_id):
+    """Roda a regra no acervo inteiro, não só na janela das últimas edições."""
+    regra = _regra_do_escritorio(rule_id)
+    quantos = _backfill_da_regra(regra, dias=None)
+    flash(f'{quantos} alerta(s) gerado(s) do acervo para "{regra.nome}".',
+          'success')
+    return redirect(url_for('dou.regras'))
 
 
 @dou_bp.route('/edicao/<data_str>/pagina/<int:numero>')
