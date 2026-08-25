@@ -159,7 +159,7 @@ Quando você envia a segunda versão, a IA compara original × revisado e lista 
 
 ### Benefícios da Planilha x Documento (só com a planilha .xlsx)
 
-Conferência **automática, sem IA**: o sistema lê as colunas **"Número do Benefício"** e **"TESES"** de **todas as abas** da planilha (comum ter uma aba por vigência — 2021, 2022, ...; abas sem essas colunas, como anotações, são ignoradas) e verifica se cada benefício **é citado no texto** da petição (tolerante a pontuação: "123.456.789-0", com espaços etc.). Resultado por linha: **Citado / Não citado**, com totais — e, quando a planilha tem várias abas, uma coluna **Aba** indica a origem de cada linha.
+Conferência **automática**: o sistema lê as colunas **"Número do Benefício"** e **"TESES"** de **todas as abas** da planilha (comum ter uma aba por vigência — 2021, 2022, ...; abas sem essas colunas, como anotações, são ignoradas) e verifica se cada benefício **é citado no texto** da petição (tolerante a pontuação: "123.456.789-0", com espaços etc.). Resultado por linha: **Citado / Não citado**, com totais — e, quando a planilha tem várias abas, uma coluna **Aba** indica a origem de cada linha.
 
 | Detalhe | Origem |
 |---|---|
@@ -223,8 +223,7 @@ Painel de aprendizado da equipe. Para cada advogado: **pontuação (0–100)**, 
 Tudo aqui é **por escritório** e **versionado**. No editor você escolhe entre **Salvar Rascunho** (cria a versão sem ativá-la) e **Salvar e Ativar** (a nova versão já passa a valer). Ao abrir uma versão antiga, um aviso deixa claro que ela está inativa.
 
 - **Agente Revisor** — modelo de IA e temperatura (padrão 0.0 — determinístico) usados nas revisões; pode ser desativado.
-- **Agente de Treinamento** — modelo e temperatura (padrão 0.7) do fluxo de Treinamento.
-- **Políticas de Atualização** — se o Treinamento pode atualizar o manual e os casos automaticamente, e se exige aprovação antes de publicar.
+- **Agente de Treinamento** — modelo e temperatura (padrão 0.7) do fluxo de Treinamento; pode ser desativado, e desativado ele não aceita comparação nova.
 - **Prompts** — a "personalidade" do revisor: **Identidade**, **Regras invioláveis** e os textos do Treinamento. O **Formato de saída** é definido pelo próprio sistema (contrato técnico embutido no agente) — o campo nas Configurações é apenas informativo e não influencia a revisão.
 - **Referências** — o **Manual de revisão do FAP** (a régua das revisões), os **Casos de referência** e as **Instruções do projeto** (somente leitura). O botão **Importar de arquivo** carrega o conteúdo de um `.md`, `.txt` ou `.docx` para o editor — você revisa e salva como nova versão.
 
@@ -238,10 +237,21 @@ Recursos do histórico de versões:
 
 ## Treinamento (apenas administradores)
 
-É como o revisor **aprende com as correções reais** do escritório, sempre em dois passos com confirmação humana:
+É como o revisor **aprende com as correções reais** do escritório. Nada é gravado sem a sua confirmação.
 
-1. **Gerar Extrato** — você envia o documento base e o revisado; a IA produz um extrato com as principais alterações e os padrões identificados.
-2. **Aplicar** — após sua revisão do extrato, o sistema grava novas versões do manual e/ou dos casos de referência, **respeitando as políticas** das Configurações. Nada é publicado sem confirmação.
+1. **Comparar** — você envia a mesma petição duas vezes: **como o advogado enviou** e **como ficou depois da revisão**. A comparação roda em segundo plano; pode fechar a página, ela fica na lista de **comparações anteriores** e a linha mostra *Aguardando sua confirmação* com o botão **Retomar**.
+2. **Conferir as alterações propostas** — a tela abre com **cada alteração isolada, em formato de diff**: a seção do manual onde ela cai, o porquê, a evidência com a contagem (*40× regência*), e as linhas em vermelho (o que sai) e verde (o que entra), com numeração e contexto em volta. Cada uma tem sua própria caixa de aceite — você aprova alteração por alteração, e **editar** abre o texto que vai entrar. Uma alteração pode ser **adição** (regra nova), **substituição** (a regra existe e ficou errada) ou **refinamento** (a regra está certa e ganha precisão). O rodapé diz quantas serão gravadas.
+
+   > [!ALERTA] **Alteração bloqueada.** Para substituir ou refinar, o sistema precisa localizar no manual, **palavra por palavra**, o trecho que a alteração diz mudar. Quando não localiza — ou quando o trecho aparece em mais de um lugar — a alteração vem marcada em vermelho e **não pode ser aceita**, para não sobrescrever o lugar errado. O botão ao lado abre o documento no editor, onde você resolve à mão.
+3. **Salvar** — **Salvar rascunho** cria a versão sem ativá-la; **Salvar e ativar** faz a nova versão passar a valer nas próximas revisões. São os mesmos rótulos do editor de referências.
+
+> [!INFO] **Como a comparação é feita.** O que mudou entre as duas versões aparece **literal**, trecho a trecho, com quantas vezes cada correção se repetiu. Sobre esses trechos, e **lendo o manual e os casos inteiros**, o sistema propõe só o que ainda não está lá. Quando tudo já está coberto, ele diz isso e não propõe nada — texto repetido no manual piora as revisões seguintes.
+
+> [!INFO] Confirmar **não** chama a IA de novo: o que entra na referência é exatamente o texto que estava na caixa. Depois de gravar, a tela mostra as versões criadas com link direto para o editor, onde ficam o diff e o histórico.
+
+As **275 correções** que sustentam as propostas ficam recolhidas no rodapé, em "O que o revisor mudou na petição", agrupadas por padrão e com o trecho literal de cada um.
+
+A tela lista as dez comparações mais recentes, com os documentos comparados, a situação e as versões que cada uma gravou.
 
 ---
 

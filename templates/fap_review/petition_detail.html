@@ -384,6 +384,27 @@
         color: var(--stat-color);
     }
 
+    .petition-priority-level {
+        font-size: 1.05rem;
+        font-weight: 800;
+        line-height: 1.15;
+        color: var(--stat-color);
+    }
+
+    /* O plano de ação da prioridade pode ter parágrafos: no painel lateral
+       fica em 3 linhas, com o texto completo no title. */
+    .petition-priority-detail {
+        font-size: .78rem;
+        line-height: 1.45;
+        color: var(--bs-secondary-color);
+        margin-top: .15rem;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
     /* ── Timeline de alterações ──────────────────────────── */
     .petition-timeline {
         padding: .5rem 0;
@@ -693,9 +714,16 @@
                         <span class="petition-summary-stat-label"><i class="bi bi-info-circle-fill"></i> Formais</span>
                     </div>
                 </div>
-                {% if latest_executive_summary.correction_priority %}
-                <div class="small text-muted mt-2"><strong>Prioridade de correção:</strong>
-                    <span class="badge rounded-pill bg-warning text-dark ms-1">{{ latest_executive_summary.correction_priority }}</span>
+                {% set priority = latest_executive_summary.correction_priority | correction_priority %}
+                {% if priority.raw %}
+                <div class="petition-summary-stat mt-2" style="--stat-color: var(--bs-{{ priority.level_style }});">
+                    <span class="petition-summary-stat-label"><i class="bi bi-flag-fill"></i> Prioridade de correção</span>
+                    {% if priority.level %}
+                    <span class="petition-priority-level">{{ priority.level }}</span>
+                    {% endif %}
+                    {% if priority.detail %}
+                    <span class="petition-priority-detail" title="{{ priority.detail }}">{{ priority.detail }}</span>
+                    {% endif %}
                 </div>
                 {% endif %}
                 {% endif %}

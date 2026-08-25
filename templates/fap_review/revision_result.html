@@ -49,6 +49,33 @@
         color: var(--bs-emphasis-color);
     }
 
+    /* ── Prioridade de correção ─────────────────────────────────── */
+    /* O revisor escreve o plano de ação junto do nível. Rótulo + valor, na
+       mesma tipografia dos contadores acima: numa pílula o parágrafo não
+       quebra linha (`.badge` é nowrap) e joga a tela na rolagem horizontal. */
+    .priority-block {
+        border-left: 4px solid var(--priority-color);
+        border-radius: .75rem;
+        padding: .85rem .9rem;
+        background: rgba(var(--priority-rgb), .05);
+    }
+
+    .priority-level {
+        font-size: 1.35rem;
+        font-weight: 800;
+        line-height: 1.1;
+        color: var(--priority-color);
+        margin-top: .15rem;
+    }
+
+    .priority-detail {
+        font-size: .85rem;
+        line-height: 1.5;
+        color: var(--bs-secondary-color);
+        margin: .4rem 0 0;
+        max-width: 78ch;
+    }
+
     /* ── Findings toolbar counters ──────────────────────────────── */
     .findings-toolbar {
         display: flex;
@@ -1059,9 +1086,24 @@
                         </div>
                         {% endif %}
 
-                        <div class="small text-muted"><strong>Prioridade de Correção:</strong> <span
-                                class="badge rounded-pill bg-warning text-dark ms-1">{{
-                                result_data.executive_summary.correction_priority }}</span></div>
+                        {# O revisor costuma escrever o plano de ação junto do nível; a pílula
+                           fica só com o nível (`.badge` é nowrap e o parágrafo inteiro
+                           empurrava a tela para a rolagem horizontal). #}
+                        {% set priority = result_data.executive_summary.correction_priority | correction_priority %}
+                        {% if priority.raw %}
+                        <div class="priority-block" style="--priority-color: var(--bs-{{ priority.level_style }}); --priority-rgb: var(--bs-{{ priority.level_style }}-rgb);">
+                            <div class="d-flex align-items-center gap-2 summary-stat-label" style="margin: 0;">
+                                <i class="bi bi-flag-fill" style="color: var(--priority-color);"></i>
+                                Prioridade de Correção
+                            </div>
+                            {% if priority.level %}
+                            <div class="priority-level">{{ priority.level }}</div>
+                            {% endif %}
+                            {% if priority.detail %}
+                            <p class="priority-detail">{{ priority.detail }}</p>
+                            {% endif %}
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>

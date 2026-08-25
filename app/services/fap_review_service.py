@@ -9,6 +9,7 @@ e nos exports em Excel.
 ``log_audit`` recebe ``user_id`` explicitamente porque o MCP não tem sessão Flask;
 o blueprint mantém um wrapper que injeta o usuário da sessão.
 """
+import difflib
 import hashlib
 import json
 import logging
@@ -479,6 +480,56 @@ def normalize_finding_severity(severity: str | None) -> str:
 
 
 
+# Nível de prioridade -> (rótulo exibido, cor Bootstrap). O primeiro alias que
+# casar vence, então os mais longos vêm antes dentro de cada grupo.
+_CORRECTION_PRIORITY_LEVELS = (
+    (('altíssima', 'altissima', 'alta', 'urgente', 'high'), 'Alta', 'danger'),
+    (('média', 'media', 'moderada', 'medium', 'moderate'), 'Média', 'warning'),
+    (('baixa', 'low'), 'Baixa', 'success'),
+    (('sem achados', 'nenhuma', 'n/a'), 'Sem achados', 'secondary'),
+    (('erro na análise', 'erro na analise'), 'Erro na análise', 'secondary'),
+)
+
+# Pontuação que separa o nível do texto que vem depois ("Alta — corrigir...").
+_CORRECTION_PRIORITY_SEPARATOR = re.compile(r'^[\s\-—–:;,.]+')
+
+
+def split_correction_priority(value: object) -> dict:
+    """Separa o nível de prioridade do plano de ação escrito junto.
+
+    O contrato do agente pede ALTA|MÉDIA|BAIXA, mas o modelo costuma devolver
+    "Alta — corrigir prioritariamente os 7 achados críticos (...) antes do
+    protocolo". Um parágrafo não cabe numa pílula (`.badge` é `nowrap`, e a
+    linha empurrava a tela inteira para a rolagem horizontal): o nível vira o
+    selo colorido e o resto vira texto corrido.
+
+    Nível desconhecido não vira selo — o texto inteiro vai para `detail`, que
+    quebra linha normalmente.
+    """
+    raw = ' '.join(str(value or '').split())
+    if not raw:
+        return {'raw': '', 'level': '', 'level_style': 'secondary', 'detail': ''}
+
+    lowered = raw.lower()
+    for aliases, label, style in _CORRECTION_PRIORITY_LEVELS:
+        for alias in aliases:
+            if not lowered.startswith(alias):
+                continue
+
+            rest = raw[len(alias):]
+            # "Altamente recomendável" não é o nível "Alta": depois do alias
+            # tem de vir pontuação ou o fim da string.
+            if rest and not _CORRECTION_PRIORITY_SEPARATOR.match(rest):
+                continue
+
+            detail = _CORRECTION_PRIORITY_SEPARATOR.sub('', rest).strip()
+            if detail:
+                detail = detail[0].upper() + detail[1:]
+            return {'raw': raw, 'level': label, 'level_style': style, 'detail': detail}
+
+    return {'raw': raw, 'level': '', 'level_style': 'secondary', 'detail': raw}
+
+
 def translate_finding_category(category: str | None) -> str:
     """Traduz categorias de achados para exibição em português."""
     normalized_category = str(category or '').strip().upper()
@@ -700,3 +751,375 @@ def build_lawyer_statistics(law_firm_id: int) -> dict:
         'lawyers': lawyers,
     }
 
+
+
+# ---------------------------------------------------------------------------
+# Treinamento — o que a comparação escreveu e o que o usuário mandou gravar
+# ---------------------------------------------------------------------------
+
+# Destinos que o treinamento pode gravar, na ordem em que aparecem na tela.
+TRAINING_TARGETS = (
+    {'key': 'manual_fap', 'label': 'Manual de revisão FAP'},
+    {'key': 'casos_referencia', 'label': 'Casos de referência'},
+)
+
+TRAINING_TARGET_LABELS = {target['key']: target['label'] for target in TRAINING_TARGETS}
+
+# Situação da comparação, do ponto de vista de quem está olhando a lista.
+# 'pending' é a comparação que já rodou e espera confirmação — antes ela ficava
+# nesse estado para sempre, sem nenhuma tela que a reabrisse.
+TRAINING_EXECUTION_STATUSES = {
+    'processing': {'label': 'Processando', 'style': 'warning', 'icon': 'bi bi-hourglass-split'},
+    'pending': {'label': 'Aguardando sua confirmação', 'style': 'warning', 'icon': 'bi bi-hourglass-split'},
+    'completed': {'label': 'Concluída', 'style': 'success', 'icon': 'bi bi-check-circle'},
+    'failed': {'label': 'Erro', 'style': 'danger', 'icon': 'bi bi-x-circle'},
+}
+
+
+def build_training_edit_groups(
+    edits: list[dict],
+    current_versions: dict[str, int] | None = None,
+    contents: dict[str, str] | None = None,
+) -> list[dict]:
+    """Um bloco por destino, com as edições propostas para ele já conferidas.
+
+    Cada edição recebe ``id`` (a posição na lista original, que é o que o
+    formulário devolve), ``status`` e ``preview`` — o diff pronto para a tela.
+    Um destino sem edição nenhuma não vira bloco.
+    """
+    edits = edits or []
+    current_versions = current_versions or {}
+    contents = contents or {}
+
+    grouped: list[dict] = []
+    for target in TRAINING_TARGETS:
+        content = contents.get(target['key'], '')
+        do_alvo = []
+
+        for edit_id, edit in enumerate(edits):
+            if str(edit.get('target') or '') != target['key']:
+                continue
+            conferida = verify_reference_edit(edit, content)
+            conferida['id'] = edit_id
+            conferida['preview'] = build_edit_preview(content, edit)
+            conferida['effective_kind'] = effective_edit_kind(
+                conferida.get('kind'), conferida['preview'])
+            do_alvo.append(conferida)
+
+        if not do_alvo:
+            continue
+
+        current = int(current_versions.get(target['key']) or 0)
+        grouped.append({
+            'key': target['key'],
+            'label': target['label'],
+            'current_version': current,
+            'next_version': current + 1,
+            'edits': do_alvo,
+            'applicable': sum(1 for e in do_alvo if e['status'] == 'ok'),
+        })
+
+    return grouped
+
+
+def effective_edit_kind(declared_kind: str | None, preview: dict | None) -> str:
+    """O tipo que o diff realmente mostra, que nem sempre é o que o modelo disse.
+
+    O modelo às vezes monta o texto novo como "âncora + regra nova". Mecanicamente
+    isso é uma adição — nada sai do documento —, mas ele declara ``substitution``.
+    A tela mostraria o selo "substituição · a regra vai ser trocada" ao lado de um
+    diff sem nenhuma linha vermelha, que é exatamente o descasamento entre rótulo
+    e evidência que este módulo passou a evitar. O selo passa a sair do diff.
+    """
+    linhas = (preview or {}).get('lines') or []
+    saiu = any(linha.get('kind') == 'del' for linha in linhas)
+    entrou = any(linha.get('kind') == 'ins' for linha in linhas)
+
+    if saiu and entrou:
+        # Refinamento e substituição têm a mesma mecânica; o que separa é a
+        # intenção, e essa só o modelo sabe.
+        return 'refinement' if declared_kind == 'refinement' else 'substitution'
+    if entrou and not saiu:
+        return 'addition'
+    return str(declared_kind or '')
+
+
+def parse_training_edit_selection(
+    selected_ids,
+    edits: list[dict],
+    texts: dict | None = None,
+) -> list[dict]:
+    """As edições marcadas, com o texto que estava na caixa quando salvou.
+
+    Edição bloqueada não entra nem se vier marcada: o formulário é do
+    navegador e o servidor não confia nele. Caixa esvaziada também não grava —
+    o silêncio nesse caminho já foi o bug que fazia a tela anunciar sucesso
+    tendo escrito zero.
+    """
+    edits = edits or []
+    texts = texts or {}
+
+    escolhidos = set()
+    for raw_id in (selected_ids or []):
+        try:
+            escolhidos.add(int(raw_id))
+        except (TypeError, ValueError):
+            continue
+
+    selecao = []
+    for edit_id, edit in enumerate(edits):
+        if edit_id not in escolhidos:
+            continue
+
+        edit = dict(edit)
+        override = texts.get(str(edit_id), texts.get(edit_id))
+        if override is not None:
+            edit['new_text'] = str(override)
+
+        if not str(edit.get('new_text') or '').strip():
+            continue
+
+        edit['id'] = edit_id
+        selecao.append(edit)
+
+    return selecao
+
+
+def append_to_reference_content(current_content: str | None, patch: str) -> str:
+    """Conteúdo da nova versão: o texto atual com o trecho novo no fim."""
+    current = (current_content or '').strip()
+    patch = (patch or '').strip()
+    if not current:
+        return patch
+    return f'{current}\n\n{patch}'
+
+
+def summarize_training_execution(status: str | None, payload: dict | None) -> dict:
+    """Situação e destinos gravados de uma comparação, para a listagem.
+
+    Lê os destinos de ``applied.targets``. O template antigo procurava
+    ``manual_updates_generated`` na raiz do JSON, mas a gravação sempre pôs
+    esse dado sob ``training_result`` — as colunas Manual e Casos mostravam
+    "Não" em toda linha, inclusive nas que tinham gravado. O formato antigo
+    continua sendo lido para as execuções que já estão no banco.
+    """
+    payload = payload or {}
+    status_key = str(status or '').strip()
+    situation = TRAINING_EXECUTION_STATUSES.get(
+        status_key,
+        {'label': status_key or 'Desconhecida', 'style': 'secondary', 'icon': 'bi bi-question-circle'},
+    )
+
+    applied = payload.get('applied') or {}
+    targets = []
+    for item in applied.get('targets') or []:
+        key = str(item.get('key') or '')
+        targets.append({
+            'key': key,
+            'label': item.get('label') or TRAINING_TARGET_LABELS.get(key, key),
+            'version_number': item.get('version_number'),
+            'activated': bool(item.get('activated')),
+        })
+
+    if not targets:
+        targets = _legacy_training_targets(payload)
+
+    return {
+        'situation': situation,
+        'targets': targets,
+        'is_pending': status_key == 'pending',
+        'is_processing': status_key == 'processing',
+    }
+
+
+def _legacy_training_targets(payload: dict) -> list[dict]:
+    """Destinos das execuções gravadas antes do formato ``applied``."""
+    legacy = payload.get('training_result') or {}
+    versions = legacy.get('reference_versions') or {}
+
+    targets = []
+    for key in ('manual_fap', 'casos_referencia'):
+        version_number = versions.get(key)
+        if not version_number:
+            continue
+        targets.append({
+            'key': key,
+            'label': TRAINING_TARGET_LABELS.get(key, key),
+            'version_number': version_number,
+            'activated': True,
+        })
+    return targets
+
+
+# ---------------------------------------------------------------------------
+# Treinamento — edições ancoradas no texto da referência
+# ---------------------------------------------------------------------------
+
+# Como cada edição se combina com o texto atual da referência.
+#   addition      — acrescenta depois da âncora (ou no fim, se não houver âncora)
+#   substitution  — troca a âncora pelo texto novo (a regra existia e ficou errada)
+#   refinement    — igual à substituição na mecânica; separado porque a intenção
+#                   é outra na tela: a regra está certa e ganha precisão
+REFERENCE_EDIT_KINDS = ('addition', 'substitution', 'refinement')
+_REPLACING_KINDS = ('substitution', 'refinement')
+
+# Por que uma edição não pode ser aplicada.
+EDIT_BLOCKED_REASONS = {
+    'no_text': 'A edição não traz texto novo.',
+    'bad_kind': 'Tipo de edição desconhecido.',
+    'no_anchor': 'A edição não diz que trecho do documento ela altera.',
+    'not_found': 'O trecho que esta edição diz alterar não existe no documento.',
+    'ambiguous': 'O trecho que esta edição diz alterar aparece mais de uma vez no documento.',
+}
+
+
+def verify_reference_edit(edit: dict, content: str) -> dict:
+    """Confere uma edição contra o texto atual da referência.
+
+    Devolve a edição com ``status`` (``ok`` ou o motivo do bloqueio). A âncora
+    tem de existir **literalmente e uma única vez**: um modelo que escreve o
+    trecho de memória produz uma aproximação, e aplicar aproximação no texto
+    errado corrompe o manual em silêncio. Melhor recusar e deixar a pessoa
+    resolver à mão.
+    """
+    edit = dict(edit or {})
+    content = content or ''
+
+    kind = str(edit.get('kind') or '').strip()
+    anchor = str(edit.get('anchor') or '').strip()
+    new_text = str(edit.get('new_text') or '').strip()
+
+    if kind not in REFERENCE_EDIT_KINDS:
+        edit['status'] = 'bad_kind'
+    elif not new_text:
+        edit['status'] = 'no_text'
+    elif kind in _REPLACING_KINDS and not anchor:
+        # Substituir sem dizer o que: viraria acréscimo mudo no fim do arquivo.
+        edit['status'] = 'no_anchor'
+    elif anchor:
+        occurrences = content.count(anchor)
+        if occurrences == 0:
+            edit['status'] = 'not_found'
+        elif occurrences > 1:
+            edit['status'] = 'ambiguous'
+        else:
+            edit['status'] = 'ok'
+    else:
+        # Adição sem âncora é acréscimo no fim — sempre aplicável.
+        edit['status'] = 'ok'
+
+    edit['blocked_reason'] = (
+        None if edit['status'] == 'ok' else EDIT_BLOCKED_REASONS.get(edit['status'])
+    )
+    return edit
+
+
+def verify_reference_edits(edits: list[dict], contents: dict[str, str]) -> list[dict]:
+    """Confere todas as edições contra o conteúdo da referência de cada destino."""
+    contents = contents or {}
+    return [
+        verify_reference_edit(edit, contents.get(str(edit.get('target') or ''), ''))
+        for edit in (edits or [])
+    ]
+
+
+def apply_reference_edit(content: str, edit: dict) -> str:
+    """Aplica uma edição já verificada e devolve o novo conteúdo."""
+    content = content or ''
+    kind = str(edit.get('kind') or '')
+    anchor = str(edit.get('anchor') or '').strip()
+    new_text = str(edit.get('new_text') or '').strip()
+
+    if kind in _REPLACING_KINDS:
+        return content.replace(anchor, new_text, 1)
+
+    if anchor:
+        return content.replace(anchor, f'{anchor}\n{new_text}', 1)
+
+    return append_to_reference_content(content, new_text)
+
+
+def apply_reference_edits(content: str, edits: list[dict]) -> tuple[str, list[dict]]:
+    """Aplica as edições aceitas, uma a uma, e devolve ``(conteúdo, aplicadas)``.
+
+    Cada edição é reconferida contra o conteúdo **já modificado** pelas
+    anteriores: uma edição pode apagar o trecho que a seguinte usava como
+    âncora, e aí a seguinte deixa de ser aplicável. Reconferir a cada passo é
+    o que impede a segunda de cair no lugar errado.
+    """
+    content = content or ''
+    applied: list[dict] = []
+
+    for edit in edits or []:
+        checked = verify_reference_edit(edit, content)
+        if checked['status'] != 'ok':
+            applied.append(checked)
+            continue
+
+        content = apply_reference_edit(content, checked)
+        checked['status'] = 'applied'
+        applied.append(checked)
+
+    return content, applied
+
+
+def build_edit_preview(content: str, edit: dict, context_lines: int = 3) -> dict:
+    """Monta o diff de uma edição, no formato que a tela desenha.
+
+    Numeração como no ``git``: as linhas de contexto e as removidas trazem o
+    número no documento atual; as inseridas, o número que terão depois.
+    """
+    content = content or ''
+    checked = verify_reference_edit(edit, content)
+
+    if checked['status'] != 'ok':
+        # Sem âncora válida não há onde ancorar o diff; a tela mostra só o que
+        # entraria e o motivo do bloqueio.
+        return {
+            'status': checked['status'],
+            'blocked_reason': checked['blocked_reason'],
+            'header': 'trecho não localizado',
+            'lines': (
+                [{'kind': 'del', 'number': '?', 'text': linha}
+                 for linha in str(edit.get('anchor') or '').splitlines()]
+                + [{'kind': 'ins', 'number': '?', 'text': linha}
+                   for linha in str(edit.get('new_text') or '').splitlines()]
+            ),
+        }
+
+    old_lines = content.splitlines()
+    new_lines = apply_reference_edit(content, checked).splitlines()
+    opcodes = difflib.SequenceMatcher(None, old_lines, new_lines, autojunk=False).get_opcodes()
+
+    lines: list[dict] = []
+    first_old_line = None
+
+    for position, (tag, start_a, end_a, start_b, end_b) in enumerate(opcodes):
+        if tag == 'equal':
+            bloco = list(range(start_a, end_a))
+            # Contexto só encostado na mudança: as primeiras linhas quando o
+            # bloco vem DEPOIS de uma alteração, as últimas quando vem ANTES.
+            vizinhas: list[int] = []
+            if position > 0 and opcodes[position - 1][0] != 'equal':
+                vizinhas += bloco[:context_lines]
+            if position + 1 < len(opcodes) and opcodes[position + 1][0] != 'equal':
+                vizinhas += bloco[-context_lines:]
+
+            for index in sorted(set(vizinhas)):
+                lines.append({'kind': 'ctx', 'number': index + 1, 'text': old_lines[index]})
+            continue
+
+        if first_old_line is None:
+            first_old_line = start_a + 1
+
+        for index in range(start_a, end_a):
+            lines.append({'kind': 'del', 'number': index + 1, 'text': old_lines[index]})
+        for index in range(start_b, end_b):
+            lines.append({'kind': 'ins', 'number': index + 1, 'text': new_lines[index]})
+
+    return {
+        'status': 'ok',
+        'blocked_reason': None,
+        'header': f'linha {first_old_line}' if first_old_line else 'fim do documento',
+        'lines': lines,
+    }

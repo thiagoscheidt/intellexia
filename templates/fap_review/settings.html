@@ -259,56 +259,6 @@
                             </div>
                         </div>
 
-                        <!-- Políticas -->
-                        <div class="col-12">
-                            <div class="card info-card">
-                                <div class="card-header d-flex align-items-center gap-2">
-                                    <i class="bi bi-toggles text-warning"></i>
-                                    Políticas de Atualização
-                                </div>
-                                <div class="card-body">
-                                    <div class="row g-3">
-                                        <div class="col-sm-6 col-lg-3">
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" role="switch"
-                                                    id="autoUpdateManual" name="auto_update_manual" {% if
-                                                    setting.auto_update_manual %}checked{% endif %}>
-                                                <label class="form-check-label small" for="autoUpdateManual">Atualizar
-                                                    Manual Automaticamente</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-sm-6 col-lg-3">
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" role="switch"
-                                                    id="autoUpdateCases" name="auto_update_cases" {% if
-                                                    setting.auto_update_cases %}checked{% endif %}>
-                                                <label class="form-check-label small" for="autoUpdateCases">Atualizar
-                                                    Casos Automaticamente</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-sm-6 col-lg-3">
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" role="switch"
-                                                    id="requireApproval" name="require_approval_before_publish" {% if
-                                                    setting.require_approval_before_publish %}checked{% endif %}>
-                                                <label class="form-check-label small" for="requireApproval">Requer
-                                                    Aprovação Antes de Publicar</label>
-                                            </div>
-                                        </div>
-                                        <div class="col-sm-6 col-lg-3">
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" role="switch"
-                                                    id="enableLearning" name="enable_continuous_learning" {% if
-                                                    setting.enable_continuous_learning %}checked{% endif %}>
-                                                <label class="form-check-label small" for="enableLearning">Habilitar
-                                                    Aprendizado Contínuo</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                         <!-- Botão Salvar -->
                         <div class="col-12 d-flex justify-content-end">
                             <button type="submit" class="btn btn-primary px-4">
@@ -432,45 +382,6 @@
                                             <div>
                                                 <div class="prompt-item-name"><i
                                                         class="bi bi-file-earmark-text me-1 text-primary"></i>{{
-                                                    ref_name }}
-                                                </div>
-                                                <div class="prompt-item-desc">{{ ref_desc }}</div>
-                                            </div>
-                                            <a href="{{ url_for('fap_review.edit_reference_by_type', reference_type=reference_type) }}"
-                                                class="btn btn-sm btn-outline-secondary ms-2"
-                                                title="Editar {{ ref_name }}">
-                                                <i class="bi bi-pencil"></i>
-                                            </a>
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Agente de Treinamento -->
-                    <div class="col-12">
-                        <div class="card info-card">
-                            <div class="card-header d-flex align-items-center gap-2">
-                                <i class="bi bi-mortarboard text-success"></i>
-                                Referências — Agente de Treinamento
-                            </div>
-                            <div class="card-body">
-                                <p class="text-muted small mb-3">Documentos de referência específicos do agente de
-                                    treinamento. Clique em uma referência para visualizar, editar ou gerenciar suas
-                                    versões.</p>
-                                <div class="row g-2">
-                                    {% for reference_type, ref_name, ref_desc in [
-                                    ('training_context', 'TRAINING_CONTEXT.md', 'Base de conhecimento para
-                                    treinamento'),
-                                    ('training_guidelines', 'TRAINING_GUIDELINES.md', 'Diretrizes de evolução contínua')
-                                    ] %}
-                                    <div class="col-12">
-                                        <div class="prompt-item">
-                                            <div>
-                                                <div class="prompt-item-name"><i
-                                                        class="bi bi-file-earmark-text me-1 text-success"></i>{{
                                                     ref_name }}
                                                 </div>
                                                 <div class="prompt-item-desc">{{ ref_desc }}</div>
@@ -631,7 +542,7 @@
             });
 
             // Garantir checkboxes desmarcados
-            ['reviewer_enabled', 'training_enabled', 'auto_update_manual', 'auto_update_cases', 'require_approval_before_publish', 'enable_continuous_learning'].forEach(key => {
+            ['reviewer_enabled', 'training_enabled'].forEach(key => {
                 if (!(key in data)) data[key] = false;
             });
 

@@ -9,6 +9,7 @@ Este módulo contém:
 from .reviewer_agent import FapPetitionReviewerAgent
 from .training_agent import FapTrainingEvolutionAgent
 from .training_apply_agent import FapTrainingApplySubAgent
+from .training_diff_agent import FapTrainingDiffGrouperAgent
 from .auxiliary_extractor_agent import (
 	AuxDocumentExtraction,
 	AuxExtractedFact,
@@ -20,6 +21,7 @@ __all__ = [
 	'FapPetitionReviewerAgent',
 	'FapTrainingEvolutionAgent',
 	'FapTrainingApplySubAgent',
+	'FapTrainingDiffGrouperAgent',
 	'FapAuxiliaryDocumentExtractorAgent',
 	'AuxDocumentExtraction',
 	'AuxExtractedFact',

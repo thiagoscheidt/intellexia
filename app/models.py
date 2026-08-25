@@ -2905,7 +2905,12 @@ class FapReviewSetting(db.Model):
     reviewer_temperature = db.Column(db.Float, default=0.0, nullable=False)
     training_temperature = db.Column(db.Float, default=0.7, nullable=False)
 
-    # Políticas de atualização
+    # Políticas de atualização — LEGADO, não são lidas por nada.
+    # Ficaram como gate do treinamento e nasciam False: o fluxo rodava inteiro,
+    # gastava as chamadas de LLM e anunciava sucesso sem gravar nada. Hoje a
+    # decisão é tomada na prévia do treinamento, com o texto à vista (o que
+    # gravar) e nos botões Salvar rascunho / Salvar e ativar (se já vale).
+    # Mantidas só para não exigir migration; não voltar a usá-las.
     auto_update_manual = db.Column(db.Boolean, default=False)
     auto_update_cases = db.Column(db.Boolean, default=False)
     require_approval_before_publish = db.Column(db.Boolean, default=True)

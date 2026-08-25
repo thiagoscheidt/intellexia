@@ -38,11 +38,12 @@ from app.models import (
 )
 from app.agents.fap_review import (
     FapPetitionReviewerAgent,
-    FapTrainingEvolutionAgent,
     FapTrainingApplySubAgent,
+    FapTrainingDiffGrouperAgent,
 )
 from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 from app.services import fap_review_service as _svc
+from app.services import fap_training_diff_service as _diff_svc
 from app.services import fap_review_aux_service as _aux_svc
 from app.utils.document_utils import render_docx_preview_html
 from app.utils.timezone import now_sp
@@ -285,10 +286,55 @@ def _extract_text_from_document(filepath: str) -> str:
 
 
 def _normalize_spreadsheet_header(value: object) -> str:
-    """Normaliza cabeçalhos de planilha para busca resiliente."""
+    """Normaliza cabeçalhos de planilha para busca resiliente.
+
+    Além de acento e caixa, derruba pontuação: "Nº", "TESE(S)" e "N° do
+    Benefício" viram texto comparável sem uma entrada de alias para cada
+    variação de digitação.
+    """
     normalized = unicodedata.normalize('NFKD', str(value or ''))
     ascii_text = normalized.encode('ascii', 'ignore').decode('ascii')
-    return ' '.join(ascii_text.strip().lower().split())
+    ascii_text = re.sub(r'[^a-z0-9]+', ' ', ascii_text.lower())
+    return ' '.join(ascii_text.split())
+
+
+# Cada escritório nomeia a coluna do seu jeito. A lista está em ordem de
+# preferência: a primeira que existir na aba é a usada.
+_BENEFIT_HEADER_ALIASES = (
+    'numero do beneficio',
+    'numero beneficio',
+    'n do beneficio',
+    'no do beneficio',
+    'n beneficio',
+    'nb',
+    'beneficio',
+)
+_THESIS_HEADER_ALIASES = ('tese', 'teses')
+
+
+def _find_header_index(header_map: dict[str, int], aliases: tuple[str, ...]) -> int | None:
+    """Índice da primeira coluna cujo cabeçalho casa com um dos nomes aceitos."""
+    for alias in aliases:
+        if alias in header_map:
+            return header_map[alias]
+    return None
+
+
+def _find_thesis_index(header_map: dict[str, int]) -> int | None:
+    """Índice da coluna da tese, aceitando singular, plural e sufixos.
+
+    Casa "TESE", "TESES", "TESE(S)" e "TESES APLICADAS" — mas pela primeira
+    palavra, nunca por substring: as vizinhas ("OBS", "Número da CAT") não
+    podem ser confundidas com a coluna da tese.
+    """
+    exact = _find_header_index(header_map, _THESIS_HEADER_ALIASES)
+    if exact is not None:
+        return exact
+
+    for header, index in header_map.items():
+        if header.split(' ', 1)[0] in _THESIS_HEADER_ALIASES:
+            return index
+    return None
 
 
 def _format_benefit_number(value: object) -> str:
@@ -339,20 +385,32 @@ def _parse_benefits_spreadsheet(filepath: str) -> list[dict[str, str]]:
     try:
         rows: list[dict[str, str]] = []
         sheets_with_columns = 0
+        rejected_sheets: list[str] = []
 
         for worksheet in workbook.worksheets:
             header_row = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
             if not header_row:
+                rejected_sheets.append(f'{worksheet.title}: aba vazia')
                 continue
 
-            header_map = {
-                _normalize_spreadsheet_header(value): index
-                for index, value in enumerate(header_row)
-            }
-            benefit_idx = header_map.get('numero do beneficio')
-            thesis_idx = header_map.get('teses')
+            # Cabeçalho repetido (a planilha real tem "OBS" três vezes): a
+            # primeira ocorrência vence, não a última.
+            header_map: dict[str, int] = {}
+            for index, value in enumerate(header_row):
+                normalized = _normalize_spreadsheet_header(value)
+                if normalized:
+                    header_map.setdefault(normalized, index)
+
+            benefit_idx = _find_header_index(header_map, _BENEFIT_HEADER_ALIASES)
+            thesis_idx = _find_thesis_index(header_map)
 
             if benefit_idx is None or thesis_idx is None:
+                missing = []
+                if benefit_idx is None:
+                    missing.append('o número do benefício')
+                if thesis_idx is None:
+                    missing.append('a tese')
+                rejected_sheets.append(f'{worksheet.title}: falta {" e ".join(missing)}')
                 continue
             sheets_with_columns += 1
 
@@ -374,8 +432,15 @@ def _parse_benefits_spreadsheet(filepath: str) -> list[dict[str, str]]:
                 })
 
         if not sheets_with_columns:
+            # Diz o que faltou em cada aba: sem isso, "cabeçalho com outro nome"
+            # e "cabeçalho fora da primeira linha" dão a mesma mensagem.
+            detalhe = '; '.join(rejected_sheets[:8])
+            if len(rejected_sheets) > 8:
+                detalhe += f'; e mais {len(rejected_sheets) - 8} aba(s)'
             raise ValueError(
-                'Nenhuma aba da planilha contém as colunas "Número do Benefício" e "TESES".'
+                'Nenhuma aba da planilha tem as duas colunas obrigatórias na primeira '
+                'linha: o número do benefício ("Número do Benefício") e a tese '
+                f'("TESE" ou "TESES"). Abas lidas — {detalhe}.'
             )
 
         return rows
@@ -2428,331 +2493,500 @@ def revision_compared_document(execution_id: int):
     )
 
 
+def _load_training_payload(execution) -> dict:
+    """Payload da comparação de treinamento, tolerante a JSON corrompido."""
+    if not execution.result_json:
+        return {}
+    try:
+        return json.loads(execution.result_json)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _training_documents_label(execution, payload: dict | None = None) -> str:
+    """Os dois arquivos comparados, como a listagem os identifica."""
+    source_files = (payload or {}).get('source_files') or {}
+    original = source_files.get('original_filename') or execution.main_document_filename or '—'
+    revised = source_files.get('revised_filename') or ''
+    return f'{original} → {revised}' if revised else original
+
+
+def _validate_training_uploads(original_file, revised_file) -> str | None:
+    """Motivo pelo qual os arquivos não servem; None quando servem."""
+    if (not original_file or not original_file.filename
+            or not revised_file or not revised_file.filename):
+        return ('Envie os dois documentos: como o advogado enviou e como ficou '
+                'depois da revisão.')
+
+    for label, upload in (('enviado pelo advogado', original_file),
+                          ('revisado', revised_file)):
+        if _get_file_extension(upload.filename) == '.doc':
+            return (f'O documento {label} está em .doc, que o Revisor não lê. '
+                    'Envie em PDF ou DOCX.')
+        if not allowed_file(upload.filename, ALLOWED_DOCUMENT_EXTENSIONS):
+            return (f'O documento {label} tem extensão não permitida. '
+                    'Envie em PDF ou DOCX.')
+
+    return None
+
+
+def _get_active_prompt_content(law_firm_id: int, prompt_type: str) -> str:
+    """Conteúdo do prompt ativo de um tipo (vazio quando não configurado)."""
+    prompt = FapReviewPromptVersion.query.filter_by(
+        law_firm_id=law_firm_id,
+        prompt_type=prompt_type,
+        is_active=True,
+    ).first()
+    return prompt.content if prompt else ''
+
+
+def _current_reference_versions(law_firm_id: int) -> dict[str, int]:
+    """``version_number`` da referência ativa de cada destino do treinamento."""
+    versions = {}
+    for target in _svc.TRAINING_TARGETS:
+        reference = _get_active_reference(law_firm_id, target['key'])
+        versions[target['key']] = reference.version_number if reference else 0
+    return versions
+
+
+def _strip_pattern_indices(patterns: list[dict]) -> list[dict]:
+    """Tira os índices antes de gravar: eles serviram à reconciliação e a tela
+    não os usa. ``result_json`` é TEXT (64 KB no MySQL) e o payload já carrega
+    os exemplos literais de cada padrão."""
+    return [
+        {chave: valor for chave, valor in pattern.items() if chave != 'indices'}
+        for pattern in patterns
+    ]
+
+
+def _launch_training_comparison(execution_id: int, law_firm_id: int) -> None:
+    """Roda a comparação fora da requisição.
+
+    A chamada de LLM leva mais que o timeout padrão do gunicorn (30s) e antes
+    rodava dentro do POST: estourar o teto matava o worker no meio do
+    treinamento. Mesmo desenho da revisão.
+    """
+    app_obj = current_app._get_current_object()
+
+    def _run_training_in_background():
+        with app_obj.app_context():
+            try:
+                _execute_training_comparison(execution_id, law_firm_id)
+            except Exception as agent_error:
+                app_obj.logger.error(f"Erro na comparação de treinamento: {agent_error}")
+                try:
+                    background_execution = FapReviewExecution.query.get(execution_id)
+                    if background_execution and background_execution.status == 'processing':
+                        background_execution.status = 'failed'
+                        background_execution.error_message = str(agent_error)
+                        background_execution.completed_at = datetime.now()
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
+            finally:
+                db.session.remove()
+
+    threading.Thread(
+        target=_run_training_in_background,
+        daemon=True,
+        name=f'fap-training-{execution_id}',
+    ).start()
+
+
+def _execute_training_comparison(execution_id: int, law_firm_id: int) -> None:
+    """Compara os documentos e deixa a execução aguardando confirmação humana."""
+    execution = FapReviewExecution.query.get(execution_id)
+    if not execution:
+        raise ValueError(f"Execução {execution_id} não encontrada")
+
+    setting = _get_fap_setting(law_firm_id)
+    payload = _load_training_payload(execution)
+    source_files = payload.get('source_files') or {}
+
+    original_text = _extract_text_from_document(
+        source_files.get('original_path') or execution.main_document_path)
+    revised_text = _extract_text_from_document(
+        source_files.get('revised_path') or execution.compared_document_path)
+
+    # PDF digitalizado (imagem, sem camada de texto) não extrai nada. Sem esta
+    # parada, a comparação seguia com string vazia e a prévia chegava com as
+    # caixas em branco, sem dizer por quê — parecendo que a correção não tinha
+    # nada a ensinar.
+    if not original_text.strip() or not revised_text.strip():
+        ilegiveis = ' e '.join(
+            label for label, texto in (
+                ('do documento enviado pelo advogado', original_text),
+                ('do documento revisado', revised_text),
+            ) if not texto.strip()
+        )
+        raise ValueError(
+            f'Não foi possível ler o texto {ilegiveis}. '
+            'Documento digitalizado (imagem) não serve para treinamento — '
+            'envie o arquivo com texto selecionável.'
+        )
+
+    # Etapa 1 — as diferenças, sem IA. `difflib` compara duas versões do mesmo
+    # documento de forma exata e em 87ms; o modelo, recebendo os documentos
+    # inteiros, resumia como "padronização terminológica" e omitia o
+    # placeholder "R$ XXX" que o advogado esqueceu de preencher.
+    changes = _diff_svc.extract_changes(original_text, revised_text)
+    changes_summary = _diff_svc.summarize_changes(changes)
+
+    if not changes:
+        raise ValueError(
+            'Os dois documentos são idênticos — não há revisão para aprender. '
+            'Confira se enviou a versão do advogado e a versão revisada.'
+        )
+
+    api_key = os.getenv('OPENAI_API_KEY')
+    model = setting.training_model
+    temperature = min(max(setting.training_temperature, 0.0), 1.0)
+
+    # Agrupar é tarefa mecânica: temperatura zero, como no revisor. A
+    # temperatura configurada vale para a etapa que escreve texto novo.
+    grouper = FapTrainingDiffGrouperAgent(openai_api_key=api_key, model=model, temperature=0.0)
+    proposer = FapTrainingApplySubAgent(openai_api_key=api_key, model=model, temperature=temperature)
+
+    manual_reference = _get_active_reference(law_firm_id, 'manual_fap')
+    cases_reference = _get_active_reference(law_firm_id, 'casos_referencia')
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        # Etapa 2a — o que se repete literalmente é agrupado SEM IA. O par
+        # "removido → inserido" que aparece duas vezes já é padrão provado, e
+        # o rótulo sai dele mesmo ("Trocar «no dia» por «em»"), o que torna
+        # impossível o rótulo não bater com o exemplo.
+        exact_patterns, remaining_indices = _diff_svc.cluster_repeated_changes(changes)
+
+        # Etapa 2b — o modelo agrupa só o que sobrou (par único, aconteceu uma
+        # vez). Ele apenas ATRIBUI índices; contagem, exemplos e relevância
+        # continuam saindo do código.
+        grouping = loop.run_until_complete(
+            grouper.group_changes(
+                changes_text=_diff_svc.format_for_prompt(
+                    changes, only_indices=remaining_indices),
+                changes_summary=changes_summary,
+            )
+        )
+
+        patterns = _diff_svc.reconcile_patterns(
+            [pattern.model_dump() for pattern in grouping.patterns],
+            changes,
+            already_claimed={
+                index for pattern in exact_patterns for index in pattern['indices']
+            },
+        )
+
+        grouping_payload = {
+            'summary': grouping.summary,
+            'exact_patterns': _strip_pattern_indices(exact_patterns),
+            'patterns': _strip_pattern_indices(patterns),
+            'unassigned': _diff_svc.unassigned_count(exact_patterns + patterns, changes),
+        }
+
+        # Etapa 3 — propor, com o manual e os casos INTEIROS à vista. Só cabe
+        # porque os documentos ficaram para trás na etapa 1.
+        extract = loop.run_until_complete(
+            proposer.propose_updates(
+                grouping=grouping_payload,
+                manual_content=manual_reference.content if manual_reference else '',
+                cases_content=cases_reference.content if cases_reference else '',
+                reviewer_identity=_get_active_prompt_content(law_firm_id, 'revisor_identity'),
+                reviewer_rules=_get_active_prompt_content(law_firm_id, 'revisor_rules'),
+                training_identity=_get_active_prompt_content(law_firm_id, 'training_identity'),
+                training_rules=_get_active_prompt_content(law_firm_id, 'training_rules'),
+                training_prompt=_get_active_prompt_content(law_firm_id, 'training_prompt'),
+            )
+        )
+    finally:
+        loop.close()
+
+    payload['stage'] = 'preview'
+    payload['changes_summary'] = changes_summary
+    payload['grouping'] = grouping_payload
+    payload['extract'] = extract.model_dump()
+    # As ~240 diferenças cruas NÃO entram no payload: `result_json` é TEXT
+    # (64 KB no MySQL) e o diff sozinho passa de 36 KB. Os exemplos literais
+    # que a tela mostra vêm dos padrões agrupados, que são pequenos.
+
+    execution.result_json = json.dumps(payload, ensure_ascii=False)
+    execution.status = 'pending'
+    execution.updated_at = datetime.now()
+    db.session.commit()
+
+    _log_audit(
+        law_firm_id,
+        'training_preview_generated',
+        'execution',
+        execution.id,
+        'Comparação gerada e aguardando confirmação humana',
+        user_id=execution.user_id,
+    )
+
+
 @fap_review_bp.route('/training', methods=['GET', 'POST'])
 @require_law_firm
 @require_admin_user
 def training():
-    """Página de gerenciamento de treinamento e evolução"""
+    """Lista as comparações de treinamento e recebe uma nova."""
     law_firm_id = get_current_law_firm_id()
-    user_id = session.get('user_id')
     setting = _get_fap_setting(law_firm_id)
 
-    training_preview = None
-    preview_execution_id = None
-    preview_files = {}
-    apply_result = None
-    
     if request.method == 'POST':
-        action = request.form.get('action', '').strip().lower()
+        if not setting.training_enabled:
+            flash('O agente de treinamento está desligado nas Configurações.', 'warning')
+            return redirect(url_for('fap_review.training'))
 
-        if action == 'compare':
-            try:
-                if 'original_document' not in request.files or 'revised_document' not in request.files:
-                    flash('Envie os dois arquivos para comparação.', 'warning')
-                    return redirect(url_for('fap_review.training'))
+        original_file = request.files.get('original_document')
+        revised_file = request.files.get('revised_document')
 
-                original_file = request.files['original_document']
-                revised_file = request.files['revised_document']
+        upload_error = _validate_training_uploads(original_file, revised_file)
+        if upload_error:
+            flash(upload_error, 'warning')
+            return redirect(url_for('fap_review.training'))
 
-                if not original_file.filename or not revised_file.filename:
-                    flash('Selecione ambos os arquivos (original e revisado).', 'warning')
-                    return redirect(url_for('fap_review.training'))
+        try:
+            upload_dir = _create_upload_directory(law_firm_id, 'training')
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
 
-                if _get_file_extension(original_file.filename) == '.doc' or _get_file_extension(revised_file.filename) == '.doc':
-                    flash('Arquivos .doc não são suportados no FAP Review. Envie em PDF ou DOCX.', 'error')
-                    return redirect(url_for('fap_review.training'))
+            original_path = upload_dir / (timestamp + 'original_' + secure_filename(original_file.filename))
+            revised_path = upload_dir / (timestamp + 'revised_' + secure_filename(revised_file.filename))
 
-                if not allowed_file(original_file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
-                    flash('Arquivo original com extensão não permitida.', 'error')
-                    return redirect(url_for('fap_review.training'))
+            original_file.save(str(original_path))
+            revised_file.save(str(revised_path))
 
-                if not allowed_file(revised_file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
-                    flash('Arquivo revisado com extensão não permitida.', 'error')
-                    return redirect(url_for('fap_review.training'))
-
-                upload_dir = _create_upload_directory(law_firm_id, 'training')
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_')
-
-                original_filename_safe = timestamp + 'original_' + secure_filename(original_file.filename)
-                revised_filename_safe = timestamp + 'revised_' + secure_filename(revised_file.filename)
-
-                original_path = upload_dir / original_filename_safe
-                revised_path = upload_dir / revised_filename_safe
-
-                original_file.save(str(original_path))
-                revised_file.save(str(revised_path))
-
-                original_text = _extract_text_from_document(str(original_path))
-                revised_text = _extract_text_from_document(str(revised_path))
-
-                training_identity_prompt = FapReviewPromptVersion.query.filter_by(
-                    law_firm_id=law_firm_id,
-                    prompt_type='training_identity',
-                    is_active=True,
-                ).first()
-                training_rules_prompt = FapReviewPromptVersion.query.filter_by(
-                    law_firm_id=law_firm_id,
-                    prompt_type='training_rules',
-                    is_active=True,
-                ).first()
-                training_prompt = FapReviewPromptVersion.query.filter_by(
-                    law_firm_id=law_firm_id,
-                    prompt_type='training_prompt',
-                    is_active=True,
-                ).first()
-
-                subagent = FapTrainingApplySubAgent(
-                    openai_api_key=os.getenv('OPENAI_API_KEY'),
-                    model=setting.training_model,
-                    temperature=min(max(setting.training_temperature, 0.0), 1.0),
-                )
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    extract_result = loop.run_until_complete(
-                        subagent.build_comparison_extract(
-                            original_text=original_text,
-                            revised_text=revised_text,
-                            training_identity=training_identity_prompt.content if training_identity_prompt else '',
-                            training_rules=training_rules_prompt.content if training_rules_prompt else '',
-                            training_prompt=training_prompt.content if training_prompt else '',
-                        )
-                    )
-                finally:
-                    loop.close()
-
-                preview_payload = {
-                    'stage': 'preview',
-                    'extract': extract_result.model_dump(),
-                    'source_files': {
-                        'original_filename': original_file.filename,
-                        'revised_filename': revised_file.filename,
-                        'original_path': str(original_path),
-                        'revised_path': str(revised_path),
-                    },
-                }
-
-                execution = FapReviewExecution(
-                    law_firm_id=law_firm_id,
-                    user_id=user_id,
-                    execution_type='training',
-                    status='pending',
-                    main_document_path=str(original_path),
-                    main_document_filename=original_file.filename,
-                    comparative_analysis=True,
-                    compared_document_path=str(revised_path),
-                    result_json=json.dumps(preview_payload, ensure_ascii=False),
-                )
-                db.session.add(execution)
-                db.session.commit()
-
-                _log_audit(
-                    law_firm_id,
-                    'training_preview_generated',
-                    'execution',
-                    execution.id,
-                    'Extrato de comparação gerado para confirmação humana',
-                )
-
-                training_preview = extract_result.model_dump()
-                preview_execution_id = execution.id
-                preview_files = {
-                    'original_filename': original_file.filename,
-                    'revised_filename': revised_file.filename,
-                }
-
-                flash('Extrato da comparação gerado. Revise e confirme para treinar.', 'success')
-
-            except Exception as e:
-                db.session.rollback()
-                current_app.logger.error(f"Erro ao gerar extrato de treinamento: {e}")
-                flash(f'Erro ao comparar documentos: {str(e)}', 'error')
-
-        elif action == 'apply':
-            preview_id = request.form.get('preview_execution_id', type=int)
-            if not preview_id:
-                flash('Execução de prévia não informada.', 'warning')
-                return redirect(url_for('fap_review.training'))
-
-            execution = FapReviewExecution.query.filter_by(
-                id=preview_id,
+            execution = FapReviewExecution(
                 law_firm_id=law_firm_id,
+                user_id=session.get('user_id'),
                 execution_type='training',
-            ).first()
-
-            if not execution:
-                flash('Prévia de treinamento não encontrada.', 'error')
-                return redirect(url_for('fap_review.training'))
-
-            try:
-                payload = json.loads(execution.result_json or '{}')
-                extract_data = payload.get('extract') or {}
-                source_files = payload.get('source_files') or {}
-
-                if not extract_data:
-                    flash('A prévia não possui extrato para aplicação.', 'warning')
-                    return redirect(url_for('fap_review.training'))
-
-                training_update_policy_prompt = FapReviewPromptVersion.query.filter_by(
-                    law_firm_id=law_firm_id,
-                    prompt_type='training_update_policy',
-                    is_active=True,
-                ).first()
-
-                manual_ref = _get_active_reference(law_firm_id, 'manual_fap')
-                cases_ref = _get_active_reference(law_firm_id, 'casos_referencia')
-
-                manual_content = (manual_ref.content if manual_ref else '').strip()
-                cases_content = (cases_ref.content if cases_ref else '').strip()
-
-                subagent = FapTrainingApplySubAgent(
-                    openai_api_key=os.getenv('OPENAI_API_KEY'),
-                    model=setting.training_model,
-                    temperature=min(max(setting.training_temperature, 0.0), 1.0),
-                )
-
-                trainer = FapTrainingEvolutionAgent(
-                    openai_api_key=os.getenv('OPENAI_API_KEY'),
-                    model=setting.training_model,
-                    temperature=min(max(setting.training_temperature, 0.0), 1.0),
-                )
-
-                manual_version = '1.0.0'
-                if manual_ref and manual_ref.version_number:
-                    manual_version = f'1.0.{manual_ref.version_number}'
-
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    apply_payload = loop.run_until_complete(
-                        subagent.build_apply_payload(
-                            extract_data=extract_data,
-                            training_update_policy=(
-                                training_update_policy_prompt.content
-                                if training_update_policy_prompt
-                                else ''
-                            ),
-                            manual_version=manual_version,
-                            original_filename=source_files.get('original_filename', ''),
-                            revised_filename=source_files.get('revised_filename', ''),
-                        )
-                    )
-                finally:
-                    loop.close()
-
-                timestamp_label = now_sp().strftime('%d/%m/%Y %H:%M')
-
-                should_update_manual = bool(apply_payload.should_update_manual and setting.auto_update_manual)
-                should_update_cases = bool(apply_payload.should_update_cases and setting.auto_update_cases)
-
-                manual_patch = (apply_payload.manual_patch_markdown or '').strip()
-                if manual_patch and should_update_manual:
-                    new_manual_content = (
-                        manual_content + '\n\n' + manual_patch
-                        if manual_content else manual_patch
-                    )
-                    manual_new = _append_reference_version(
-                        law_firm_id=law_firm_id,
-                        user_id=user_id,
-                        reference_type='manual_fap',
-                        new_content=new_manual_content,
-                        activate=True,
-                    )
-                    manual_updated = True
-                else:
-                    manual_new = None
-                    manual_updated = False
-
-                cases_patch = (apply_payload.case_reference_markdown or '').strip()
-                if cases_patch and should_update_cases:
-                    new_cases_content = (
-                        cases_content + '\n\n' + cases_patch
-                        if cases_content else cases_patch
-                    )
-                    cases_new = _append_reference_version(
-                        law_firm_id=law_firm_id,
-                        user_id=user_id,
-                        reference_type='casos_referencia',
-                        new_content=new_cases_content,
-                        activate=True,
-                    )
-                    cases_updated = True
-                else:
-                    cases_new = None
-                    cases_updated = False
-
-                semantic_version_new = trainer._increment_version(
-                    manual_version,
-                    apply_payload.version_increment or 'patch',
-                )
-
-                execution.status = 'completed'
-                execution.completed_at = datetime.now()
-                execution.updated_at = datetime.now()
-                execution.result_json = json.dumps(
+                status='processing',
+                main_document_path=str(original_path),
+                main_document_filename=original_file.filename,
+                comparative_analysis=True,
+                compared_document_path=str(revised_path),
+                result_json=json.dumps(
                     {
-                        'stage': 'applied',
-                        'applied_at': timestamp_label,
-                        'extract': extract_data,
-                        'source_files': source_files,
-                        'training_result': {
-                            'manual_updates_generated': manual_updated,
-                            'case_reference_generated': cases_updated,
-                            'manual_version_new': semantic_version_new,
-                            'approval_required': setting.require_approval_before_publish,
-                            'message': apply_payload.message,
-                            'reference_versions': {
-                                'manual_fap': manual_new.version_number if manual_new else None,
-                                'casos_referencia': cases_new.version_number if cases_new else None,
-                            },
+                        'stage': 'processing',
+                        'source_files': {
+                            'original_filename': original_file.filename,
+                            'revised_filename': revised_file.filename,
+                            'original_path': str(original_path),
+                            'revised_path': str(revised_path),
                         },
                     },
                     ensure_ascii=False,
-                )
+                ),
+            )
+            db.session.add(execution)
+            db.session.commit()
 
-                db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Erro ao registrar comparação de treinamento: {e}")
+            flash(f'Erro ao enviar os documentos: {str(e)}', 'error')
+            return redirect(url_for('fap_review.training'))
 
-                _log_audit(
-                    law_firm_id,
-                    'training_applied',
-                    'execution',
-                    execution.id,
-                    'Treinamento aplicado com confirmação humana',
-                )
+        _log_audit(
+            law_firm_id,
+            'training_comparison_started',
+            'execution',
+            execution.id,
+            'Comparação de treinamento iniciada',
+        )
+        _launch_training_comparison(execution.id, law_firm_id)
 
-                apply_result = {
-                    'manual_updated': manual_updated,
-                    'cases_updated': cases_updated,
-                    'manual_version_new': semantic_version_new,
-                    'message': apply_payload.message,
-                }
-                flash('Treinamento aplicado com sucesso.', 'success')
+        return redirect(url_for('fap_review.training_comparison', execution_id=execution.id))
 
-            except Exception as e:
-                db.session.rollback()
-                current_app.logger.error(f"Erro ao aplicar treinamento: {e}")
-
-                execution.status = 'failed'
-                execution.error_message = str(e)
-                execution.completed_at = datetime.now()
-                db.session.commit()
-
-                flash(f'Erro ao aplicar treinamento: {str(e)}', 'error')
-    
-    # Últimas execuções de treinamento
     recent_training = FapReviewExecution.query.filter_by(
         law_firm_id=law_firm_id,
-        execution_type='training'
+        execution_type='training',
     ).order_by(FapReviewExecution.created_at.desc()).limit(10).all()
-    
-    return render_template('fap_review/training.html',
-                          setting=setting,
-                          recent_training=recent_training,
-                          training_preview=training_preview,
-                          preview_execution_id=preview_execution_id,
-                          preview_files=preview_files,
-                          apply_result=apply_result)
+
+    comparison_rows = []
+    for execution in recent_training:
+        payload = _load_training_payload(execution)
+        comparison_rows.append({
+            'execution': execution,
+            'documents': _training_documents_label(execution, payload),
+            **_svc.summarize_training_execution(execution.status, payload),
+        })
+
+    return render_template(
+        'fap_review/training.html',
+        setting=setting,
+        comparison_rows=comparison_rows,
+    )
+
+
+@fap_review_bp.route('/training/<int:execution_id>')
+@require_law_firm
+@require_admin_user
+def training_comparison(execution_id: int):
+    """Uma comparação: a espera, a prévia do que será gravado, ou o que foi gravado."""
+    law_firm_id = get_current_law_firm_id()
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id,
+        execution_type='training',
+    ).first_or_404()
+
+    # Watchdog: a comparação roda em thread; sem isso, um reinício do processo
+    # web deixaria a execução presa em "processando" para sempre.
+    if _svc.is_execution_stuck(execution):
+        execution.status = 'failed'
+        execution.error_message = ('Processamento interrompido (tempo excedido — provável '
+                                   'reinício do servidor). Envie os documentos novamente.')
+        execution.completed_at = datetime.now()
+        db.session.commit()
+
+    payload = _load_training_payload(execution)
+
+    extract = payload.get('extract') or {}
+
+    return render_template(
+        'fap_review/training_comparison.html',
+        execution=execution,
+        extract=extract,
+        grouping=payload.get('grouping') or {},
+        changes_summary=payload.get('changes_summary') or {},
+        applied=payload.get('applied') or {},
+        edit_groups=_svc.build_training_edit_groups(
+            extract.get('edits') or [],
+            _current_reference_versions(law_firm_id),
+            _current_reference_contents(law_firm_id),
+        ),
+        documents=_training_documents_label(execution, payload),
+    )
+
+
+def _current_reference_contents(law_firm_id: int) -> dict[str, str]:
+    """Conteúdo ativo de cada destino, contra o qual as âncoras são conferidas."""
+    contents = {}
+    for target in _svc.TRAINING_TARGETS:
+        reference = _get_active_reference(law_firm_id, target['key'])
+        contents[target['key']] = reference.content if reference else ''
+    return contents
+
+
+@fap_review_bp.route('/training/<int:execution_id>/aplicar', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def training_apply(execution_id: int):
+    """Grava nas referências exatamente o texto confirmado na prévia.
+
+    Sem chamada de IA aqui: o que a pessoa leu (e pôde editar) é o que entra.
+    """
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id,
+        execution_type='training',
+    ).first_or_404()
+
+    if execution.status != 'pending':
+        flash('Esta comparação não está aguardando confirmação.', 'warning')
+        return redirect(url_for('fap_review.training_comparison', execution_id=execution.id))
+
+    payload = _load_training_payload(execution)
+    edits = (payload.get('extract') or {}).get('edits') or []
+
+    selection = _svc.parse_training_edit_selection(
+        request.form.getlist('edits'),
+        edits,
+        {chave[len('text_'):]: valor
+         for chave, valor in request.form.items() if chave.startswith('text_')},
+    )
+
+    if not selection:
+        flash('Nada foi marcado para gravar — nenhuma referência foi alterada.', 'warning')
+        return redirect(url_for('fap_review.training_comparison', execution_id=execution.id))
+
+    activate = request.form.get('mode') == 'activate'
+
+    try:
+        applied_targets = []
+        blocked = []
+
+        for target in _svc.TRAINING_TARGETS:
+            do_alvo = [item for item in selection if item.get('target') == target['key']]
+            if not do_alvo:
+                continue
+
+            current_reference = _get_active_reference(law_firm_id, target['key'])
+            content, resultado = _svc.apply_reference_edits(
+                current_reference.content if current_reference else '', do_alvo)
+
+            aplicadas = [item for item in resultado if item['status'] == 'applied']
+            blocked.extend(item for item in resultado if item['status'] != 'applied')
+
+            if not aplicadas:
+                continue
+
+            new_version = _append_reference_version(
+                law_firm_id=law_firm_id,
+                user_id=user_id,
+                reference_type=target['key'],
+                new_content=content,
+                activate=activate,
+            )
+            applied_targets.append({
+                'key': target['key'],
+                'label': target['label'],
+                'version_number': new_version.version_number,
+                'previous_version': current_reference.version_number if current_reference else 0,
+                'activated': activate,
+                'edits': len(aplicadas),
+            })
+
+        if not applied_targets:
+            db.session.rollback()
+            flash('Nenhuma alteração pôde ser aplicada — os trechos que elas alteram '
+                  'não foram encontrados no documento atual.', 'warning')
+            return redirect(url_for('fap_review.training_comparison', execution_id=execution.id))
+
+        payload['stage'] = 'applied'
+        payload['applied'] = {
+            'activated': activate,
+            'applied_at': now_sp().strftime('%d/%m/%Y %H:%M'),
+            'targets': applied_targets,
+            'blocked': len(blocked),
+        }
+
+        execution.result_json = json.dumps(payload, ensure_ascii=False)
+        execution.status = 'completed'
+        execution.completed_at = datetime.now()
+        execution.updated_at = datetime.now()
+        db.session.commit()
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao gravar treinamento: {e}")
+        flash(f'Erro ao gravar: {str(e)}', 'error')
+        return redirect(url_for('fap_review.training_comparison', execution_id=execution.id))
+
+    written = ', '.join(
+        f"{item['label']} v{item['version_number']} ({item['edits']} alterações)"
+        for item in applied_targets
+    )
+
+    _log_audit(
+        law_firm_id,
+        'training_applied',
+        'execution',
+        execution.id,
+        f"Treinamento gravado ({'ativado' if activate else 'rascunho'}): {written}",
+    )
+
+    flash(
+        f'Gravado: {written}.'
+        + ('' if activate else ' Salvo como rascunho — ainda não está valendo.'),
+        'success',
+    )
+    return redirect(url_for('fap_review.training_comparison', execution_id=execution.id))
 
 
 @fap_review_bp.route('/settings', methods=['GET', 'POST'])
@@ -2777,10 +3011,6 @@ def settings():
             setting.reviewer_temperature = float(reviewer_temp_str)
             training_temp_str = str(data.get('training_temperature', setting.training_temperature)).replace(',', '.')
             setting.training_temperature = float(training_temp_str)
-            setting.auto_update_manual = data.get('auto_update_manual', setting.auto_update_manual)
-            setting.auto_update_cases = data.get('auto_update_cases', setting.auto_update_cases)
-            setting.require_approval_before_publish = data.get('require_approval_before_publish', setting.require_approval_before_publish)
-            setting.enable_continuous_learning = data.get('enable_continuous_learning', setting.enable_continuous_learning)
             setting.reviewer_enabled = data.get('reviewer_enabled', setting.reviewer_enabled)
             setting.training_enabled = data.get('training_enabled', setting.training_enabled)
             setting.updated_at = now_sp()

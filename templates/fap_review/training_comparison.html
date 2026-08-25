@@ -1,0 +1,562 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% set page_title = "Comparação #" ~ execution.id %}
+{% set kind_labels = {'addition': 'adição', 'substitution': 'substituição', 'refinement': 'refinamento'} %}
+{% set kind_styles = {'addition': 'success', 'substitution': 'warning', 'refinement': 'info'} %}
+{% set kind_help = {
+  'addition': 'O manual não tem regra sobre isto — esta é nova.',
+  'substitution': 'A regra já existe no manual e vai ser trocada por esta.',
+  'refinement': 'A regra já existe e está certa; esta versão a deixa mais precisa.'
+} %}
+
+{% block title %}{{ page_title }} - Treinamento - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<style>
+  .info-card {
+    border: 1px solid rgba(15, 23, 42, .07);
+    border-radius: .85rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+  }
+
+  [data-bs-theme="dark"] .info-card {
+    border-color: rgba(148, 163, 184, .18);
+    box-shadow: none;
+  }
+
+  .info-card .card-header {
+    background: transparent;
+    border-bottom: 1px solid rgba(15, 23, 42, .07);
+    font-weight: 700;
+    font-size: .85rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6c7a8d;
+  }
+
+  [data-bs-theme="dark"] .info-card .card-header {
+    border-bottom-color: rgba(148, 163, 184, .18);
+  }
+
+  /* uma alteração proposta */
+  .edit {
+    border: 1px solid var(--bs-border-color);
+    border-radius: .7rem;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    transition: opacity .15s ease, border-color .15s ease;
+  }
+
+  .edit.is-on { border-color: var(--bs-success-border-subtle); }
+  .edit.is-off { opacity: .5; }
+  .edit.is-blocked { border-color: var(--bs-danger-border-subtle); }
+
+  .edit-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6rem;
+    align-items: flex-start;
+    padding: .7rem .9rem;
+    background: var(--bs-secondary-bg);
+  }
+
+  .edit-where { font-weight: 700; font-size: .86rem; }
+  .edit-why { font-size: .8rem; color: var(--bs-secondary-color); }
+
+  .evid {
+    font-size: .7rem;
+    padding: .1rem .4rem;
+    border-radius: .3rem;
+    white-space: nowrap;
+    background: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text-emphasis);
+  }
+
+  /* o diff */
+  .diff {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .78rem;
+    line-height: 1.65;
+    overflow-x: auto;
+    background: var(--bs-body-bg);
+  }
+
+  .diff-line { display: flex; }
+  .diff-line .num {
+    flex: 0 0 3.4rem;
+    text-align: right;
+    padding-right: .7rem;
+    user-select: none;
+    color: var(--bs-tertiary-color);
+    background: var(--bs-tertiary-bg);
+  }
+
+  .diff-line .sig { flex: 0 0 1.1rem; text-align: center; user-select: none; font-weight: 700; }
+  .diff-line .txt { flex: 1; padding-right: 1rem; white-space: pre-wrap; word-break: break-word; }
+
+  .diff-line.ctx { color: var(--bs-secondary-color); }
+  .diff-line.del { background: rgba(220, 53, 69, .10); }
+  .diff-line.del .sig, .diff-line.del .txt { color: #b02a37; }
+  .diff-line.ins { background: rgba(25, 135, 84, .12); }
+  .diff-line.ins .sig, .diff-line.ins .txt { color: #0f5132; }
+
+  [data-bs-theme="dark"] .diff-line.del { background: rgba(220, 53, 69, .18); }
+  [data-bs-theme="dark"] .diff-line.del .sig,
+  [data-bs-theme="dark"] .diff-line.del .txt { color: #ff8f9c; }
+  [data-bs-theme="dark"] .diff-line.ins { background: rgba(25, 135, 84, .20); }
+  [data-bs-theme="dark"] .diff-line.ins .sig,
+  [data-bs-theme="dark"] .diff-line.ins .txt { color: #75d6a3; }
+
+  .diff-hunk {
+    padding: .15rem .9rem;
+    font-size: .72rem;
+    color: var(--bs-tertiary-color);
+    background: var(--bs-tertiary-bg);
+  }
+
+  .edit-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: .5rem;
+    padding: .4rem .9rem;
+    border-top: 1px solid var(--bs-border-color);
+    font-size: .78rem;
+  }
+
+  .edit-editor textarea {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .78rem;
+    line-height: 1.6;
+  }
+
+  .intro {
+    background: var(--bs-primary-bg-subtle);
+    border: 1px solid var(--bs-primary-border-subtle);
+    border-radius: .7rem;
+    padding: .9rem 1.1rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .intro h2 { font-size: 1rem; font-weight: 700; margin-bottom: .35rem; }
+  .intro p { font-size: .88rem; margin-bottom: .4rem; }
+  .intro p:last-child { margin-bottom: 0; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    font-size: .78rem;
+    color: var(--bs-secondary-color);
+    padding: .5rem .9rem;
+    background: var(--bs-tertiary-bg);
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .legend .chip {
+    display: inline-block;
+    width: .85rem;
+    height: .85rem;
+    border-radius: .2rem;
+    vertical-align: -1px;
+    margin-right: .3rem;
+  }
+
+  .chip-del { background: rgba(220, 53, 69, .35); }
+  .chip-ins { background: rgba(25, 135, 84, .35); }
+  .chip-ctx { background: var(--bs-tertiary-color); opacity: .35; }
+
+  .kind-help { font-size: .78rem; color: var(--bs-secondary-color); }
+
+  .save-bar {
+    position: sticky;
+    bottom: 0;
+    background: var(--bs-body-bg);
+    border-top: 1px solid var(--bs-border-color);
+    padding: .85rem 0;
+    z-index: 20;
+  }
+
+  .ev-row {
+    display: flex;
+    gap: .6rem;
+    align-items: baseline;
+    padding: .35rem 0;
+    border-bottom: 1px solid var(--bs-border-color);
+    font-size: .83rem;
+  }
+
+  .ev-row:last-child { border-bottom: none; }
+  .ev-n { flex: 0 0 3rem; text-align: right; font-weight: 700; font-size: .76rem; }
+  .ev-ex {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .72rem;
+    color: var(--bs-secondary-color);
+    word-break: break-word;
+  }
+
+  .ev-noise { opacity: .6; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="fap-training-comparison-page">
+  {% call page_hero(title=page_title, subtitle=documents, icon='bi bi-mortarboard') %}
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+      <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i class="bi bi-file-earmark-check"></i>
+          Revisor de Petições</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('fap_review.training') }}">Treinamento</a></li>
+      <li class="breadcrumb-item active">{{ page_title }}</li>
+    </ol>
+  </nav>
+  {% endcall %}
+
+  <div class="container-fluid" style="max-width:1080px">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="mb-3">
+      {% for category, message in messages %}
+      {% set alert_style = 'danger' if category == 'error' else category %}
+      <div class="alert alert-{{ alert_style }} alert-dismissible fade show" role="alert">
+        <i class="bi bi-info-circle me-2"></i>{{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    {% if execution.status == 'processing' %}
+    <div class="card info-card">
+      <div class="card-body text-center py-5">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <h5 class="mb-2">Comparando os dois documentos…</h5>
+        <p class="text-muted small mb-0" style="max-width:520px;margin:0 auto">
+          <strong>Pode fechar esta página</strong> — a comparação continua rodando e fica na lista de comparações
+          anteriores.
+        </p>
+      </div>
+    </div>
+
+    {% elif execution.status == 'failed' %}
+    <div class="card info-card">
+      <div class="card-body text-center py-5">
+        <i class="bi bi-x-circle fs-1 text-danger d-block mb-3"></i>
+        <h5 class="mb-2">A comparação falhou</h5>
+        <p class="text-muted small mb-3" style="max-width:560px;margin:0 auto">
+          {{ execution.error_message or 'Não foi possível comparar os documentos.' }}
+        </p>
+        <a href="{{ url_for('fap_review.training') }}" class="btn btn-primary btn-sm">
+          <i class="bi bi-arrow-left me-1"></i> Enviar novamente
+        </a>
+      </div>
+    </div>
+
+    {% else %}
+
+    {% if applied %}
+    <div class="card info-card mb-4">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-check-circle text-success"></i> Gravado
+      </div>
+      <div class="card-body">
+        {% for target in applied.targets %}
+        <div
+          class="d-flex flex-wrap align-items-center justify-content-between gap-2 py-2 {% if not loop.last %}border-bottom{% endif %}">
+          <div>
+            <div class="fw-semibold">{{ target.label }}</div>
+            {% if target.activated %}
+            <div class="small text-success">
+              <i class="bi bi-check2 me-1"></i>versão {{ target.version_number }} criada e <strong>ativada</strong>
+              com {{ target.edits }} alteraç{{ 'ão' if target.edits == 1 else 'ões' }} — já vale nas próximas revisões
+            </div>
+            {% else %}
+            <div class="small text-muted">
+              <i class="bi bi-file-earmark me-1"></i>versão {{ target.version_number }} salva como
+              <strong>rascunho</strong> com {{ target.edits }} alteraç{{ 'ão' if target.edits == 1 else 'ões' }}
+            </div>
+            {% endif %}
+          </div>
+          <a href="{{ url_for('fap_review.edit_reference_by_type', reference_type=target.key) }}"
+            class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-journal-text me-1"></i> Abrir no editor
+          </a>
+        </div>
+        {% endfor %}
+        <div class="small text-muted mt-2">
+          Aplicado em {{ applied.applied_at }}.
+          {% if applied.blocked %}{{ applied.blocked }} alteração(ões) não puderam ser aplicadas.{% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if execution.status == 'pending' %}
+    <div class="intro">
+      <h2><i class="bi bi-lightbulb me-1"></i>O que esta tela está te pedindo</h2>
+      {% if edit_groups %}
+      <p>
+        A IA comparou as duas versões da petição, viu
+        <strong>{{ changes_summary.total or 0 }} correções</strong>
+        que o revisor fez, e leu o seu manual inteiro para descobrir o que dali ele
+        <strong>ainda não diz</strong>. O resultado são as alterações abaixo.
+      </p>
+      <p>
+        Você decide <strong>uma por uma</strong>: leia o trecho em vermelho (o que sai do manual) e o
+        em verde (o que entra), ajuste o texto se quiser, e desmarque o que não concordar.
+        <strong>Nada é gravado até você clicar em salvar, no rodapé.</strong>
+      </p>
+      {% else %}
+      <p class="mb-0">
+        A IA comparou as duas versões, leu o seu manual inteiro e concluiu que
+        <strong>esta revisão não ensina nada que o manual ainda não diga</strong>. Não há o que gravar —
+        e isso é um bom sinal: quer dizer que o manual já está cobrindo o que o revisor corrige.
+      </p>
+      {% endif %}
+    </div>
+
+    <form method="POST" action="{{ url_for('fap_review.training_apply', execution_id=execution.id) }}"
+      id="trainingApplyForm">
+
+      {% for group in edit_groups %}
+      <div class="card info-card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+          <span>
+            <i class="bi bi-journal-text text-primary me-2"></i>{{ group.label }} ·
+            v{{ group.current_version }} → v{{ group.next_version }}
+          </span>
+          <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
+            {{ group.edits | length }} alteraç{{ 'ão' if group.edits | length == 1 else 'ões' }} propost{{ 'a' if
+            group.edits | length == 1 else 'as' }}
+          </span>
+        </div>
+        <div class="legend">
+          <span>Salvando, o que você aceitar vira a <strong>versão {{ group.next_version }}</strong> deste
+            documento; a {{ group.current_version }} fica no histórico.</span>
+        </div>
+        <div class="card-body">
+          {% for edit in group.edits %}
+          {% set blocked = edit.status != 'ok' %}
+          <div class="edit {{ 'is-blocked' if blocked else 'is-on' }}" data-edit-id="{{ edit.id }}">
+            <div class="edit-head">
+              <input class="form-check-input mt-1 flex-shrink-0 edit-toggle" type="checkbox" name="edits"
+                value="{{ edit.id }}" id="edit_{{ edit.id }}" {% if not blocked %}checked{% else %}disabled{% endif %}>
+              <div class="flex-grow-1">
+                <label class="edit-where mb-0" for="edit_{{ edit.id }}">{{ edit.section or 'Fim do documento' }}</label>
+                {% if blocked %}
+                <div class="edit-why text-danger">
+                  <i class="bi bi-exclamation-triangle me-1"></i>{{ edit.blocked_reason }}
+                </div>
+                {% else %}
+                <div class="kind-help">{{ kind_help.get(edit.effective_kind or edit.kind, '') }}</div>
+                {% if edit.rationale %}<div class="edit-why">{{ edit.rationale }}</div>{% endif %}
+                {% endif %}
+              </div>
+              <div class="d-flex gap-1 flex-shrink-0 flex-wrap">
+                {% for item in edit.evidence %}
+                <span class="evid">{{ item }}</span>
+                {% endfor %}
+                <span
+                  class="badge rounded-pill bg-{{ kind_styles.get(edit.effective_kind or edit.kind, 'secondary') }}-subtle text-{{ kind_styles.get(edit.effective_kind or edit.kind, 'secondary') }}-emphasis border border-{{ kind_styles.get(edit.effective_kind or edit.kind, 'secondary') }}-subtle">
+                  {{ kind_labels.get(edit.effective_kind or edit.kind, edit.kind) }}
+                </span>
+              </div>
+            </div>
+
+            <div class="legend">
+              <span><span class="chip chip-del"></span>sai do documento</span>
+              <span><span class="chip chip-ins"></span>entra no documento</span>
+              <span><span class="chip chip-ctx"></span>texto em volta, não muda</span>
+              <span class="ms-auto">{{ edit.preview.header }}</span>
+            </div>
+            <div class="diff">
+              {% for line in edit.preview.lines %}
+              <div class="diff-line {{ line.kind }}">
+                <span class="num">{{ line.number }}</span>
+                <span class="sig">{{ '+' if line.kind == 'ins' else ('-' if line.kind == 'del' else ' ') }}</span>
+                <span class="txt">{{ line.text }}</span>
+              </div>
+              {% endfor %}
+            </div>
+
+            <div class="edit-editor p-2 border-top" hidden>
+              <label class="form-label small fw-semibold mb-1">Texto que vai entrar</label>
+              <textarea class="form-control" name="text_{{ edit.id }}" rows="5">{{ edit.new_text }}</textarea>
+            </div>
+
+            <div class="edit-foot">
+              {% if blocked %}
+              <span class="text-danger">
+                <i class="bi bi-x-circle me-1"></i>Não pode ser aceita. Para trocar um trecho, o sistema
+                precisa achá-lo no documento palavra por palavra — e não achou. Escreva a regra à mão, se
+                concordar com ela.
+              </span>
+              <a href="{{ url_for('fap_review.edit_reference_by_type', reference_type=group.key) }}"
+                class="btn btn-sm btn-outline-secondary flex-shrink-0">abrir no editor</a>
+              {% else %}
+              <span class="text-muted"><i class="bi bi-check2 me-1"></i>trecho localizado no documento</span>
+              <button type="button" class="btn btn-sm btn-link p-0 edit-open">
+                <i class="bi bi-pencil me-1"></i>editar
+              </button>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+
+      {% if not edit_groups %}
+      <div class="card info-card mb-3">
+        <div class="card-body text-center py-4">
+          <i class="bi bi-check-circle fs-2 text-success d-block mb-2"></i>
+          <h6 class="mb-1">Nada a acrescentar</h6>
+          <p class="small text-muted mb-0" style="max-width:520px;margin:0 auto">
+            {{ extract.recommendation or 'Esta revisão não trouxe padrão que o manual ainda não cubra.' }}
+          </p>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if edit_groups %}
+      <div class="save-bar">
+        <div class="small text-muted mb-2">
+          <strong>Salvar rascunho</strong> cria a versão nova sem ativá-la — as revisões continuam usando a
+          atual, e você ativa depois no editor. <strong>Salvar e ativar</strong> faz a versão nova valer já
+          nas próximas revisões. Nos dois casos a versão anterior fica no histórico e dá para voltar.
+        </div>
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <span class="small" id="saveSummary"></span>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('fap_review.training') }}" class="btn btn-outline-secondary btn-sm">Voltar</a>
+            <button type="submit" name="mode" value="draft" class="btn btn-outline-primary" data-apply-btn>
+              <i class="bi bi-file-earmark me-1"></i> Salvar rascunho
+            </button>
+            <button type="submit" name="mode" value="activate" class="btn btn-success" data-apply-btn>
+              <i class="bi bi-check2-circle me-1"></i> Salvar e ativar
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </form>
+    {% endif %}
+
+    <div class="card info-card mt-3">
+      <div class="card-header p-0">
+        <button class="btn btn-link w-100 text-start text-decoration-none py-2 px-3" type="button"
+          data-bs-toggle="collapse" data-bs-target="#evidencias" style="color:inherit;font:inherit">
+          <i class="bi bi-chevron-right me-2" id="evidenciasChevron"></i>
+          O que o revisor mudou na petição
+          {% if changes_summary.total %}— {{ changes_summary.total }} correções{% endif %}
+        </button>
+      </div>
+      <div class="collapse" id="evidencias">
+        <div class="card-body">
+          <p class="small text-muted">
+            Tudo o que o revisor mexeu na petição, agrupado por padrão e com o trecho literal de cada um.
+            É a matéria-prima das alterações propostas acima — sirva-se dela para conferir se uma proposta
+            está bem fundamentada.
+          </p>
+          {% if grouping.summary or extract.comparison_summary %}
+          <p class="small mb-3">{{ grouping.summary or extract.comparison_summary }}</p>
+          {% endif %}
+
+          {% for pattern in grouping.exact_patterns %}
+          <div class="ev-row">
+            <span class="ev-n">{{ pattern.occurrences }}×</span>
+            <span>{{ pattern.pattern }}
+              {% for exemplo in pattern.examples[:1] %}<div class="ev-ex">{{ exemplo }}</div>{% endfor %}
+            </span>
+          </div>
+          {% endfor %}
+
+          {% for pattern in grouping.patterns %}
+          <div class="ev-row {{ '' if pattern.relevant_for_manual else 'ev-noise' }}">
+            <span class="ev-n">{{ pattern.occurrences }}×</span>
+            <span>{{ pattern.pattern }}
+              {% for exemplo in pattern.examples[:1] %}<div class="ev-ex">{{ exemplo }}</div>{% endfor %}
+            </span>
+          </div>
+          {% endfor %}
+
+          {% if grouping.unassigned %}
+          <div class="small text-muted mt-2">
+            {{ grouping.unassigned }} mudanças não entraram em nenhum padrão.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if execution.status == 'processing' %}
+<script>
+  setTimeout(function () { location.reload(); }, 3000);
+</script>
+{% endif %}
+
+{% if execution.status == 'pending' %}
+<script>
+  (function () {
+    const form = document.getElementById('trainingApplyForm');
+    if (!form) { return; }
+
+    const toggles = Array.from(form.querySelectorAll('.edit-toggle:not([disabled])'));
+    const buttons = Array.from(form.querySelectorAll('[data-apply-btn]'));
+    const summary = document.getElementById('saveSummary');
+
+    form.querySelectorAll('.edit-open').forEach(function (botao) {
+      botao.addEventListener('click', function () {
+        const editor = botao.closest('.edit').querySelector('.edit-editor');
+        editor.hidden = !editor.hidden;
+        botao.innerHTML = editor.hidden
+          ? '<i class="bi bi-pencil me-1"></i>editar'
+          : '<i class="bi bi-x me-1"></i>fechar edição';
+      });
+    });
+
+    function sync() {
+      let marcadas = 0;
+
+      toggles.forEach(function (toggle) {
+        const bloco = toggle.closest('.edit');
+        const caixa = bloco.querySelector('textarea');
+        bloco.classList.toggle('is-on', toggle.checked);
+        bloco.classList.toggle('is-off', !toggle.checked);
+        if (caixa) { caixa.disabled = !toggle.checked; }
+        if (toggle.checked) { marcadas += 1; }
+      });
+
+      buttons.forEach(function (botao) { botao.disabled = marcadas === 0; });
+      summary.className = 'small ' + (marcadas ? 'text-muted' : 'text-danger fw-semibold');
+      summary.innerHTML = marcadas
+        ? '<i class="bi bi-arrow-return-right me-1"></i>Vai gravar <strong>' + marcadas +
+          '</strong> alteraç' + (marcadas === 1 ? 'ão' : 'ões') + '.'
+        : '<i class="bi bi-exclamation-triangle me-1"></i>Nada marcado — não há o que gravar.';
+    }
+
+    toggles.forEach(function (toggle) { toggle.addEventListener('change', sync); });
+    sync();
+  })();
+</script>
+{% endif %}
+
+<script>
+  (function () {
+    const painel = document.getElementById('evidencias');
+    const seta = document.getElementById('evidenciasChevron');
+    if (!painel || !seta) { return; }
+    painel.addEventListener('show.bs.collapse', function () { seta.className = 'bi bi-chevron-down me-2'; });
+    painel.addEventListener('hide.bs.collapse', function () { seta.className = 'bi bi-chevron-right me-2'; });
+  })();
+</script>
+{% endblock %}
