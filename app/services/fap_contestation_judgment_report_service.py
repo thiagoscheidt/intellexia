@@ -1592,11 +1592,20 @@ class FapContestationJudgmentReportService:
         if not status and justification:
             status = 'Em análise'
 
-        # Parecer: adiciona delimitadores para evitar capturar "Sumário dos Elementos Contestados" do próximo bloco
+        # Parecer: adiciona delimitadores para evitar capturar "Sumário dos Elementos Contestados" do próximo bloco.
+        # "Não deve ser considerado" só encerra o parecer ocupando a LINHA INTEIRA:
+        # é português corrente, e o próprio analista narra o pedido da empresa com
+        # ela ("...que o respectivo insumo não deve ser considerado no cálculo do
+        # FAP") — o corte engolia 89% do parecer no meio da frase, sem mudar o
+        # status, então nada aparecia em tela. No acervo a frase nunca apareceu
+        # como cabeçalho; o alvo declarado deste delimitador era o Sumário.
         opinion = self._extract_text_between_keywords(
             section,
             r'\bParecer\b',
-            [r'\bSum[aá]rio\s+dos\s+Elementos\s+Contestados\b', r'\bN[aã]o\s+deve\s+ser\s+considerado\b'],
+            [
+                r'\bSum[aá]rio\s+dos\s+Elementos\s+Contestados\b',
+                r'(?:^|\n)[ \t]*N[aã]o\s+deve\s+ser\s+considerado[ \t]*(?=\n|$)',
+            ],
         )
         if opinion:
             opinion = re.sub(r'^(Status\s*)?(Deferido|Indeferido)\b\s*', '', opinion, flags=re.IGNORECASE).strip()
@@ -1616,8 +1625,17 @@ class FapContestationJudgmentReportService:
         first_match = re.search(r'Administrativo\s*1\s*[ªa]\s*inst[âa]ncia', block, flags=re.IGNORECASE)
         second_match = re.search(r'Administrativo\s*2\s*[ªa]\s*inst[âa]ncia', block, flags=re.IGNORECASE)
         first_justification_match = re.search(r'\bJustificativa\b', block, flags=re.IGNORECASE)
+        # "Dados do Benefício" só encerra a seção quando ocupa a LINHA INTEIRA.
+        # Exigir apenas o início da linha não basta: a quebra do PDF joga a frase
+        # em prosa "...é indevida a utilização dos / dados do benefício B91 para
+        # composição do FAP da empresa." para o começo de uma linha, e o corte caía
+        # antes de "Status"/"Parecer" — o benefício virava "Em análise" e o parecer
+        # se perdia. No acervo, o cabeçalho real vem sempre sozinho na linha.
         end_match = re.search(
-            r'(?:^|\n)\s*NB\s*:|Informa[cç][oõ]es\s+de\s+Revis[aã]o\s+de\s+Benef[ií]cio|Dados\s+do\s+Benef[ií]cio|Sum[aá]rio\s+dos\s+Elementos\s+Contestados',
+            r'(?:^|\n)\s*NB\s*:'
+            r'|Informa[cç][oõ]es\s+de\s+Revis[aã]o\s+de\s+Benef[ií]cio'
+            r'|(?:^|\n)[ \t]*Dados\s+do\s+Benef[ií]cio[ \t]*(?=\n|$)'
+            r'|Sum[aá]rio\s+dos\s+Elementos\s+Contestados',
             block,
             flags=re.IGNORECASE | re.MULTILINE,
         )
