@@ -24,7 +24,7 @@ from typing import Any, Optional
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ReferenceEdit(BaseModel):
@@ -51,6 +51,22 @@ class ReferenceEdit(BaseModel):
         default_factory=list,
         description="Rótulos dos padrões da revisão que sustentam esta alteração",
     )
+
+    @field_validator('evidence', mode='before')
+    @classmethod
+    def _evidence_as_list(cls, value):
+        """O modelo devolve `evidence` ora como lista, ora como string solta.
+
+        Uma string recusada pelo validador derrubava a proposta INTEIRA — na
+        conversa, o turno degradava para o JSON cru com zero propostas, mesmo
+        com âncora literal e texto certos. Aceitar os dois formatos custa nada.
+        """
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = value.strip()
+            return [value] if value else []
+        return list(value)
 
 
 class ComparisonExtract(BaseModel):

@@ -1,0 +1,17 @@
+{# Legenda + linhas do diff de uma alteração. Compartilhado pela comparação de
+   documentos e pelo treinamento interativo — é o mesmo componente. #}
+<div class="legend">
+  <span><span class="chip chip-del"></span>sai do documento</span>
+  <span><span class="chip chip-ins"></span>entra no documento</span>
+  <span><span class="chip chip-ctx"></span>texto em volta, não muda</span>
+  <span class="ms-auto">{{ edit.preview.header }}</span>
+</div>
+<div class="diff">
+  {% for line in edit.preview.lines %}
+  <div class="diff-line {{ line.kind }}">
+    <span class="num">{{ line.number }}</span>
+    <span class="sig">{{ '+' if line.kind == 'ins' else ('-' if line.kind == 'del' else ' ') }}</span>
+    <span class="txt">{{ line.text }}</span>
+  </div>
+  {% endfor %}
+</div>

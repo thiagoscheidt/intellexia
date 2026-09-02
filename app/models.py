@@ -3047,6 +3047,42 @@ class FapReviewExecution(db.Model):
         return f'<FapReviewExecution type={self.execution_type} status={self.status}>'
 
 
+class FapReviewTrainingMessage(db.Model):
+    """Mensagens do treinamento interativo do Revisor FAP.
+
+    A sessão de conversa é uma ``FapReviewExecution`` com
+    ``execution_type='training_chat'`` — assim ela entra na mesma lista, com o
+    mesmo "Retomar" e a mesma coluna de versões gravadas que a comparação de
+    documentos. As mensagens vêm para cá porque uma conversa longa não cabe no
+    ``result_json`` (TEXT, 64 KB no MySQL); lá ficam só os ids das edições
+    aceitas e recusadas.
+
+    ``edits_json`` guarda as edições que a IA propôs NAQUELA mensagem, com o id
+    estável ``"<message_id>-<posição>"`` que o aceite e a gravação usam.
+    """
+    __tablename__ = 'fap_review_training_messages'
+    __table_args__ = (
+        db.Index('ix_fap_review_training_messages_execution', 'execution_id', 'id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    execution_id = db.Column(db.Integer, db.ForeignKey('fap_review_executions.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    role = db.Column(db.String(20), nullable=False, comment='user, assistant')
+    content = db.Column(db.Text, nullable=False)
+    edits_json = db.Column(db.Text, comment='Edições propostas nesta mensagem (só assistant)')
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+
+    execution = db.relationship('FapReviewExecution')
+    user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapReviewTrainingMessage execution={self.execution_id} role={self.role}>'
+
+
 class FapReviewIgnoredFinding(db.Model):
     """Achados marcados como não úteis para não reaproveitar no histórico do documento."""
     __tablename__ = 'fap_review_ignored_findings'

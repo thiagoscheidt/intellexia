@@ -34,12 +34,13 @@ from app.models import (
     FapReviewPetition,
     FapReviewPromptVersion, FapReviewReferenceVersion, FapReviewSetting,
     FapReviewExecution, FapReviewIgnoredFinding, FapReviewAuditLog,
-    FapReviewFindingCheck,
+    FapReviewFindingCheck, FapReviewTrainingMessage,
 )
 from app.agents.fap_review import (
     FapPetitionReviewerAgent,
     FapTrainingApplySubAgent,
     FapTrainingDiffGrouperAgent,
+    FapTrainingChatAgent,
 )
 from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 from app.services import fap_review_service as _svc
@@ -2725,15 +2726,15 @@ def _execute_training_comparison(execution_id: int, law_firm_id: int) -> None:
     )
 
 
-@fap_review_bp.route('/training', methods=['GET', 'POST'])
+@fap_review_bp.route('/training/comparar', methods=['POST'])
 @require_law_firm
 @require_admin_user
-def training():
-    """Lista as comparações de treinamento e recebe uma nova."""
+def training_compare():
+    """Recebe os dois documentos e dispara a comparação."""
     law_firm_id = get_current_law_firm_id()
     setting = _get_fap_setting(law_firm_id)
 
-    if request.method == 'POST':
+    if True:
         if not setting.training_enabled:
             flash('O agente de treinamento está desligado nas Configurações.', 'warning')
             return redirect(url_for('fap_review.training'))
@@ -2798,25 +2799,343 @@ def training():
 
         return redirect(url_for('fap_review.training_comparison', execution_id=execution.id))
 
-    recent_training = FapReviewExecution.query.filter_by(
-        law_firm_id=law_firm_id,
-        execution_type='training',
-    ).order_by(FapReviewExecution.created_at.desc()).limit(10).all()
 
-    comparison_rows = []
-    for execution in recent_training:
+@fap_review_bp.route('/training')
+@require_law_firm
+@require_admin_user
+def training():
+    """Entrada do treinamento: a escolha do modo e a atividade recente."""
+    law_firm_id = get_current_law_firm_id()
+    setting = _get_fap_setting(law_firm_id)
+
+    recent = FapReviewExecution.query.filter(
+        FapReviewExecution.law_firm_id == law_firm_id,
+        FapReviewExecution.execution_type.in_(_svc.TRAINING_EXECUTION_TYPES),
+    ).order_by(FapReviewExecution.created_at.desc()).limit(12).all()
+
+    rows = []
+    for execution in recent:
         payload = _load_training_payload(execution)
-        comparison_rows.append({
-            'execution': execution,
-            'documents': _training_documents_label(execution, payload),
-            **_svc.summarize_training_execution(execution.status, payload),
-        })
+        if execution.execution_type == _svc.TRAINING_CHAT_TYPE:
+            first = FapReviewTrainingMessage.query.filter_by(
+                execution_id=execution.id, role='user',
+            ).order_by(FapReviewTrainingMessage.id.asc()).first()
+            subject = (first.content if first else '').strip().splitlines()[0][:90] if first and first.content.strip() else 'Conversa sem mensagens'
+            rows.append({
+                'execution': execution,
+                'documents': subject,
+                **_svc.summarize_chat_execution(execution.status, payload, subject),
+            })
+        else:
+            rows.append({
+                'execution': execution,
+                'documents': _training_documents_label(execution, payload),
+                'is_chat': False,
+                **_svc.summarize_training_execution(execution.status, payload),
+            })
 
-    return render_template(
-        'fap_review/training.html',
-        setting=setting,
-        comparison_rows=comparison_rows,
+    return render_template('fap_review/training.html', setting=setting, comparison_rows=rows)
+
+
+# ---------------------------------------------------------------------------
+# Treinamento interativo
+# ---------------------------------------------------------------------------
+
+def _chat_execution_or_404(execution_id: int, law_firm_id: int):
+    return FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id,
+        execution_type=_svc.TRAINING_CHAT_TYPE,
+    ).first_or_404()
+
+
+def _chat_messages(execution_id: int):
+    return FapReviewTrainingMessage.query.filter_by(
+        execution_id=execution_id,
+    ).order_by(FapReviewTrainingMessage.id.asc()).all()
+
+
+def _enrich_chat_edits(edits_by_id: dict, payload: dict, contents: dict) -> dict:
+    """Confere cada edição contra o documento atual e anexa diff, selo e decisão."""
+    enriched = {}
+    for edit_id, edit in edits_by_id.items():
+        content = contents.get(str(edit.get('target') or ''), '')
+        checked = _svc.verify_reference_edit(edit, content)
+        checked['id'] = edit_id
+        checked['message_id'] = edit.get('message_id')
+        checked['preview'] = _svc.build_edit_preview(content, edit)
+        checked['effective_kind'] = _svc.effective_edit_kind(checked.get('kind'), checked['preview'])
+        checked['decision'] = _svc.decision_for(payload, edit_id)
+        enriched[edit_id] = checked
+    return enriched
+
+
+def _chat_tray(payload: dict, edits: dict, law_firm_id: int) -> list[dict]:
+    """A bandeja: edições aceitas, por destino, com a versão que vão gerar."""
+    versions = _current_reference_versions(law_firm_id)
+    groups = []
+    for target in _svc.TRAINING_TARGETS:
+        items = [
+            edits[edit_id] for edit_id in _svc.chat_state(payload)['accepted']
+            if edit_id in edits and edits[edit_id].get('target') == target['key']
+        ]
+        if not items:
+            continue
+        current = versions.get(target['key'], 0)
+        groups.append({
+            'key': target['key'], 'label': target['label'],
+            'current_version': current, 'next_version': current + 1,
+            'edits': items,
+        })
+    return groups
+
+
+def _chat_page_context(execution, law_firm_id: int) -> dict:
+    payload = _load_training_payload(execution)
+    messages = _chat_messages(execution.id)
+    contents = _current_reference_contents(law_firm_id)
+    edits = _enrich_chat_edits(_svc.edits_from_messages(messages), payload, contents)
+    return {
+        'execution': execution,
+        'messages': messages,
+        'edits': edits,
+        'tray': _chat_tray(payload, edits, law_firm_id),
+        'state': _svc.chat_state(payload),
+        'versions': _current_reference_versions(law_firm_id),
+    }
+
+
+@fap_review_bp.route('/training/conversa', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def training_chat_start():
+    """Abre uma conversa nova."""
+    law_firm_id = get_current_law_firm_id()
+    setting = _get_fap_setting(law_firm_id)
+
+    if not setting.training_enabled:
+        flash('O agente de treinamento está desligado nas Configurações.', 'warning')
+        return redirect(url_for('fap_review.training'))
+
+    execution = FapReviewExecution(
+        law_firm_id=law_firm_id,
+        user_id=session.get('user_id'),
+        execution_type=_svc.TRAINING_CHAT_TYPE,
+        status='pending',
+        main_document_filename='Treinamento interativo',
+        result_json=json.dumps({'stage': 'chat', 'accepted': [], 'refused': [], 'saved': []}),
     )
+    db.session.add(execution)
+    db.session.commit()
+
+    _log_audit(law_firm_id, 'training_chat_started', 'execution', execution.id,
+               'Conversa de treinamento iniciada')
+    return redirect(url_for('fap_review.training_chat', execution_id=execution.id))
+
+
+@fap_review_bp.route('/training/conversa/<int:execution_id>')
+@require_law_firm
+@require_admin_user
+def training_chat(execution_id: int):
+    """A conversa: mensagens, propostas e a bandeja de aceitas."""
+    law_firm_id = get_current_law_firm_id()
+    execution = _chat_execution_or_404(execution_id, law_firm_id)
+    return render_template('fap_review/training_chat.html',
+                           **_chat_page_context(execution, law_firm_id))
+
+
+@fap_review_bp.route('/training/conversa/<int:execution_id>/mensagem', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def training_chat_message(execution_id: int):
+    """Recebe uma mensagem, roda o agente e devolve a resposta renderizada.
+
+    Roda na requisição, não em thread: resposta de chat de 10–20 s o usuário
+    espera olhando, e o padrão thread + reload da comparação faria a conversa
+    engasgar. O usuário e a resposta são gravados JUNTOS, depois que o agente
+    responde — toda mensagem do usuário tem resposta.
+    """
+    law_firm_id = get_current_law_firm_id()
+    execution = _chat_execution_or_404(execution_id, law_firm_id)
+
+    if execution.status == 'completed':
+        return jsonify({'error': 'Esta conversa foi encerrada.'}), 400
+
+    data = request.get_json(silent=True) or {}
+    text = str(data.get('message') or request.form.get('message') or '').strip()
+    if not text:
+        return jsonify({'error': 'Escreva uma mensagem.'}), 400
+
+    setting = _get_fap_setting(law_firm_id)
+    contents = _current_reference_contents(law_firm_id)
+    history = [
+        {'role': message.role, 'content': message.content}
+        for message in _chat_messages(execution.id)
+    ]
+
+    agent = FapTrainingChatAgent(
+        openai_api_key=os.getenv('OPENAI_API_KEY'),
+        model=setting.training_model,
+        temperature=min(max(setting.training_temperature, 0.0), 1.0),
+    )
+
+    try:
+        turn = agent.respond(
+            history=history,
+            user_message=text,
+            manual_content=contents.get('manual_fap', ''),
+            cases_content=contents.get('casos_referencia', ''),
+            reviewer_identity=_get_active_prompt_content(law_firm_id, 'revisor_identity'),
+            reviewer_rules=_get_active_prompt_content(law_firm_id, 'revisor_rules'),
+            training_identity=_get_active_prompt_content(law_firm_id, 'training_identity'),
+            training_rules=_get_active_prompt_content(law_firm_id, 'training_rules'),
+        )
+    except Exception as error:
+        current_app.logger.error(f"Erro no treinamento interativo: {error}")
+        return jsonify({'error': f'A IA não respondeu: {error}'}), 502
+
+    user_id = session.get('user_id')
+    user_message = FapReviewTrainingMessage(
+        law_firm_id=law_firm_id, execution_id=execution.id, user_id=user_id,
+        role='user', content=text)
+    assistant_message = FapReviewTrainingMessage(
+        law_firm_id=law_firm_id, execution_id=execution.id, user_id=user_id,
+        role='assistant', content=turn.reply,
+        edits_json=json.dumps([edit.model_dump() for edit in turn.edits], ensure_ascii=False))
+    db.session.add(user_message)
+    db.session.add(assistant_message)
+    execution.updated_at = datetime.now()
+    db.session.commit()
+
+    context = _chat_page_context(execution, law_firm_id)
+    return jsonify({
+        'user_html': render_template('fap_review/_training_chat_message.html',
+                                     message=user_message, edits=context['edits'],
+                                     execution=execution),
+        'assistant_html': render_template('fap_review/_training_chat_message.html',
+                                          message=assistant_message, edits=context['edits'],
+                                          execution=execution),
+        'tray_html': render_template('fap_review/_training_chat_tray.html', **context),
+    })
+
+
+@fap_review_bp.route('/training/conversa/<int:execution_id>/edicao/<edit_id>/<decision>', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def training_chat_decision(execution_id: int, edit_id: str, decision: str):
+    """Aceitar, recusar ou desfazer uma proposta. Aceitar não grava: vai para a bandeja."""
+    law_firm_id = get_current_law_firm_id()
+    execution = _chat_execution_or_404(execution_id, law_firm_id)
+
+    if decision not in _svc.CHAT_DECISIONS:
+        return jsonify({'error': 'Decisão desconhecida.'}), 400
+
+    edits = _svc.edits_from_messages(_chat_messages(execution.id))
+    if edit_id not in edits:
+        return jsonify({'error': 'Proposta não encontrada nesta conversa.'}), 404
+
+    if decision == 'accept':
+        content = _current_reference_contents(law_firm_id).get(edits[edit_id].get('target') or '', '')
+        if _svc.verify_reference_edit(edits[edit_id], content)['status'] != 'ok':
+            return jsonify({'error': 'Esta proposta não pode ser aceita: o trecho que ela altera '
+                                     'não foi encontrado no documento.'}), 400
+
+    payload = _svc.apply_chat_decision(_load_training_payload(execution), edit_id, decision)
+    execution.result_json = json.dumps(payload, ensure_ascii=False)
+    execution.updated_at = datetime.now()
+    db.session.commit()
+
+    context = _chat_page_context(execution, law_firm_id)
+    return jsonify({
+        'edit_html': render_template('fap_review/_training_edit_card.html',
+                                     edit=context['edits'][edit_id], execution=execution),
+        'tray_html': render_template('fap_review/_training_chat_tray.html', **context),
+    })
+
+
+@fap_review_bp.route('/training/conversa/<int:execution_id>/salvar', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def training_chat_save(execution_id: int):
+    """Grava as aceitas como versão nova de cada destino e esvazia a bandeja."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+    execution = _chat_execution_or_404(execution_id, law_firm_id)
+
+    payload = _load_training_payload(execution)
+    edits = _svc.edits_from_messages(_chat_messages(execution.id))
+    selection = _svc.accepted_edits(payload, edits)
+
+    if not selection:
+        flash('Nenhuma alteração aceita — nada para gravar.', 'warning')
+        return redirect(url_for('fap_review.training_chat', execution_id=execution.id))
+
+    activate = request.form.get('mode') == 'activate'
+
+    try:
+        applied_targets, blocked = [], []
+        for target in _svc.TRAINING_TARGETS:
+            do_alvo = [item for item in selection if item.get('target') == target['key']]
+            if not do_alvo:
+                continue
+            current_reference = _get_active_reference(law_firm_id, target['key'])
+            content, resultado = _svc.apply_reference_edits(
+                current_reference.content if current_reference else '', do_alvo)
+            aplicadas = [item for item in resultado if item['status'] == 'applied']
+            blocked.extend(item for item in resultado if item['status'] != 'applied')
+            if not aplicadas:
+                continue
+            new_version = _append_reference_version(
+                law_firm_id=law_firm_id, user_id=user_id, reference_type=target['key'],
+                new_content=content, activate=activate)
+            applied_targets.append({
+                'key': target['key'], 'label': target['label'],
+                'version_number': new_version.version_number,
+                'previous_version': current_reference.version_number if current_reference else 0,
+                'activated': activate, 'edits': len(aplicadas),
+            })
+
+        if not applied_targets:
+            db.session.rollback()
+            flash('Nenhuma alteração pôde ser aplicada — os trechos que elas alteram não foram '
+                  'encontrados no documento atual.', 'warning')
+            return redirect(url_for('fap_review.training_chat', execution_id=execution.id))
+
+        payload = _svc.record_chat_save(
+            payload, applied_targets, activate, now_sp().strftime('%d/%m/%Y %H:%M'))
+        payload['blocked_last_save'] = len(blocked)
+        execution.result_json = json.dumps(payload, ensure_ascii=False)
+        execution.updated_at = datetime.now()
+        db.session.commit()
+
+    except Exception as error:
+        db.session.rollback()
+        current_app.logger.error(f"Erro ao gravar treinamento interativo: {error}")
+        flash(f'Erro ao gravar: {error}', 'error')
+        return redirect(url_for('fap_review.training_chat', execution_id=execution.id))
+
+    written = ', '.join(
+        f"{item['label']} v{item['version_number']} ({item['edits']} alterações)"
+        for item in applied_targets)
+    _log_audit(law_firm_id, 'training_applied', 'execution', execution.id,
+               f"Treinamento interativo gravado ({'ativado' if activate else 'rascunho'}): {written}")
+    flash(f'Gravado: {written}.' + ('' if activate else ' Salvo como rascunho — ainda não está valendo.'),
+          'success')
+    return redirect(url_for('fap_review.training_chat', execution_id=execution.id))
+
+
+@fap_review_bp.route('/training/conversa/<int:execution_id>/encerrar', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def training_chat_close(execution_id: int):
+    """Encerra a conversa; o que estava aceito e não salvo fica registrado como pendente."""
+    law_firm_id = get_current_law_firm_id()
+    execution = _chat_execution_or_404(execution_id, law_firm_id)
+    execution.status = 'completed'
+    execution.completed_at = datetime.now()
+    db.session.commit()
+    flash('Conversa encerrada.', 'success')
+    return redirect(url_for('fap_review.training'))
 
 
 @fap_review_bp.route('/training/<int:execution_id>')

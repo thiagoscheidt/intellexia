@@ -1,0 +1,199 @@
+/* Treinamento do Revisor FAP — card de alteração (diff) e peças da conversa.
+   Compartilhado entre a comparação de documentos e o treinamento interativo:
+   o card é o mesmo componente nos dois, e o CSS vive num lugar só. */
+
+.fap-training .info-card {
+  border: 1px solid rgba(15, 23, 42, .07);
+  border-radius: .85rem;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+}
+[data-bs-theme="dark"] .fap-training .info-card { border-color: rgba(148, 163, 184, .18); box-shadow: none; }
+.fap-training .info-card .card-header {
+  background: transparent;
+  border-bottom: 1px solid rgba(15, 23, 42, .07);
+  font-weight: 700; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color: #6c7a8d;
+}
+[data-bs-theme="dark"] .fap-training .info-card .card-header { border-bottom-color: rgba(148, 163, 184, .18); }
+
+/* ── card de alteração ── */
+.fap-training .edit {
+  border: 1px solid var(--bs-border-color); border-radius: .7rem; overflow: hidden;
+  margin-bottom: 1rem; background: var(--bs-body-bg);
+  transition: opacity .15s ease, border-color .15s ease;
+}
+.fap-training .edit.is-on, .fap-training .edit.is-accepted { border-color: var(--bs-success-border-subtle); }
+.fap-training .edit.is-off, .fap-training .edit.is-refused { opacity: .5; }
+.fap-training .edit.is-blocked { border-color: var(--bs-danger-border-subtle); }
+
+.fap-training .edit-head {
+  display: flex; flex-wrap: wrap; gap: .6rem; align-items: flex-start;
+  padding: .7rem .9rem; background: var(--bs-secondary-bg);
+}
+.fap-training .edit-where { font-weight: 700; font-size: .86rem; }
+.fap-training .edit-why { font-size: .8rem; color: var(--bs-secondary-color); }
+.fap-training .kind-help { font-size: .78rem; color: var(--bs-secondary-color); }
+.fap-training .evid {
+  font-size: .7rem; padding: .1rem .4rem; border-radius: .3rem; white-space: nowrap;
+  background: var(--bs-primary-bg-subtle); color: var(--bs-primary-text-emphasis);
+}
+
+.fap-training .legend {
+  display: flex; flex-wrap: wrap; gap: 1rem; font-size: .78rem; color: var(--bs-secondary-color);
+  padding: .5rem .9rem; background: var(--bs-tertiary-bg); border-bottom: 1px solid var(--bs-border-color);
+}
+.fap-training .legend .chip {
+  display: inline-block; width: .85rem; height: .85rem; border-radius: .2rem;
+  vertical-align: -1px; margin-right: .3rem;
+}
+.fap-training .chip-del { background: rgba(220, 53, 69, .35); }
+.fap-training .chip-ins { background: rgba(25, 135, 84, .35); }
+.fap-training .chip-ctx { background: var(--bs-tertiary-color); opacity: .35; }
+
+.fap-training .diff {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; line-height: 1.65;
+  overflow-x: auto; background: var(--bs-body-bg);
+}
+.fap-training .diff-line { display: flex; }
+.fap-training .diff-line .num {
+  flex: 0 0 3.4rem; text-align: right; padding-right: .7rem; user-select: none;
+  color: var(--bs-tertiary-color); background: var(--bs-tertiary-bg);
+}
+.fap-training .diff-line .sig { flex: 0 0 1.1rem; text-align: center; user-select: none; font-weight: 700; }
+.fap-training .diff-line .txt { flex: 1; padding-right: 1rem; white-space: pre-wrap; word-break: break-word; }
+.fap-training .diff-line.ctx { color: var(--bs-secondary-color); }
+.fap-training .diff-line.del { background: rgba(220, 53, 69, .10); }
+.fap-training .diff-line.del .sig, .fap-training .diff-line.del .txt { color: #b02a37; }
+.fap-training .diff-line.ins { background: rgba(25, 135, 84, .12); }
+.fap-training .diff-line.ins .sig, .fap-training .diff-line.ins .txt { color: #0f5132; }
+[data-bs-theme="dark"] .fap-training .diff-line.del { background: rgba(220, 53, 69, .18); }
+[data-bs-theme="dark"] .fap-training .diff-line.del .sig,
+[data-bs-theme="dark"] .fap-training .diff-line.del .txt { color: #ff8f9c; }
+[data-bs-theme="dark"] .fap-training .diff-line.ins { background: rgba(25, 135, 84, .20); }
+[data-bs-theme="dark"] .fap-training .diff-line.ins .sig,
+[data-bs-theme="dark"] .fap-training .diff-line.ins .txt { color: #75d6a3; }
+
+.fap-training .edit-foot {
+  display: flex; justify-content: space-between; align-items: center; gap: .5rem;
+  padding: .4rem .9rem; border-top: 1px solid var(--bs-border-color); font-size: .78rem;
+}
+.fap-training .edit-foot .st { margin-right: auto; color: var(--bs-secondary-color); }
+.fap-training .edit-editor textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; line-height: 1.6;
+}
+
+/* ── conversa ──
+   O chat mora dentro de um `card info-card`, como o resto do módulo, e a grade
+   é a do Bootstrap (col-xl-8 / col-xl-4).
+
+   A altura é a da tela, não a do conteúdo: o card é uma coluna flex de altura
+   fixa, só a área de mensagens rola e o campo de escrever fica ancorado
+   embaixo — como num chat. Sem isso a página inteira crescia a cada mensagem
+   e o campo de escrever ia embora para baixo da dobra.
+
+   Diferente do chat da Base de Conhecimento, este NÃO esconde o header nem o
+   rodapé do app: quem treina precisa dos contadores dos módulos e da
+   navegação à mão. Daí o desconto de `--fap-chat-offset` em vez de 100vh
+   cheios. */
+.fap-training {
+  --fap-chat-offset: 265px;   /* header + hero + respiro */
+  --fap-chat-min: 460px;
+}
+
+.fap-training .chat-card {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--fap-chat-offset));
+  min-height: var(--fap-chat-min);
+  overflow: hidden;
+}
+
+.fap-training .chat-body {
+  flex: 1 1 auto;
+  min-height: 0;              /* sem isto o filho flex não rola: ele estica */
+  overflow-y: auto;
+  padding: 1.25rem;
+  background: var(--bs-tertiary-bg);
+}
+
+/* Empilha as mensagens a partir de BAIXO enquanto sobra espaço, como no
+   ChatGPT — com duas mensagens elas ficam junto do campo de escrever, não
+   perdidas no topo de um vazio de 500px. */
+.fap-training .chat-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 100%;
+}
+
+.fap-training .chat {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;             /* coluna de leitura centrada */
+}
+
+.fap-training .chat-footer { padding: .85rem 1rem; }
+.fap-training .chat-footer > * { max-width: 880px; margin-left: auto; margin-right: auto; }
+
+.fap-training .chat-tray-sticky {
+  position: sticky;
+  top: 84px;
+  max-height: calc(100dvh - var(--fap-chat-offset));
+  overflow-y: auto;
+}
+
+@media (max-width: 1199.98px) {
+  /* Empilhado, a altura de tela deixaria a bandeja fora de alcance. */
+  .fap-training .chat-card { height: auto; max-height: none; }
+  .fap-training .chat-body { height: clamp(420px, 60dvh, 640px); flex: 0 0 auto; }
+  .fap-training .chat-tray-sticky { position: static; max-height: none; overflow: visible; }
+}
+
+.fap-training .msg { display: flex; flex-direction: column; width: 100%; animation: fapTrainingFadeIn .35s ease-out; }
+@keyframes fapTrainingFadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.fap-training .msg-user { align-items: flex-end; }
+.fap-training .msg-assistant { align-items: flex-start; }
+
+.fap-training .msg-meta {
+  display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem;
+  font-size: .72rem; font-weight: 600; letter-spacing: .02em; color: var(--bs-secondary-color);
+}
+.fap-training .msg-role {
+  display: inline-flex; align-items: center; gap: .3rem; border: 1px solid var(--bs-border-color);
+  border-radius: 999px; padding: .15rem .55rem; background: var(--bs-body-bg);
+}
+.fap-training .msg-user .msg-role { background: #eef1ff; border-color: rgba(102, 126, 234, .35); color: #4c5fd7; }
+[data-bs-theme="dark"] .fap-training .msg-user .msg-role { background: rgba(102, 126, 234, .18); color: #a5b4fc; }
+
+.fap-training .bubble {
+  max-width: 85%; padding: .75rem 1rem; border-radius: 14px;
+  font-size: .93rem; line-height: 1.55; word-wrap: break-word; text-align: left; min-width: 0;
+}
+.fap-training .msg-assistant .bubble {
+  background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); color: var(--bs-body-color);
+}
+.fap-training .msg-user .bubble {
+  background: linear-gradient(135deg, #6f85f2 0%, #7b57ab 100%); color: #fff;
+  box-shadow: 0 6px 16px rgba(102, 126, 234, .20);
+}
+.fap-training .bubble-text { white-space: pre-wrap; }
+
+/* Bolha com proposta: ocupa a linha inteira, senão o diff não cabe. */
+.fap-training .msg-assistant:has(.edit) .bubble { max-width: 100%; width: 100%; }
+.fap-training .bubble .edit { margin-top: .75rem; margin-bottom: 0; }
+
+.fap-training .chips { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+.fap-training .chip-btn {
+  font-size: .78rem; padding: .3rem .7rem; border-radius: 999px; border: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg); color: inherit; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.fap-training .chip-btn:hover { border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle); }
+
+.fap-training .tray .item {
+  display: flex; gap: .5rem; align-items: flex-start; padding: .5rem 0;
+  border-bottom: 1px solid var(--bs-border-color); font-size: .82rem;
+}
+.fap-training .tray .item:last-child { border-bottom: none; }
+.fap-training .tray .empty { font-size: .82rem; color: var(--bs-tertiary-color); text-align: center; padding: 1rem 0; }

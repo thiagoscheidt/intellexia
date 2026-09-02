@@ -1,0 +1,58 @@
+{# Card de uma alteração proposta na CONVERSA: cabeçalho, diff e os botões de
+   decisão. Precisa de `edit` (conferida, com preview/effective_kind/decision)
+   e `execution`. #}
+{% set kind_labels = {'addition': 'adição', 'substitution': 'substituição', 'refinement': 'refinamento'} %}
+{% set kind_styles = {'addition': 'success', 'substitution': 'warning', 'refinement': 'info'} %}
+{% set kind_help = {
+  'addition': 'O manual não tem regra sobre isto — esta é nova.',
+  'substitution': 'A regra já existe no manual e vai ser trocada por esta.',
+  'refinement': 'A regra já existe e está certa; esta versão a deixa mais precisa.'
+} %}
+{% set blocked = edit.status != 'ok' %}
+{% set kind = edit.effective_kind or edit.kind %}
+{% set style = kind_styles.get(kind, 'secondary') %}
+{% set edit_state = 'is-blocked' if blocked else ('is-accepted' if edit.decision == 'accepted' else ('is-refused' if edit.decision == 'refused' else 'is-open')) %}
+<div class="edit {{ edit_state }}" data-edit-id="{{ edit.id }}">
+  <div class="edit-head">
+    <div class="flex-grow-1">
+      <div class="edit-where">{{ edit.section or ('Fim do documento' if not edit.anchor else 'Documento') }}
+        <span class="text-muted fw-normal small">· {{ 'Manual de revisão FAP' if edit.target == 'manual_fap' else 'Casos de referência' }}</span>
+      </div>
+      {% if blocked %}
+      <div class="edit-why text-danger"><i class="bi bi-exclamation-triangle me-1"></i>{{ edit.blocked_reason }}</div>
+      {% else %}
+      <div class="kind-help">{{ kind_help.get(kind, '') }}</div>
+      {% if edit.rationale %}<div class="edit-why">{{ edit.rationale }}</div>{% endif %}
+      {% endif %}
+    </div>
+    <div class="d-flex gap-1 flex-shrink-0 flex-wrap">
+      {% for item in edit.evidence %}<span class="evid">{{ item }}</span>{% endfor %}
+      <span class="badge rounded-pill bg-{{ style }}-subtle text-{{ style }}-emphasis border border-{{ style }}-subtle">
+        {{ kind_labels.get(kind, kind) }}
+      </span>
+    </div>
+  </div>
+
+  {% include 'fap_review/_training_edit_diff.html' %}
+
+  <div class="edit-foot">
+    {% if blocked %}
+    <span class="st text-danger">
+      <i class="bi bi-x-circle me-1"></i>Não pode ser aceita. O sistema precisa achar o trecho no documento
+      palavra por palavra — e não achou. Peça à IA para refazer com o trecho exato, ou escreva a regra à mão.
+    </span>
+    <a href="{{ url_for('fap_review.edit_reference_by_type', reference_type=edit.target) }}"
+      class="btn btn-sm btn-outline-secondary flex-shrink-0">abrir no editor</a>
+    {% elif edit.decision == 'accepted' %}
+    <span class="st"><i class="bi bi-check-circle-fill text-success me-1"></i>aceita — na lista ao lado, ainda não gravada</span>
+    <button type="button" class="btn btn-sm btn-link p-0 text-muted" data-decide="undo">desfazer</button>
+    {% elif edit.decision == 'refused' %}
+    <span class="st"><i class="bi bi-x-circle me-1"></i>recusada</span>
+    <button type="button" class="btn btn-sm btn-link p-0 text-muted" data-decide="undo">desfazer</button>
+    {% else %}
+    <span class="st"><i class="bi bi-check2 me-1"></i>trecho localizado no documento</span>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-decide="refuse">Recusar</button>
+    <button type="button" class="btn btn-sm btn-success" data-decide="accept"><i class="bi bi-check2 me-1"></i>Aceitar</button>
+    {% endif %}
+  </div>
+</div>

@@ -237,7 +237,11 @@ Recursos do histórico de versões:
 
 ## Treinamento (apenas administradores)
 
-É como o revisor **aprende com as correções reais** do escritório. Nada é gravado sem a sua confirmação.
+É como o revisor **aprende com as correções reais** do escritório. Há **dois modos**, e nos dois **toda mudança aparece antes como diff e só entra com a sua confirmação**.
+
+### Aprender com uma revisão
+
+Quando você tem uma revisão real em mãos: envia as duas versões e o sistema extrai o aprendizado de centenas de correções de uma vez.
 
 1. **Comparar** — você envia a mesma petição duas vezes: **como o advogado enviou** e **como ficou depois da revisão**. A comparação roda em segundo plano; pode fechar a página, ela fica na lista de **comparações anteriores** e a linha mostra *Aguardando sua confirmação* com o botão **Retomar**.
 2. **Conferir as alterações propostas** — a tela abre com **cada alteração isolada, em formato de diff**: a seção do manual onde ela cai, o porquê, a evidência com a contagem (*40× regência*), e as linhas em vermelho (o que sai) e verde (o que entra), com numeração e contexto em volta. Cada uma tem sua própria caixa de aceite — você aprova alteração por alteração, e **editar** abre o texto que vai entrar. Uma alteração pode ser **adição** (regra nova), **substituição** (a regra existe e ficou errada) ou **refinamento** (a regra está certa e ganha precisão). O rodapé diz quantas serão gravadas.
@@ -251,7 +255,20 @@ Recursos do histórico de versões:
 
 As **275 correções** que sustentam as propostas ficam recolhidas no rodapé, em "O que o revisor mudou na petição", agrupadas por padrão e com o trecho literal de cada um.
 
-A tela lista as dez comparações mais recentes, com os documentos comparados, a situação e as versões que cada uma gravou.
+### Treinamento interativo
+
+Quando você **já sabe o que quer ensinar**: uma conversa com a IA sobre o manual e os casos de referência, que ficam carregados inteiros durante toda a conversa.
+
+- Peça uma regra nova, questione ou corrija uma que existe, cole um trecho de petição e pergunte o que ele ensina, ou só pergunte o que o manual diz — os atalhos no início da conversa cobrem esses quatro casos.
+- Quando a conversa pede mudança, a IA **propõe** a alteração como o mesmo diff da comparação, no meio da conversa, com **Aceitar / Recusar**. Consulta não gera proposta.
+- **Aceitar não grava**: a alteração vai para a bandeja **Alterações aceitas**, ao lado. Você grava quando quiser, com **Salvar rascunho** ou **Salvar e ativar** — uma versão nova por gravação, não uma por aceite.
+- Gravar não encerra: a conversa segue a partir da versão nova. Pode sair e voltar; a conversa e as aceitas ficam guardadas. **Encerrar conversa** a marca como concluída.
+
+> [!ALERTA] Uma proposta cuja âncora a IA escreveu de memória, sem bater com o manual, vem **bloqueada** — não pode ser aceita. Peça à IA para refazer citando o trecho exato, ou escreva a regra à mão no editor.
+
+### Atividade recente
+
+A lista na entrada unifica comparações e conversas: tipo, assunto, situação, e as versões que cada uma gravou. **Retomar** abre o que ainda está em andamento.
 
 ---
 

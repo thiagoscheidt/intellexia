@@ -10,6 +10,7 @@ from .reviewer_agent import FapPetitionReviewerAgent
 from .training_agent import FapTrainingEvolutionAgent
 from .training_apply_agent import FapTrainingApplySubAgent
 from .training_diff_agent import FapTrainingDiffGrouperAgent
+from .training_chat_agent import FapTrainingChatAgent
 from .auxiliary_extractor_agent import (
 	AuxDocumentExtraction,
 	AuxExtractedFact,
@@ -22,6 +23,7 @@ __all__ = [
 	'FapTrainingEvolutionAgent',
 	'FapTrainingApplySubAgent',
 	'FapTrainingDiffGrouperAgent',
+	'FapTrainingChatAgent',
 	'FapAuxiliaryDocumentExtractorAgent',
 	'AuxDocumentExtraction',
 	'AuxExtractedFact',

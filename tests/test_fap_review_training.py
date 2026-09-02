@@ -16,6 +16,7 @@ Regressões cobertas:
 Uso: uv run python tests/test_fap_review_training.py
 """
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -25,7 +26,15 @@ os.environ.setdefault('OPENAI_API_KEY', 'test-key')
 
 from app.services.fap_review_service import (  # noqa: E402
     TRAINING_TARGETS,
+    accepted_edits,
+    apply_chat_decision,
     apply_reference_edits,
+    chat_state,
+    decision_for,
+    edit_id_for,
+    edits_from_messages,
+    record_chat_save,
+    summarize_chat_execution,
     build_training_edit_groups,
     effective_edit_kind,
     parse_training_edit_selection,
@@ -311,9 +320,70 @@ def run():
     check("âncora do manual não vale nos casos", conferidas[2]['status'] == 'not_found',
           f"(obteve {conferidas[2]['status']})")
 
+    print("[23] Edições da conversa recebem id estável por mensagem")
+    class Msg:
+        def __init__(self, id, role, edits_json=None):
+            self.id, self.role, self.edits_json = id, role, edits_json
+    mensagens = [
+        Msg(10, 'user'),
+        Msg(11, 'assistant', json.dumps([{'target': 'manual_fap', 'kind': 'addition', 'anchor': '', 'new_text': 'A'},
+                                         {'target': 'casos_referencia', 'kind': 'addition', 'anchor': '', 'new_text': 'B'}])),
+        Msg(12, 'user'),
+        Msg(13, 'assistant', json.dumps([{'target': 'manual_fap', 'kind': 'addition', 'anchor': '', 'new_text': 'C'}])),
+        Msg(14, 'assistant', 'json quebrado {'),
+    ]
+    por_id = edits_from_messages(mensagens)
+    check("três edições", len(por_id) == 3, f"(obteve {sorted(por_id)})")
+    check("id é mensagem-posição", set(por_id) == {'11-0', '11-1', '13-0'}, f"(obteve {sorted(por_id)})")
+    check("o id vai dentro da edição", por_id['11-1']['id'] == '11-1')
+    check("json quebrado é ignorado, não derruba", '14-0' not in por_id)
+    check("helper de id bate", edit_id_for(11, 1) == '11-1')
+
+    print("[24] Aceitar / recusar / desfazer, sem gravar nada")
+    payload = {}
+    payload = apply_chat_decision(payload, '11-0', 'accept')
+    check("aceita entra", chat_state(payload)['accepted'] == ['11-0'])
+    payload = apply_chat_decision(payload, '11-1', 'refuse')
+    check("recusada entra na outra lista", chat_state(payload)['refused'] == ['11-1'])
+    payload = apply_chat_decision(payload, '11-1', 'accept')
+    check("aceitar tira de recusadas", chat_state(payload)['refused'] == [])
+    check("e ordena por aceite", chat_state(payload)['accepted'] == ['11-0', '11-1'])
+    payload = apply_chat_decision(payload, '11-0', 'undo')
+    check("desfazer tira das duas", '11-0' not in chat_state(payload)['accepted'])
+    check("estado consultável", decision_for(payload, '11-1') == 'accepted'
+          and decision_for(payload, '11-0') == 'open')
+    try:
+        apply_chat_decision(payload, '11-0', 'apagar'); check("decisão inválida é recusada", False)
+    except ValueError:
+        check("decisão inválida é recusada", True)
+
+    print("[25] A bandeja é o que foi aceito, na ordem, com o texto da proposta")
+    payload = apply_chat_decision({}, '13-0', 'accept')
+    payload = apply_chat_decision(payload, '11-0', 'accept')
+    bandeja = accepted_edits(payload, por_id)
+    check("duas na bandeja", [e['id'] for e in bandeja] == ['13-0', '11-0'], f"(obteve {[e['id'] for e in bandeja]})")
+    check("com o texto", bandeja[0]['new_text'] == 'C')
+    check("id de mensagem apagada não quebra", accepted_edits(apply_chat_decision({}, '99-9', 'accept'), por_id) == [])
+
+    print("[26] Gravar esvazia a bandeja e registra a versão")
+    payload = record_chat_save(payload, [{'key': 'manual_fap', 'label': 'Manual', 'version_number': 4,
+                                          'activated': True, 'edits': 2}], True, '26/08/2026 10:00')
+    check("bandeja vazia", chat_state(payload)['accepted'] == [])
+    check("gravação registrada", len(chat_state(payload)['saved']) == 1)
+    check("com os ids que entraram", chat_state(payload)['saved'][0]['edit_ids'] == ['13-0', '11-0'])
+    resumo = summarize_chat_execution('pending', payload, 'Datas de acidente')
+    check("lista mostra a versão gravada", resumo['targets'][0]['version_number'] == 4)
+    check("em andamento enquanto não encerra", resumo['situation']['label'] == 'Em andamento')
+    check("é conversa", resumo['is_chat'] is True)
+    pendente = summarize_chat_execution('pending', apply_chat_decision({}, '11-0', 'accept'), '')
+    check("nota de pendência", pendente['pending_note'] == '1 aceita, não salva', f"(obteve {pendente['pending_note']!r})")
+    check("encerrada vira concluída", summarize_chat_execution('completed', {}, '')['situation']['label'] == 'Concluída')
+
     print("[22] Templates compilam e as rotas existem")
     from main import app  # noqa: E402  (importa a app inteira: mais lento)
-    for template_name in ('fap_review/training.html', 'fap_review/training_comparison.html'):
+    for template_name in ('fap_review/training.html', 'fap_review/training_comparison.html',
+                          'fap_review/training_chat.html', 'fap_review/_training_edit_card.html',
+                          'fap_review/_training_chat_message.html', 'fap_review/_training_chat_tray.html'):
         try:
             app.jinja_env.get_template(template_name)
             check(f"{template_name} compila", True)
@@ -321,7 +391,10 @@ def run():
             check(f"{template_name} compila", False, f"({error})")
 
     rules = {rule.endpoint for rule in app.url_map.iter_rules()}
-    for endpoint in ('fap_review.training', 'fap_review.training_comparison', 'fap_review.training_apply'):
+    for endpoint in ('fap_review.training', 'fap_review.training_compare', 'fap_review.training_comparison',
+                     'fap_review.training_apply', 'fap_review.training_chat_start', 'fap_review.training_chat',
+                     'fap_review.training_chat_message', 'fap_review.training_chat_decision',
+                     'fap_review.training_chat_save', 'fap_review.training_chat_close'):
         check(f"{endpoint} registrada", endpoint in rules)
 
 

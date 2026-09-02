@@ -14,195 +14,28 @@
 {% block title %}{{ page_title }} - Treinamento - IntellexIA{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fap-review-training.css') }}">
 <style>
-  .info-card {
-    border: 1px solid rgba(15, 23, 42, .07);
-    border-radius: .85rem;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
-  }
-
-  [data-bs-theme="dark"] .info-card {
-    border-color: rgba(148, 163, 184, .18);
-    box-shadow: none;
-  }
-
-  .info-card .card-header {
-    background: transparent;
-    border-bottom: 1px solid rgba(15, 23, 42, .07);
-    font-weight: 700;
-    font-size: .85rem;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    color: #6c7a8d;
-  }
-
-  [data-bs-theme="dark"] .info-card .card-header {
-    border-bottom-color: rgba(148, 163, 184, .18);
-  }
-
-  /* uma alteração proposta */
-  .edit {
-    border: 1px solid var(--bs-border-color);
-    border-radius: .7rem;
-    overflow: hidden;
-    margin-bottom: 1rem;
-    transition: opacity .15s ease, border-color .15s ease;
-  }
-
-  .edit.is-on { border-color: var(--bs-success-border-subtle); }
-  .edit.is-off { opacity: .5; }
-  .edit.is-blocked { border-color: var(--bs-danger-border-subtle); }
-
-  .edit-head {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .6rem;
-    align-items: flex-start;
-    padding: .7rem .9rem;
-    background: var(--bs-secondary-bg);
-  }
-
-  .edit-where { font-weight: 700; font-size: .86rem; }
-  .edit-why { font-size: .8rem; color: var(--bs-secondary-color); }
-
-  .evid {
-    font-size: .7rem;
-    padding: .1rem .4rem;
-    border-radius: .3rem;
-    white-space: nowrap;
-    background: var(--bs-primary-bg-subtle);
-    color: var(--bs-primary-text-emphasis);
-  }
-
-  /* o diff */
-  .diff {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: .78rem;
-    line-height: 1.65;
-    overflow-x: auto;
-    background: var(--bs-body-bg);
-  }
-
-  .diff-line { display: flex; }
-  .diff-line .num {
-    flex: 0 0 3.4rem;
-    text-align: right;
-    padding-right: .7rem;
-    user-select: none;
-    color: var(--bs-tertiary-color);
-    background: var(--bs-tertiary-bg);
-  }
-
-  .diff-line .sig { flex: 0 0 1.1rem; text-align: center; user-select: none; font-weight: 700; }
-  .diff-line .txt { flex: 1; padding-right: 1rem; white-space: pre-wrap; word-break: break-word; }
-
-  .diff-line.ctx { color: var(--bs-secondary-color); }
-  .diff-line.del { background: rgba(220, 53, 69, .10); }
-  .diff-line.del .sig, .diff-line.del .txt { color: #b02a37; }
-  .diff-line.ins { background: rgba(25, 135, 84, .12); }
-  .diff-line.ins .sig, .diff-line.ins .txt { color: #0f5132; }
-
-  [data-bs-theme="dark"] .diff-line.del { background: rgba(220, 53, 69, .18); }
-  [data-bs-theme="dark"] .diff-line.del .sig,
-  [data-bs-theme="dark"] .diff-line.del .txt { color: #ff8f9c; }
-  [data-bs-theme="dark"] .diff-line.ins { background: rgba(25, 135, 84, .20); }
-  [data-bs-theme="dark"] .diff-line.ins .sig,
-  [data-bs-theme="dark"] .diff-line.ins .txt { color: #75d6a3; }
-
-  .diff-hunk {
-    padding: .15rem .9rem;
-    font-size: .72rem;
-    color: var(--bs-tertiary-color);
-    background: var(--bs-tertiary-bg);
-  }
-
-  .edit-foot {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: .5rem;
-    padding: .4rem .9rem;
-    border-top: 1px solid var(--bs-border-color);
-    font-size: .78rem;
-  }
-
-  .edit-editor textarea {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: .78rem;
-    line-height: 1.6;
-  }
-
-  .intro {
-    background: var(--bs-primary-bg-subtle);
-    border: 1px solid var(--bs-primary-border-subtle);
-    border-radius: .7rem;
-    padding: .9rem 1.1rem;
-    margin-bottom: 1.25rem;
-  }
-
+  .intro { background: var(--bs-primary-bg-subtle); border: 1px solid var(--bs-primary-border-subtle);
+    border-radius: .7rem; padding: .9rem 1.1rem; margin-bottom: 1.25rem; }
   .intro h2 { font-size: 1rem; font-weight: 700; margin-bottom: .35rem; }
   .intro p { font-size: .88rem; margin-bottom: .4rem; }
   .intro p:last-child { margin-bottom: 0; }
-
-  .legend {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    font-size: .78rem;
-    color: var(--bs-secondary-color);
-    padding: .5rem .9rem;
-    background: var(--bs-tertiary-bg);
-    border-bottom: 1px solid var(--bs-border-color);
-  }
-
-  .legend .chip {
-    display: inline-block;
-    width: .85rem;
-    height: .85rem;
-    border-radius: .2rem;
-    vertical-align: -1px;
-    margin-right: .3rem;
-  }
-
-  .chip-del { background: rgba(220, 53, 69, .35); }
-  .chip-ins { background: rgba(25, 135, 84, .35); }
-  .chip-ctx { background: var(--bs-tertiary-color); opacity: .35; }
-
-  .kind-help { font-size: .78rem; color: var(--bs-secondary-color); }
-
-  .save-bar {
-    position: sticky;
-    bottom: 0;
-    background: var(--bs-body-bg);
-    border-top: 1px solid var(--bs-border-color);
-    padding: .85rem 0;
-    z-index: 20;
-  }
-
-  .ev-row {
-    display: flex;
-    gap: .6rem;
-    align-items: baseline;
-    padding: .35rem 0;
-    border-bottom: 1px solid var(--bs-border-color);
-    font-size: .83rem;
-  }
-
+  .save-bar { position: sticky; bottom: 0; background: var(--bs-body-bg);
+    border-top: 1px solid var(--bs-border-color); padding: .85rem 0; z-index: 20; }
+  .ev-row { display: flex; gap: .6rem; align-items: baseline; padding: .35rem 0;
+    border-bottom: 1px solid var(--bs-border-color); font-size: .83rem; }
   .ev-row:last-child { border-bottom: none; }
   .ev-n { flex: 0 0 3rem; text-align: right; font-weight: 700; font-size: .76rem; }
-  .ev-ex {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: .72rem;
-    color: var(--bs-secondary-color);
-    word-break: break-word;
-  }
-
+  .ev-ex { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem;
+    color: var(--bs-secondary-color); word-break: break-word; }
   .ev-noise { opacity: .6; }
+  .change-list li { font-size: .88rem; margin-bottom: .4rem; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="fap-training-comparison-page">
+<div class="fap-training fap-training-comparison-page">
   {% call page_hero(title=page_title, subtitle=documents, icon='bi bi-mortarboard') %}
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
@@ -214,7 +47,7 @@
   </nav>
   {% endcall %}
 
-  <div class="container-fluid" style="max-width:1080px">
+  <div class="container-fluid">
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
     <div class="mb-3">
@@ -366,21 +199,7 @@
               </div>
             </div>
 
-            <div class="legend">
-              <span><span class="chip chip-del"></span>sai do documento</span>
-              <span><span class="chip chip-ins"></span>entra no documento</span>
-              <span><span class="chip chip-ctx"></span>texto em volta, não muda</span>
-              <span class="ms-auto">{{ edit.preview.header }}</span>
-            </div>
-            <div class="diff">
-              {% for line in edit.preview.lines %}
-              <div class="diff-line {{ line.kind }}">
-                <span class="num">{{ line.number }}</span>
-                <span class="sig">{{ '+' if line.kind == 'ins' else ('-' if line.kind == 'del' else ' ') }}</span>
-                <span class="txt">{{ line.text }}</span>
-              </div>
-              {% endfor %}
-            </div>
+            {% include 'fap_review/_training_edit_diff.html' %}
 
             <div class="edit-editor p-2 border-top" hidden>
               <label class="form-label small fw-semibold mb-1">Texto que vai entrar</label>

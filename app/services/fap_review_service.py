@@ -1123,3 +1123,150 @@ def build_edit_preview(content: str, edit: dict, context_lines: int = 3) -> dict
         'header': f'linha {first_old_line}' if first_old_line else 'fim do documento',
         'lines': lines,
     }
+
+
+# ---------------------------------------------------------------------------
+# Treinamento interativo — estado da conversa
+# ---------------------------------------------------------------------------
+#
+# A sessão é uma FapReviewExecution(execution_type='training_chat'). No
+# result_json dela ficam só decisões — ids aceitos, ids recusados, o que já foi
+# gravado. As edições em si vivem em `fap_review_training_messages.edits_json`,
+# cada uma com id estável "<message_id>-<posição>". Manter o payload pequeno é
+# deliberado: TEXT tem 64 KB no MySQL, e uma conversa longa não caberia.
+
+TRAINING_CHAT_TYPE = 'training_chat'
+TRAINING_EXECUTION_TYPES = ('training', TRAINING_CHAT_TYPE)
+
+CHAT_DECISIONS = ('accept', 'refuse', 'undo')
+
+
+def edit_id_for(message_id: int, position: int) -> str:
+    """Id estável de uma edição proposta numa mensagem."""
+    return f'{int(message_id)}-{int(position)}'
+
+
+def edits_from_messages(messages) -> dict[str, dict]:
+    """Todas as edições propostas na conversa, por id, com o id gravado dentro."""
+    by_id: dict[str, dict] = {}
+    for message in messages or []:
+        if getattr(message, 'role', None) != 'assistant' or not getattr(message, 'edits_json', None):
+            continue
+        try:
+            proposed = json.loads(message.edits_json) or []
+        except (TypeError, json.JSONDecodeError):
+            continue
+        for position, edit in enumerate(proposed):
+            edit = dict(edit or {})
+            edit['id'] = edit_id_for(message.id, position)
+            edit['message_id'] = message.id
+            by_id[edit['id']] = edit
+    return by_id
+
+
+def chat_state(payload: dict | None) -> dict:
+    """Decisões da conversa, com os campos sempre presentes."""
+    payload = payload or {}
+    return {
+        'accepted': [str(item) for item in (payload.get('accepted') or [])],
+        'refused': [str(item) for item in (payload.get('refused') or [])],
+        'saved': list(payload.get('saved') or []),
+    }
+
+
+def apply_chat_decision(payload: dict | None, edit_id: str, decision: str) -> dict:
+    """Aplica aceitar / recusar / desfazer a uma edição e devolve o payload novo.
+
+    Aceitar tira de recusadas; recusar tira de aceitas; desfazer tira das duas.
+    Nada aqui grava referência: aceitar só coloca na bandeja.
+    """
+    if decision not in CHAT_DECISIONS:
+        raise ValueError(f'Decisão desconhecida: {decision!r}')
+
+    payload = dict(payload or {})
+    state = chat_state(payload)
+    edit_id = str(edit_id)
+
+    accepted = [item for item in state['accepted'] if item != edit_id]
+    refused = [item for item in state['refused'] if item != edit_id]
+
+    if decision == 'accept':
+        accepted.append(edit_id)
+    elif decision == 'refuse':
+        refused.append(edit_id)
+
+    payload['stage'] = 'chat'
+    payload['accepted'] = accepted
+    payload['refused'] = refused
+    payload.setdefault('saved', state['saved'])
+    return payload
+
+
+def accepted_edits(payload: dict | None, edits_by_id: dict[str, dict]) -> list[dict]:
+    """As edições aceitas, na ordem em que foram aceitas, prontas para gravar."""
+    return [
+        dict(edits_by_id[edit_id])
+        for edit_id in chat_state(payload)['accepted']
+        if edit_id in (edits_by_id or {})
+    ]
+
+
+def decision_for(payload: dict | None, edit_id: str) -> str:
+    """'accepted', 'refused' ou 'open' — o estado de uma edição na conversa."""
+    state = chat_state(payload)
+    edit_id = str(edit_id)
+    if edit_id in state['accepted']:
+        return 'accepted'
+    if edit_id in state['refused']:
+        return 'refused'
+    return 'open'
+
+
+def record_chat_save(payload: dict | None, targets: list[dict], activated: bool, applied_at: str) -> dict:
+    """Registra uma gravação e esvazia a bandeja; a conversa segue da versão nova."""
+    payload = dict(payload or {})
+    state = chat_state(payload)
+    saved = list(state['saved'])
+    saved.append({
+        'applied_at': applied_at,
+        'activated': bool(activated),
+        'targets': list(targets or []),
+        'edit_ids': list(state['accepted']),
+    })
+    payload['stage'] = 'chat'
+    payload['saved'] = saved
+    payload['accepted'] = []
+    payload['refused'] = state['refused']
+    return payload
+
+
+def summarize_chat_execution(status: str | None, payload: dict | None, subject: str = '') -> dict:
+    """Situação e versões gravadas de uma conversa, para a lista unificada."""
+    state = chat_state(payload)
+    status_key = str(status or '').strip()
+
+    if status_key == 'completed':
+        situation = TRAINING_EXECUTION_STATUSES['completed']
+    else:
+        situation = {'label': 'Em andamento', 'style': 'warning', 'icon': 'bi bi-chat-dots'}
+
+    targets: list[dict] = []
+    for save in state['saved']:
+        for item in save.get('targets') or []:
+            targets.append({
+                'key': item.get('key'),
+                'label': item.get('label') or TRAINING_TARGET_LABELS.get(item.get('key'), item.get('key')),
+                'version_number': item.get('version_number'),
+                'activated': bool(item.get('activated')),
+            })
+
+    pending = len(state['accepted'])
+    return {
+        'situation': situation,
+        'targets': targets,
+        'is_pending': status_key != 'completed',
+        'is_processing': False,
+        'is_chat': True,
+        'subject': subject,
+        'pending_note': f'{pending} aceita{"s" if pending != 1 else ""}, não salva{"s" if pending != 1 else ""}' if pending else '',
+    }

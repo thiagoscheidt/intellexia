@@ -1,0 +1,225 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+{% set page_title = "Conversa #" ~ execution.id %}
+{% block title %}{{ page_title }} - Treinamento - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fap-review-training.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="fap-training">
+  {% call page_hero(title=page_title,
+    subtitle='Manual v' ~ versions.get('manual_fap', 0) ~ ' · Casos de referência v' ~ versions.get('casos_referencia', 0) ~ ' carregados nesta conversa',
+    icon='bi bi-chat-dots') %}
+  <nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i class="bi bi-file-earmark-check"></i> Revisor de Petições</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('fap_review.training') }}">Treinamento</a></li>
+    <li class="breadcrumb-item active">{{ page_title }}</li>
+  </ol></nav>
+  {% endcall %}
+
+  <div class="container-fluid">
+    {% with messages_flash = get_flashed_messages(with_categories=true) %}
+    {% if messages_flash %}<div class="mb-3">
+      {% for category, message in messages_flash %}
+      {% set alert_style = 'danger' if category == 'error' else category %}
+      <div class="alert alert-{{ alert_style }} alert-dismissible fade show" role="alert">
+        <i class="bi bi-info-circle me-2"></i>{{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      {% endfor %}
+    </div>{% endif %}
+    {% endwith %}
+
+    <div class="row g-4">
+      <div class="col-xl-8">
+        <div class="card info-card chat-card">
+          <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+            <span><i class="bi bi-chat-dots text-primary me-2"></i>Conversa</span>
+            {% if execution.status == 'completed' %}
+            <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
+              <i class="bi bi-lock me-1"></i>encerrada
+            </span>
+            {% else %}
+            <form method="POST" action="{{ url_for('fap_review.training_chat_close', execution_id=execution.id) }}" class="m-0"
+              onsubmit="return confirm('Encerrar esta conversa? O que estiver aceito e não salvo fica registrado como pendente.');">
+              <button type="submit" class="btn btn-link btn-sm p-0 text-muted" style="text-transform:none;letter-spacing:0">encerrar conversa</button>
+            </form>
+            {% endif %}
+          </div>
+
+          <div class="card-body chat-body" id="chatBody">
+            <div class="chat-stack">
+            <div class="chat" id="chatLog">
+              <div class="msg msg-assistant">
+                <div class="msg-meta"><span class="msg-role"><i class="bi bi-robot"></i> IA de treinamento</span></div>
+                <div class="bubble">
+                  Estou com o <strong>Manual de revisão FAP</strong> (v{{ versions.get('manual_fap', 0) }}) e os
+                  <strong>Casos de referência</strong> (v{{ versions.get('casos_referencia', 0) }}) carregados.
+                  O que você quer ensinar ao revisor?
+                  <div class="chips">
+                    <button type="button" class="chip-btn" data-fill="Quero adicionar uma regra: "><i class="bi bi-plus-lg me-1"></i>Adicionar uma regra</button>
+                    <button type="button" class="chip-btn" data-fill="A regra sobre  está errada. O certo é "><i class="bi bi-pencil me-1"></i>Corrigir uma regra que existe</button>
+                    <button type="button" class="chip-btn" data-fill="Este trecho de petição foi corrigido pelo revisor. O que ele ensina?&#10;&#10;"><i class="bi bi-clipboard me-1"></i>Colar um trecho de petição</button>
+                    <button type="button" class="chip-btn" data-fill="O que o manual diz sobre "><i class="bi bi-question-circle me-1"></i>O que o manual diz sobre…</button>
+                  </div>
+                </div>
+              </div>
+
+              {% for message in messages %}
+              {% include 'fap_review/_training_chat_message.html' %}
+              {% endfor %}
+
+              <div class="msg msg-assistant" id="chatThinking" hidden>
+                <div class="msg-meta"><span class="msg-role"><i class="bi bi-robot"></i> IA de treinamento</span></div>
+                <div class="bubble text-muted">
+                  <span class="spinner-border spinner-border-sm me-2"></span>Lendo o manual e pensando…
+                </div>
+              </div>
+            </div>
+            </div>
+          </div>
+
+          {% if execution.status != 'completed' %}
+          <div class="card-footer bg-transparent chat-footer">
+            <div class="alert alert-danger py-2 small mb-2" id="chatError" hidden></div>
+            <form id="chatForm">
+              <div class="input-group">
+                <textarea class="form-control" id="chatInput" rows="2"
+                  placeholder="Peça uma regra, questione uma seção, ou cole um trecho de petição…"
+                  style="max-height:180px"></textarea>
+                <button type="submit" class="btn btn-primary px-3" id="chatSend" title="Enviar (Enter)">
+                  <i class="bi bi-send"></i>
+                </button>
+              </div>
+            </form>
+            <div class="form-text small mt-2 d-flex flex-wrap align-items-center gap-x-3 gap-y-1 justify-content-between">
+              <span>A IA lê o manual e os casos inteiros a cada resposta. Ela propõe as mudanças; só você grava.</span>
+              <span class="text-nowrap">
+                <kbd>Enter</kbd> envia · <kbd>Shift</kbd>+<kbd>Enter</kbd> quebra linha
+              </span>
+            </div>
+          </div>
+          {% else %}
+          <div class="card-footer bg-transparent text-muted small">
+            <i class="bi bi-lock me-1"></i>Conversa encerrada. As alterações já gravadas continuam valendo.
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="col-xl-4">
+        <div class="chat-tray-sticky" id="chatTrayWrap">
+          {% include 'fap_review/_training_chat_tray.html' %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const form = document.getElementById('chatForm');
+  const body = document.getElementById('chatBody');
+  const log = document.getElementById('chatLog');
+  const trayWrap = document.getElementById('chatTrayWrap');
+  const thinking = document.getElementById('chatThinking');
+  const errorBox = document.getElementById('chatError');
+  const input = document.getElementById('chatInput');
+  const send = document.getElementById('chatSend');
+
+  const urlMessage = "{{ url_for('fap_review.training_chat_message', execution_id=execution.id) }}";
+  const urlDecision = "{{ url_for('fap_review.training_chat_decision', execution_id=execution.id, edit_id='__ID__', decision='__D__') }}";
+
+  function showError(text) { if (errorBox) { errorBox.textContent = text; errorBox.hidden = !text; } }
+  function scrollDown() { if (body) { body.scrollTop = body.scrollHeight; } }
+
+  document.querySelectorAll('.chip-btn').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      if (!input) { return; }
+      input.value = chip.dataset.fill;
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
+  });
+
+  if (form) {
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text) { return; }
+      showError('');
+      send.disabled = true; input.disabled = true;
+      thinking.hidden = false; scrollDown();
+      try {
+        const response = await fetch(urlMessage, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ message: text }),
+        });
+        const payload = await response.json();
+        if (!response.ok) { throw new Error(payload.error || 'Falha ao enviar.'); }
+        thinking.insertAdjacentHTML('beforebegin', payload.user_html);
+        thinking.insertAdjacentHTML('beforebegin', payload.assistant_html);
+        trayWrap.innerHTML = payload.tray_html;
+        input.value = '';
+        autoGrow();
+      } catch (error) {
+        showError(error.message);
+      } finally {
+        thinking.hidden = true;
+        send.disabled = false; input.disabled = false; input.focus();
+        scrollDown();
+      }
+    });
+
+    // Enter envia, Shift+Enter quebra linha — a convenção dos outros chats do
+    // app (Assistente e Base de Conhecimento) e a que todo mundo espera de um
+    // chat. Colar texto de várias linhas continua funcionando: colar não
+    // dispara keydown.
+    input.addEventListener('keydown', function (event) {
+      if (event.key !== 'Enter' || event.shiftKey) { return; }
+      if (event.isComposing) { return; }   // acentuação com tecla morta
+      event.preventDefault();
+      form.requestSubmit();
+    });
+
+    // A caixa cresce com o texto até o teto do CSS, para um trecho colado
+    // ficar visível em vez de esconder atrás de duas linhas.
+    function autoGrow() {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 180) + 'px';
+    }
+    input.addEventListener('input', autoGrow);
+    autoGrow();
+  }
+
+  document.addEventListener('click', async function (event) {
+    const button = event.target.closest('[data-decide]');
+    if (!button) { return; }
+    const card = button.closest('.edit');
+    const editId = card && card.dataset.editId;
+    if (!editId) { return; }
+    showError('');
+    button.disabled = true;
+    try {
+      const response = await fetch(
+        urlDecision.replace('__ID__', encodeURIComponent(editId)).replace('__D__', button.dataset.decide),
+        { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      const payload = await response.json();
+      if (!response.ok) { throw new Error(payload.error || 'Falha ao registrar a decisão.'); }
+      card.outerHTML = payload.edit_html;
+      trayWrap.innerHTML = payload.tray_html;
+    } catch (error) {
+      showError(error.message);
+      button.disabled = false;
+    }
+  });
+
+  scrollDown();
+})();
+</script>
+{% endblock %}

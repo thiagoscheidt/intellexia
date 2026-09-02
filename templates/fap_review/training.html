@@ -1,108 +1,43 @@
 {% extends "layout/base.html" %}
-
 {% from "partials/page_hero.html" import page_hero %}
-
 {% set page_title = "Treinamento" %}
-
 {% block title %}{{ page_title }} - Revisor de Petições - IntellexIA{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fap-review-training.css') }}">
 <style>
-  .info-card {
-    border: 1px solid rgba(15, 23, 42, .07);
-    border-radius: .85rem;
-    box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
-  }
+  .table td, .table th { vertical-align: middle; }
+  .version-pill { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .74rem; }
+  .document-cell { font-size: .84rem; word-break: break-word; max-width: 360px; }
 
-  [data-bs-theme="dark"] .info-card {
-    border-color: rgba(148, 163, 184, .18);
-    box-shadow: none;
+  /* mesma dropzone do revision.html */
+  .dropzone-custom {
+    border: 2px dashed var(--bs-border-color); border-radius: .75rem; background: var(--bs-secondary-bg);
+    padding: 1.4rem 1rem; text-align: center; cursor: pointer;
+    transition: border-color .2s ease, background .2s ease;
   }
-
-  .info-card .card-header {
-    background: transparent;
-    border-bottom: 1px solid rgba(15, 23, 42, .07);
-    font-weight: 700;
-    font-size: .85rem;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    color: #6c7a8d;
-  }
-
-  [data-bs-theme="dark"] .info-card .card-header {
-    border-bottom-color: rgba(148, 163, 184, .18);
-  }
-
-  .table td,
-  .table th {
-    vertical-align: middle;
-  }
-
-  .step-list {
-    counter-reset: step;
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    display: grid;
-    gap: .5rem;
-  }
-
-  .step-list li {
-    counter-increment: step;
-    display: flex;
-    gap: .6rem;
-    align-items: flex-start;
-    font-size: .88rem;
-    color: var(--bs-secondary-color);
-  }
-
-  .step-list li::before {
-    content: counter(step);
-    flex: 0 0 1.35rem;
-    height: 1.35rem;
-    border-radius: 50%;
-    background: var(--bs-primary-bg-subtle);
-    color: var(--bs-primary-text-emphasis);
-    font-size: .74rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-top: .08rem;
-  }
-
-  .version-pill {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: .74rem;
-  }
-
-  .document-cell {
-    font-size: .84rem;
-    word-break: break-word;
-    max-width: 320px;
-  }
+  .dropzone-custom:hover, .dropzone-custom.dragover { border-color: var(--bs-primary); background: var(--bs-primary-bg-subtle); }
+  .dropzone-custom.is-filled { border-color: var(--bs-success); background: var(--bs-success-bg-subtle); }
+  .dropzone-custom .dropzone-icon { font-size: 1.7rem; color: var(--bs-primary); opacity: .7; }
+  .dropzone-custom .file-name { font-size: .82rem; word-break: break-all; }
+  .when-list { font-size: .86rem; color: var(--bs-secondary-color); padding-left: 1.1rem; margin-bottom: 0; }
+  .when-list li { margin-bottom: .25rem; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="fap-training-page">
-  {% call page_hero(title=page_title, subtitle='Ensine o revisor com as correções reais do escritório',
-  icon='bi bi-mortarboard') %}
-  <nav aria-label="breadcrumb">
-    <ol class="breadcrumb mb-0 bg-transparent small">
-      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
-      </li>
-      <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i class="bi bi-file-earmark-check"></i>
-          Revisor de Petições</a></li>
-      <li class="breadcrumb-item active">{{ page_title }}</li>
-    </ol>
-  </nav>
+<div class="fap-training">
+  {% call page_hero(title=page_title, subtitle='Ensine o revisor com as correções reais do escritório', icon='bi bi-mortarboard') %}
+  <nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i class="bi bi-file-earmark-check"></i> Revisor de Petições</a></li>
+    <li class="breadcrumb-item active">{{ page_title }}</li>
+  </ol></nav>
   {% endcall %}
 
   <div class="container-fluid">
     {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-    <div class="mb-3">
+    {% if messages %}<div class="mb-3">
       {% for category, message in messages %}
       {% set alert_style = 'danger' if category == 'error' else category %}
       <div class="alert alert-{{ alert_style }} alert-dismissible fade show" role="alert">
@@ -110,137 +45,189 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
       {% endfor %}
-    </div>
-    {% endif %}
+    </div>{% endif %}
     {% endwith %}
 
     {% if not setting.training_enabled %}
-    <div class="card info-card mb-4">
-      <div class="card-body text-center py-5">
-        <i class="bi bi-power fs-1 text-muted d-block mb-3"></i>
-        <h5 class="mb-2">O agente de treinamento está desligado</h5>
-        <p class="text-muted small mb-3" style="max-width:480px;margin:0 auto">
-          Enquanto estiver desligado, nenhuma comparação nova pode ser feita. As comparações anteriores continuam
-          acessíveis.
-        </p>
-        <a href="{{ url_for('fap_review.settings') }}" class="btn btn-primary btn-sm">
-          <i class="bi bi-sliders me-1"></i> Ligar nas Configurações
-        </a>
-      </div>
-    </div>
+    <div class="card info-card mb-4"><div class="card-body text-center py-5">
+      <i class="bi bi-power fs-1 text-muted d-block mb-3"></i>
+      <h5 class="mb-2">O agente de treinamento está desligado</h5>
+      <p class="text-muted small mb-3" style="max-width:480px;margin:0 auto">Enquanto estiver desligado, nenhum treinamento novo pode ser feito. Os anteriores continuam acessíveis.</p>
+      <a href="{{ url_for('fap_review.settings') }}" class="btn btn-primary btn-sm"><i class="bi bi-sliders me-1"></i> Ligar nas Configurações</a>
+    </div></div>
     {% else %}
-    <div class="card info-card mb-4">
-      <div class="card-header d-flex align-items-center gap-2">
-        <i class="bi bi-files text-primary"></i> Comparar uma correção
-      </div>
-      <div class="card-body">
-        <div class="row g-4">
-          <div class="col-lg-5">
-            <ol class="step-list mb-0">
-              <li>Você envia a petição <strong>como o advogado entregou</strong> e <strong>como ficou depois da
-                  revisão</strong>.</li>
-              <li>A IA compara as duas e escreve, em texto, o que aprendeu com a correção.</li>
-              <li>Você lê, ajusta o texto e decide se ele entra no manual — <strong>nada é gravado sem essa
-                  confirmação</strong>.</li>
-            </ol>
+
+    <div class="row g-4 mb-4">
+      <div class="col-lg-6">
+        <div class="card info-card h-100">
+          <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-files text-primary"></i> Aprender com uma revisão
           </div>
-          <div class="col-lg-7">
-            <form method="POST" enctype="multipart/form-data" class="row g-3">
-              <div class="col-md-6">
-                <label for="original_document" class="form-label small fw-semibold">Como o advogado enviou</label>
-                <input class="form-control" type="file" id="original_document" name="original_document"
-                  accept=".pdf,.docx,.txt" required>
-                <div class="form-text small">PDF ou DOCX</div>
+          <div class="card-body d-flex flex-column">
+            <p class="small text-muted mb-3">
+              Envie a petição como o advogado entregou e como ficou depois da revisão. O sistema encontra cada
+              correção, agrupa em padrões e propõe o que o manual ainda não diz. Toda proposta aparece como diff e
+              só entra com a sua confirmação.
+            </p>
+            <ul class="when-list mb-3">
+              <li>Quando você tem <strong>uma revisão real</strong> em mãos</li>
+              <li>Extrai o aprendizado <strong>de centenas de correções</strong> de uma vez</li>
+            </ul>
+
+            <form method="POST" action="{{ url_for('fap_review.training_compare') }}" enctype="multipart/form-data"
+              class="mt-auto" id="compareForm">
+              <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                  <label class="form-label small fw-semibold mb-2">
+                    <i class="bi bi-file-earmark-text text-primary me-1"></i>Como o advogado enviou
+                  </label>
+                  <div class="dropzone-custom" id="originalDropzone">
+                    <i class="bi bi-file-earmark-arrow-up dropzone-icon"></i>
+                    <p class="mb-1 mt-2 fw-semibold small">Arraste o arquivo aqui ou clique para selecionar</p>
+                    <small class="text-muted">PDF ou Word (.docx)</small>
+                    <div class="file-name mt-2 fw-semibold text-success" id="originalName" hidden></div>
+                    <input type="file" class="d-none" id="originalDocument" name="original_document" accept=".pdf,.docx,.txt" required>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small fw-semibold mb-2">
+                    <i class="bi bi-file-earmark-check text-success me-1"></i>Como ficou depois da revisão
+                  </label>
+                  <div class="dropzone-custom" id="revisedDropzone">
+                    <i class="bi bi-file-earmark-arrow-up dropzone-icon"></i>
+                    <p class="mb-1 mt-2 fw-semibold small">Arraste o arquivo aqui ou clique para selecionar</p>
+                    <small class="text-muted">PDF ou Word (.docx)</small>
+                    <div class="file-name mt-2 fw-semibold text-success" id="revisedName" hidden></div>
+                    <input type="file" class="d-none" id="revisedDocument" name="revised_document" accept=".pdf,.docx,.txt" required>
+                  </div>
+                </div>
               </div>
-              <div class="col-md-6">
-                <label for="revised_document" class="form-label small fw-semibold">Como ficou depois da revisão</label>
-                <input class="form-control" type="file" id="revised_document" name="revised_document"
-                  accept=".pdf,.docx,.txt" required>
-                <div class="form-text small">PDF ou DOCX</div>
-              </div>
-              <div class="col-12 d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <span class="small text-muted">
-                  <i class="bi bi-cpu me-1"></i>{{ setting.training_model }} · temperatura {{
-                  setting.training_temperature }} ·
-                  <a href="{{ url_for('fap_review.settings') }}">configurações</a>
-                </span>
-                <button type="submit" class="btn btn-primary">
-                  <i class="bi bi-arrow-left-right me-1"></i> Comparar
-                </button>
-              </div>
+              <button type="submit" class="btn btn-primary w-100" id="compareSubmit" disabled>
+                <i class="bi bi-arrow-left-right me-1"></i> Comparar documentos
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-lg-6">
+        <div class="card info-card h-100">
+          <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-chat-dots text-primary"></i> Treinamento interativo
+            <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle ms-1" style="text-transform:none;letter-spacing:0">novo</span>
+          </div>
+          <div class="card-body d-flex flex-column">
+            <p class="small text-muted mb-3">
+              Converse com a IA sobre o manual e os casos de referência, que ficam carregados inteiros durante toda
+              a conversa. Peça uma regra nova, questione uma que existe, cole um trecho de petição e pergunte o que
+              ele ensina. Cada mudança proposta vem como diff, no meio da conversa — aceitar não grava; você salva
+              quando quiser.
+            </p>
+            <ul class="when-list mb-3">
+              <li>Quando você <strong>já sabe o que quer ensinar</strong></li>
+              <li>Para <strong>corrigir ou afinar</strong> uma regra específica</li>
+              <li>Para <strong>perguntar</strong> o que o manual diz, sem mudar nada</li>
+            </ul>
+            <form method="POST" action="{{ url_for('fap_review.training_chat_start') }}" class="mt-auto">
+              <button type="submit" class="btn btn-primary w-100"><i class="bi bi-chat-dots me-1"></i> Iniciar conversa</button>
             </form>
           </div>
         </div>
       </div>
     </div>
+
+    <div class="small text-muted mb-4">
+      <i class="bi bi-cpu me-1"></i>{{ setting.training_model }} · temperatura {{ setting.training_temperature }} ·
+      <a href="{{ url_for('fap_review.settings') }}">configurações</a>
+    </div>
     {% endif %}
 
     <div class="card info-card">
-      <div class="card-header d-flex align-items-center gap-2">
-        <i class="bi bi-clock-history text-primary"></i> Comparações anteriores
-      </div>
+      <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-clock-history text-primary"></i> Atividade recente</div>
       <div class="card-body p-0">
         {% if comparison_rows %}
-        <div class="table-responsive">
-          <table class="table table-hover mb-0">
-            <thead class="table-light">
-              <tr>
-                <th class="ps-3">#</th>
-                <th>Documentos</th>
-                <th>Situação</th>
-                <th>O que foi gravado</th>
-                <th>Data</th>
-                <th class="pe-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for row in comparison_rows %}
-              <tr>
-                <td class="ps-3"><span class="text-muted small">{{ row.execution.id }}</span></td>
-                <td class="document-cell">{{ row.documents }}</td>
-                <td>
-                  <span
-                    class="badge rounded-pill bg-{{ row.situation.style }}-subtle text-{{ row.situation.style }}-emphasis border border-{{ row.situation.style }}-subtle px-2 py-1">
-                    <i class="{{ row.situation.icon }} me-1"></i>{{ row.situation.label }}
-                  </span>
-                </td>
-                <td>
-                  {% if row.targets %}
-                  {% for target in row.targets %}
-                  <span
-                    class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle version-pill">
-                    {{ target.label }} v{{ target.version_number }}{% if not target.activated %} · rascunho{% endif %}
-                  </span>
-                  {% endfor %}
-                  {% else %}
-                  <span class="text-muted small">—</span>
-                  {% endif %}
-                </td>
-                <td><small class="text-muted">{{ row.execution.created_at.strftime('%d/%m/%Y %H:%M') }}</small></td>
-                <td class="pe-3">
-                  {% if row.is_pending %}
-                  <a href="{{ url_for('fap_review.training_comparison', execution_id=row.execution.id) }}"
-                    class="btn btn-sm btn-primary">Retomar</a>
-                  {% else %}
-                  <a href="{{ url_for('fap_review.training_comparison', execution_id=row.execution.id) }}"
-                    class="btn btn-sm btn-outline-primary" title="Abrir comparação">
-                    <i class="bi bi-eye"></i>
-                  </a>
-                  {% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
+        <div class="table-responsive"><table class="table table-hover mb-0">
+          <thead class="table-light"><tr>
+            <th class="ps-3">#</th><th>Tipo</th><th>Assunto</th><th>Situação</th><th>O que foi gravado</th><th>Data</th><th class="pe-3"></th>
+          </tr></thead>
+          <tbody>
+            {% for row in comparison_rows %}
+            {% set chat = row.is_chat %}
+            <tr>
+              <td class="ps-3"><span class="text-muted small">{{ row.execution.id }}</span></td>
+              <td class="small text-nowrap"><i class="bi {{ 'bi-chat-dots' if chat else 'bi-files' }} text-primary me-1"></i>{{ 'Conversa' if chat else 'Comparação' }}</td>
+              <td class="document-cell">{{ row.documents }}</td>
+              <td>
+                <span class="badge rounded-pill bg-{{ row.situation.style }}-subtle text-{{ row.situation.style }}-emphasis border border-{{ row.situation.style }}-subtle px-2 py-1">
+                  <i class="{{ row.situation.icon }} me-1"></i>{{ row.situation.label }}
+                </span>
+              </td>
+              <td>
+                {% if row.targets %}{% for target in row.targets %}
+                <span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle version-pill">{{ target.label }} v{{ target.version_number }}{% if not target.activated %} · rascunho{% endif %}</span>
+                {% endfor %}
+                {% elif row.pending_note %}<span class="text-muted small">{{ row.pending_note }}</span>
+                {% else %}<span class="text-muted small">—</span>{% endif %}
+              </td>
+              <td><small class="text-muted text-nowrap">{{ row.execution.created_at.strftime('%d/%m/%Y %H:%M') }}</small></td>
+              <td class="pe-3">
+                {% set href = url_for('fap_review.training_chat', execution_id=row.execution.id) if chat else url_for('fap_review.training_comparison', execution_id=row.execution.id) %}
+                {% if row.is_pending %}<a href="{{ href }}" class="btn btn-sm btn-primary">Retomar</a>
+                {% else %}<a href="{{ href }}" class="btn btn-sm btn-outline-primary" title="Abrir"><i class="bi bi-eye"></i></a>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table></div>
         {% else %}
-        <div class="text-center py-5 text-muted">
-          <i class="bi bi-inbox fs-1 d-block mb-2"></i>
-          Nenhuma comparação de treinamento ainda
-        </div>
+        <div class="text-center py-5 text-muted"><i class="bi bi-inbox fs-1 d-block mb-2"></i>Nenhum treinamento ainda</div>
         {% endif %}
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const submit = document.getElementById('compareSubmit');
+  if (!submit) { return; }
+
+  function setupDropzone(zoneId, inputId, nameId) {
+    const zone = document.getElementById(zoneId);
+    const input = document.getElementById(inputId);
+    const name = document.getElementById(nameId);
+
+    function refresh() {
+      const file = input.files && input.files[0];
+      zone.classList.toggle('is-filled', !!file);
+      name.hidden = !file;
+      name.innerHTML = file ? '<i class="bi bi-check-circle-fill me-1"></i>' + file.name : '';
+      submit.disabled = !(document.getElementById('originalDocument').files[0]
+                          && document.getElementById('revisedDocument').files[0]);
+    }
+
+    zone.addEventListener('click', function () { input.click(); });
+    zone.addEventListener('dragover', function (e) { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', function () { zone.classList.remove('dragover'); });
+    zone.addEventListener('drop', function (e) {
+      e.preventDefault(); zone.classList.remove('dragover');
+      const dt = new DataTransfer();
+      if (e.dataTransfer.files[0]) { dt.items.add(e.dataTransfer.files[0]); }
+      input.files = dt.files;
+      refresh();
+    });
+    input.addEventListener('change', refresh);
+  }
+
+  setupDropzone('originalDropzone', 'originalDocument', 'originalName');
+  setupDropzone('revisedDropzone', 'revisedDocument', 'revisedName');
+
+  document.getElementById('compareForm').addEventListener('submit', function () {
+    submit.disabled = true;
+    submit.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Enviando…';
+  });
+})();
+</script>
 {% endblock %}

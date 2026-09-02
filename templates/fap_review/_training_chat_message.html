@@ -1,0 +1,23 @@
+{# Uma mensagem da conversa, com os cards das alterações propostas nela. #}
+{% if message.role == 'user' %}
+<div class="msg msg-user" data-message-id="{{ message.id }}">
+  <div class="msg-meta"><span class="msg-role"><i class="bi bi-person"></i> {{ session.get('user_name') or 'Você' }}</span>
+    <span>{{ message.created_at.strftime('%H:%M') if message.created_at else '' }}</span></div>
+  <div class="bubble">{{ message.content }}</div>
+</div>
+{% else %}
+<div class="msg msg-assistant" data-message-id="{{ message.id }}">
+  <div class="msg-meta"><span class="msg-role"><i class="bi bi-robot"></i> IA de treinamento</span>
+    <span>{{ message.created_at.strftime('%H:%M') if message.created_at else '' }}</span></div>
+  <div class="bubble">
+    <div class="bubble-text">{{ message.content }}</div>
+    {% set proposed = message.edits_json | from_json if message.edits_json else [] %}
+    {% for _ in proposed %}
+    {% set edit_id = message.id ~ '-' ~ loop.index0 %}
+    {% if edit_id in edits %}
+    {% with edit=edits[edit_id] %}{% include 'fap_review/_training_edit_card.html' %}{% endwith %}
+    {% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
