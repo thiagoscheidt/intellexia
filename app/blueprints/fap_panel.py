@@ -1268,15 +1268,22 @@ def contestacoes_pending_list():
     law_firm_id = get_current_law_firm_id()
     filter_conds = _build_contestacoes_filters(law_firm_id)
 
+    from sqlalchemy import or_
+
     imported_exists = exists().where(and_(
         FapAutoImportedContestacao.law_firm_id == law_firm_id,
         FapAutoImportedContestacao.contestacao_id == FapWebContestacao.contestacao_id,
     ))
 
+    # Pendente = nunca importada OU marcada para reprocessar. A segunda é a
+    # contestação que foi julgada depois de importada: o PDF foi rebaixado e os
+    # benefícios ainda vêm da versão transmitida. Mesma regra de
+    # `scripts/processar_beneficios_contestacoes.py` — se as duas divergirem, a
+    # tela oferece um conjunto e o script processa outro.
     rows = (
         FapWebContestacao.query
         .filter(*filter_conds)
-        .filter(~imported_exists)
+        .filter(or_(~imported_exists, FapWebContestacao.needs_reprocess.is_(True)))
         .with_entities(
             FapWebContestacao.id,
             FapWebContestacao.contestacao_id,
@@ -1385,6 +1392,7 @@ def contestacoes_page():
     total_contestacoes = 0
     imported_count = 0
     pending_count = 0
+    reprocess_count = 0
     with_file_count = 0
     without_file_count = 0
     # Contadores por coluna/instância (count_and1, count_pub2, …), alimentando
@@ -1398,8 +1406,14 @@ def contestacoes_page():
             FapAutoImportedContestacao.law_firm_id == law_firm_id,
             FapAutoImportedContestacao.contestacao_id == FapWebContestacao.contestacao_id,
         ))
-        imported_count = query.filter(imported_exists).count()
-        pending_count = total_contestacoes - imported_count
+        # "Aguardando reprocessamento": já importada, mas o relatório mudou
+        # (julgamento publicado → PDF rebaixado). Sai da contagem de
+        # processadas, senão a tela diz que está tudo em dia.
+        reprocess_count = query.filter(
+            imported_exists, FapWebContestacao.needs_reprocess.is_(True)
+        ).count()
+        imported_count = query.filter(imported_exists).count() - reprocess_count
+        pending_count = total_contestacoes - imported_count - reprocess_count
 
         # Arquivos locais sobre TODO o conjunto filtrado (não só a página exibida)
         with_file_count = query.filter(FapWebContestacao.file_path.isnot(None)).count()
@@ -1488,6 +1502,23 @@ def contestacoes_page():
         for imp in imported_rows:
             imported_map[imp.contestacao_id] = imp.report_id
 
+    # ── Contestações já importadas cujo relatório mudou desde a importação ──
+    # A linha continua "Processado" pelo vínculo em FapAutoImportedContestacao,
+    # mas os benefícios em tela vêm do PDF antigo — o selo precisa dizer isso.
+    reprocess_ids = set()
+    if contestacao_ids:
+        reprocess_ids = {
+            r.contestacao_id
+            for r in FapWebContestacao.query
+            .filter(
+                FapWebContestacao.law_firm_id == law_firm_id,
+                FapWebContestacao.contestacao_id.in_(contestacao_ids),
+                FapWebContestacao.needs_reprocess.is_(True),
+            )
+            .with_entities(FapWebContestacao.contestacao_id)
+            .all()
+        }
+
     # ── Valores únicos para os filtros de instância e situação ───────────
     distinct = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
     instancias = {(r.instancia_codigo, r.instancia_descricao)
@@ -1560,6 +1591,8 @@ def contestacoes_page():
         total_groups=total_groups,
         imported_count=imported_count,
         pending_count=pending_count,
+        reprocess_count=reprocess_count,
+        reprocess_ids=reprocess_ids,
         # filtros ativos (para repreencher o form)
         f_year=f_year,
         f_cnpj_raiz=f_cnpj_raiz,

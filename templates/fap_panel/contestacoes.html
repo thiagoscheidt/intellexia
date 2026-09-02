@@ -9,6 +9,7 @@
 contestacao_id=c.contestacao_id) -%}
 {%- set local_url = url_for('fap_panel.serve_contestacao_file', rec_id=c.id) if c.file_path else None -%}
 {%- set imported_report_id = imported_map.get(c.contestacao_id) -%}
+{%- set aguardando_reprocesso = c.contestacao_id in reprocess_ids -%}
 <div class="contestacao-cell">
   <div class="cell-row">
     <span class="protocolo-code">{{ c.protocolo or '—' }}</span>
@@ -44,7 +45,13 @@ contestacao_id=c.contestacao_id) -%}
       </button>
     </div>
 
-    {% if imported_report_id %}
+    {% if aguardando_reprocesso %}
+    <span class="btn-cell btn-cell-reprocess import-pending-btn" data-year="{{ c.ano_vigencia }}" data-cnpj="{{ cnpj14 }}"
+      data-id="{{ c.contestacao_id }}" data-rec-id="{{ c.id }}"
+      title="O relatório mudou desde a importação (julgamento publicado). Os benefícios em tela ainda vêm do documento anterior.">
+      <i class="bi bi-arrow-repeat"></i> Aguardando processamento
+    </span>
+    {% elif imported_report_id %}
     <a href="{{ url_for('disputes_center.fap_contestation_reports') }}" class="btn-cell btn-cell-imported"
       title="Benefícios processados"><i class="bi bi-check-circle-fill"></i> Processado</a>
     {% else %}
@@ -502,6 +509,23 @@ contestacao_id=c.contestacao_id) -%}
     color: #78350f;
   }
 
+  /* Aguardando processamento: já importada, mas o relatório mudou depois
+     (julgamento publicado → PDF rebaixado). Laranja para não se confundir com
+     o âmbar de "nunca processada" nem com o verde de "em dia" — são três
+     estados distintos e a triagem depende de separá-los à primeira vista.
+     Par orange-100/orange-800: 7,4:1, bem acima do mínimo de 4,5. */
+  .btn-cell-reprocess {
+    background: #ffedd5;
+    color: #9a3412;
+    border-color: #fed7aa;
+    cursor: pointer;
+  }
+
+  .btn-cell-reprocess:hover {
+    background: #fed7aa;
+    color: #7c2d12;
+  }
+
   .btn-cell-history {
     background: #e0f2fe;
     color: #075985;
@@ -910,6 +934,9 @@ vigência, empresa e instância.', icon='bi bi-table') %}
         <span class="text-muted">|</span>
         <span><i class="bi bi-clock-fill text-warning me-1"></i><span id="statsPending" class="fw-semibold">{{ pending_count }}</span>
           pendentes</span>
+        <span class="text-muted">|</span>
+        <span><i class="bi bi-arrow-repeat text-warning me-1"></i><span id="statsReprocess"
+            class="fw-semibold">{{ reprocess_count }}</span> aguardando processamento</span>
         <span class="text-muted">|</span>
         <span class="text-muted"><span id="statsTotal" class="fw-semibold">{{ total }}</span> no total (filtro)</span>
       </div>

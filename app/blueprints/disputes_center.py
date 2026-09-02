@@ -4075,7 +4075,25 @@ def fap_auto_import_import_contestacao():
         contestacao_id=int(contestacao_id),
         cnpj=cnpj,
     ).first()
-    if existing and not force_reimport:
+    # "Já importada" não vale quando a contestação está marcada para
+    # reprocessar: é o caso do julgamento publicado depois da importação — o PDF
+    # foi rebaixado e os benefícios em banco ainda vêm da versão transmitida.
+    # Sem esta exceção o botão "Aguardando processamento" cairia aqui, viraria
+    # "Processado" na tela e nada teria sido reprocessado.
+    rec_id_raw = data.get('rec_id')
+    if rec_id_raw:
+        _rec_marcado = FapWebContestacao.query.filter_by(
+            id=int(rec_id_raw), law_firm_id=law_firm_id,
+        ).first()
+    else:
+        _rec_marcado = FapWebContestacao.query.filter_by(
+            law_firm_id=law_firm_id,
+            contestacao_id=int(contestacao_id),
+            cnpj=cnpj,
+        ).first()
+    precisa_reprocessar = bool(_rec_marcado and _rec_marcado.needs_reprocess)
+
+    if existing and not force_reimport and not precisa_reprocessar:
         return jsonify({
             'ok': False,
             'already_imported': True,
@@ -4163,12 +4181,33 @@ def fap_auto_import_import_contestacao():
         report.knowledge_base_id = knowledge_file.id
         db.session.flush()
 
-        if existing and force_reimport:
+        if existing:
+            # Reusa a linha de importação sempre que ela existe — no
+            # force_reimport e também no reprocessamento. Criar outra estouraria
+            # a unicidade de (escritório, contestação, cnpj).
+            report_id_anterior = existing.report_id
             imported = existing
             imported.report_id = report.id
             imported.year = int(year)
             imported.original_filename = filename
             imported.imported_at = datetime.now()
+
+            # As decisões do relatório anterior vieram de OUTRO documento (a
+            # versão transmitida) e serão reextraídas do novo. O fingerprint é
+            # hash(instância|justificativa|parecer): com o parecer saindo do
+            # nada para o texto completo, a decisão nova entra com fingerprint
+            # diferente e a antiga fica — o benefício exibiria duas ocorrências
+            # de 1ª instância.
+            if report_id_anterior and report_id_anterior != report.id:
+                apagadas = BenefitContestationDecision.query.filter_by(
+                    report_id=report_id_anterior
+                ).delete(synchronize_session=False)
+                if apagadas:
+                    current_app.logger.info(
+                        'Reprocessamento da contestação %s: %s decisão(ões) do relatório #%s '
+                        'apagadas para reextração.',
+                        contestacao_id, apagadas, report_id_anterior,
+                    )
         else:
             imported = FapAutoImportedContestacao(
                 law_firm_id=law_firm_id,
