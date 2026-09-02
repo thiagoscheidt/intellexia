@@ -91,11 +91,13 @@ def main() -> None:
         if args.anos:
             years = sorted(set(int(a) for a in args.anos), reverse=True)
         else:
+            # Anos com pendência = sem arquivo OU com arquivo defasado (a
+            # situação mudou depois do download; ver download_pending_files).
             rows = (
                 db.session.query(FapWebContestacao.ano_vigencia)
                 .filter(
                     FapWebContestacao.law_firm_id == law_firm_id,
-                    FapWebContestacao.file_path.is_(None),
+                    FapWebContestacao.filtro_pendente_download(),
                 )
                 .distinct()
                 .all()
@@ -118,6 +120,7 @@ def main() -> None:
         _log(
             f"✓ Download concluído: {result['downloaded']} baixado(s), "
             f"{result['linked']} já em disco, "
+            f"{result.get('stale', 0)} defasado(s) rebaixado(s), "
             f"{result['failed']} sem PDF/falha (de {result['pending']} pendente(s))."
         )
         if result.get('expired'):

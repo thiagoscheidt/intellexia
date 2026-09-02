@@ -54,7 +54,7 @@ from app.services import fap_group_service
 from app.services import fap_group_import_service
 from app.services import fap_procuracoes_service
 from app.services.fap_web_service import (
-    FapWebAuthPayload, FapWebService, build_fap_service, resolve_fap_auth,
+    FapWebAuthPayload, FapWebService, build_fap_service, resolve_fap_auth, slug_situacao,
 )
 
 fap_panel_bp = Blueprint('fap_panel', __name__, url_prefix='/fap-panel')
@@ -696,10 +696,14 @@ def sync_download_batch():
     if auth is None:
         return jsonify({'ok': False, 'message': 'Dados de autenticação não encontrados.'}), 400
 
+    # Pendente = sem arquivo OU com arquivo defasado. O relatório da DATAPREV
+    # muda de conteúdo conforme o estágio (transmitida traz só justificativas;
+    # publicada traz Status, Parecer e Sumário), então quando a situação avança
+    # o PDF em disco precisa ser rebaixado — antes ele ficava preso para sempre.
     pending_q = (
         FapWebContestacao.query
         .filter_by(law_firm_id=law_firm_id)
-        .filter(FapWebContestacao.file_path.is_(None))
+        .filter(FapWebContestacao.filtro_pendente_download())
         .filter(FapWebContestacao.cnpj.like(cnpj_raiz + '%'))
     )
 
@@ -715,6 +719,7 @@ def sync_download_batch():
             FapWebContestacao.contestacao_id,
             FapWebContestacao.cnpj,
             FapWebContestacao.ano_vigencia,
+            FapWebContestacao.situacao_codigo,
         )
         .limit(60)
         .all()
@@ -735,7 +740,10 @@ def sync_download_batch():
                 return {'rec_id': rec.id, 'ok': False, 'error': dl.message}
 
             pdf_bytes = dl.data['pdf_bytes']
-            filename  = f"{rec.contestacao_id}_{dl.data['filename']}"
+            # A situação entra no nome: a versão transmitida e a publicada
+            # convivem em disco sem uma sobrescrever a outra.
+            situacao_slug = slug_situacao(rec.situacao_codigo)
+            filename  = f"{rec.contestacao_id}_{situacao_slug}_{dl.data['filename']}"
             save_dir  = os.path.join(upload_root, str(rec.ano_vigencia), rec.cnpj)
             os.makedirs(save_dir, exist_ok=True)
 
@@ -750,7 +758,12 @@ def sync_download_batch():
             with flask_app.app_context():
                 db_rec = db.session.get(FapWebContestacao, rec.id)
                 if db_rec:
+                    trocou_arquivo = bool(db_rec.file_path) and db_rec.file_path != rel_path
                     db_rec.file_path = rel_path
+                    db_rec.file_situacao_codigo = rec.situacao_codigo
+                    if trocou_arquivo:
+                        # Arquivo novo torna o parse anterior obsoleto.
+                        db_rec.needs_reprocess = True
                     db.session.commit()
 
             return {'rec_id': rec.id, 'ok': True, 'filename': filename}

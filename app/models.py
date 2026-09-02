@@ -2620,6 +2620,16 @@ class FapWebContestacao(db.Model):
     # ── Arquivo baixado ───────────────────────────────────────────────
     file_path = db.Column(db.String(500))  # Caminho relativo do PDF baixado em uploads/
 
+    # A qual situação o PDF em disco corresponde. O relatório da DATAPREV muda
+    # de conteúdo conforme o estágio: enquanto "Transmitida" ele traz só as
+    # justificativas; publicado, traz Status, Parecer e o Sumário. Sem esta
+    # coluna a fila de download (que só olhava `file_path IS NULL`) nunca
+    # rebaixava o arquivo capturado em voo, e o banco dizia "Indeferimento
+    # Total" com um PDF de meses antes, sem resultado nenhum.
+    # NULL = origem desconhecida (arquivo anterior a esta coluna); o backfill
+    # `scripts/backfill_fap_file_situacao.py` preenche lendo a 1ª página.
+    file_situacao_codigo = db.Column(db.String(100), index=True)
+
     # ── Controle de reprocessamento ───────────────────────────────────
     needs_reprocess = db.Column(db.Boolean, nullable=False, default=False, index=True)
 
@@ -2660,6 +2670,31 @@ class FapWebContestacao(db.Model):
             return _dt.fromisoformat(s[:10]).strftime('%d/%m/%Y')
         except Exception:
             return None
+
+    @staticmethod
+    def filtro_arquivo_defasado():
+        """Condição SQL: o PDF em disco não corresponde à situação atual.
+
+        Fonte única das três filas de download (cron, painel e script avulso) e
+        do teste. `file_situacao_codigo` NULL fica de FORA de propósito: é
+        "origem desconhecida" (arquivo anterior à coluna), e tratá-lo como
+        defasado dispararia o rebaixamento do acervo inteiro de uma vez. Quem
+        classifica esses é `scripts/backfill_fap_file_situacao.py`.
+        """
+        return db.and_(
+            FapWebContestacao.file_path.isnot(None),
+            FapWebContestacao.file_situacao_codigo.isnot(None),
+            FapWebContestacao.situacao_codigo.isnot(None),
+            FapWebContestacao.file_situacao_codigo != FapWebContestacao.situacao_codigo,
+        )
+
+    @staticmethod
+    def filtro_pendente_download():
+        """Condição SQL: precisa baixar — sem arquivo OU com arquivo defasado."""
+        return db.or_(
+            FapWebContestacao.file_path.is_(None),
+            FapWebContestacao.filtro_arquivo_defasado(),
+        )
 
     @staticmethod
     def extract_deferimento_descricao(item):

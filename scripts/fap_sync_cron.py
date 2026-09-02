@@ -8,8 +8,11 @@ Sequência de execução:
   3. Sincroniza procurações (delega a fap_procuracoes_service) + alerta por e-mail
   4. Contestações — Fase 1: busca em paralelo (várias empresas ao mesmo tempo)
                    Fase 2: grava no banco sequencialmente (upsert FapWebContestacao)
-  5. Download — fila única global: baixa em paralelo todos os PDFs sem arquivo local
-                (pula os que já existem em disco)
+  5. Download — fila única global: baixa em paralelo os PDFs sem arquivo local
+                (pula os que já existem em disco) E os defasados, isto é, cuja
+                situação avançou depois do download — o relatório da DATAPREV
+                muda de conteúdo conforme o estágio, e o arquivo capturado
+                enquanto "Transmitida" não tem Status nem Parecer.
 
 Variáveis de ambiente (.env):
   FAP_AUTH_JSON        — JSON de autenticação (obrigatório)
@@ -267,6 +270,7 @@ def persist_contestacoes_for_company(
 
     total_created = 0
     total_updated = 0
+    total_changed = 0
 
     tracked_fields = (
         'cnpj', 'cnpj_raiz', 'ano_vigencia', 'fap_company_id',
@@ -279,6 +283,7 @@ def persist_contestacoes_for_company(
         now = datetime.now()
         created = 0
         updated = 0
+        changed = 0
 
         for item in items:
             cid = item.get('id')
@@ -381,6 +386,8 @@ def persist_contestacoes_for_company(
                 existing.raw_data = json.dumps(item, ensure_ascii=False)
                 existing.last_synced_at = now
                 updated += 1
+                if changed_new:
+                    changed += 1
             else:
                 rec = FapWebContestacao(
                     law_firm_id=law_firm_id,
@@ -409,11 +416,19 @@ def persist_contestacoes_for_company(
                 created += 1
 
         db.session.commit()
-        _log(f"    Ano {year_int}: {len(items)} contestação(ões) — {created} criada(s), {updated} atualizada(s)")
+        # "atualizada" contava todo registro visto, mudando algo ou não — um dia
+        # sem novidade e um dia de virada de julgamento imprimiam a MESMA linha,
+        # e era exatamente isso que se ia procurar no log. "alterada" é o número
+        # que responde.
+        _log(
+            f"    Ano {year_int}: {len(items)} contestação(ões) — {created} criada(s), "
+            f"{updated} revista(s), {changed} alterada(s)"
+        )
         total_created += created
         total_updated += updated
+        total_changed += changed
 
-    return {'created': total_created, 'updated': total_updated}
+    return {'created': total_created, 'updated': total_updated, 'changed': total_changed}
 
 
 # ---------------------------------------------------------------------------
@@ -426,50 +441,76 @@ def download_pending_files(
     years: list[int],
     max_workers: int = 5,
 ) -> dict:
-    """Baixa, numa fila única, todos os PDFs sem arquivo local do escritório.
+    """Baixa, numa fila única, os PDFs faltantes E os defasados do escritório.
 
     Mais eficiente que baixar empresa-a-empresa: um só pool de workers cobre
     todas as empresas/anos de uma vez (sem ociosidade quando uma empresa tem
-    poucos arquivos). Antes de ir à rede, resolve em disco os arquivos que já
-    existem (não rebaixa) e salva em
+    poucos arquivos). Salva em
     ``uploads/fap_web_contestacoes/{law_firm_id}/{ano}/{cnpj14}/``.
+
+    Duas filas, e a distinção importa:
+
+    * **faltantes** (``file_path IS NULL``): antes de ir à rede, resolve em
+      disco o arquivo que já existe — cobre o run interrompido que gravou o PDF
+      e não gravou o caminho.
+    * **defasados** (``file_situacao_codigo`` diferente da situação atual): vão
+      SEMPRE à rede. O relatório da DATAPREV muda de conteúdo conforme o
+      estágio — enquanto "Transmitida" traz só as justificativas; publicado,
+      traz Status, Parecer e o Sumário —, então resolver em disco aqui
+      revincularia justamente o arquivo velho que se quer substituir.
+
+    ``file_situacao_codigo`` NULL é "origem desconhecida" e NÃO entra na fila:
+    são os arquivos anteriores à coluna, e tratá-los como defasados dispararia
+    o rebaixamento do acervo inteiro. Quem os classifica é o
+    ``scripts/backfill_fap_file_situacao.py``.
     """
     import os
     import glob
     from flask import current_app
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    from app.services.fap_web_service import FapWebService
+    from app.services.fap_web_service import FapWebService, slug_situacao
 
     year_ints = [int(y) for y in years]
 
-    pending = (
+    _campos = (
+        FapWebContestacao.id,
+        FapWebContestacao.contestacao_id,
+        FapWebContestacao.cnpj,
+        FapWebContestacao.ano_vigencia,
+        FapWebContestacao.situacao_codigo,
+    )
+    _escopo = (
+        FapWebContestacao.law_firm_id == law_firm_id,
+        FapWebContestacao.ano_vigencia.in_(year_ints),
+    )
+
+    faltantes = (
         FapWebContestacao.query
-        .filter(
-            FapWebContestacao.law_firm_id == law_firm_id,
-            FapWebContestacao.ano_vigencia.in_(year_ints),
-            FapWebContestacao.file_path.is_(None),
-        )
-        .with_entities(
-            FapWebContestacao.id,
-            FapWebContestacao.contestacao_id,
-            FapWebContestacao.cnpj,
-            FapWebContestacao.ano_vigencia,
-        )
+        .filter(*_escopo, FapWebContestacao.file_path.is_(None))
+        .with_entities(*_campos)
         .all()
     )
 
+    defasados = (
+        FapWebContestacao.query
+        .filter(*_escopo, FapWebContestacao.filtro_arquivo_defasado())
+        .with_entities(*_campos)
+        .all()
+    )
+
+    pending = faltantes + defasados
+
     if not pending:
-        return {'pending': 0, 'downloaded': 0, 'failed': 0, 'linked': 0, 'expired': False}
+        return {'pending': 0, 'downloaded': 0, 'failed': 0, 'linked': 0,
+                'stale': 0, 'expired': False}
 
     upload_root = os.path.join(current_app.root_path, 'uploads', 'fap_web_contestacoes', str(law_firm_id))
     flask_app = current_app._get_current_object()
 
-    # ── 1) Resolve arquivos que já existem em disco (não baixa de novo) ──
-    # Cobre o caso de o PDF ter sido baixado antes mas o file_path ter ficado
-    # nulo (ex.: run interrompido). Só vincula o caminho — sem ir à rede.
-    to_download = []
+    # ── 1) Resolve em disco — SOMENTE os faltantes (ver docstring) ──────
+    to_download = list(defasados)
     linked_from_disk = 0
-    for rec in pending:
+    for rec in faltantes:
         save_dir = os.path.join(upload_root, str(rec.ano_vigencia), rec.cnpj)
         existing = next(
             (m for m in glob.glob(os.path.join(save_dir, f'{rec.contestacao_id}_*')) if os.path.isfile(m)),
@@ -490,11 +531,15 @@ def download_pending_files(
     if linked_from_disk:
         db.session.commit()
 
-    _log(f"  {len(pending)} pendente(s): {linked_from_disk} já em disco, {len(to_download)} para baixar")
+    _log(
+        f"  {len(pending)} pendente(s) ({len(faltantes)} sem arquivo, "
+        f"{len(defasados)} defasado(s)): {linked_from_disk} resolvido(s) em disco, "
+        f"{len(to_download)} para baixar"
+    )
 
     if not to_download:
         return {'pending': len(pending), 'downloaded': 0, 'failed': 0,
-                'linked': linked_from_disk, 'expired': False}
+                'linked': linked_from_disk, 'stale': len(defasados), 'expired': False}
 
     def _download_one(rec):
         svc = FapWebService(auth)
@@ -509,7 +554,11 @@ def download_pending_files(
                         'expired': bool(getattr(dl, 'expired', False)), 'error': dl.message}
 
             pdf_bytes = dl.data['pdf_bytes']
-            filename  = f"{rec.contestacao_id}_{dl.data['filename']}"
+            # A situação entra no nome do arquivo: a versão transmitida e a
+            # publicada convivem em disco (a transmitida é a prova do que foi
+            # protocolado) e o glob da etapa 1 não confunde uma com a outra.
+            situacao = slug_situacao(rec.situacao_codigo)
+            filename  = f"{rec.contestacao_id}_{situacao}_{dl.data['filename']}"
             save_dir  = os.path.join(upload_root, str(rec.ano_vigencia), rec.cnpj)
             os.makedirs(save_dir, exist_ok=True)
 
@@ -524,7 +573,14 @@ def download_pending_files(
             with flask_app.app_context():
                 db_rec = db.session.get(FapWebContestacao, rec.id)
                 if db_rec:
+                    trocou_arquivo = bool(db_rec.file_path) and db_rec.file_path != rel_path
                     db_rec.file_path = rel_path
+                    db_rec.file_situacao_codigo = rec.situacao_codigo
+                    if trocou_arquivo:
+                        # Arquivo novo = o parse anterior está obsoleto. Sem isto o
+                        # relatório publicado ficaria em disco com os benefícios
+                        # ainda vindos da versão transmitida.
+                        db_rec.needs_reprocess = True
                     db.session.commit()
 
             return {'rec_id': rec.id, 'ok': True, 'filename': filename}
@@ -558,7 +614,7 @@ def download_pending_files(
                 _log(f"  ... download {done}/{total_dl} (ok={downloaded}, falhas={failed})")
 
     return {'pending': len(pending), 'downloaded': downloaded, 'failed': failed,
-            'linked': linked_from_disk, 'expired': expired}
+            'linked': linked_from_disk, 'stale': len(defasados), 'expired': expired}
 
 
 # ---------------------------------------------------------------------------
@@ -692,6 +748,7 @@ def main() -> None:
             # ── Fase 2: GRAVAÇÃO sequencial no banco ──────────────────────
             total_created = 0
             total_updated = 0
+            total_changed = 0
             for i, company in enumerate(companies, 1):
                 res = fetched_by_company.get(company.id)
                 nome = (company.nome or company.cnpj or '').strip()
@@ -714,11 +771,15 @@ def main() -> None:
                     )
                     total_created += stats['created']
                     total_updated += stats['updated']
+                    total_changed += stats.get('changed', 0)
                 except Exception as e:
                     _log(f"  ✗ Erro ao gravar {nome}: {e}")
                     db.session.rollback()
 
-            _log(f"\n  ✓ Contestações: {total_created} criadas, {total_updated} atualizadas no total")
+            _log(
+                f"\n  ✓ Contestações: {total_created} criada(s), {total_updated} revista(s), "
+                f"{total_changed} alterada(s) no total"
+            )
 
             # ── Fase 3: DOWNLOAD global dos PDFs (fila única) ─────────────
             if download_enabled:
@@ -731,6 +792,7 @@ def main() -> None:
                     _log(
                         f"  ✓ Download: {dl['downloaded']} baixado(s), "
                         f"{dl['linked']} já em disco, "
+                        f"{dl.get('stale', 0)} defasado(s) rebaixado(s), "
                         f"{dl['failed']} sem PDF/falha (de {dl['pending']} pendente(s))"
                     )
                     if dl['expired']:

@@ -159,13 +159,24 @@ def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImport
         conds.append(FapWebContestacao.file_path.isnot(None))
         conds.append(FapWebContestacao.file_path != '')
 
-        # Exclui já importadas (a menos que force_reimport)
+        # Exclui já importadas (a menos que force_reimport) — MAS deixa passar
+        # quem está marcado para reprocessar.
+        #
+        # `needs_reprocess` era escrito (pelo sync, quando a contestação muda; e
+        # pela fila de download, quando o PDF é rebaixado) e não era lido por
+        # consulta nenhuma — nem aqui, apesar do índice dedicado criado para
+        # isso. Resultado: a contestação julgada depois de importada ficava
+        # congelada com os benefícios da versão transmitida, sem status e sem
+        # parecer, e nada no sistema a resgatava.
         if not args.force_reimport:
             already_imported = exists().where(and_(
                 FapAutoImportedContestacao.law_firm_id == law_firm_id,
                 FapAutoImportedContestacao.contestacao_id == FapWebContestacao.contestacao_id,
             ))
-            conds.append(~already_imported)
+            conds.append(or_(
+                ~already_imported,
+                FapWebContestacao.needs_reprocess.is_(True),
+            ))
 
         query = (
             FapWebContestacao.query
@@ -222,18 +233,46 @@ def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImport
             file_size = os.path.getsize(abs_path)
 
             try:
-                # Reaproveta report existente de run anterior interrompido
+                # Reaproveita report existente de run anterior interrompido e,
+                # com needs_reprocess, também o já concluído: reusar a MESMA
+                # linha evita dois relatórios para a mesma contestação. A
+                # sobrescrita dos benefícios continua governada pela data —
+                # `_should_apply_benefit_update` só aceita referência mais nova,
+                # e o relatório publicado tem Data Publicação enquanto o
+                # transmitido só tem Data Transmissão, então o novo vence.
                 report = None
                 if fap_rec.report_id and not args.force_reimport:
-                    report = FapContestationJudgmentReport.query.filter_by(
+                    report_q = FapContestationJudgmentReport.query.filter_by(
                         id=fap_rec.report_id,
                         law_firm_id=law_firm_id,
-                    ).filter(FapContestationJudgmentReport.status.in_(
-                        ['pending', 'queued', 'processing', 'error']
-                    )).first()
+                    )
+                    if not fap_rec.needs_reprocess:
+                        report_q = report_q.filter(FapContestationJudgmentReport.status.in_(
+                            ['pending', 'queued', 'processing', 'error']
+                        ))
+                    report = report_q.first()
                     if report:
+                        arquivo_mudou = (report.file_path or '') != abs_path
+                        report.original_filename = filename
+                        report.file_path = abs_path
+                        report.file_size = file_size
                         report.status = 'pending'
                         report.error_message = None
+                        if arquivo_mudou:
+                            # PDF rebaixado tem outro hash: entra como arquivo
+                            # novo na base de conhecimento, senão o relatório
+                            # continuaria apontando para o texto antigo.
+                            knowledge_file = _ensure_knowledge_base(
+                                db=db,
+                                KnowledgeBase=KnowledgeBase,
+                                law_firm_id=law_firm_id,
+                                user_id=user_id,
+                                filename=filename,
+                                file_path=abs_path,
+                                file_size=file_size,
+                                file_type='PDF',
+                            )
+                            report.knowledge_base_id = knowledge_file.id
                         db.session.flush()
 
                 if report is None:

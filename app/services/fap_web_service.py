@@ -477,6 +477,19 @@ class FapWebService:
 # Resolução de autenticação (sessão do usuário → fallback no .env)
 # ---------------------------------------------------------------------------
 
+def slug_situacao(codigo: str | None) -> str:
+    """Trecho seguro para nome de arquivo a partir do código de situação.
+
+    O nome do PDF baixado carrega a situação para que a versão transmitida e a
+    publicada convivam em disco: o relatório da DATAPREV muda de conteúdo
+    conforme o estágio, e sobrescrever apagaria a prova do que foi protocolado.
+    Fonte única — usada pela fila do cron e pela rota do painel.
+    """
+    bruto = str(codigo or 'SEM_SITUACAO')
+    limpo = ''.join(ch if (ch.isalnum() or ch == '_') else '_' for ch in bruto)
+    return limpo[:40] or 'SEM_SITUACAO'
+
+
 def resolve_fap_auth(
     session_auth_json: str | None,
 ) -> tuple['FapWebAuthPayload | None', 'FapWebAuthPayload | None']:
