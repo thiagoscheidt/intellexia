@@ -109,7 +109,8 @@ def _ensure_knowledge_base(db, KnowledgeBase, law_firm_id, user_id, filename, fi
 
 
 def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImportedContestacao,
-              FapContestationJudgmentReport, FapVigenciaCnpj, KnowledgeBase, User, service) -> None:
+              FapContestationJudgmentReport, FapVigenciaCnpj, KnowledgeBase, User, service,
+              BenefitContestationDecision) -> None:
     from sqlalchemy import and_, exists, or_
 
     with app.app_context():
@@ -259,6 +260,19 @@ def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImport
                         report.status = 'pending'
                         report.error_message = None
                         if arquivo_mudou:
+                            # As decisões deste relatório vieram do PDF antigo e
+                            # serão reextraídas do novo. Sem apagar, o parecer
+                            # que aparece agora entra como fingerprint diferente
+                            # e o benefício fica com DUAS ocorrências de 1ª
+                            # instância: a da versão transmitida (só
+                            # justificativa, status "Em análise") e a completa.
+                            apagadas = BenefitContestationDecision.query.filter_by(
+                                report_id=report.id
+                            ).delete(synchronize_session=False)
+                            if apagadas:
+                                _log(f'  [{idx}/{total}] PDF trocado — {apagadas} decisão(ões) '
+                                     f'do relatório #{report.id} apagadas para reextração.')
+
                             # PDF rebaixado tem outro hash: entra como arquivo
                             # novo na base de conhecimento, senão o relatório
                             # continuaria apontando para o texto antigo.
@@ -456,6 +470,7 @@ def main() -> None:
     from main import app
     from app.models import db
     from app.models import (
+        BenefitContestationDecision,
         FapWebContestacao,
         FapAutoImportedContestacao,
         FapContestationJudgmentReport,
@@ -472,7 +487,8 @@ def main() -> None:
 
     for ano in anos:
         _run_year(args, ano, app, db, FapWebContestacao, FapAutoImportedContestacao,
-                  FapContestationJudgmentReport, FapVigenciaCnpj, KnowledgeBase, User, service)
+                  FapContestationJudgmentReport, FapVigenciaCnpj, KnowledgeBase, User, service,
+                  BenefitContestationDecision)
 
 
 if __name__ == '__main__':
