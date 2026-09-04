@@ -422,17 +422,27 @@ trecho grifado — reusando a peça 3.3, o mesmo caminho do RPI-14.
 
 ---
 
-## 5. Itens do documento de feedbacks fora desta remessa
+## 5. Itens fora desta remessa
 
-Levantados pelos usuários, sem ID no briefing. Registrados para não se perderem:
+Levantados pelos usuários, sem ID no briefing, e hoje abertos nas colunas **To Do**
+e **Doing** do Trello. Conferidos contra o código em 04/09/2026 — a conferência
+mudou o diagnóstico de três deles, e o registro anterior estava errado em um.
 
-| Origem | Item | Situação |
+| Cartão no Trello | Coluna | Situação depois da conferência |
 |---|---|---|
-| Gabriel 1 | Log de revisões dentro de cada caso, para abrir a tentativa nº 4 | O detalhe da petição já lista as revisões; conferir se atende |
-| Gabriel 3 | Usuários da mesma categoria com autorizações diferentes | É o modelo de permissão por módulo, que é por usuário e não por papel — decisão de produto, não defeito |
-| Edivan 1 | Baixar anexos das contestações administrativas do FAP Web | Outro módulo (Painel FAP) |
-| João 3 | E-mail de recuperação de senha nunca chega | **Defeito de infraestrutura, fora do Revisor.** Sem SMTP configurado o envio degrada em silêncio. Verificar no ambiente antes de tratar como bug de código |
-| Fred 3 / Edivan | Erros de leitura de números e datas nos PDFs anexos | Ver nota do RPI-25 |
+| FB-01 · Anexo não analisado (a CAT) | Doing | PDF sem texto extraível não é recusado: segue para o modelo como arquivo e a leitura vira visual. Uma CAT digitalizada cai aí, e nada no resultado diz que foi lido por imagem |
+| FB-02 · Falsos positivos por comparação textual | To Do | A conferência de razão social é feita só pelo prompt, que exige grafia **idêntica** — apontar `S.A` contra `S.A.` é obediência à instrução, não falha do modelo. O NIT tem a mesma forma. Cabe como regra R7 do saneador |
+| FB-03 · Leitura de números em PDF | Doing | Provável mesma origem do FB-01. Pede validação determinística dos campos de forma fechada (NIT, benefício, data na vigência), não ajuste de prompt |
+| FB-04 · Log de revisões no caso | To Do | **Já atendido.** `petition_detail` lista todas as execuções de revisão com status, documento, responsável, data e link. Confirmar com o Gabriel se o que falta é chegar até a tela |
+| FB-05 · Hierarquia e permissões por categoria | To Do | Confirmado: o papel dá só o conjunto padrão e a permissão efetiva é por usuário. Divergir é comportamento previsto — decisão de produto, não defeito |
+| FB-06 · Contador por advogado e situação | To Do | **Duplicata do RPI-04**, que já entrega o contador por status ao lado do advogado. Fechar junto |
+| FB-07 · E-mail de recuperação de senha | To Do | **O registro anterior estava errado.** Não é SMTP: `forgot_password_post` valida o formato do endereço e devolve a mensagem de sucesso sem gerar token, gravar nada ou chamar o `email_service`. O fluxo nunca foi construído |
+| FB-08 · Download dos anexos das contestações | To Do | O que existe é `download_contestacao`, que devolve o PDF do **julgamento**. Os anexos da empresa dependem de endpoint que ainda não se sabe se o gateway expõe |
+| Verificar caso reportado pelo Gabriel | To Do | Painel FAP. `fetch_procuracoes()` é chamada global; `fetch_contestacoes(cnpj, ano)` é por empresa e vigência, sobre o que já está em `fap_companies`. Rodar `diag_fap_estado_vs_portal.py` antes de tratar como defeito |
+| Máscara de CNPJ no template | To Do | `{{cliente_cnpj}}` recebe `case.client.cnpj` cru. O formatador existe (`_format_cnpj`), mas é privado do blueprint `disputes_center` |
+
+Nenhum deles entra na R02. Ficam registrados aqui e no quadro de tarefas, na
+coluna **Fora da R02**, para o de-para com o Trello fechar sem sobra.
 
 ---
 
