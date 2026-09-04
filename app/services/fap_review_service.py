@@ -20,6 +20,7 @@ from pathlib import Path
 
 from sqlalchemy import func
 
+from app.agents.fap_review.finding_sanitizer import fingerprint_achado
 from app.models import (
     db, FapReviewAuditLog, FapReviewExecution, FapReviewPetition,
     FapReviewPromptVersion, FapReviewReferenceVersion,
@@ -420,20 +421,14 @@ def normalize_finding_field(value: object) -> str:
 
 
 def build_finding_fingerprint(finding: dict | None) -> str:
-    """Gera fingerprint estável de um achado para persistir feedback do usuário."""
-    if not isinstance(finding, dict):
-        return ''
+    """Gera fingerprint estável de um achado para persistir feedback do usuário.
 
-    payload = {
-        'category': normalize_finding_field(finding.get('category')),
-        'severity': normalize_finding_field(finding.get('severity')),
-        'description': normalize_finding_field(finding.get('description')),
-        'location': normalize_finding_field(finding.get('location')),
-        'correction': normalize_finding_field(finding.get('correction')),
-        'manual_reference': normalize_finding_field(finding.get('manual_reference')),
-    }
-    serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
-    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+    Delega ao saneador (função pura, sem Flask) para que a identidade usada na
+    deduplicação dentro de uma revisão e a usada para reconhecer achado
+    descartado entre revisões sejam literalmente a mesma. Divergindo, um achado
+    marcado "não pertinente" voltaria a aparecer na revisão seguinte.
+    """
+    return fingerprint_achado(finding)
 
 
 

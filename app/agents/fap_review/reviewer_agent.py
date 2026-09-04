@@ -27,6 +27,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from app.agents.core.file_agent import FileAgent
+from app.agents.fap_review.finding_sanitizer import sanear
 from app.models import AgentTokenUsage
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
 from app.services.token_usage_service import TokenUsageService
@@ -113,6 +114,11 @@ class PetitionReviewResult(BaseModel):
     # Documentos em falta
     missing_documents: list[MissingDocument] = Field(default_factory=list)
     
+    # Achados que o saneador descartou, com regra e motivo. Vai para o debug:
+    # descarte silencioso impediria distinguir "o modelo não viu" de "o saneador
+    # comeu" — e é dessa distinção que depende confiar no revisor.
+    sanitizer_discards: list[dict] = Field(default_factory=list)
+
     # Resumo executivo
     executive_summary: ExecutiveSummary = Field(...)
     
@@ -439,8 +445,11 @@ INSTRUÇÕES DO PROJETO:
             result_dict = self._extract_json_dict_from_response(response_text)
 
             parse_errors: list[str] = []
+            sanitizer_discards: list[dict] = []
             theses = self._parse_theses(result_dict.get('theses', []), parse_errors)
-            findings = self._parse_findings(result_dict.get('findings', []), parse_errors)
+            findings = self._parse_findings(
+                result_dict.get('findings', []), parse_errors,
+                documento_texto=petition_text or '', descartes=sanitizer_discards)
             missing_documents = self._parse_missing_documents(result_dict.get('missing_documents', []), parse_errors)
             self._ensure_output_parsed(
                 result_dict,
@@ -458,6 +467,7 @@ INSTRUÇÕES DO PROJETO:
                 theses=theses,
                 findings=findings,
                 missing_documents=missing_documents,
+                sanitizer_discards=sanitizer_discards,
                 executive_summary=self._build_executive_summary(
                     result_dict.get('executive_summary', {}), findings),
                 new_patterns=[],
@@ -632,8 +642,13 @@ INSTRUÇÕES DO PROJETO:
             result_dict = self._extract_json_dict_from_response(response_text)
 
             parse_errors: list[str] = []
+            sanitizer_discards: list[dict] = []
             comparative_changes = self._parse_comparative_changes(result_dict.get('comparative_changes', []), parse_errors)
-            findings = self._parse_findings(result_dict.get('findings', []), parse_errors)
+            # A revisão comparativa audita a versão REVISADA — é o texto dela que
+            # o saneador precisa para saber se uma correção já foi atendida.
+            findings = self._parse_findings(
+                result_dict.get('findings', []), parse_errors,
+                documento_texto=revised_petition_text or '', descartes=sanitizer_discards)
             self._ensure_output_parsed(
                 result_dict,
                 parsed_items=len(comparative_changes) + len(findings),
@@ -649,6 +664,7 @@ INSTRUÇÕES DO PROJETO:
                 comparative_changes=comparative_changes,
                 findings=findings,
                 new_patterns=[],
+                sanitizer_discards=sanitizer_discards,
                 executive_summary=self._build_executive_summary(
                     result_dict.get('executive_summary', {}), findings),
             )
@@ -696,65 +712,22 @@ INSTRUÇÕES DO PROJETO:
         """Parse lista de teses"""
         return self._parse_model_items(data, IdentifiedThesis, "thesis", parse_errors)
 
-    def _parse_findings(self, data: list, parse_errors: list[str] | None = None) -> list[FindingItem]:
-        """Parse lista de achados"""
-        items = [
-            item for item in (data if isinstance(data, list) else [])
-            if not (isinstance(item, dict) and self._should_ignore_finding(item))
-        ]
-        return self._parse_model_items(items, FindingItem, "finding", parse_errors)
+    def _parse_findings(self, data: list, parse_errors: list[str] | None = None,
+                        documento_texto: str = '',
+                        descartes: list[dict] | None = None) -> list[FindingItem]:
+        """Parse lista de achados, já saneada.
 
-    def _normalize_review_text(self, value: Any) -> str:
-        """Normaliza texto para heurísticas simples de saneamento do output do modelo."""
-        text = str(value or "").strip().lower()
-        return " ".join(text.split())
+        O saneamento vive em `finding_sanitizer` (função pura) e não aqui: assim
+        os casos do briefing viram teste sem instanciar o agente nem chamar o
+        modelo. O que foi descartado sobe em `descartes` para aparecer no debug.
+        """
+        mantidos, removidos = sanear(data if isinstance(data, list) else [], documento_texto)
+        if descartes is not None:
+            descartes.extend(removidos)
+        for removido in removidos:
+            print(f"[FapReviewer] achado descartado ({removido['regra']}): {removido['motivo']}")
+        return self._parse_model_items(mantidos, FindingItem, "finding", parse_errors)
 
-    def _should_ignore_finding(self, item: dict[str, Any]) -> bool:
-        """Descarta falsos positivos em que o modelo marcou como achado algo explicitamente sem problema."""
-        haystack = " ".join(
-            self._normalize_review_text(item.get(field))
-            for field in ("category", "description", "location", "correction", "manual_reference")
-        )
-
-        if not haystack:
-            return False
-
-        mentions_company_name = any(
-            token in haystack
-            for token in (
-                "razao social",
-                "razão social",
-                "nome da empresa",
-                "nome da autora",
-                "empresa autora",
-            )
-        )
-        if not mentions_company_name:
-            return False
-
-        indicates_no_issue = any(
-            token in haystack
-            for token in (
-                "sem divergencia",
-                "sem divergências",
-                "sem divergencia detectada",
-                "sem divergências detectadas",
-                "nao ha divergencia",
-                "não há divergência",
-                "nenhuma divergencia",
-                "nenhuma divergência",
-                "grafada de forma consistente",
-                "grafado de forma consistente",
-                "consistente em todo o documento",
-                "sem problema",
-                "sem inconsistencias",
-                "sem inconsistências",
-            )
-        )
-        if not indicates_no_issue:
-            return False
-
-        return True
 
     def _parse_missing_documents(self, data: list, parse_errors: list[str] | None = None) -> list[MissingDocument]:
         """Parse lista de documentos em falta"""
@@ -1208,10 +1181,7 @@ Estruture em JSON com:
 
     def _merge_result_dicts(self, all_dicts: list[dict]) -> dict:
         """Consolida resultados de múltiplos chunks em um único dicionário."""
-        merged_findings = [
-            item for item in self._merge_unique_dict_items(all_dicts, "findings")
-            if not self._should_ignore_finding(item)
-        ]
+        merged_findings = self._merge_unique_dict_items(all_dicts, "findings")
         merged: dict[str, Any] = {
             "theses": self._merge_unique_dict_items(all_dicts, "theses"),
             "findings": merged_findings,
