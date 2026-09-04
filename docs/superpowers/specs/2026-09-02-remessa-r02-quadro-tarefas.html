@@ -445,7 +445,7 @@
       </div>
       <div class="bar"><span id="bar"></span></div>
       <div class="progress-top" style="font-size:11.5px">
-        <span id="progressNote">As 7 de dificuldade baixa da R02 estão entregues e testadas</span>
+        <span id="progressNote">12 de 28 entregues e testadas</span>
       </div>
     </div>
   </header>
@@ -455,7 +455,7 @@
     <span class="sep">|</span>
     <span><b>13</b> ajuste · <b>15</b> novo</span>
     <span class="sep">|</span>
-    <span class="entregue-nota"><b>7</b> entregues — as de dificuldade baixa da R02</span>
+    <span class="entregue-nota"><b>12</b> entregues — as 7 de dificuldade baixa mais RPI-04, 07, 10, GER-01 e FB-06</span>
     <span class="sep">|</span>
     <span class="hint">dificuldade é estimativa a partir da leitura do código, não medição</span>
   </p>
@@ -626,9 +626,9 @@
           <span class="tag nat-novo">Novo</span><span class="tag">index.html + petition_detail.html</span></div>
       </article>
 
-      <article class="card k-have" data-kind="have" data-wave="1" data-diff="media" data-nature="ajuste">
+      <article data-entregue="1" class="card k-have" data-kind="have" data-wave="1" data-diff="media" data-nature="ajuste">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-04" aria-label="Concluir: RPI-04">
+          <input class="card-check" type="checkbox" id="t-04" checked aria-label="Concluir: RPI-04">
           <span class="card-id">RPI-04</span>
           <h3 class="card-title">Filtros na lista de petições</h3>
         </div>
@@ -647,6 +647,7 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
           <span class="tag nat-ajuste">Ajuste</span><span class="tag">index.html + fap_review_service</span></div>
       </article>
@@ -673,7 +674,7 @@
           <div class="line">
             <span class="line-lab">O que fazer</span>
             <p>Sem Flask, sem rede, sem LLM. Recebe achados + texto do documento; devolve os saneados <strong>e a lista do que descartou, com o motivo</strong>.</p>
-            <p style="margin-top:6px"><strong>Parcial:</strong> o módulo existe e roda com R1, R2 e R6 (entregues junto com RPI-12 e RPI-13). Faltam R3 (citação direta), R4 (60 dias) e R5 (riscos ancorados) — por isso segue desmarcada.</p>
+            <p style="margin-top:6px"><strong>Parcial:</strong> o módulo roda com R1, R2, R3, R4 e R6. Falta só a R5 (riscos ancorados), que depende da decisão de produto do RPI-20 — por isso segue desmarcada. A R4 é a única que corrige em vez de descartar.</p>
           </div>
           <div class="line diag">
             <span class="line-lab">Por quê assim</span>
@@ -732,9 +733,9 @@
           <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
 
-      <article class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
+      <article data-entregue="1" class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-07" aria-label="Concluir: RPI-07">
+          <input class="card-check" type="checkbox" id="t-07" checked aria-label="Concluir: RPI-07">
           <span class="card-id">RPI-07</span>
           <h3 class="card-title">Ignorar citação direta</h3>
         </div>
@@ -753,13 +754,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
           <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
 
-      <article class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
+      <article data-entregue="1" class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-10" aria-label="Concluir: RPI-10">
+          <input class="card-check" type="checkbox" id="t-10" checked aria-label="Concluir: RPI-10">
           <span class="card-id">RPI-10</span>
           <h3 class="card-title">Prazo de 60 dias</h3>
         </div>
@@ -778,6 +780,7 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
           <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
@@ -1090,9 +1093,9 @@
         </div>
       </article>
 
-      <article class="card k-fix" data-kind="fix" data-wave="5" data-diff="baixa" data-nature="ajuste">
+      <article data-entregue="1" class="card k-fix" data-kind="fix" data-wave="5" data-diff="baixa" data-nature="ajuste">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-ger01" aria-label="Concluir: GER-01">
+          <input class="card-check" type="checkbox" id="t-ger01" checked aria-label="Concluir: GER-01">
           <span class="card-id">GER-01</span>
           <h3 class="card-title">Máscara de CNPJ no template</h3>
         </div>
@@ -1111,6 +1114,7 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
           <span class="tag nat-ajuste">Ajuste</span>
           <span class="tag">Trello · To Do</span>
@@ -1230,9 +1234,9 @@
         </div>
       </article>
 
-      <article class="card k-have" data-kind="have" data-wave="5" data-diff="baixa" data-nature="ajuste">
+      <article data-entregue="1" class="card k-have" data-kind="have" data-wave="5" data-diff="baixa" data-nature="ajuste">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-fb06" aria-label="Concluir: FB-06">
+          <input class="card-check" type="checkbox" id="t-fb06" checked aria-label="Concluir: FB-06">
           <span class="card-id">FB-06</span>
           <h3 class="card-title">Contador de petições por advogado</h3>
         </div>
@@ -1251,6 +1255,7 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
           <span class="tag nat-ajuste">Ajuste</span>
           <span class="tag">Trello · To Do</span>
