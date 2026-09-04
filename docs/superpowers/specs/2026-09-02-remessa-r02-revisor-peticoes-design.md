@@ -231,6 +231,35 @@ benefício e tese, e o extrator de anexos devolve fatos em texto livre.
 quando o achado cita duas datas, o código recalcula o intervalo e corrige o
 número (ou descarta o achado, se o intervalo real não sustentar a tese).
 
+> **Como (a) chega em produção: pelo agente de treinamento, nunca por script.**
+> O manual de produção está muitas versões à frente do seed, e uma migration
+> que grave e ative uma versão nova põe conteúdo em vigor sem ninguém ver o
+> diff — que é exatamente o que o fluxo de treinamento existe para impedir.
+> O caminho é a conversa interativa (`/fap-review/training/conversa`): o
+> agente propõe a edição, a âncora é conferida contra o manual **daquele**
+> banco (tem de existir literalmente e uma vez só, senão é bloqueada), o
+> admin lê o diff, aceita ou recusa, e escolhe entre rascunho e ativar. Fica
+> registrado em auditoria e a versão anterior permanece no histórico.
+>
+> Instrução para colar na conversa:
+>
+> > No manual de revisão FAP, no tópico **3.3 RESTABELECIMENTO**, logo após o
+> > parágrafo que começa com "**Definição:** dois benefícios de incapacidade
+> > temporária consecutivos", acrescente um parágrafo dizendo como se conta o
+> > intervalo: o dia da cessação não entra na conta, conta-se do dia seguinte
+> > à DCB até o dia anterior à DIB, em fórmula `(DIB − DCB) − 1`. Inclua uma
+> > tabela com três exemplos — 22/12/2017 para 22/01/2018 dá 30 dias;
+> > 01/01/2020 para 02/01/2020 dá 0 dias; 01/01/2020 para 02/03/2020 dá 60
+> > dias e por isso **não** é restabelecimento, já que a regra exige intervalo
+> > inferior a 60. Feche alertando que é erro frequente somar um dia a mais,
+> > contando o próprio dia da cessação. Não altere nenhum outro trecho.
+>
+> O texto exato está no seed (`database/fap_review_seed/MANUAL_REVISAO_FAP.md`),
+> que vale para instalação nova — onde o manual ativo ainda está vazio.
+>
+> **A regra R4 não depende disso.** Ela é determinística e já está valendo: o
+> manual orienta o modelo, o código é que garante o número.
+
 > **Ponto para o Fred validar.** O texto do Edivan diz "não contar o primeiro
 > dia e contar o último", o que daria **31** no exemplo 1 — contradizendo o
 > próprio exemplo dele. Os dois exemplos são consistentes entre si com a
