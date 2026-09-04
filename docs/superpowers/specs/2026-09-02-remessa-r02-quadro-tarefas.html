@@ -393,6 +393,77 @@
     padding: 10px 2px;
   }
 
+  .aside {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--rule);
+  }
+
+  .aside h2 {
+    font-size: 15px;
+    font-weight: 650;
+    letter-spacing: -.01em;
+    margin: 0 0 5px;
+  }
+
+  .aside > p {
+    margin: 0 0 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    max-width: 74ch;
+  }
+
+  .aside ul {
+    list-style: none;
+    margin: 0 0 16px;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 26px;
+  }
+
+  .aside li {
+    display: flex;
+    gap: 9px;
+    align-items: baseline;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    padding: 6px 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  .aside li b {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  .aside .pri {
+    margin-left: auto;
+    font-size: 10px;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+
+  .aside .tail {
+    margin: 0;
+    font-size: 12.5px;
+    line-height: 1.65;
+    color: var(--ink-faint);
+    max-width: 74ch;
+  }
+
+  .aside .tail b { color: var(--ink-soft); font-weight: 600; }
+
+  @media (max-width: 680px) {
+    .aside ul { grid-template-columns: minmax(0, 1fr); }
+  }
+
   footer {
     margin-top: 40px;
     padding-top: 16px;
@@ -995,9 +1066,38 @@
 
   </div>
 
+  <section class="aside">
+    <h2>Fora deste quadro</h2>
+    <p>
+      As colunas <b>To Do</b> e <b>Doing</b> do Trello têm hoje mais dez cartões que não são
+      requisitos da R02 — vieram de retorno de uso, depois do briefing, e ainda não foram
+      classificados. Ficam listados aqui para este quadro não se passar pela lista completa do que
+      existe; o controle deles continua sendo só no Trello.
+    </p>
+    <ul>
+      <li><b>Caso do Gabriel</b> <span>empresa já aparece em Procurações e ainda não em Contestações — é Painel FAP, não Revisor</span> <span class="pri">alta</span></li>
+      <li><b>FB-02</b> <span>falsos positivos por comparação textual: “S.A” contra “S.A.”, NIT correto marcado como divergente</span> <span class="pri">alta</span></li>
+      <li><b>FB-07</b> <span>e-mail de recuperação de senha não chega; login pelo Google segue funcionando</span> <span class="pri">alta</span></li>
+      <li><b>Máscara de CNPJ</b> <span>formatação do CNPJ no template da peça</span> <span class="pri">média</span></li>
+      <li><b>FB-01</b> <span>anexo não analisado pelo agente — o caso da CAT com a data correta</span> <span class="pri">doing</span></li>
+      <li><b>FB-03</b> <span>leitura de números em PDF: inversão de dígitos e datas incoerentes</span> <span class="pri">doing</span></li>
+      <li><b>FB-04</b> <span>log de revisões dentro do mesmo caso</span> <span class="pri">backlog</span></li>
+      <li><b>FB-05</b> <span>hierarquia e permissões por categoria de usuário</span> <span class="pri">backlog</span></li>
+      <li><b>FB-06</b> <span>contador de petições por advogado e por situação</span> <span class="pri">backlog</span></li>
+      <li><b>FB-08</b> <span>download dos anexos das contestações administrativas</span> <span class="pri">baixa</span></li>
+    </ul>
+    <p class="tail">
+      Duas coisas que só aparecem no cruzamento. <b>FB-06 não é item novo</b>: o contador por
+      advogado e por situação já está dentro do RPI-04, na Onda 3. E <b>FB-02 está parcialmente
+      atendido</b> — a regra R6 do saneador já descarta o achado de razão social em que o próprio
+      agente diz não haver divergência; falta a normalização de pontuação e o caso do NIT.
+    </p>
+  </section>
+
   <footer>
     <span>IntellexIA · módulo <strong>Revisor de Petições Iniciais</strong></span>
     <span>Design completo em <code>2026-09-02-remessa-r02-revisor-peticoes-design.md</code></span>
+    <span>Conferido contra o Trello em 04/09/2026</span>
     <span>Marcações ficam salvas neste navegador</span>
   </footer>
 
