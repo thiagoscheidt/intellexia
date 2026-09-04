@@ -244,6 +244,141 @@ def test_r6_nao_toca_achado_de_outro_assunto():
     check('achado é mantido', mantidos == [outro], f'mantidos={len(mantidos)}')
 
 
+
+# ── R3 — RPI-07: achado dentro de citação direta ────────────────────────
+
+# Petição com dois blocos de citação direta — uma transcrição de sentença e um
+# artigo de lei — e texto próprio do advogado em volta. Os relatos do RPI-07
+# são exatamente estes: o agente mandou uniformizar expressão dentro da
+# transcrição e atualizar terminologia dentro da citação literal da lei.
+PECA_COM_CITACAO = (
+    'Como se depreende da r. sentença proferida nos autos, "o auxílio-doença '
+    'acidentário concedido ao obreiro não guarda nexo com as atividades '
+    'desenvolvidas na empresa reclamada", razão pela qual a autora requer a '
+    'exclusão do benefício. Dispõe o artigo 22 da Lei nº 8.213/91 que "a empresa '
+    'deverá comunicar o acidente do trabalho à Previdência Social até o primeiro '
+    'dia útil seguinte ao da ocorrência". A autora comunicou o acidente do '
+    'trabalho fora do prazo legal, o que não afasta o direito à revisão.'
+)
+
+
+def test_r3_descarta_achado_dentro_da_transcricao():
+    print('\n15. R3 — achado dentro de citação direta')
+
+    dentro = achado(
+        category='CAT-3',
+        description='Uniformizar a expressão "obreiro" para "trabalhador".',
+        location='Fundamentação',
+        location_excerpt='concedido ao obreiro não guarda nexo com as atividades',
+    )
+    mantidos, descartes = sanear([dentro], PECA_COM_CITACAO)
+    check('achado é descartado', len(mantidos) == 0 and len(descartes) == 1)
+    check('regra é R3', descartes and descartes[0]['regra'] == 'R3',
+          descartes[0]['regra'] if descartes else 'nenhum descarte')
+
+
+def test_r3_descarta_achado_dentro_da_citacao_de_lei():
+    print('\n16. R3 — achado dentro de citação literal de lei')
+
+    dentro = achado(
+        category='CAT-6',
+        description='Atualizar a terminologia: "Previdência Social" hoje é INSS.',
+        location='Fundamentação',
+        location_excerpt='comunicar o acidente do trabalho à Previdência Social',
+    )
+    mantidos, descartes = sanear([dentro], PECA_COM_CITACAO)
+    check('achado é descartado', len(mantidos) == 0 and len(descartes) == 1)
+    check('regra é R3', descartes and descartes[0]['regra'] == 'R3')
+
+
+def test_r3_preserva_achado_no_texto_do_advogado():
+    print('\n17. R3 — texto próprio da peça continua auditado')
+
+    # Mesmo assunto, mas fora das aspas: é texto do advogado e tem de ser
+    # corrigido. Descartar aqui seria o oposto do pedido.
+    fora = achado(
+        category='CAT-6',
+        description='Terminologia desatualizada no texto da peça.',
+        location='Fundamentação',
+        location_excerpt='A autora comunicou o acidente do trabalho fora do prazo legal',
+    )
+    mantidos, descartes = sanear([fora], PECA_COM_CITACAO)
+    check('achado é mantido', len(mantidos) == 1 and len(descartes) == 0)
+
+
+def test_r3_trecho_dentro_e_fora_das_aspas_sobrevive():
+    print('\n18. R3 — na dúvida, mantém')
+
+    # "acidente do trabalho" aparece dentro da citação de lei e também no texto
+    # do advogado. Não dá para saber a qual o achado se refere; descartar
+    # engoliria um apontamento legítimo.
+    doc = 'Dispõe a lei que "a empresa deve comunicar o acidente do trabalho". ' \
+          'A autora não comunicou o acidente do trabalho.'
+    ambiguo = achado(location_excerpt='o acidente do trabalho')
+    mantidos, descartes = sanear([ambiguo], doc)
+    check('achado é mantido', len(mantidos) == 1 and len(descartes) == 0)
+
+
+def test_r3_aspas_tipograficas():
+    print('\n19. R3 — aspas tipográficas do Word')
+
+    doc = 'Conforme a sentença, \u201co obreiro laborava em condi\u00e7\u00f5es insalubres\u201d, ' \
+          'o que a autora contesta.'
+    dentro = achado(location_excerpt='o obreiro laborava em condi\u00e7\u00f5es insalubres')
+    mantidos, descartes = sanear([dentro], doc)
+    check('achado é descartado', len(mantidos) == 0 and len(descartes) == 1)
+    check('regra é R3', descartes and descartes[0]['regra'] == 'R3')
+
+
+def test_r3_aspa_sem_par_nao_engole_o_documento():
+    print('\n20. R3 — aspa solta não vira citação até o fim da peça')
+
+    # Uma aspa de abertura sem fechamento é erro de digitação, não citação.
+    # Se ela abrisse um span, todo o resto da peça deixaria de ser auditado.
+    doc = 'A autora afirma que "houve erro de estabelecimento. ' \
+          'O benefício foi vinculado ao CNPJ incorreto pela autarquia.'
+    depois = achado(location_excerpt='vinculado ao CNPJ incorreto pela autarquia')
+    mantidos, descartes = sanear([depois], doc)
+    check('achado é mantido', len(mantidos) == 1 and len(descartes) == 0)
+
+
+def test_r3_apostrofo_nao_delimita_citacao():
+    print('\n21. R3 — apóstrofo não abre citação')
+
+    # Aspas simples marcam valor proposto na R1, não citação. Tratá-las como
+    # delimitador faria qualquer apóstrofo silenciar o texto em volta.
+    doc = "A empresa d'Água Ltda. informou o CNPJ 19.630.496/0001-05 na inicial."
+    a = achado(location_excerpt='informou o CNPJ 19.630.496/0001-05 na inicial')
+    mantidos, descartes = sanear([a], doc)
+    check('achado é mantido', len(mantidos) == 1 and len(descartes) == 0)
+
+
+def test_r3_sem_documento_nao_descarta():
+    print('\n22. R3 — sem o texto do documento, a regra não roda')
+
+    a = achado(location_excerpt='concedido ao obreiro não guarda nexo')
+    mantidos, descartes = sanear([a], '')
+    check('achado é mantido', len(mantidos) == 1 and len(descartes) == 0)
+
+
+def test_r3_achado_sem_trecho_nao_descarta():
+    print('\n23. R3 — achado sem trecho literal não tem como ser localizado')
+
+    a = achado(location_excerpt=None,
+               description='Falta o pedido de tutela de urgência.')
+    mantidos, descartes = sanear([a], PECA_COM_CITACAO)
+    check('achado é mantido', len(mantidos) == 1 and len(descartes) == 0)
+
+
+def test_r3_descarte_traz_motivo_legivel():
+    print('\n24. R3 — o descarte diz por que descartou')
+
+    dentro = achado(location_excerpt='concedido ao obreiro não guarda nexo com as atividades')
+    _, descartes = sanear([dentro], PECA_COM_CITACAO)
+    motivo = descartes[0]['motivo'] if descartes else ''
+    check('motivo menciona a citação', 'citação' in motivo, motivo)
+
+
 def main() -> int:
     print('=' * 62)
     print('SANEADOR DE ACHADOS — Revisor FAP')
@@ -263,6 +398,16 @@ def main() -> int:
     test_r6_descarta_achado_que_diz_nao_haver_divergencia()
     test_r6_preserva_divergencia_real_de_razao_social()
     test_r6_nao_toca_achado_de_outro_assunto()
+    test_r3_descarta_achado_dentro_da_transcricao()
+    test_r3_descarta_achado_dentro_da_citacao_de_lei()
+    test_r3_preserva_achado_no_texto_do_advogado()
+    test_r3_trecho_dentro_e_fora_das_aspas_sobrevive()
+    test_r3_aspas_tipograficas()
+    test_r3_aspa_sem_par_nao_engole_o_documento()
+    test_r3_apostrofo_nao_delimita_citacao()
+    test_r3_sem_documento_nao_descarta()
+    test_r3_achado_sem_trecho_nao_descarta()
+    test_r3_descarte_traz_motivo_legivel()
 
     print('\n' + '=' * 62)
     if _falhas:

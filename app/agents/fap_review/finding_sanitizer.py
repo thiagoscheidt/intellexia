@@ -11,6 +11,7 @@ Regras implementadas até aqui (remessa R02):
 
     R1 — RPI-12: a correção propõe algo que o documento já atende.
     R2 — RPI-13: o mesmo achado devolvido mais de uma vez.
+    R3 — RPI-07: o achado cai dentro de uma citação direta.
     R6 — falso positivo em que o próprio achado diz não haver divergência.
 """
 
@@ -111,6 +112,89 @@ def _achado_se_declara_sem_problema(achado: dict) -> str | None:
     return 'o próprio achado declara que a razão social está consistente'
 
 
+# ── R3 ──────────────────────────────────────────────────────────────────
+# RPI-07: transcrição de sentença, doutrina e texto de lei não são corrigidos
+# na peça em elaboração — são reproduzidos como estão. O prompt também orienta
+# isso, mas quem garante é o código.
+
+# Só aspas duplas delimitam citação. A aspa simples é o que a R1 usa para
+# marcar valor proposto, e em português ela também é apóstrofo ("d'Água"):
+# tratá-la como delimitador faria uma palavra apostrofada silenciar todo o
+# texto em volta dela.
+_ASPAS_RETAS = '"'
+_ASPAS_DIRECIONAIS = (('“', '”'), ('«', '»'))
+
+# Trecho curto demais casa em qualquer lugar e não prova localização.
+_MINIMO_TRECHO = 8
+
+# Um par de aspas mais longo que isto quase certamente é emparelhamento errado
+# — uma aspa solta lá atrás deslocando todos os pares — e não uma citação. Uma
+# transcrição de acórdão inteira cabe folgada nesse limite.
+_MAX_SPAN_CITACAO = 4000
+
+
+def _spans_de_citacao(documento: str) -> list[tuple[int, int]]:
+    """Intervalos do documento que estão entre aspas duplas.
+
+    Só pares **fechados** contam: aspa de abertura sem fechamento é erro de
+    digitação, e deixá-la abrir um intervalo faria todo o resto da peça deixar
+    de ser auditado.
+    """
+    spans: list[tuple[int, int]] = []
+
+    # Direcionais: a própria forma diz quem abre e quem fecha, então o
+    # emparelhamento é confiável mesmo com uma aspa solta no meio.
+    for abre, fecha in _ASPAS_DIRECIONAIS:
+        pilha: list[int] = []
+        for i, ch in enumerate(documento):
+            if ch == abre:
+                pilha.append(i)
+            elif ch == fecha and pilha:
+                spans.append((pilha.pop(), i))
+
+    # Retas: são idênticas na abertura e no fechamento, então só resta parear
+    # na ordem — 1ª com 2ª, 3ª com 4ª. Sobrando uma, ela fica de fora.
+    posicoes = [i for i, ch in enumerate(documento) if ch == _ASPAS_RETAS]
+    for a, b in zip(posicoes[::2], posicoes[1::2]):
+        spans.append((a, b))
+
+    return [(a, b) for a, b in spans if b - a <= _MAX_SPAN_CITACAO]
+
+
+def _achado_dentro_de_citacao(achado: dict, documento: str,
+                              spans: list[tuple[int, int]]) -> str | None:
+    """Motivo do descarte, se o trecho do achado só ocorrer dentro de citação.
+
+    Exige que **todas** as ocorrências do trecho estejam citadas. Quando a
+    mesma frase aparece dentro e fora das aspas não há como saber a qual o
+    achado se refere, e descartar engoliria um apontamento legítimo.
+    """
+    if not spans:
+        return None
+
+    trecho = normalizar_espacos(achado.get('location_excerpt'))
+    if len(trecho) < _MINIMO_TRECHO:
+        return None
+
+    ocorrencias = []
+    inicio = documento.find(trecho)
+    while inicio != -1:
+        ocorrencias.append(inicio)
+        inicio = documento.find(trecho, inicio + 1)
+
+    if not ocorrencias:
+        return None
+
+    fim_trecho = len(trecho)
+    for posicao in ocorrencias:
+        if not any(a < posicao and posicao + fim_trecho - 1 < b
+                   for a, b in spans):
+            return None
+
+    return ('o trecho está dentro de uma citação direta, que é reproduzida '
+            'como consta na origem e não corrigida na peça')
+
+
 def _correcao_ja_atendida(achado: dict, documento: str) -> str | None:
     """Motivo do descarte, se a correção pedir algo que o documento já tem."""
     for proposta in trechos_citados(achado.get('correction')):
@@ -132,9 +216,10 @@ def sanear(achados: list, documento_texto: str = '') -> tuple[list, list[dict]]:
 
     Returns:
         (mantidos, descartes), onde cada descarte é
-        ``{'regra': 'R1'|'R2'|'R6', 'motivo': str, 'achado': dict}``.
+        ``{'regra': 'R1'|'R2'|'R3'|'R6', 'motivo': str, 'achado': dict}``.
     """
     documento = normalizar_espacos(documento_texto)
+    spans_citados = _spans_de_citacao(documento) if documento else []
 
     mantidos: list = []
     descartes: list[dict] = []
@@ -148,6 +233,11 @@ def sanear(achados: list, documento_texto: str = '') -> tuple[list, list[dict]]:
         motivo = _achado_se_declara_sem_problema(achado)
         if motivo:
             descartes.append({'regra': 'R6', 'motivo': motivo, 'achado': achado})
+            continue
+
+        motivo = _achado_dentro_de_citacao(achado, documento, spans_citados)
+        if motivo:
+            descartes.append({'regra': 'R3', 'motivo': motivo, 'achado': achado})
             continue
 
         motivo = _correcao_ja_atendida(achado, documento) if documento else None

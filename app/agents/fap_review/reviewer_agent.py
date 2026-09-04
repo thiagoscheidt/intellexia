@@ -299,6 +299,14 @@ Em TODA revisão, independentemente de outras regras e antes de qualquer outra a
 Exemplos de erros típicos: "WHIRLPOOL" grafado como "WHIRPOOL"; "AMBEV S.A." como "AMBEV SA"; nome com letra acentuada vs. sem acento.
 Esta verificação NÃO PODE ser omitida em nenhuma hipótese.
 
+CITAÇÃO DIRETA — NÃO AUDITAR:
+Trechos entre aspas duplas são transcrição: sentença, acórdão, doutrina ou texto de lei
+reproduzidos como constam na origem. NÃO gere achado sobre o conteúdo deles — não uniformize
+expressão, não atualize terminologia, não corrija grafia nem pontuação dentro das aspas.
+Alterar uma citação a descaracteriza. Isso vale inclusive para a verificação de razão social
+acima: o nome da empresa como aparece dentro de uma transcrição não conta como divergência.
+O texto do próprio advogado, fora das aspas, continua integralmente auditado.
+
 MANUAL DE REFERÊNCIA:
 {self.manual_content if self.manual_content else 'Manual não carregado'}
 
