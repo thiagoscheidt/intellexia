@@ -51,6 +51,42 @@ NEW_REVISION_BLOCKED_STATUSES = {'awaiting_approval', 'ready_for_filing', 'filed
 
 MAX_IDENTIFIER_LENGTH = 96
 
+# Rótulo para execução sem modelo gravado. NUNCA substituir por um nome de
+# modelo "provável": foi um literal chutado no template que produziu o RPI-18,
+# com o debug anunciando gpt-4o-mini enquanto o Sonnet rodava. A configuração
+# do escritório pode ter mudado desde a execução — só o que foi gravado vale.
+MODEL_NOT_RECORDED = 'não registrado'
+
+_SO_DIGITOS = re.compile(r'[0-9]+')
+
+
+def describe_model_name(value: str | None) -> str:
+    """Modelo a exibir para uma execução; ausência é dita, não adivinhada."""
+    return str(value or '').strip() or MODEL_NOT_RECORDED
+
+
+def validate_wrike_identifier(raw: str | None) -> tuple[str, str | None]:
+    """Valida o Id Wrike da petição (RPI-23).
+
+    Só dígitos: texto livre quebra a busca por Id e impede relacionar os dados
+    com o Wrike depois. Devolve ``(valor_normalizado, mensagem_de_erro | None)``.
+
+    O valor é tratado como identificador, não como número — zero à esquerda é
+    preservado, e por isso a normalização apara as pontas mas não converte.
+    """
+    valor = str(raw or '').strip()
+
+    if not valor:
+        return '', 'Informe o Id Wrike da petição.'
+    if len(valor) > MAX_IDENTIFIER_LENGTH:
+        return valor, f'O Id Wrike pode ter no máximo {MAX_IDENTIFIER_LENGTH} caracteres.'
+    # `str.isdigit()` aceita '²' e '١٢٣'; ambos passariam e quebrariam
+    # exatamente a busca por Id que este requisito existe para proteger.
+    if not _SO_DIGITOS.fullmatch(valor):
+        return valor, 'O Id Wrike deve conter apenas números.'
+
+    return valor, None
+
 # Só revisão que falhou pode ser reexecutada com os mesmos arquivos.
 # 'completed' fica de fora para não sobrescrever achados já triados, e
 # 'processing'/'pending' para não disparar duas execuções (cada clique custa uma

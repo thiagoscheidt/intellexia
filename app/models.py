@@ -3054,6 +3054,12 @@ class FapReviewExecution(db.Model):
     # Metadados
     prompt_version_id = db.Column(db.Integer, db.ForeignKey('fap_review_prompt_versions.id'))
     reference_version_id = db.Column(db.Integer, db.ForeignKey('fap_review_reference_versions.id'))
+    # Modelo efetivamente usado, gravado no momento da execução. Sem ele, a tela
+    # de debug só podia chutar — e chutava 'gpt-4o-mini' enquanto o Sonnet
+    # rodava (RPI-18). Execução anterior à coluna fica NULL e a tela diz
+    # "não registrado": a configuração do escritório pode ter mudado desde
+    # então, e inferir a partir dela recriaria o mesmo defeito.
+    model_name = db.Column(db.String(100), comment='Modelo LLM usado nesta execução')
 
     # Análise comparativa (se houver duas versões)
     comparative_analysis = db.Column(db.Boolean, default=False, comment='True se análise comparativa')

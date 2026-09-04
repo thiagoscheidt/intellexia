@@ -774,6 +774,9 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
         # Snapshot das versões usadas nesta execução (rastreabilidade)
         execution.used_versions_json = json.dumps(
             _svc.collect_active_versions(law_firm_id), ensure_ascii=False)
+        # Gravado ANTES de rodar: se a execução falhar no meio, ainda queremos
+        # saber com que modelo ela falhou.
+        execution.model_name = setting.reviewer_model
         db.session.commit()
 
         # Instanciar agente revisor
@@ -1257,10 +1260,10 @@ def revision():
                     return jsonify({'error': 'Petição selecionada não encontrada.'}), 404
                 law_firm_document_identifier = petition.office_document_identifier
             else:
-                if not law_firm_document_identifier:
-                    return jsonify({'error': 'Informe o identificador do documento para o escritório.'}), 400
-                if len(law_firm_document_identifier) > 96:
-                    return jsonify({'error': 'O identificador do documento deve ter no máximo 96 caracteres.'}), 400
+                law_firm_document_identifier, identifier_error = _svc.validate_wrike_identifier(
+                    law_firm_document_identifier)
+                if identifier_error:
+                    return jsonify({'error': identifier_error}), 400
                 petition = FapReviewPetition.query.filter_by(
                     law_firm_id=law_firm_id,
                     office_document_identifier=law_firm_document_identifier,
@@ -1582,6 +1585,8 @@ def revision_result(execution_id: int):
 
     return render_template('fap_review/revision_result.html',
                           execution=execution,
+                          model_label=_svc.describe_model_name(execution.model_name),
+                          sanitizer_discards=(result_data or {}).get('sanitizer_discards') or [],
                           petition=petition,
                           petition_status_badge=_build_petition_status_badge(petition.workflow_status) if petition else None,
                           result_data=result_data,
@@ -1692,10 +1697,15 @@ def petition_update_details(petition_id: int):
     if len(new_title) > 255:
         return jsonify({'error': 'O título da petição pode ter no máximo 255 caracteres.'}), 400
 
-    if not new_identifier:
+    # Formato só é cobrado quando o Id muda: petição antiga pode ter identificador
+    # não numérico, e exigi-lo aqui travaria uma edição de título que não tem
+    # nada a ver com isso. Id novo ou alterado passa pela regra cheia.
+    if new_identifier != petition.office_document_identifier:
+        new_identifier, identifier_error = _svc.validate_wrike_identifier(new_identifier)
+        if identifier_error:
+            return jsonify({'error': identifier_error}), 400
+    elif not new_identifier:
         return jsonify({'error': 'Informe o Id Wrike da petição.'}), 400
-    if len(new_identifier) > 96:
-        return jsonify({'error': 'O Id Wrike pode ter no máximo 96 caracteres.'}), 400
 
     duplicated_petition = FapReviewPetition.query.filter(
         FapReviewPetition.law_firm_id == law_firm_id,
@@ -2762,6 +2772,7 @@ def training_compare():
                 user_id=session.get('user_id'),
                 execution_type='training',
                 status='processing',
+                model_name=_get_fap_setting(law_firm_id).training_model,
                 main_document_path=str(original_path),
                 main_document_filename=original_file.filename,
                 comparative_analysis=True,
@@ -2816,6 +2827,14 @@ def training():
     rows = []
     for execution in recent:
         payload = _load_training_payload(execution)
+        # RPI-03: a coerência entre lotes não precisa de mecanismo novo — o
+        # versionamento com ativação já existe. Precisa ficar visível: com que
+        # modelo cada lote rodou, e se é o mesmo que está valendo hoje.
+        model_meta = {
+            'model_label': _svc.describe_model_name(execution.model_name),
+            'model_is_current': bool(
+                execution.model_name and execution.model_name == setting.training_model),
+        }
         if execution.execution_type == _svc.TRAINING_CHAT_TYPE:
             first = FapReviewTrainingMessage.query.filter_by(
                 execution_id=execution.id, role='user',
@@ -2824,6 +2843,7 @@ def training():
             rows.append({
                 'execution': execution,
                 'documents': subject,
+                **model_meta,
                 **_svc.summarize_chat_execution(execution.status, payload, subject),
             })
         else:
@@ -2831,6 +2851,7 @@ def training():
                 'execution': execution,
                 'documents': _training_documents_label(execution, payload),
                 'is_chat': False,
+                **model_meta,
                 **_svc.summarize_training_execution(execution.status, payload),
             })
 
@@ -2922,6 +2943,7 @@ def training_chat_start():
         user_id=session.get('user_id'),
         execution_type=_svc.TRAINING_CHAT_TYPE,
         status='pending',
+        model_name=_get_fap_setting(law_firm_id).training_model,
         main_document_filename='Treinamento interativo',
         result_json=json.dumps({'stage': 'chat', 'accepted': [], 'refused': [], 'saved': []}),
     )

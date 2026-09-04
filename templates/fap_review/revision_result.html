@@ -1537,29 +1537,7 @@
                             </div>
                         </div>
 
-                        {% if petition and execution.status == 'completed' and not execution_superseded
-                        and petition.workflow_status not in ['awaiting_approval', 'ready_for_filing', 'filed', 'archived'] %}
-                        <!-- Conclusão da triagem: barra flutuante quando todos os pontos foram triados -->
-                        <div id="triageCompleteActions" class="triage-floating-bar"
-                            style="display: {% if triage_complete %}block{% else %}none{% endif %};"
-                            data-complete-triage-url="{{ url_for('fap_review.revision_complete_triage', execution_id=execution.id) }}">
-                            <div class="small fw-semibold mb-2" style="color: #198754;">
-                                <i class="bi bi-clipboard2-check me-1"></i> Todos os pontos foram triados. Como deseja
-                                concluir esta versão?
-                            </div>
-                            <div class="d-flex flex-wrap gap-2 justify-content-center">
-                                <button type="button" class="btn btn-sm btn-outline-primary" id="triageNewVersionBtn"
-                                    data-outcome="new_version">
-                                    <i class="bi bi-arrow-repeat me-1"></i> Revisada — enviar nova versão
-                                </button>
-                                <button type="button" class="btn btn-sm btn-primary" id="triageFinalVersionBtn"
-                                    data-outcome="final_version">
-                                    <i class="bi bi-send-check me-1"></i> Versão final — enviar para aprovação
-                                </button>
-                            </div>
-                            <div id="triageActionFeedback" class="small mt-2" style="display:none;"></div>
-                        </div>
-                        {% endif %}
+
 
                         <!-- Listagem redesenhada dos Pontos -->
                         {% for finding in result_data.findings %}
@@ -1684,6 +1662,37 @@
                 </div>
             </div>
             {% endif %}
+
+            <!-- Conclusão da triagem: fora do bloco de achados de propósito.
+                 Aninhada nele, a barra sumia quando a revisão não encontrava nada —
+                 e a petição sem erros ficava sem como ser aprovada (RPI-19). -->
+                    {% if petition and execution.status == 'completed' and not execution_superseded
+                    and petition.workflow_status not in ['awaiting_approval', 'ready_for_filing', 'filed', 'archived'] %}
+                    <!-- Conclusão da triagem: barra flutuante quando todos os pontos foram triados -->
+                    <div id="triageCompleteActions" class="triage-floating-bar"
+                        style="display: {% if triage_complete %}block{% else %}none{% endif %};"
+                        data-complete-triage-url="{{ url_for('fap_review.revision_complete_triage', execution_id=execution.id) }}">
+                        <div class="small fw-semibold mb-2" style="color: #198754;">
+                            <i class="bi bi-clipboard2-check me-1"></i>
+                            {% if result_data.findings %}
+                            Todos os pontos foram triados. Como deseja concluir esta versão?
+                            {% else %}
+                            Nenhum ponto de atenção nesta revisão. Como deseja concluir esta versão?
+                            {% endif %}
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 justify-content-center">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="triageNewVersionBtn"
+                                data-outcome="new_version">
+                                <i class="bi bi-arrow-repeat me-1"></i> Revisada — enviar nova versão
+                            </button>
+                            <button type="button" class="btn btn-sm btn-primary" id="triageFinalVersionBtn"
+                                data-outcome="final_version">
+                                <i class="bi bi-send-check me-1"></i> Versão final — enviar para aprovação
+                            </button>
+                        </div>
+                        <div id="triageActionFeedback" class="small mt-2" style="display:none;"></div>
+                    </div>
+                    {% endif %}
 
             {% if result_data.missing_documents %}
             <div class="col-12">
@@ -1946,7 +1955,7 @@
                                             </tr>
                                             <tr>
                                                 <td class="fw-semibold">Modelo LLM</td>
-                                                <td><code>{{ execution.model_name or 'gpt-4o-mini' }}</code></td>
+                                                <td><code>{{ model_label }}</code></td>
                                             </tr>
                                             {% if used_versions %}
                                             <tr>
@@ -1958,7 +1967,55 @@
                                                 </td>
                                             </tr>
                                             {% endif %}
+                                            <tr>
+                                                <td class="fw-semibold">Saneamento</td>
+                                                <td>
+                                                    {% if sanitizer_discards %}
+                                                    <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                                                        {{ sanitizer_discards|length }} achado(s) descartado(s)
+                                                    </span>
+                                                    {% else %}
+                                                    <span class="text-muted">nenhum achado descartado</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
                                         </table>
+
+                                        {% if sanitizer_discards %}
+                                        <!-- O que o saneador removeu, e por quê. Descarte silencioso
+                                             impediria distinguir "o modelo não viu" de "o saneador comeu" —
+                                             e é dessa distinção que depende confiar no revisor. -->
+                                        <div class="mt-3">
+                                            <div class="fw-semibold small mb-2">
+                                                <i class="bi bi-funnel me-1"></i> Achados descartados pelo saneamento
+                                            </div>
+                                            <table class="table table-sm table-bordered mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th style="width: 5rem;">Regra</th>
+                                                        <th>Motivo</th>
+                                                        <th>Achado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for discard in sanitizer_discards %}
+                                                    <tr>
+                                                        <td><code>{{ discard.regra }}</code></td>
+                                                        <td class="small">{{ discard.motivo }}</td>
+                                                        <td class="small text-muted">
+                                                            {{ (discard.achado or {}).get('description') or '—' }}
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                            <div class="form-text mt-2">
+                                                R1 — a correção propunha algo que o documento já trazia (RPI-12).
+                                                R2 — repetição de um ponto anterior (RPI-13).
+                                                R6 — o próprio achado declarava não haver divergência.
+                                            </div>
+                                        </div>
+                                        {% endif %}
                                     </div>
                                 </div>
 

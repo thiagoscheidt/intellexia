@@ -774,11 +774,15 @@
                                     </label>
                                     <input type="text" class="form-control" id="lawFirmDocumentIdentifier"
                                         name="law_firm_document_identifier" maxlength="96" required
+                                        inputmode="numeric" pattern="[0-9]+"
+                                        autocomplete="off"
+                                        aria-describedby="lawFirmDocumentIdentifierHelp"
                                         value="{{ selected_petition.office_document_identifier if selected_petition else '' }}"
-                                        placeholder="Ex.: PET-FAP-CLIENTE-X-2026-001">
-                                    <div class="form-text">
-                                        Esse Id Wrike passa a representar a petição inteira e agrupa todas as suas
-                                        revisões.
+                                        placeholder="Ex.: 1790631885">
+                                    <div class="invalid-feedback" id="lawFirmDocumentIdentifierError"></div>
+                                    <div class="form-text" id="lawFirmDocumentIdentifierHelp">
+                                        Somente números, como aparece na URL da tarefa no Wrike. Esse Id passa a
+                                        representar a petição inteira e agrupa todas as suas revisões.
                                     </div>
                                 </div>
 
@@ -1209,13 +1213,43 @@
             document.getElementById('summaryAttachments').textContent = `${totalAttachments} arquivo(s)`;
         }
 
-        function validateStep1() {
-            const documentIdentifier = documentIdentifierInput.value.trim();
-            if (!documentIdentifier) {
-                alert('Por favor, informe o Id Wrike da petição');
-                return false;
+        // Espelha `validate_wrike_identifier` do servidor. A validação daqui é
+        // conveniência: quem recusa de verdade é o endpoint, que valida de novo.
+        function wrikeIdentifierError(value) {
+            const valor = (value || '').trim();
+            if (!valor) return 'Informe o Id Wrike da petição.';
+            if (valor.length > 96) return 'O Id Wrike pode ter no máximo 96 caracteres.';
+            // [0-9] e não \d: \d casa dígito unicode ('١٢٣'), que passaria aqui
+            // e seria recusado pelo servidor — erro na etapa seguinte, sem motivo à vista.
+            if (!/^[0-9]+$/.test(valor)) return 'O Id Wrike deve conter apenas números.';
+            return null;
+        }
+
+        function showIdentifierError(message) {
+            const box = document.getElementById('lawFirmDocumentIdentifierError');
+            documentIdentifierInput.classList.toggle('is-invalid', Boolean(message));
+            if (box) box.textContent = message || '';
+            if (message) documentIdentifierInput.focus();
+        }
+
+        documentIdentifierInput?.addEventListener('input', function () {
+            // Limpa o vermelho enquanto a pessoa corrige, em vez de deixá-lo
+            // aceso até a próxima tentativa de avançar.
+            if (documentIdentifierInput.classList.contains('is-invalid')) {
+                showIdentifierError(null);
             }
-            return true;
+        });
+
+        function validateStep1() {
+            // Petição existente traz o Id do banco e o servidor nem revalida —
+            // aplicar o formato aqui travaria trabalho por causa de Id antigo.
+            if (petitionMode !== 'new') {
+                showIdentifierError(null);
+                return true;
+            }
+            const erro = wrikeIdentifierError(documentIdentifierInput.value);
+            showIdentifierError(erro);
+            return !erro;
         }
 
         function validateStep2() {
