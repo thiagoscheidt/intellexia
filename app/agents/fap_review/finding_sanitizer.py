@@ -12,7 +12,12 @@ Regras implementadas até aqui (remessa R02):
     R1 — RPI-12: a correção propõe algo que o documento já atende.
     R2 — RPI-13: o mesmo achado devolvido mais de uma vez.
     R3 — RPI-07: o achado cai dentro de uma citação direta.
+    R4 — RPI-10: o intervalo entre DCB e DIB está contado errado.
     R6 — falso positivo em que o próprio achado diz não haver divergência.
+
+A R4 é a única que **corrige** em vez de descartar. A correção não pode ser
+silenciosa pelo mesmo motivo do descarte, então fica gravada no próprio achado,
+em ``sanitizer_fix``, onde o advogado a lê junto do apontamento.
 """
 
 from __future__ import annotations
@@ -20,6 +25,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import date, datetime
 from typing import Any
 
 # Aspas simples, duplas e as tipográficas que o Word costuma produzir.
@@ -195,6 +201,118 @@ def _achado_dentro_de_citacao(achado: dict, documento: str,
             'como consta na origem e não corrigida na peça')
 
 
+# ── R4 ──────────────────────────────────────────────────────────────────
+# RPI-10: o intervalo entre a DCB do benefício anterior e a DIB do seguinte,
+# sem contar o dia da cessação. LLM fazendo aritmética de data erra, e o aceite
+# do briefing é numérico — por isso quem conta é o código.
+
+LIMITE_RESTABELECIMENTO = 60
+
+_DATA_BR = re.compile(r'\b(\d{2})/(\d{2})/(\d{4})\b')
+_QUANTIDADE_DE_DIAS = re.compile(r'\b(\d{1,4})\s*dias?\b', re.IGNORECASE)
+
+# Sem esses termos, duas datas num achado são duas datas quaisquer — vigência e
+# protocolo, por exemplo. Recalcular ali corromperia um apontamento correto.
+_TESE_DOS_60_DIAS = ('restabelecimento', 'restabelec', 'prorrogação', 'prorrogacao',
+                     'dcb', 'dib')
+
+_CAMPOS_COM_TEXTO = ('description', 'correction')
+
+
+def _para_data(valor: Any) -> date | None:
+    """Aceita ``date``/``datetime`` ou ``'dd/mm/aaaa'``. Devolve ``None`` se não der."""
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    texto = normalizar_espacos(valor)
+    casamento = _DATA_BR.search(texto)
+    if not casamento:
+        return None
+    try:
+        return date(int(casamento.group(3)), int(casamento.group(2)), int(casamento.group(1)))
+    except ValueError:
+        return None
+
+
+def dias_entre_beneficios(dcb: Any, dib: Any) -> int | None:
+    """Dias entre a cessação de um benefício e o início do seguinte.
+
+    O dia da cessação não conta: ``(DIB − DCB) − 1``. É a fórmula que satisfaz
+    os dois exemplos do aceite — 22/12/2017 → 22/01/2018 dá 30, e 01/01/2020 →
+    02/01/2020 dá 0. A frase do documento de feedbacks ("não contar o primeiro
+    dia e contar o último") daria 31 no primeiro caso, contradizendo o próprio
+    exemplo de quem a escreveu; seguimos os exemplos.
+
+    Devolve ``None`` quando não há como calcular — data ilegível, ou DIB
+    anterior à DCB, que é dado inconsistente e não intervalo negativo.
+    """
+    inicio, fim = _para_data(dcb), _para_data(dib)
+    if inicio is None or fim is None or fim < inicio:
+        return None
+    return max(0, (fim - inicio).days - 1)
+
+
+def _recalcular_intervalo(achado: dict) -> tuple[str, dict | None, str | None]:
+    """Confere o intervalo citado no achado contra o que as datas dizem.
+
+    Returns:
+        ``(acao, correcao, motivo)`` — ``acao`` é ``'manter'``, ``'corrigir'``
+        ou ``'descartar'``.
+    """
+    texto = ' '.join(normalizar_campo(achado.get(campo)) for campo in _CAMPOS_COM_TEXTO)
+    if not any(termo in texto for termo in _TESE_DOS_60_DIAS):
+        return 'manter', None, None
+
+    datas = {_para_data(f'{d}/{m}/{a}') for d, m, a in _DATA_BR.findall(texto)}
+    datas.discard(None)
+    if len(datas) != 2:
+        # Uma data só não fecha intervalo; três ou mais não dizem qual par é o
+        # da tese. Nos dois casos, chutar é pior que não mexer.
+        return 'manter', None, None
+
+    dcb, dib = sorted(datas)
+    real = dias_entre_beneficios(dcb, dib)
+    if real is None:
+        return 'manter', None, None
+
+    if real > LIMITE_RESTABELECIMENTO:
+        return 'descartar', None, (
+            f'entre a DCB de {dcb:%d/%m/%Y} e a DIB de {dib:%d/%m/%Y} há {real} dias, '
+            f'acima dos {LIMITE_RESTABELECIMENTO} que caracterizam restabelecimento'
+        )
+
+    # O limite legal citado no próprio texto não é o intervalo alegado.
+    citados = {int(n) for n in _QUANTIDADE_DE_DIAS.findall(texto)}
+    citados.discard(LIMITE_RESTABELECIMENTO)
+    if len(citados) != 1:
+        return 'manter', None, None
+
+    alegado = citados.pop()
+    if alegado == real:
+        return 'manter', None, None
+
+    return 'corrigir', {
+        'regra': 'R4',
+        'de': alegado,
+        'para': real,
+        'motivo': (f'entre a DCB de {dcb:%d/%m/%Y} e a DIB de {dib:%d/%m/%Y} há '
+                   f'{real} dias, não {alegado} — o dia da cessação não conta'),
+    }, None
+
+
+def _aplicar_correcao_de_dias(achado: dict, correcao: dict) -> dict:
+    """Devolve cópia do achado com o número de dias corrigido no texto."""
+    ajustado = dict(achado)
+    padrao = re.compile(rf'\b{correcao["de"]}(\s*dias?)\b', re.IGNORECASE)
+    for campo in _CAMPOS_COM_TEXTO:
+        valor = ajustado.get(campo)
+        if isinstance(valor, str):
+            ajustado[campo] = padrao.sub(lambda m: f'{correcao["para"]}{m.group(1)}', valor)
+    ajustado['sanitizer_fix'] = correcao
+    return ajustado
+
+
 def _correcao_ja_atendida(achado: dict, documento: str) -> str | None:
     """Motivo do descarte, se a correção pedir algo que o documento já tem."""
     for proposta in trechos_citados(achado.get('correction')):
@@ -244,6 +362,13 @@ def sanear(achados: list, documento_texto: str = '') -> tuple[list, list[dict]]:
         if motivo:
             descartes.append({'regra': 'R1', 'motivo': motivo, 'achado': achado})
             continue
+
+        acao, correcao, motivo = _recalcular_intervalo(achado)
+        if acao == 'descartar':
+            descartes.append({'regra': 'R4', 'motivo': motivo, 'achado': achado})
+            continue
+        if acao == 'corrigir':
+            achado = _aplicar_correcao_de_dias(achado, correcao)
 
         marca = fingerprint_achado(achado)
         if marca and marca in vistos:

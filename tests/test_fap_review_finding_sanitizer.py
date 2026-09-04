@@ -13,7 +13,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.agents.fap_review.finding_sanitizer import sanear, fingerprint_achado
+from app.agents.fap_review.finding_sanitizer import (
+    sanear, fingerprint_achado, dias_entre_beneficios)
 
 _falhas = []
 
@@ -379,6 +380,126 @@ def test_r3_descarte_traz_motivo_legivel():
     check('motivo menciona a citação', 'citação' in motivo, motivo)
 
 
+
+# ── R4 — RPI-10: intervalo entre DCB e DIB ──────────────────────────────
+
+def test_dias_entre_beneficios_confere_os_exemplos_do_aceite():
+    print('\n25. RPI-10 — os dois exemplos do aceite')
+
+    # São estes os números do briefing. A frase do documento de feedbacks
+    # ("não contar o primeiro dia e contar o último") daria 31 no primeiro
+    # caso, contradizendo o próprio exemplo — vale o exemplo.
+    check('22/12/2017 → 22/01/2018 dá 30',
+          dias_entre_beneficios('22/12/2017', '22/01/2018') == 30,
+          str(dias_entre_beneficios('22/12/2017', '22/01/2018')))
+    check('01/01/2020 → 02/01/2020 dá 0',
+          dias_entre_beneficios('01/01/2020', '02/01/2020') == 0,
+          str(dias_entre_beneficios('01/01/2020', '02/01/2020')))
+
+
+def test_dias_entre_beneficios_bordas():
+    print('\n26. RPI-10 — bordas do cálculo')
+
+    check('mesmo dia dá 0', dias_entre_beneficios('01/01/2020', '01/01/2020') == 0)
+    check('DIB antes da DCB não é calculável',
+          dias_entre_beneficios('10/01/2020', '01/01/2020') is None)
+    check('data inválida não é calculável',
+          dias_entre_beneficios('31/02/2020', '01/03/2020') is None)
+    check('texto que não é data não é calculável',
+          dias_entre_beneficios('sem data', '01/03/2020') is None)
+    # 60 exato não é "inferior a 60": a fronteira da tese tem de ser exata.
+    check('01/01/2020 → 02/03/2020 dá 60',
+          dias_entre_beneficios('01/01/2020', '02/03/2020') == 60,
+          str(dias_entre_beneficios('01/01/2020', '02/03/2020')))
+
+
+def test_r4_corrige_o_numero_de_dias():
+    print('\n27. R4 — número errado é corrigido, não descartado')
+
+    errado = achado(
+        category='CAT-2',
+        description='Restabelecimento: entre a DCB de 22/12/2017 e a DIB de '
+                    '22/01/2018 decorreram 31 dias, intervalo inferior a 60 dias.',
+        correction='Ajustar para 31 dias.',
+    )
+    mantidos, descartes = sanear([errado], '')
+    check('achado é mantido', len(mantidos) == 1 and len(descartes) == 0)
+    if mantidos:
+        check('descrição passa a dizer 30 dias', '30 dias' in mantidos[0]['description'],
+              mantidos[0]['description'])
+        check('31 dias sai da descrição', '31 dias' not in mantidos[0]['description'])
+        check('a correção também é ajustada', '30 dias' in (mantidos[0].get('correction') or ''),
+              mantidos[0].get('correction'))
+        fix = mantidos[0].get('sanitizer_fix')
+        check('a correção fica registrada no achado', isinstance(fix, dict))
+        check('registro diz a regra', fix and fix.get('regra') == 'R4')
+        check('registro diz de quanto para quanto',
+              fix and fix.get('de') == 31 and fix.get('para') == 30,
+              str(fix))
+
+
+def test_r4_nao_mexe_quando_o_numero_ja_esta_certo():
+    print('\n28. R4 — número certo passa intacto')
+
+    certo = achado(
+        description='Restabelecimento: DCB 22/12/2017 e DIB 22/01/2018, 30 dias '
+                    'de intervalo, inferior a 60 dias.',
+    )
+    original = certo['description']
+    mantidos, descartes = sanear([certo], '')
+    check('achado é mantido', len(mantidos) == 1 and len(descartes) == 0)
+    check('descrição não muda', mantidos and mantidos[0]['description'] == original)
+    check('não há registro de correção',
+          mantidos and mantidos[0].get('sanitizer_fix') is None)
+
+
+def test_r4_descarta_quando_o_intervalo_derruba_a_tese():
+    print('\n29. R4 — intervalo real não sustenta o restabelecimento')
+
+    # 01/01/2020 → 01/06/2020 são 151 dias: não é restabelecimento.
+    insustentavel = achado(
+        description='Restabelecimento: DCB 01/01/2020 e DIB 01/06/2020, '
+                    'intervalo inferior a 60 dias.',
+    )
+    mantidos, descartes = sanear([insustentavel], '')
+    check('achado é descartado', len(mantidos) == 0 and len(descartes) == 1)
+    check('regra é R4', descartes and descartes[0]['regra'] == 'R4')
+    check('motivo traz o intervalo real',
+          descartes and '151' in descartes[0]['motivo'],
+          descartes[0]['motivo'] if descartes else '')
+
+
+def test_r4_so_atua_em_achado_da_tese_dos_60_dias():
+    print('\n30. R4 — duas datas fora da tese não são recalculadas')
+
+    # Datas de vigência e de protocolo não têm nada a ver com DCB/DIB.
+    outro = achado(
+        category='CAT-1',
+        description='A vigência de 01/01/2020 foi protocolada em 01/06/2020, '
+                    'fora do prazo de 30 dias previsto.',
+    )
+    original = outro['description']
+    mantidos, descartes = sanear([outro], '')
+    check('achado é mantido', len(mantidos) == 1 and len(descartes) == 0)
+    check('descrição não muda', mantidos and mantidos[0]['description'] == original)
+
+
+def test_r4_precisa_de_exatamente_duas_datas():
+    print('\n31. R4 — sem par de datas, não há o que recalcular')
+
+    uma_data = achado(description='Restabelecimento com DCB 22/12/2017, 31 dias depois.')
+    original = uma_data['description']
+    mantidos, _ = sanear([uma_data], '')
+    check('uma data só: intacto', mantidos and mantidos[0]['description'] == original)
+
+    tres = achado(description='Restabelecimento: DCB 22/12/2017, DIB 22/01/2018, '
+                              'contestada em 05/05/2018, 31 dias.')
+    original3 = tres['description']
+    mantidos3, _ = sanear([tres], '')
+    check('três datas: intacto (ambíguo)',
+          mantidos3 and mantidos3[0]['description'] == original3)
+
+
 def main() -> int:
     print('=' * 62)
     print('SANEADOR DE ACHADOS — Revisor FAP')
@@ -408,6 +529,13 @@ def main() -> int:
     test_r3_sem_documento_nao_descarta()
     test_r3_achado_sem_trecho_nao_descarta()
     test_r3_descarte_traz_motivo_legivel()
+    test_dias_entre_beneficios_confere_os_exemplos_do_aceite()
+    test_dias_entre_beneficios_bordas()
+    test_r4_corrige_o_numero_de_dias()
+    test_r4_nao_mexe_quando_o_numero_ja_esta_certo()
+    test_r4_descarta_quando_o_intervalo_derruba_a_tese()
+    test_r4_so_atua_em_achado_da_tese_dos_60_dias()
+    test_r4_precisa_de_exatamente_duas_datas()
 
     print('\n' + '=' * 62)
     if _falhas:

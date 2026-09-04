@@ -50,6 +50,12 @@ class FindingItem(BaseModel):
     correction: Optional[str] = Field(None, description="Sugestão de correção")
     manual_reference: Optional[str] = Field(None, description="Seção do manual relacionada")
     is_new_pattern: bool = Field(False, description="Indica se é um padrão novo não coberto pelo manual")
+    sanitizer_fix: Optional[dict] = Field(
+        None,
+        description="Correção determinística que o saneador aplicou ao achado (regra R4). "
+                    "Fica no achado, e não na lista de descartes, porque o apontamento "
+                    "continua valendo — só o número estava errado.",
+    )
 
 
 class MissingDocument(BaseModel):
@@ -734,6 +740,10 @@ INSTRUÇÕES DO PROJETO:
             descartes.extend(removidos)
         for removido in removidos:
             print(f"[FapReviewer] achado descartado ({removido['regra']}): {removido['motivo']}")
+        for mantido in mantidos:
+            correcao = mantido.get('sanitizer_fix') if isinstance(mantido, dict) else None
+            if correcao:
+                print(f"[FapReviewer] achado corrigido ({correcao['regra']}): {correcao['motivo']}")
         return self._parse_model_items(mantidos, FindingItem, "finding", parse_errors)
 
 
