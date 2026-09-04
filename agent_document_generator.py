@@ -13,6 +13,7 @@ from app.agents.fap.fap_section_generator_agent import FapSectionGeneratorAgent
 from datetime import datetime
 from copy import deepcopy
 from app.utils.timezone import now_sp
+from app.utils.cnpj import formatar_cnpj
 from docxcompose.composer import Composer
 import os
 from pdf2image import convert_from_path
@@ -169,7 +170,7 @@ class AgentDocumentGenerator:
             "",
             "CLIENTE:",
             f"- Nome/Razão Social: {case.client.name if case.client else 'Não informado'}",
-            f"- CNPJ: {case.client.cnpj if case.client else 'Não informado'}",
+            f"- CNPJ: {formatar_cnpj(case.client.cnpj) if case.client else 'Não informado'}",
             f"- Endereço: {self._format_address(case.client) if case.client else 'Não informado'}",
             "",
             "BENEFÍCIO (EXEMPLO DA CATEGORIA):",
@@ -191,7 +192,7 @@ class AgentDocumentGenerator:
         return {
             'Dados do Cliente': {
                 '{{cliente_nome}}': case.client.name if case.client else 'Não informado',
-                '{{cliente_cnpj}}': case.client.cnpj if case.client else 'Não informado',
+                '{{cliente_cnpj}}': formatar_cnpj(case.client.cnpj) if case.client else 'Não informado',
                 '{{cliente_endereco}}': self._format_address(case.client) if case.client else 'Não informado',
                 '{{cliente_cidade}}': case.client.city if case.client else 'Não informado',
                 '{{cliente_estado}}': case.client.state if case.client else 'Não informado',
@@ -264,7 +265,7 @@ class AgentDocumentGenerator:
         replacements = {
             # Dados do Cliente
             '{{cliente_nome}}': case.client.name if case.client else '',
-            '{{cliente_cnpj}}': case.client.cnpj if case.client else '',
+            '{{cliente_cnpj}}': formatar_cnpj(case.client.cnpj) if case.client else '',
             '{{cliente_endereco}}': self._format_address(case.client) if case.client else '',
             '{{cliente_cidade}}': case.client.city if case.client else '',
             '{{cliente_estado}}': case.client.state if case.client else '',
@@ -700,7 +701,7 @@ class AgentDocumentGenerator:
                     self._format_table_cell(cells[1], vigencia)
                 if len(cells) >= 3:
                     # CNPJ do cliente
-                    cnpj = case.client.cnpj if case.client else ''
+                    cnpj = formatar_cnpj(case.client.cnpj) if case.client else ''
                     self._format_table_cell(cells[2], cnpj)
                 if len(cells) >= 4:
                     # Empregado(a) - Nome do Segurado
