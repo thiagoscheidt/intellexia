@@ -388,6 +388,112 @@
         color: #9aa5b4;
     }
 
+    /* ── RPI-04: seletor de advogado (1º nível do filtro) ── */
+    .lawyer-toolbar {
+        display: flex;
+        align-items: flex-start;
+        gap: .6rem;
+        flex-wrap: wrap;
+    }
+
+    .lawyer-toolbar-label {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        font-size: .68rem;
+        font-weight: 800;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: #8a96a3;
+        padding-top: .42rem;
+        flex-shrink: 0;
+    }
+
+    .lawyer-chips {
+        display: flex;
+        gap: .45rem;
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+
+    .lawyer-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        border: 1px solid rgba(21, 37, 53, .10);
+        background: #fff;
+        border-radius: 999px;
+        padding: .3rem .68rem;
+        font-size: .78rem;
+        color: var(--fr-slate-700);
+        transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+
+    .lawyer-chip:hover {
+        border-color: rgba(13, 110, 253, .35);
+    }
+
+    .lawyer-chip[aria-pressed="true"] {
+        border-color: #0d6efd;
+        background: rgba(13, 110, 253, .06);
+        box-shadow: 0 0 0 1px rgba(13, 110, 253, .25);
+    }
+
+    .lawyer-chip.is-orphan {
+        border-style: dashed;
+        color: var(--fr-slate-500);
+    }
+
+    .lawyer-chip-name {
+        font-weight: 700;
+        color: var(--fr-slate-900);
+    }
+
+    .lawyer-chip.is-orphan .lawyer-chip-name {
+        font-weight: 600;
+        color: var(--fr-slate-500);
+    }
+
+    .lawyer-chip-total {
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        color: var(--fr-slate-900);
+    }
+
+    /* Badge por fila, nas cores dos status em tela — mesma convenção dos
+       contadores do header. Fila zerada não gera badge: quem monta a lista já
+       omite o status sem petição. */
+    .lawyer-chip-badge {
+        font-size: .68rem;
+        font-weight: 700;
+        border-radius: 999px;
+        padding: .08rem .42rem;
+        background: rgba(21, 37, 53, .06);
+        color: #5f6b7a;
+        white-space: nowrap;
+    }
+
+    .lawyer-chip-badge.status-awaiting_adjustments {
+        background: rgba(220, 53, 69, .12);
+        color: #a52834;
+    }
+
+    .lawyer-chip-badge.status-in_review,
+    .lawyer-chip-badge.status-new {
+        background: rgba(255, 193, 7, .16);
+        color: #8a6100;
+    }
+
+    .lawyer-chip-badge.status-awaiting_approval {
+        background: rgba(13, 202, 240, .14);
+        color: #0a6c7e;
+    }
+
+    .lawyer-chip-badge.status-ready_for_filing {
+        background: rgba(25, 135, 84, .12);
+        color: #146c43;
+    }
+
     .filter-pill {
         display: inline-flex;
         align-items: center;
@@ -913,6 +1019,33 @@
                 </div>
             </div>
 
+            {% if lawyer_counts %}
+            <!-- RPI-04: advogado é o 1º nível do filtro; a busca de texto e o
+                 filtro de status passam a agir dentro da seleção. -->
+            <div class="lawyer-toolbar px-3 pb-2">
+                <span class="lawyer-toolbar-label"><i class="bi bi-people"></i> Advogado</span>
+                <div class="lawyer-chips">
+                    {% for lawyer in lawyer_counts %}
+                    <button type="button" class="lawyer-chip{% if lawyer.user_id is none %} is-orphan{% endif %}"
+                        data-lawyer="{{ lawyer.user_id or '' }}"
+                        aria-pressed="false"
+                        title="{{ lawyer.name }} — {{ lawyer.total }} petição(ões) em acompanhamento">
+                        <span class="lawyer-chip-name">{{ lawyer.name }}</span>
+                        <span class="lawyer-chip-total">{{ lawyer.total }}</span>
+                        {# Ordem do ciclo de vida, não alfabética: "4 em revisão, 1 aguardando
+                           aprovação, 1 aprovada" conta uma história; a ordem do dicionário não. #}
+                        {% for status, rotulo in petition_status_labels.items() %}
+                        {% if lawyer.por_status.get(status) %}
+                        <span class="lawyer-chip-badge status-{{ status }}">{{
+                            lawyer.por_status[status] }} {{ rotulo | lower }}</span>
+                        {% endif %}
+                        {% endfor %}
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Lista de petições -->
             {% if petition_rows %}
             <div id="petitionListView">
@@ -961,6 +1094,7 @@
                     style="background: {{ row_bg }}; border-left: {{ row_border_width }} solid {{ row_border_color }};"
                     data-petition-id="{{ petition.id }}"
                     data-status="{{ petition.workflow_status }}"
+                    data-reviewer="{{ row.latest_reviewer_id or '' }}"
                     data-search="{{ (petition.title ~ ' ' ~ (petition.office_document_identifier or '') ~ ' ' ~ (latest_reviewer_name or ''))|lower }}">
 
                     <!-- Wrike ID -->
@@ -1117,6 +1251,7 @@
                             <div class="kanban-card" draggable="true"
                                 data-petition-id="{{ petition.id }}"
                                 data-status-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}"
+                                data-reviewer="{{ row.latest_reviewer_id or '' }}"
                                 data-search="{{ (petition.title ~ ' ' ~ (petition.office_document_identifier or '') ~ ' ' ~ (latest_reviewer_name or ''))|lower }}">
                                 <a class="kanban-card-title"
                                     href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}">{{ petition.title }}</a>
@@ -1194,14 +1329,19 @@
         const rows = document.querySelectorAll('.petition-row');
         const countDisplay = document.getElementById('petitionCount');
         const emptyState = document.getElementById('petitionEmptyState');
+        const lawyerChips = document.querySelectorAll('.lawyer-chip');
         const totalCount = rows.length;
         let activeFilter = 'all';
+        // RPI-04: advogado é o 1º nível. '' = todos; a busca e o status agem
+        // dentro da seleção, nunca por cima dela.
+        let activeLawyer = '';
 
         function applyFilters() {
             const term = (searchInput ? searchInput.value : '').toLowerCase().trim();
             let visible = 0;
 
             rows.forEach(function (row) {
+                const matchesLawyer = !activeLawyer || (row.dataset.reviewer || '') === activeLawyer;
                 const matchesSearch = !term || (row.dataset.search || '').includes(term);
                 const status = row.dataset.status || '';
                 let matchesFilter = true;
@@ -1223,13 +1363,13 @@
                     matchesFilter = status === 'archived';
                 }
 
-                const show = matchesSearch && matchesFilter;
+                const show = matchesLawyer && matchesSearch && matchesFilter;
                 row.style.display = show ? '' : 'none';
                 if (show) visible++;
             });
 
             if (countDisplay) {
-                if (activeFilter !== 'all' || term) {
+                if (activeFilter !== 'all' || term || activeLawyer) {
                     countDisplay.textContent = 'Exibindo ' + visible + ' de ' + totalCount + ' petições';
                 } else if (activeFilter === 'all') {
                     countDisplay.textContent = 'Exibindo ' + visible + ' petições';
@@ -1242,7 +1382,8 @@
             }
 
             document.querySelectorAll('.kanban-card').forEach(function (card) {
-                const matches = !term || (card.dataset.search || '').includes(term);
+                const matchesCardLawyer = !activeLawyer || (card.dataset.reviewer || '') === activeLawyer;
+                const matches = matchesCardLawyer && (!term || (card.dataset.search || '').includes(term));
                 card.style.display = matches ? '' : 'none';
             });
         }
@@ -1252,6 +1393,21 @@
                 filterPills.forEach(function (p) { p.classList.remove('active'); });
                 this.classList.add('active');
                 activeFilter = this.dataset.filter || 'all';
+                applyFilters();
+            });
+        });
+
+        // Clicar no chip já selecionado limpa a seleção: sem isso, escolhido um
+        // advogado não haveria como voltar a ver a lista inteira.
+        lawyerChips.forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                const value = chip.dataset.lawyer || '';
+                const already = chip.getAttribute('aria-pressed') === 'true';
+                activeLawyer = already ? '' : value;
+                lawyerChips.forEach(function (other) {
+                    other.setAttribute('aria-pressed',
+                        String(!already && (other.dataset.lawyer || '') === value));
+                });
                 applyFilters();
             });
         });

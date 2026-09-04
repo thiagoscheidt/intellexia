@@ -3,7 +3,8 @@
 Testes das regras da remessa R02 no Revisor de Petições
 (app/services/fap_review_service.py).
 
-Funções puras: não precisam de banco, rede nem contexto Flask.
+Quase tudo é função pura — sem banco, rede nem contexto Flask. A exceção é o
+teste 20, que confere a query agregada do RPI-04 contra o banco local.
 
     uv run python tests/test_fap_review_r02.py
 """
@@ -17,6 +18,8 @@ sys.path.insert(0, str(RAIZ))
 
 from app.services.fap_review_service import (
     MODEL_NOT_RECORDED,
+    SEM_REVISOR,
+    agrupar_peticoes_por_advogado,
     describe_model_name,
     validate_wrike_identifier,
 )
@@ -174,6 +177,133 @@ def test_barra_de_aprovacao_sobrevive_a_revisao_sem_achados():
           'Nenhum ponto de atenção nesta revisão' in html)
 
 
+
+# ── RPI-04 — contador por advogado e por situação ───────────────────────
+
+def _linhas(*tuplas):
+    """Linhas como a query agregada devolve: (user_id, nome, status, quantidade)."""
+    return list(tuplas)
+
+
+def test_rpi04_agrupa_e_soma_por_advogado():
+    print('\n13. RPI-04 — cada advogado vira uma linha, com o total somado')
+
+    grupos = agrupar_peticoes_por_advogado(_linhas(
+        (7, 'Rodrigo', 'in_review', 3),
+        (7, 'Rodrigo', 'awaiting_approval', 5),
+        (7, 'Rodrigo', 'ready_for_filing', 4),
+        (9, 'Isrhael', 'in_review', 2),
+    ))
+    check('dois advogados', len(grupos) == 2, str(len(grupos)))
+    rodrigo = next((g for g in grupos if g['name'] == 'Rodrigo'), None)
+    check('total do Rodrigo é 12', rodrigo and rodrigo['total'] == 12,
+          str(rodrigo['total']) if rodrigo else 'ausente')
+    check('mantém a quebra por status',
+          rodrigo and rodrigo['por_status'].get('awaiting_approval') == 5)
+    check('guarda o id para o filtro da tela',
+          rodrigo and rodrigo['user_id'] == 7)
+
+
+def test_rpi04_ordena_por_volume():
+    print('\n14. RPI-04 — quem tem mais petições aparece primeiro')
+
+    grupos = agrupar_peticoes_por_advogado(_linhas(
+        (9, 'Isrhael', 'in_review', 2),
+        (7, 'Rodrigo', 'in_review', 12),
+        (3, 'Ana', 'in_review', 2),
+    ))
+    check('o maior vem primeiro', grupos[0]['name'] == 'Rodrigo', grupos[0]['name'])
+    # Empate no total: ordem alfabética, para a lista não dançar entre recargas.
+    check('empate desempata por nome',
+          [g['name'] for g in grupos[1:]] == ['Ana', 'Isrhael'],
+          str([g['name'] for g in grupos[1:]]))
+
+
+def test_rpi04_peticao_sem_revisor():
+    print('\n15. RPI-04 — petição sem revisão fica visível, não some')
+
+    grupos = agrupar_peticoes_por_advogado(_linhas(
+        (7, 'Rodrigo', 'in_review', 3),
+        (None, None, 'new', 4),
+    ))
+    sem = next((g for g in grupos if g['user_id'] is None), None)
+    check('vira um grupo próprio', sem is not None)
+    check('com rótulo explícito', sem and sem['name'] == SEM_REVISOR, sem['name'] if sem else '')
+    # Vai por último mesmo tendo mais petições: não é advogado, é ausência de um.
+    check('fica por último', grupos[-1]['user_id'] is None)
+
+
+def test_rpi04_ignora_linha_sem_quantidade():
+    print('\n16. RPI-04 — status zerado não cria advogado fantasma')
+
+    grupos = agrupar_peticoes_por_advogado(_linhas(
+        (7, 'Rodrigo', 'in_review', 3),
+        (9, 'Isrhael', 'in_review', 0),
+    ))
+    check('só quem tem petição aparece', len(grupos) == 1, str(len(grupos)))
+
+
+def test_rpi04_lista_vazia():
+    print('\n17. RPI-04 — escritório sem petição não quebra a tela')
+
+    check('devolve lista vazia', agrupar_peticoes_por_advogado([]) == [])
+
+
+def test_rpi04_seletor_existe_na_tela():
+    print('\n18. RPI-04 — o seletor de advogado está na listagem')
+
+    index = (RAIZ / 'templates' / 'fap_review' / 'index.html').read_text(encoding='utf-8')
+    check('há chip de advogado', 'lawyer-chip' in index)
+    check('a linha carrega o id do revisor para o 2º nível',
+          'data-reviewer' in index)
+    check('o JS filtra por advogado', 'activeLawyer' in index)
+
+
+def test_rpi04_busca_textual_filtra_dentro_da_selecao():
+    print('\n19. RPI-04 — a busca é o 2º nível, não substitui o 1º')
+
+    index = (RAIZ / 'templates' / 'fap_review' / 'index.html').read_text(encoding='utf-8')
+    trecho = re.search(r'function applyFilters\(\)\s*\{.*?\n        \}', index, re.S)
+    check('applyFilters existe', trecho is not None)
+    corpo = trecho.group(0) if trecho else ''
+    check('a visibilidade exige advogado E busca E status',
+          'matchesLawyer' in corpo and 'matchesSearch' in corpo and 'matchesFilter' in corpo,
+          'faltou combinar os três níveis')
+
+
+def test_rpi04_contagem_bate_com_o_banco():
+    print('\n20. RPI-04 — a soma dos contadores bate com a listagem')
+
+    from main import app
+    from app.models import FapReviewPetition
+    from app.services.fap_review_service import lawyer_petition_counts
+
+    with app.app_context():
+        firm = FapReviewPetition.query.with_entities(
+            FapReviewPetition.law_firm_id).first()
+        if not firm:
+            check('sem petições no banco local — nada a conferir', True)
+            return
+        law_firm_id = firm[0]
+
+        grupos = lawyer_petition_counts(law_firm_id)
+        somado = sum(g['total'] for g in grupos)
+        listadas = FapReviewPetition.query.filter(
+            FapReviewPetition.law_firm_id == law_firm_id,
+            FapReviewPetition.workflow_status != 'archived',
+        ).count()
+        check('soma dos advogados = petições não arquivadas',
+              somado == listadas, f'{somado} contra {listadas}')
+
+        # Arquivada fora da conta é decisão, não descuido: a listagem também a
+        # esconde por padrão, e um contador que não bate com o que se vê mente.
+        arquivadas = FapReviewPetition.query.filter_by(
+            law_firm_id=law_firm_id, workflow_status='archived').count()
+        check('arquivadas ficam fora da conta',
+              'archived' not in {s for g in grupos for s in g['por_status']},
+              f'{arquivadas} arquivada(s) no banco')
+
+
 def main() -> int:
     print('=' * 62)
     print('REMESSA R02 — regras do Revisor de Petições')
@@ -191,6 +321,14 @@ def main() -> int:
     test_modelo_registrado_aparece()
     test_modelo_ausente_nao_e_chutado()
     test_barra_de_aprovacao_sobrevive_a_revisao_sem_achados()
+    test_rpi04_agrupa_e_soma_por_advogado()
+    test_rpi04_ordena_por_volume()
+    test_rpi04_peticao_sem_revisor()
+    test_rpi04_ignora_linha_sem_quantidade()
+    test_rpi04_lista_vazia()
+    test_rpi04_seletor_existe_na_tela()
+    test_rpi04_busca_textual_filtra_dentro_da_selecao()
+    test_rpi04_contagem_bate_com_o_banco()
 
     print('\n' + '=' * 62)
     if _falhas:

@@ -25,6 +25,7 @@ from app.models import (
     db, FapReviewAuditLog, FapReviewExecution, FapReviewPetition,
     FapReviewPromptVersion, FapReviewReferenceVersion,
 )
+from app.models import User as _Usuario
 
 logger = logging.getLogger(__name__)
 
@@ -244,6 +245,70 @@ def count_pending_review_queues(law_firm_id: int) -> dict:
         'awaiting_adjustments': counts.get('awaiting_adjustments', 0),
         'awaiting_approval': counts.get('awaiting_approval', 0),
     }
+
+
+SEM_REVISOR = 'Sem revisor'
+
+
+def agrupar_peticoes_por_advogado(linhas) -> list[dict]:
+    """Linhas ``(user_id, nome, status, quantidade)`` viram um grupo por advogado.
+
+    Separado da query de propósito: a forma do agrupamento — total somado,
+    quebra por status, ordenação — é o que a tela consome, e testá-la não pode
+    depender de banco.
+
+    Ordena por volume, porque é a fila maior que interessa primeiro; empate cai
+    na ordem alfabética, senão a lista dançaria a cada recarga. Petição ainda
+    sem revisão vira um grupo próprio, sempre por último: não é advogado, é a
+    ausência de um, e esconder essas petições faria o contador não fechar com a
+    listagem.
+    """
+    grupos: dict = {}
+    for user_id, nome, status, quantidade in linhas:
+        if not quantidade:
+            continue
+        grupo = grupos.setdefault(user_id, {
+            'user_id': user_id,
+            'name': (nome or '').strip() or SEM_REVISOR,
+            'total': 0,
+            'por_status': {},
+        })
+        grupo['total'] += quantidade
+        grupo['por_status'][status] = grupo['por_status'].get(status, 0) + quantidade
+
+    return sorted(
+        grupos.values(),
+        key=lambda g: (g['user_id'] is None, -g['total'], g['name'].lower()),
+    )
+
+
+def lawyer_petition_counts(law_firm_id: int) -> list[dict]:
+    """Petições por advogado e por situação — o contador do RPI-04.
+
+    O advogado é quem enviou a **última** revisão da petição, que é o nome já
+    exibido na linha da listagem. Arquivadas ficam fora: a listagem também as
+    esconde por padrão, e contador que não bate com o que se vê na tela mente.
+    """
+    linhas = (
+        db.session.query(
+            FapReviewExecution.user_id,
+            _Usuario.name,
+            FapReviewPetition.workflow_status,
+            func.count(FapReviewPetition.id),
+        )
+        .select_from(FapReviewPetition)
+        .outerjoin(FapReviewExecution,
+                   FapReviewExecution.id == FapReviewPetition.latest_revision_id)
+        .outerjoin(_Usuario, _Usuario.id == FapReviewExecution.user_id)
+        .filter(
+            FapReviewPetition.law_firm_id == law_firm_id,
+            FapReviewPetition.workflow_status != 'archived',
+        )
+        .group_by(FapReviewExecution.user_id, _Usuario.name,
+                  FapReviewPetition.workflow_status)
+        .all()
+    )
+    return agrupar_peticoes_por_advogado(linhas)
 
 
 def mark_petition_in_user_review(petition: FapReviewPetition | None) -> bool:

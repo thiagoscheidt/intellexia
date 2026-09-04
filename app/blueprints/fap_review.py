@@ -1201,6 +1201,7 @@ def index():
         {
             'petition': petition,
             'latest_revision': petition.latest_revision,
+            'latest_reviewer_id': petition.latest_revision.user.id if petition.latest_revision and petition.latest_revision.user else None,
             'latest_reviewer_name': petition.latest_revision.user.name if petition.latest_revision and petition.latest_revision.user else None,
             'latest_reviewer_picture': petition.latest_revision.user.google_picture_url if petition.latest_revision and petition.latest_revision.user else None,
             'status_badge': _build_petition_status_badge(petition.workflow_status),
@@ -1217,6 +1218,8 @@ def index():
                           awaiting_adjustments_petitions=awaiting_adjustments_petitions,
                           awaiting_approval_petitions=awaiting_approval_petitions,
                           total_revisions=total_revisions,
+                          lawyer_counts=_svc.lawyer_petition_counts(law_firm_id),
+                          petition_status_labels=PETITION_WORKFLOW_STATUSES,
                           petition_rows=petition_rows)
 
 
