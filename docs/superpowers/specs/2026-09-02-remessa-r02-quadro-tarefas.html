@@ -120,13 +120,29 @@
 
   /* ── Toolbar ─────────────────────────────────────────── */
 
+  .ledger {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 12px;
+    margin: 16px 0 0;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
+  .ledger b { font-family: var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+  .ledger .sep { color: var(--rule); }
+  .ledger .hint { color: var(--ink-faint); font-style: italic; }
+
   .toolbar {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px 10px;
-    margin: 18px 0 24px;
+    margin: 14px 0 0;
   }
+
+  .toolbar:last-of-type { margin-bottom: 24px; }
 
   .toolbar-label {
     font-size: 10.5px;
@@ -160,6 +176,8 @@
 
   .spacer { flex: 1 1 auto; }
 
+  .sep-v { width: 1px; align-self: stretch; background: var(--rule); margin: 0 2px; }
+
   .linky {
     font: inherit;
     font-size: 12.5px;
@@ -182,6 +200,9 @@
     gap: 18px;
     align-items: start;
   }
+
+  .board[data-cols="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .board[data-cols="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
   .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 
@@ -335,6 +356,12 @@
 
   .tag.dep { background: var(--base-bg); color: var(--base); }
 
+  .tag.diff { background: transparent; border: 1px solid var(--rule); color: var(--ink-soft); }
+  .tag.diff .dots { font-family: var(--mono); letter-spacing: .5px; color: var(--ink); }
+
+  .tag.nat-ajuste { background: transparent; border: 1px dashed var(--ink-faint); color: var(--ink-soft); }
+  .tag.nat-novo   { background: var(--ink); color: var(--paper); }
+
   code {
     font-family: var(--mono);
     font-size: .87em;
@@ -367,8 +394,16 @@
     * { transition: none !important; }
   }
 
-  @media (max-width: 1240px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (max-width: 680px)  { .board { grid-template-columns: minmax(0, 1fr); } .wrap { padding: 20px 16px 56px; } }
+  @media (max-width: 1240px) {
+    .board,
+    .board[data-cols="3"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 680px) {
+    .board,
+    .board[data-cols="2"],
+    .board[data-cols="3"] { grid-template-columns: minmax(0, 1fr); }
+    .wrap { padding: 20px 16px 56px; }
+  }
 
   @media print {
     body { background: #fff; }
@@ -400,6 +435,21 @@
     </div>
   </header>
 
+  <p class="ledger">
+    <span><b>7</b> baixa · <b>7</b> média · <b>4</b> alta</span>
+    <span class="sep">|</span>
+    <span><b>6</b> ajuste · <b>12</b> novo</span>
+    <span class="sep">|</span>
+    <span class="hint">dificuldade é estimativa a partir da leitura do código, não medição</span>
+  </p>
+
+  <div class="toolbar">
+    <span class="toolbar-label">Agrupar</span>
+    <button class="pill" type="button" data-group="onda" aria-pressed="true">Onda</button>
+    <button class="pill" type="button" data-group="dificuldade" aria-pressed="false">Dificuldade</button>
+    <button class="pill" type="button" data-group="natureza" aria-pressed="false">Ajuste / Novo</button>
+  </div>
+
   <div class="toolbar">
     <span class="toolbar-label">Filtrar</span>
     <button class="pill" type="button" data-filter="all" aria-pressed="true">Todas</button>
@@ -407,6 +457,13 @@
     <button class="pill k-fix"   type="button" data-filter="fix"   aria-pressed="false">Correção</button>
     <button class="pill k-have"  type="button" data-filter="have"  aria-pressed="false">Já existe em parte</button>
     <button class="pill k-build" type="button" data-filter="build" aria-pressed="false">Construção nova</button>
+    <span class="sep-v"></span>
+    <button class="pill" type="button" data-diff="baixa" aria-pressed="false">●○○ Baixa</button>
+    <button class="pill" type="button" data-diff="media" aria-pressed="false">●●○ Média</button>
+    <button class="pill" type="button" data-diff="alta"  aria-pressed="false">●●● Alta</button>
+    <span class="sep-v"></span>
+    <button class="pill" type="button" data-nature="ajuste" aria-pressed="false">Ajuste</button>
+    <button class="pill" type="button" data-nature="novo"   aria-pressed="false">Novo</button>
     <span class="spacer"></span>
     <button class="linky" type="button" id="hideDone" aria-pressed="false">Ocultar concluídas</button>
     <button class="linky" type="button" id="resetAll">Limpar marcações</button>
@@ -425,7 +482,7 @@
         <p class="col-d">Risco baixo, efeito imediato na homologação do Fred.</p>
       </div>
 
-      <article class="card k-base" data-kind="base">
+      <article class="card k-base" data-kind="base" data-wave="1" data-diff="baixa" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-A" aria-label="Concluir: coluna do modelo na execução">
           <span class="card-id">PEÇA A</span>
@@ -442,12 +499,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
+          <span class="tag nat-novo">Novo</span>
           <span class="tag">models.py + database/</span>
           <span class="tag dep">bloqueia RPI-18 · 02 · 22</span>
         </div>
       </article>
 
-      <article class="card k-fix" data-kind="fix">
+      <article class="card k-fix" data-kind="fix" data-wave="1" data-diff="baixa" data-nature="ajuste">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-19" aria-label="Concluir: RPI-19">
           <span class="card-id">RPI-19</span>
@@ -467,10 +526,12 @@
             <p>A regra já está certa — a triagem retorna completa com zero achados. A barra está <em>dentro</em> do bloco que só renderiza se existirem achados, então some junto.</p>
           </div>
         </div>
-        <div class="card-meta"><span class="tag">revision_result.html</span></div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
+          <span class="tag nat-ajuste">Ajuste</span><span class="tag">revision_result.html</span></div>
       </article>
 
-      <article class="card k-fix" data-kind="fix">
+      <article class="card k-fix" data-kind="fix" data-wave="1" data-diff="baixa" data-nature="ajuste">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-18" aria-label="Concluir: RPI-18">
           <span class="card-id">RPI-18</span>
@@ -491,12 +552,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
+          <span class="tag nat-ajuste">Ajuste</span>
           <span class="tag">revision_result.html</span>
           <span class="tag dep">depende da Peça A</span>
         </div>
       </article>
 
-      <article class="card k-build" data-kind="build">
+      <article class="card k-build" data-kind="build" data-wave="1" data-diff="baixa" data-nature="ajuste">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-23" aria-label="Concluir: RPI-23">
           <span class="card-id">RPI-23</span>
@@ -512,10 +575,12 @@
             <p>Validação no cliente <strong>e no servidor</strong> — só no navegador não é validação. A unicidade por escritório continua, com mensagem distinta da de formato.</p>
           </div>
         </div>
-        <div class="card-meta"><span class="tag">revision.html + blueprint</span></div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
+          <span class="tag nat-ajuste">Ajuste</span><span class="tag">revision.html + blueprint</span></div>
       </article>
 
-      <article class="card k-have" data-kind="have">
+      <article class="card k-have" data-kind="have" data-wave="1" data-diff="media" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-09" aria-label="Concluir: RPI-09">
           <span class="card-id">RPI-09</span>
@@ -535,10 +600,12 @@
             <p><strong>Arquivar já existe</strong> — é status do fluxo, tem botão no detalhe e coluna no kanban. Só não aparece na lista, que é onde o problema surge.</p>
           </div>
         </div>
-        <div class="card-meta"><span class="tag">index.html + petition_detail.html</span></div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-novo">Novo</span><span class="tag">index.html + petition_detail.html</span></div>
       </article>
 
-      <article class="card k-have" data-kind="have">
+      <article class="card k-have" data-kind="have" data-wave="1" data-diff="media" data-nature="ajuste">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-04" aria-label="Concluir: RPI-04">
           <span class="card-id">RPI-04</span>
@@ -558,7 +625,9 @@
             <p>A busca incremental <strong>já existe e já cobre título, Id Wrike e advogado</strong>. Falta só o seletor e o contador.</p>
           </div>
         </div>
-        <div class="card-meta"><span class="tag">index.html + fap_review_service</span></div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-ajuste">Ajuste</span><span class="tag">index.html + fap_review_service</span></div>
       </article>
     </section>
 
@@ -573,7 +642,7 @@
         <p class="col-d">Todos saem da mesma peça: o saneador.</p>
       </div>
 
-      <article class="card k-base" data-kind="base">
+      <article class="card k-base" data-kind="base" data-wave="2" data-diff="alta" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-B" aria-label="Concluir: saneador de achados">
           <span class="card-id">PEÇA B</span>
@@ -590,12 +659,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Alta"><span class="dots">●●●</span> Alta</span>
+          <span class="tag nat-novo">Novo</span>
           <span class="tag">app/agents/fap_review/</span>
           <span class="tag dep">bloqueia RPI-07 · 10 · 12 · 13 · 20</span>
         </div>
       </article>
 
-      <article class="card k-build" data-kind="build">
+      <article class="card k-build" data-kind="build" data-wave="2" data-diff="baixa" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-12" aria-label="Concluir: RPI-12">
           <span class="card-id">RPI-12</span>
@@ -611,10 +682,12 @@
             <p>Regra R1: normalizar sugestão e trecho — espaços, caixa, pontuação — e descartar quando equivalentes.</p>
           </div>
         </div>
-        <div class="card-meta"><span class="tag dep">depende da Peça B</span></div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
+          <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
 
-      <article class="card k-build" data-kind="build">
+      <article class="card k-build" data-kind="build" data-wave="2" data-diff="baixa" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-13" aria-label="Concluir: RPI-13">
           <span class="card-id">RPI-13</span>
@@ -630,10 +703,12 @@
             <p>Regra R2: deduplicar por fingerprint, reusando a função que já identifica achados descartados entre revisões.</p>
           </div>
         </div>
-        <div class="card-meta"><span class="tag dep">depende da Peça B</span></div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
+          <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
 
-      <article class="card k-build" data-kind="build">
+      <article class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-07" aria-label="Concluir: RPI-07">
           <span class="card-id">RPI-07</span>
@@ -653,10 +728,12 @@
             <p>Não há <strong>nenhum</strong> tratamento de aspas no agente.</p>
           </div>
         </div>
-        <div class="card-meta"><span class="tag dep">depende da Peça B</span></div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
 
-      <article class="card k-build" data-kind="build">
+      <article class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-10" aria-label="Concluir: RPI-10">
           <span class="card-id">RPI-10</span>
@@ -676,10 +753,12 @@
             <p>A frase do Edivan (“não contar o primeiro dia e contar o último”) daria <strong>31</strong>, contradizendo o exemplo dele. Vamos pelos exemplos: <code>(DIB − DCB) − 1</code>.</p>
           </div>
         </div>
-        <div class="card-meta"><span class="tag dep">depende da Peça B</span></div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
 
-      <article class="card k-build" data-kind="build">
+      <article class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-20" aria-label="Concluir: RPI-20">
           <span class="card-id">RPI-20</span>
@@ -699,7 +778,9 @@
             <p>No caso do João havia 0 achados e <strong>6 lacunas documentais</strong>, e os riscos falavam delas. Zerar por não haver achado apagaria aviso legítimo; ancorar resolve os dois lados.</p>
           </div>
         </div>
-        <div class="card-meta"><span class="tag dep">depende da Peça B</span></div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
     </section>
 
@@ -714,7 +795,7 @@
         <p class="col-d">Os dois requisitos saem do mesmo mecanismo.</p>
       </div>
 
-      <article class="card k-base" data-kind="base">
+      <article class="card k-base" data-kind="base" data-wave="3" data-diff="alta" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-C" aria-label="Concluir: util de grifo">
           <span class="card-id">PEÇA C</span>
@@ -731,12 +812,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Alta"><span class="dots">●●●</span> Alta</span>
+          <span class="tag nat-novo">Novo</span>
           <span class="tag">app/utils/ + dou_xml_parser</span>
           <span class="tag dep">bloqueia RPI-14 · 25</span>
         </div>
       </article>
 
-      <article class="card k-fix" data-kind="fix">
+      <article class="card k-fix" data-kind="fix" data-wave="3" data-diff="media" data-nature="ajuste">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-14" aria-label="Concluir: RPI-14">
           <span class="card-id">RPI-14</span>
@@ -757,12 +840,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-ajuste">Ajuste</span>
           <span class="tag">document_preview.html</span>
           <span class="tag dep">depende da Peça C</span>
         </div>
       </article>
 
-      <article class="card k-have" data-kind="have">
+      <article class="card k-have" data-kind="have" data-wave="3" data-diff="media" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-25" aria-label="Concluir: RPI-25">
           <span class="card-id">RPI-25</span>
@@ -783,6 +868,8 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-novo">Novo</span>
           <span class="tag">revision_result.html</span>
           <span class="tag dep">depende da Peça C</span>
         </div>
@@ -800,7 +887,7 @@
         <p class="col-d">Bloco mais pesado e o único sem nada pronto.</p>
       </div>
 
-      <article class="card k-build" data-kind="build">
+      <article class="card k-build" data-kind="build" data-wave="4" data-diff="alta" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-02" aria-label="Concluir: RPI-02">
           <span class="card-id">RPI-02</span>
@@ -821,12 +908,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Alta"><span class="dots">●●●</span> Alta</span>
+          <span class="tag nat-novo">Novo</span>
           <span class="tag">training.html</span>
           <span class="tag dep">depende da Peça A</span>
         </div>
       </article>
 
-      <article class="card k-have" data-kind="have">
+      <article class="card k-have" data-kind="have" data-wave="4" data-diff="baixa" data-nature="ajuste">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-03" aria-label="Concluir: RPI-03">
           <span class="card-id">RPI-03</span>
@@ -846,10 +935,12 @@
             <p>O mecanismo <strong>já existe</strong>: versionamento com ativação, registro das versões por execução e aprovação na tela de comparação. Falta só ficar visível.</p>
           </div>
         </div>
-        <div class="card-meta"><span class="tag">training.html</span></div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
+          <span class="tag nat-ajuste">Ajuste</span><span class="tag">training.html</span></div>
       </article>
 
-      <article class="card k-build" data-kind="build">
+      <article class="card k-build" data-kind="build" data-wave="4" data-diff="alta" data-nature="novo">
         <div class="card-top">
           <input class="card-check" type="checkbox" id="t-22" aria-label="Concluir: RPI-22">
           <span class="card-id">RPI-22</span>
@@ -870,6 +961,8 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Alta"><span class="dots">●●●</span> Alta</span>
+          <span class="tag nat-novo">Novo</span>
           <span class="tag">training + tela nova</span>
           <span class="tag dep">depende da Peça A</span>
         </div>
@@ -891,16 +984,50 @@
   'use strict';
 
   var STORE = 'r02-quadro-v1';
+  var board = document.querySelector('.board');
   var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
   var checks = Array.prototype.slice.call(document.querySelectorAll('.card-check'));
-  var pills = Array.prototype.slice.call(document.querySelectorAll('.pill[data-filter]'));
-  var hideDoneBtn = document.getElementById('hideDone');
-  var resetBtn = document.getElementById('resetAll');
   var doneCount = document.getElementById('doneCount');
   var bar = document.getElementById('bar');
   var note = document.getElementById('progressNote');
+  var hideDoneBtn = document.getElementById('hideDone');
+  var resetBtn = document.getElementById('resetAll');
 
-  var filter = 'all';
+  // Como o quadro pode ser reagrupado: cada modo diz qual atributo do cartão
+  // vira coluna, e as colunas em que ordem. A ordem é fixa e não sai dos dados —
+  // uma coluna vazia continua aparecendo, senão o filtro pareceria ter sumido
+  // com a categoria inteira.
+  var GROUPS = {
+    onda: {
+      attr: 'wave',
+      cols: [
+        { k: '1', n: 'ONDA 1', t: 'Destrava o aceite',      d: 'Risco baixo, efeito imediato na homologação do Fred.' },
+        { k: '2', n: 'ONDA 2', t: 'Qualidade dos achados',  d: 'Todos saem da mesma peça: o saneador.' },
+        { k: '3', n: 'ONDA 3', t: 'Grifo no documento',     d: 'Os dois requisitos saem do mesmo mecanismo.' },
+        { k: '4', n: 'ONDA 4', t: 'Controle de lotes',      d: 'Bloco mais pesado e o único sem nada pronto.' }
+      ]
+    },
+    dificuldade: {
+      attr: 'diff',
+      cols: [
+        { k: 'baixa', n: '●○○', t: 'Baixa', d: 'Mudança localizada, sem estrutura nova a projetar.' },
+        { k: 'media', n: '●●○', t: 'Média', d: 'Toca mais de um ponto, ou exige uma decisão de formato.' },
+        { k: 'alta',  n: '●●●', t: 'Alta',  d: 'Módulo ou tela nova, com risco real de regressão.' }
+      ]
+    },
+    natureza: {
+      attr: 'nature',
+      cols: [
+        { k: 'ajuste', n: 'AJUSTE', t: 'Altera o que já existe',    d: 'Corrige ou completa comportamento e telas já em produção.' },
+        { k: 'novo',   n: 'NOVO',   t: 'Constrói o que não existe', d: 'Módulo, coluna, tela ou capacidade que hoje não há.' }
+      ]
+    }
+  };
+
+  var group = 'onda';
+  var fKind = 'all';
+  var fDiff = 'all';
+  var fNature = 'all';
   var hideDone = false;
 
   function readStore() {
@@ -918,41 +1045,78 @@
     } catch (e) {
       // Modo privado ou armazenamento bloqueado: o quadro segue funcionando,
       // apenas sem lembrar as marcações entre visitas.
-      if (note) note.textContent = 'Este navegador não está salvando as marcações';
+      if (note) { note.textContent = 'Este navegador não está salvando as marcações'; }
     }
   }
 
-  function cardOf(check) {
-    return check.closest('.card');
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) { node.className = cls; }
+    if (text != null) { node.textContent = text; }
+    return node;
+  }
+
+  // Reconstrói as colunas do modo atual e devolve cada cartão à sua coluna.
+  function layout() {
+    var spec = GROUPS[group];
+
+    // Tira os cartões do DOM antes de esvaziar o quadro: apagar innerHTML com
+    // eles dentro descartaria os nós e levaria junto os listeners dos checkboxes.
+    cards.forEach(function (card) {
+      if (card.parentNode) { card.parentNode.removeChild(card); }
+    });
+
+    board.innerHTML = '';
+    board.dataset.cols = String(spec.cols.length);
+
+    spec.cols.forEach(function (col) {
+      var section = el('section', 'col');
+      section.setAttribute('aria-label', col.t);
+
+      var head = el('div', 'col-head');
+      var top = el('div', 'col-top');
+      top.appendChild(el('span', 'col-n', col.n));
+      top.appendChild(el('span', 'col-t', col.t));
+      var count = el('span', 'col-count');
+      count.setAttribute('data-count', '');
+      top.appendChild(count);
+      head.appendChild(top);
+      head.appendChild(el('p', 'col-d', col.d));
+      section.appendChild(head);
+
+      cards.forEach(function (card) {
+        if (card.dataset[spec.attr] === col.k) { section.appendChild(card); }
+      });
+
+      board.appendChild(section);
+    });
   }
 
   function paint() {
     var done = 0;
 
     checks.forEach(function (check) {
-      var card = cardOf(check);
       if (check.checked) { done++; }
-      card.classList.toggle('is-done', check.checked);
+      check.closest('.card').classList.toggle('is-done', check.checked);
     });
 
     cards.forEach(function (card) {
       var check = card.querySelector('.card-check');
-      var byKind = filter === 'all' || card.dataset.kind === filter;
-      var byDone = !(hideDone && check && check.checked);
-      card.classList.toggle('is-hidden', !(byKind && byDone));
+      var ok = (fKind === 'all' || card.dataset.kind === fKind) &&
+               (fDiff === 'all' || card.dataset.diff === fDiff) &&
+               (fNature === 'all' || card.dataset.nature === fNature) &&
+               !(hideDone && check && check.checked);
+      card.classList.toggle('is-hidden', !ok);
     });
 
-    document.querySelectorAll('.col').forEach(function (col) {
+    Array.prototype.forEach.call(board.querySelectorAll('.col'), function (col) {
       var visible = col.querySelectorAll('.card:not(.is-hidden)').length;
       var counter = col.querySelector('[data-count]');
       if (counter) { counter.textContent = visible; }
 
       var empty = col.querySelector('.empty');
       if (visible === 0 && !empty) {
-        empty = document.createElement('p');
-        empty.className = 'empty';
-        empty.textContent = 'Nada nesta onda com o filtro atual.';
-        col.appendChild(empty);
+        col.appendChild(el('p', 'empty', 'Nada aqui com o filtro atual.'));
       } else if (visible > 0 && empty) {
         empty.remove();
       }
@@ -960,6 +1124,22 @@
 
     doneCount.textContent = done;
     bar.style.width = (checks.length ? (done / checks.length) * 100 : 0) + '%';
+  }
+
+  // Um grupo de pills é excludente entre si: clicar no que já está ativo desliga.
+  function wirePills(selector, dataKey, apply) {
+    var pills = Array.prototype.slice.call(document.querySelectorAll(selector));
+    pills.forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        var value = pill.dataset[dataKey];
+        var already = pill.getAttribute('aria-pressed') === 'true';
+        var next = (already && dataKey !== 'group') ? 'all' : value;
+        pills.forEach(function (other) {
+          other.setAttribute('aria-pressed', String(other.dataset[dataKey] === next));
+        });
+        apply(next);
+      });
+    });
   }
 
   var saved = readStore();
@@ -973,14 +1153,25 @@
     });
   });
 
-  pills.forEach(function (pill) {
-    pill.addEventListener('click', function () {
-      filter = pill.dataset.filter;
-      pills.forEach(function (p) {
-        p.setAttribute('aria-pressed', String(p === pill));
-      });
-      paint();
-    });
+  wirePills('.pill[data-group]', 'group', function (value) {
+    group = value;
+    layout();
+    paint();
+  });
+
+  wirePills('.pill[data-filter]', 'filter', function (value) {
+    fKind = value;
+    paint();
+  });
+
+  wirePills('.pill[data-diff]', 'diff', function (value) {
+    fDiff = value;
+    paint();
+  });
+
+  wirePills('.pill[data-nature]', 'nature', function (value) {
+    fNature = value;
+    paint();
   });
 
   hideDoneBtn.addEventListener('click', function () {
@@ -996,6 +1187,7 @@
     paint();
   });
 
+  layout();
   paint();
 })();
 </script>
