@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quadro de tarefas — Remessa R02 · Revisor de Petições</title>
+<style>
+  :root {
+    --ink:       #1A1D24;
+    --ink-soft:  #4A5160;
+    --ink-faint: #767E8E;
+    --paper:     #F4F5F7;
+    --surface:   #FFFFFF;
+    --surface-2: #EDEFF3;
+    --rule:      #D8DCE3;
+    --rule-soft: #E6E9EE;
+    --mark:      #FFD84D;
+    --mark-ink:  #1A1D24;
+    --fix:       #B4423A;  --fix-bg:   #F9EAE8;
+    --have:      #226B5C;  --have-bg:  #E4F0EC;
+    --build:     #35539C;  --build-bg: #E7ECF8;
+    --base:      #6B4E9E;  --base-bg:  #EFEAF8;
+    --done-veil: rgba(34,107,92,.05);
+
+    --body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink:       #E4E7EC;
+      --ink-soft:  #A8B0BE;
+      --ink-faint: #7C8494;
+      --paper:     #101318;
+      --surface:   #171B22;
+      --surface-2: #1E232C;
+      --rule:      #2E3541;
+      --rule-soft: #262C36;
+      --mark:      #E8C24A;
+      --mark-ink:  #17191E;
+      --fix:       #E4877D;  --fix-bg:   #2E1E1D;
+      --have:      #6FC4AE;  --have-bg:  #162A26;
+      --build:     #93AEEA;  --build-bg: #1A2138;
+      --base:      #B49BE0;  --base-bg:  #241E33;
+      --done-veil: rgba(111,196,174,.06);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible { outline: 2px solid var(--build); outline-offset: 2px; }
+
+  .wrap { max-width: 1560px; margin: 0 auto; padding: 28px 24px 72px; }
+
+  /* ── Header ──────────────────────────────────────────── */
+
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 20px 32px;
+    padding-bottom: 18px;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .titles h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    margin: 0 0 4px;
+  }
+
+  .titles p { margin: 0; font-size: 13.5px; color: var(--ink-faint); }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 8px;
+  }
+
+  /* ── Progress ────────────────────────────────────────── */
+
+  .progress { display: flex; flex-direction: column; gap: 7px; min-width: 250px; }
+
+  .progress-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+  }
+
+  .progress-top b {
+    font-family: var(--mono);
+    font-size: 1.15rem;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .bar { height: 7px; background: var(--surface-2); border: 1px solid var(--rule); overflow: hidden; }
+  .bar span { display: block; height: 100%; width: 0; background: var(--have); transition: width .2s ease; }
+
+  /* ── Toolbar ─────────────────────────────────────────── */
+
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    margin: 18px 0 24px;
+  }
+
+  .toolbar-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-right: 2px;
+  }
+
+  .pill {
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    color: var(--ink-soft);
+    border-radius: 100px;
+    cursor: pointer;
+  }
+
+  .pill:hover { border-color: var(--ink-faint); color: var(--ink); }
+
+  .pill[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+  .pill.k-fix[aria-pressed="true"]   { background: var(--fix);   border-color: var(--fix);   color: #fff; }
+  .pill.k-have[aria-pressed="true"]  { background: var(--have);  border-color: var(--have);  color: #fff; }
+  .pill.k-build[aria-pressed="true"] { background: var(--build); border-color: var(--build); color: #fff; }
+  .pill.k-base[aria-pressed="true"]  { background: var(--base);  border-color: var(--base);  color: #fff; }
+
+  .spacer { flex: 1 1 auto; }
+
+  .linky {
+    font: inherit;
+    font-size: 12.5px;
+    background: none;
+    border: none;
+    padding: 5px 4px;
+    color: var(--ink-faint);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+  }
+
+  .linky:hover { color: var(--ink); }
+
+  /* ── Board ───────────────────────────────────────────── */
+
+  .board {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+  }
+
+  .col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+  .col-head {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 0 2px 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .col-top { display: flex; align-items: center; gap: 9px; }
+
+  .col-n {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .1em;
+    background: var(--mark);
+    color: var(--mark-ink);
+    padding: 3px 7px;
+    flex: none;
+  }
+
+  .col-t { font-size: 14px; font-weight: 700; letter-spacing: -.005em; }
+
+  .col-count {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+    flex: none;
+  }
+
+  .col-d { font-size: 12px; color: var(--ink-faint); line-height: 1.4; }
+
+  /* ── Cards ───────────────────────────────────────────── */
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--rule);
+    padding: 12px 14px 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .card.k-fix   { border-left-color: var(--fix); }
+  .card.k-have  { border-left-color: var(--have); }
+  .card.k-build { border-left-color: var(--build); }
+  .card.k-base  { border-left-color: var(--base); }
+
+  .card.is-hidden { display: none; }
+
+  .card.is-done { background: linear-gradient(var(--done-veil), var(--done-veil)), var(--surface); }
+  .card.is-done .card-title { text-decoration: line-through; color: var(--ink-faint); }
+  .card.is-done .card-body,
+  .card.is-done .card-meta { opacity: .55; }
+
+  .card-top { display: flex; align-items: flex-start; gap: 9px; }
+
+  .card-check {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 17px;
+    height: 17px;
+    flex: none;
+    margin: 2px 0 0;
+    border: 1.5px solid var(--ink-faint);
+    border-radius: 3px;
+    background: var(--surface);
+    cursor: pointer;
+    display: grid;
+    place-content: center;
+  }
+
+  .card-check::after {
+    content: "";
+    width: 9px;
+    height: 5px;
+    border-left: 2px solid var(--surface);
+    border-bottom: 2px solid var(--surface);
+    transform: rotate(-45deg) translate(1px, -1px) scale(0);
+    transition: transform .1s ease;
+  }
+
+  .card-check:checked { background: var(--have); border-color: var(--have); }
+  .card-check:checked::after { transform: rotate(-45deg) translate(1px, -1px) scale(1); }
+
+  .card-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border: 1px solid currentColor;
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: .01em;
+  }
+
+  .k-fix   .card-id { color: var(--fix);   background: var(--fix-bg); }
+  .k-have  .card-id { color: var(--have);  background: var(--have-bg); }
+  .k-build .card-id { color: var(--build); background: var(--build-bg); }
+  .k-base  .card-id { color: var(--base);  background: var(--base-bg); }
+
+  .card-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    letter-spacing: -.005em;
+    line-height: 1.35;
+    margin: 1px 0 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .card-body { display: flex; flex-direction: column; gap: 7px; }
+
+  .line { display: flex; flex-direction: column; gap: 2px; }
+
+  .line-lab {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  .line p { margin: 0; font-size: 12.8px; line-height: 1.48; color: var(--ink-soft); }
+
+  .line.diag {
+    border-left: 2px solid var(--mark);
+    padding-left: 9px;
+    background: var(--surface-2);
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-right: 8px;
+  }
+
+  .card-meta { display: flex; flex-wrap: wrap; gap: 5px; }
+
+  .tag {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 7px;
+    background: var(--surface-2);
+    color: var(--ink-soft);
+    border-radius: 2px;
+  }
+
+  .tag.dep { background: var(--base-bg); color: var(--base); }
+
+  code {
+    font-family: var(--mono);
+    font-size: .87em;
+    background: var(--surface-2);
+    padding: 0 3px;
+    border-radius: 2px;
+  }
+
+  .diag code { background: var(--surface); }
+
+  .empty {
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    font-style: italic;
+    padding: 10px 2px;
+  }
+
+  footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    font-size: 12px;
+    color: var(--ink-faint);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 22px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+
+  @media (max-width: 1240px) { .board { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 680px)  { .board { grid-template-columns: minmax(0, 1fr); } .wrap { padding: 20px 16px 56px; } }
+
+  @media print {
+    body { background: #fff; }
+    .toolbar, .progress, .card-check { display: none; }
+    .board { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .card { break-inside: avoid; border: 1px solid #bbb; }
+    .col { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="titles">
+      <p class="eyebrow">Remessa R02 · Revisor de Petições Iniciais</p>
+      <h1>Quadro de tarefas</h1>
+      <p>18 tarefas — 15 requisitos do briefing e as 3 peças de base das quais dez deles dependem.</p>
+    </div>
+    <div class="progress">
+      <div class="progress-top">
+        <span>Concluídas</span>
+        <span><b id="doneCount">0</b> <span style="font-family:var(--mono)">/ 18</span></span>
+      </div>
+      <div class="bar"><span id="bar"></span></div>
+      <div class="progress-top" style="font-size:11.5px">
+        <span id="progressNote">Marque as tarefas conforme entregar</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <span class="toolbar-label">Filtrar</span>
+    <button class="pill" type="button" data-filter="all" aria-pressed="true">Todas</button>
+    <button class="pill k-base"  type="button" data-filter="base"  aria-pressed="false">Peça de base</button>
+    <button class="pill k-fix"   type="button" data-filter="fix"   aria-pressed="false">Correção</button>
+    <button class="pill k-have"  type="button" data-filter="have"  aria-pressed="false">Já existe em parte</button>
+    <button class="pill k-build" type="button" data-filter="build" aria-pressed="false">Construção nova</button>
+    <span class="spacer"></span>
+    <button class="linky" type="button" id="hideDone" aria-pressed="false">Ocultar concluídas</button>
+    <button class="linky" type="button" id="resetAll">Limpar marcações</button>
+  </div>
+
+  <div class="board">
+
+    <!-- ══ ONDA 1 ══════════════════════════════════════ -->
+    <section class="col" aria-label="Onda 1">
+      <div class="col-head">
+        <div class="col-top">
+          <span class="col-n">ONDA 1</span>
+          <span class="col-t">Destrava o aceite</span>
+          <span class="col-count" data-count>6</span>
+        </div>
+        <p class="col-d">Risco baixo, efeito imediato na homologação do Fred.</p>
+      </div>
+
+      <article class="card k-base" data-kind="base">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-A" aria-label="Concluir: coluna do modelo na execução">
+          <span class="card-id">PEÇA A</span>
+          <h3 class="card-title">Persistir o modelo efetivo na execução</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">O que fazer</span>
+            <p>Coluna <code>model_name</code> em <code>FapReviewExecution</code>, gravada quando o agente é instanciado. Migration standalone e idempotente em <code>database/</code>.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Cuidado</span>
+            <p>Execução antiga fica <code>NULL</code> — a tela diz “não registrado”, nunca um palpite. Foi um literal chutado que criou o RPI-18.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag">models.py + database/</span>
+          <span class="tag dep">bloqueia RPI-18 · 02 · 22</span>
+        </div>
+      </article>
+
+      <article class="card k-fix" data-kind="fix">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-19" aria-label="Concluir: RPI-19">
+          <span class="card-id">RPI-19</span>
+          <h3 class="card-title">Aceite da revisão sem erros</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Aprovar a petição mesmo sem nenhum erro apontado. O João zerou os achados, o botão sumiu e o caso ficou pendente.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Mover a barra de conclusão da triagem para fora do condicional de achados.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Causa raiz</span>
+            <p>A regra já está certa — a triagem retorna completa com zero achados. A barra está <em>dentro</em> do bloco que só renderiza se existirem achados, então some junto.</p>
+          </div>
+        </div>
+        <div class="card-meta"><span class="tag">revision_result.html</span></div>
+      </article>
+
+      <article class="card k-fix" data-kind="fix">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-18" aria-label="Concluir: RPI-18">
+          <span class="card-id">RPI-18</span>
+          <h3 class="card-title">Modelo de LLM no debug</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Saber de forma confiável com que modelo e prompt a revisão foi gerada. Configurado Sonnet 5, o debug mostra <code>gpt-4o-mini</code>.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Usar a coluna da Peça A e remover o literal do template.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Causa raiz</span>
+            <p>O template lê um atributo que não existe como coluna. Em Jinja isso é falso, e <code>modelo or 'gpt-4o-mini'</code> cai sempre no literal. <strong>A configuração está certa; só o debug mente.</strong></p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag">revision_result.html</span>
+          <span class="tag dep">depende da Peça A</span>
+        </div>
+      </article>
+
+      <article class="card k-build" data-kind="build">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-23" aria-label="Concluir: RPI-23">
+          <span class="card-id">RPI-23</span>
+          <h3 class="card-title">Id Wrike aceita só números</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Bloquear o avanço com preenchimento indevido, com mensagem de erro e campo em vermelho.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Validação no cliente <strong>e no servidor</strong> — só no navegador não é validação. A unicidade por escritório continua, com mensagem distinta da de formato.</p>
+          </div>
+        </div>
+        <div class="card-meta"><span class="tag">revision.html + blueprint</span></div>
+      </article>
+
+      <article class="card k-have" data-kind="have">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-09" aria-label="Concluir: RPI-09">
+          <span class="card-id">RPI-09</span>
+          <h3 class="card-title">Arquivar ou excluir uma revisão</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Tirar da lista um caso de teste ou um projeto duplicado por erro de Wrike, ajustando as estatísticas.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Trazer arquivar para a lista e o kanban. Somar exclusão <strong>lógica</strong>, restrita a admin: sai das listas e dos números, mas registro, arquivos e auditoria permanecem.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p><strong>Arquivar já existe</strong> — é status do fluxo, tem botão no detalhe e coluna no kanban. Só não aparece na lista, que é onde o problema surge.</p>
+          </div>
+        </div>
+        <div class="card-meta"><span class="tag">index.html + petition_detail.html</span></div>
+      </article>
+
+      <article class="card k-have" data-kind="have">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-04" aria-label="Concluir: RPI-04">
+          <span class="card-id">RPI-04</span>
+          <h3 class="card-title">Filtros na lista de petições</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Filtrar por advogado e por título, o título incremental. O Isrhael quer busca em dois níveis e contador por advogado por status.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Seletor de advogado como 1º nível; a busca textual filtra dentro da seleção. Contador por status ao lado do nome, de query agregada no serviço.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p>A busca incremental <strong>já existe e já cobre título, Id Wrike e advogado</strong>. Falta só o seletor e o contador.</p>
+          </div>
+        </div>
+        <div class="card-meta"><span class="tag">index.html + fap_review_service</span></div>
+      </article>
+    </section>
+
+    <!-- ══ ONDA 2 ══════════════════════════════════════ -->
+    <section class="col" aria-label="Onda 2">
+      <div class="col-head">
+        <div class="col-top">
+          <span class="col-n">ONDA 2</span>
+          <span class="col-t">Qualidade dos achados</span>
+          <span class="col-count" data-count>6</span>
+        </div>
+        <p class="col-d">Todos saem da mesma peça: o saneador.</p>
+      </div>
+
+      <article class="card k-base" data-kind="base">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-B" aria-label="Concluir: saneador de achados">
+          <span class="card-id">PEÇA B</span>
+          <h3 class="card-title">Saneador de achados, função pura</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">O que fazer</span>
+            <p>Sem Flask, sem rede, sem LLM. Recebe achados + texto do documento; devolve os saneados <strong>e a lista do que descartou, com o motivo</strong>.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Por quê assim</span>
+            <p>O descarte precisa aparecer no debug: filtro silencioso vira caixa-preta e ninguém distingue “o revisor não viu” de “o saneador comeu”. Sendo função pura, os casos viram teste sem gastar chamada de modelo.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag">app/agents/fap_review/</span>
+          <span class="tag dep">bloqueia RPI-07 · 10 · 12 · 13 · 20</span>
+        </div>
+      </article>
+
+      <article class="card k-build" data-kind="build">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-12" aria-label="Concluir: RPI-12">
+          <span class="card-id">RPI-12</span>
+          <h3 class="card-title">Sugestão igual ao erro</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Não apontar erro quando a sugestão for igual ao original. CEP <code>22.775-005</code> apontado como errado, com sugestão “corrigir para <code>CEP 22.775-005</code>”.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Regra R1: normalizar sugestão e trecho — espaços, caixa, pontuação — e descartar quando equivalentes.</p>
+          </div>
+        </div>
+        <div class="card-meta"><span class="tag dep">depende da Peça B</span></div>
+      </article>
+
+      <article class="card k-build" data-kind="build">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-13" aria-label="Concluir: RPI-13">
+          <span class="card-id">RPI-13</span>
+          <h3 class="card-title">Duplicidade de apontamentos</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Uma correção aparecer uma vez só. O B91 nº 6214157201 saiu nos pontos 15 e 21, idêntico.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Regra R2: deduplicar por fingerprint, reusando a função que já identifica achados descartados entre revisões.</p>
+          </div>
+        </div>
+        <div class="card-meta"><span class="tag dep">depende da Peça B</span></div>
+      </article>
+
+      <article class="card k-build" data-kind="build">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-07" aria-label="Concluir: RPI-07">
+          <span class="card-id">RPI-07</span>
+          <h3 class="card-title">Ignorar citação direta</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Não auditar trechos entre aspas. O agente pediu para uniformizar expressão dentro de transcrição de sentença e para atualizar terminologia dentro de citação literal de lei.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Regra R3: descartar achado cujo trecho caia dentro de um span entre aspas. O prompt também orienta — mas quem garante é o código.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p>Não há <strong>nenhum</strong> tratamento de aspas no agente.</p>
+          </div>
+        </div>
+        <div class="card-meta"><span class="tag dep">depende da Peça B</span></div>
+      </article>
+
+      <article class="card k-build" data-kind="build">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-10" aria-label="Concluir: RPI-10">
+          <span class="card-id">RPI-10</span>
+          <h3 class="card-title">Prazo de 60 dias</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Contar o intervalo entre DCB e DIB sem o dia da cessação. Aceite: 22/12/2017→22/01/2018 = <strong>30</strong>; 01/01/2020→02/01/2020 = <strong>0</strong>.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Corrigir a regra na referência <code>manual_fap</code> e somar a regra R4: quando o achado cita duas datas, o código recalcula e corrige o número.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Validar com o Fred</span>
+            <p>A frase do Edivan (“não contar o primeiro dia e contar o último”) daria <strong>31</strong>, contradizendo o exemplo dele. Vamos pelos exemplos: <code>(DIB − DCB) − 1</code>.</p>
+          </div>
+        </div>
+        <div class="card-meta"><span class="tag dep">depende da Peça B</span></div>
+      </article>
+
+      <article class="card k-build" data-kind="build">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-20" aria-label="Concluir: RPI-20">
+          <span class="card-id">RPI-20</span>
+          <h3 class="card-title">Definição de riscos jurídicos</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Clareza sobre como os riscos influenciam a análise. Aceite: sem item errado, não deveria haver risco.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Todo risco cita sua âncora — um achado ou um documento faltante — exibida ao lado. Risco sem âncora é descartado (R5). Com zero achados <em>e</em> zero documentos faltantes, a seção some.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Análise</span>
+            <p>No caso do João havia 0 achados e <strong>6 lacunas documentais</strong>, e os riscos falavam delas. Zerar por não haver achado apagaria aviso legítimo; ancorar resolve os dois lados.</p>
+          </div>
+        </div>
+        <div class="card-meta"><span class="tag dep">depende da Peça B</span></div>
+      </article>
+    </section>
+
+    <!-- ══ ONDA 3 ══════════════════════════════════════ -->
+    <section class="col" aria-label="Onda 3">
+      <div class="col-head">
+        <div class="col-top">
+          <span class="col-n">ONDA 3</span>
+          <span class="col-t">Grifo no documento</span>
+          <span class="col-count" data-count>3</span>
+        </div>
+        <p class="col-d">Os dois requisitos saem do mesmo mecanismo.</p>
+      </div>
+
+      <article class="card k-base" data-kind="base">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-C" aria-label="Concluir: util de grifo">
+          <span class="card-id">PEÇA C</span>
+          <h3 class="card-title">Grifo determinístico no servidor</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">O que fazer</span>
+            <p>Extrair do DOU o mapa de índices e o grifo para um util compartilhado; o preview envolve o trecho em <code>&lt;mark&gt;</code> no servidor e o JS só ancora.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Risco</span>
+            <p>Mover sem alterar comportamento e conferir contra o acervo do DOU antes de seguir. Se divergir, plano B é implementação própria no Revisor.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag">app/utils/ + dou_xml_parser</span>
+          <span class="tag dep">bloqueia RPI-14 · 25</span>
+        </div>
+      </article>
+
+      <article class="card k-fix" data-kind="fix">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-14" aria-label="Concluir: RPI-14">
+          <span class="card-id">RPI-14</span>
+          <h3 class="card-title">“Ver no documento” errático</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Exibir o trecho onde consta o erro. O Edivan diz que falhou em <strong>todos</strong> os “ver no documento”.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Marcação no servidor com âncora. O agente já devolve o trecho literal, que é a entrada exata de que o mecanismo precisa. Trecho não localizável passa a ser dito na tela.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Causa raiz</span>
+            <p>Busca aproximada no navegador com rolagem suave: sem casar fica no topo; casando tarde, “pula”. Piora com acento, ligadura e quebra de parágrafo.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag">document_preview.html</span>
+          <span class="tag dep">depende da Peça C</span>
+        </div>
+      </article>
+
+      <article class="card k-have" data-kind="have">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-25" aria-label="Concluir: RPI-25">
+          <span class="card-id">RPI-25</span>
+          <h3 class="card-title">Mostrar a fonte dos dados</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>O agente dos anexos indicar de onde tirou cada informação, como o revisor faz com o texto.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Botão “ver trecho” por fato, abrindo o anexo com o trecho grifado — mesmo caminho do RPI-14.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje / limite</span>
+            <p>O trecho de origem <strong>já é extraído e persistido</strong>; só não é exibido. Mas isso torna visível a falha da CAT e do NIT — <strong>não a corrige</strong>. Item próprio numa remessa seguinte.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag">revision_result.html</span>
+          <span class="tag dep">depende da Peça C</span>
+        </div>
+      </article>
+    </section>
+
+    <!-- ══ ONDA 4 ══════════════════════════════════════ -->
+    <section class="col" aria-label="Onda 4">
+      <div class="col-head">
+        <div class="col-top">
+          <span class="col-n">ONDA 4</span>
+          <span class="col-t">Controle de lotes</span>
+          <span class="col-count" data-count>3</span>
+        </div>
+        <p class="col-d">Bloco mais pesado e o único sem nada pronto.</p>
+      </div>
+
+      <article class="card k-build" data-kind="build">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-02" aria-label="Concluir: RPI-02">
+          <span class="card-id">RPI-02</span>
+          <h3 class="card-title">Controle de lotes de processamento</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Saber prompt e modelo de cada lote para rastrear erro sistemático; reprocessar o mesmo lote com outro modelo e comparar.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Histórico completo e paginado com modelo, versões, usuário, data e itens. Reprocessar execução concluída com outro modelo, criando execução nova ligada à original — sem sobrescrever a triagem.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p>A tela lista a atividade recente, mas <strong>corta em 12</strong> e mostra só id, documentos, alvos e data.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag">training.html</span>
+          <span class="tag dep">depende da Peça A</span>
+        </div>
+      </article>
+
+      <article class="card k-have" data-kind="have">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-03" aria-label="Concluir: RPI-03">
+          <span class="card-id">RPI-03</span>
+          <h3 class="card-title">Coerência entre lotes</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Definir qual modelo/prompt vale, para análises sucessivas não divergirem. Aceite: revisar e aprovar os aprendizados da ingestão.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>O histórico do lote exibe a combinação usada e marca qual está vigente, para a divergência entre dois lotes ser legível.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p>O mecanismo <strong>já existe</strong>: versionamento com ativação, registro das versões por execução e aprovação na tela de comparação. Falta só ficar visível.</p>
+          </div>
+        </div>
+        <div class="card-meta"><span class="tag">training.html</span></div>
+      </article>
+
+      <article class="card k-build" data-kind="build">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-22" aria-label="Concluir: RPI-22">
+          <span class="card-id">RPI-22</span>
+          <h3 class="card-title">Comparação entre modelos</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Quantificar quanto um modelo é melhor. Dos 21 pontos críticos do GPT na análise do Edivan, <strong>nenhum estava errado</strong>.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Tela A/B: achados em comum, exclusivos, severidade, custo, tokens e tempo. E <strong>precisão pela triagem humana</strong> — aceitos sobre total.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">De graça</span>
+            <p>O sinal já é coletado: cada achado é registrado como revisado ou não pertinente. O caso do Edivan vira “21 achados, 21 descartados, precisão 0%”.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag">training + tela nova</span>
+          <span class="tag dep">depende da Peça A</span>
+        </div>
+      </article>
+    </section>
+
+  </div>
+
+  <footer>
+    <span>IntellexIA · módulo <strong>Revisor de Petições Iniciais</strong></span>
+    <span>Design completo em <code>2026-09-02-remessa-r02-revisor-peticoes-design.md</code></span>
+    <span>Marcações ficam salvas neste navegador</span>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var STORE = 'r02-quadro-v1';
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var checks = Array.prototype.slice.call(document.querySelectorAll('.card-check'));
+  var pills = Array.prototype.slice.call(document.querySelectorAll('.pill[data-filter]'));
+  var hideDoneBtn = document.getElementById('hideDone');
+  var resetBtn = document.getElementById('resetAll');
+  var doneCount = document.getElementById('doneCount');
+  var bar = document.getElementById('bar');
+  var note = document.getElementById('progressNote');
+
+  var filter = 'all';
+  var hideDone = false;
+
+  function readStore() {
+    try {
+      var raw = localStorage.getItem(STORE);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function writeStore(state) {
+    try {
+      localStorage.setItem(STORE, JSON.stringify(state));
+    } catch (e) {
+      // Modo privado ou armazenamento bloqueado: o quadro segue funcionando,
+      // apenas sem lembrar as marcações entre visitas.
+      if (note) note.textContent = 'Este navegador não está salvando as marcações';
+    }
+  }
+
+  function cardOf(check) {
+    return check.closest('.card');
+  }
+
+  function paint() {
+    var done = 0;
+
+    checks.forEach(function (check) {
+      var card = cardOf(check);
+      if (check.checked) { done++; }
+      card.classList.toggle('is-done', check.checked);
+    });
+
+    cards.forEach(function (card) {
+      var check = card.querySelector('.card-check');
+      var byKind = filter === 'all' || card.dataset.kind === filter;
+      var byDone = !(hideDone && check && check.checked);
+      card.classList.toggle('is-hidden', !(byKind && byDone));
+    });
+
+    document.querySelectorAll('.col').forEach(function (col) {
+      var visible = col.querySelectorAll('.card:not(.is-hidden)').length;
+      var counter = col.querySelector('[data-count]');
+      if (counter) { counter.textContent = visible; }
+
+      var empty = col.querySelector('.empty');
+      if (visible === 0 && !empty) {
+        empty = document.createElement('p');
+        empty.className = 'empty';
+        empty.textContent = 'Nada nesta onda com o filtro atual.';
+        col.appendChild(empty);
+      } else if (visible > 0 && empty) {
+        empty.remove();
+      }
+    });
+
+    doneCount.textContent = done;
+    bar.style.width = (checks.length ? (done / checks.length) * 100 : 0) + '%';
+  }
+
+  var saved = readStore();
+  checks.forEach(function (check) {
+    if (saved[check.id]) { check.checked = true; }
+    check.addEventListener('change', function () {
+      var state = readStore();
+      if (check.checked) { state[check.id] = 1; } else { delete state[check.id]; }
+      writeStore(state);
+      paint();
+    });
+  });
+
+  pills.forEach(function (pill) {
+    pill.addEventListener('click', function () {
+      filter = pill.dataset.filter;
+      pills.forEach(function (p) {
+        p.setAttribute('aria-pressed', String(p === pill));
+      });
+      paint();
+    });
+  });
+
+  hideDoneBtn.addEventListener('click', function () {
+    hideDone = !hideDone;
+    hideDoneBtn.setAttribute('aria-pressed', String(hideDone));
+    hideDoneBtn.textContent = hideDone ? 'Mostrar concluídas' : 'Ocultar concluídas';
+    paint();
+  });
+
+  resetBtn.addEventListener('click', function () {
+    checks.forEach(function (check) { check.checked = false; });
+    writeStore({});
+    paint();
+  });
+
+  paint();
+})();
+</script>
+</body>
+</html>
