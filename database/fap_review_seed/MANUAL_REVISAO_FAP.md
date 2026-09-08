@@ -276,6 +276,16 @@ Incluir também a petição inicial do processo judicial que deu origem ao B92.
 
 **Definição:** dois benefícios de incapacidade temporária consecutivos decorrentes da mesma incapacidade, com intervalo inferior a 60 dias entre a DCB do primeiro e a DIB do segundo.
 
+**Como contar o intervalo:** o dia da cessação **não** entra na conta — conta-se do dia seguinte à DCB até o dia anterior à DIB. Em fórmula: `(DIB − DCB) − 1`.
+
+| DCB | DIB | Intervalo |
+|---|---|---|
+| 22/12/2017 | 22/01/2018 | **30 dias** |
+| 01/01/2020 | 02/01/2020 | **0 dias** (benefícios consecutivos, sem intervalo) |
+| 01/01/2020 | 02/03/2020 | **60 dias** — não é restabelecimento, porque a regra exige intervalo *inferior* a 60 |
+
+Conferir o número escrito na peça contra essa conta. É erro frequente somar um dia a mais, contando o próprio dia da cessação.
+
 **Dado técnico essencial — índices afetados:**
 - **Ambos os benefícios na mesma vigência** → o segundo impacta apenas **frequência e gravidade** (o custo já está integralmente computado nessa vigência pelo primeiro benefício).
 - **Benefícios em vigências diferentes** → o segundo impacta **frequência, gravidade e custo** (o custo do segundo benefício aparece pela primeira vez nessa nova vigência).

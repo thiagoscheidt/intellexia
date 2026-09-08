@@ -133,6 +133,8 @@
   .ledger b { font-family: var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
   .ledger .sep { color: var(--rule); }
   .ledger .hint { color: var(--ink-faint); font-style: italic; }
+  .ledger .entregue-nota { color: var(--have); font-weight: 600; }
+  .ledger .entregue-nota b { color: var(--have); }
 
   .toolbar {
     display: flex;
@@ -362,6 +364,18 @@
   .tag.nat-ajuste { background: transparent; border: 1px dashed var(--ink-faint); color: var(--ink-soft); }
   .tag.nat-novo   { background: var(--ink); color: var(--paper); }
 
+  .tag.entregue {
+    background: var(--have);
+    color: #fff;
+    font-weight: 700;
+    letter-spacing: .02em;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .tag.entregue { color: #10231F; }
+  }
+  :root[data-theme="dark"] .tag.entregue { color: #10231F; }
+
   code {
     font-family: var(--mono);
     font-size: .87em;
@@ -421,24 +435,27 @@
     <div class="titles">
       <p class="eyebrow">Remessa R02 · Revisor de Petições Iniciais</p>
       <h1>Quadro de tarefas</h1>
-      <p>18 tarefas — 15 requisitos do briefing e as 3 peças de base das quais dez deles dependem.</p>
+      <p>28 tarefas — 15 requisitos do briefing, as 3 peças de base das quais dez deles dependem
+        e os 10 cartões que entraram depois, por retorno de uso.</p>
     </div>
     <div class="progress">
       <div class="progress-top">
         <span>Concluídas</span>
-        <span><b id="doneCount">0</b> <span style="font-family:var(--mono)">/ 18</span></span>
+        <span><b id="doneCount">0</b> <span style="font-family:var(--mono)">/ 28</span></span>
       </div>
       <div class="bar"><span id="bar"></span></div>
       <div class="progress-top" style="font-size:11.5px">
-        <span id="progressNote">Marque as tarefas conforme entregar</span>
+        <span id="progressNote">12 de 28 entregues e testadas</span>
       </div>
     </div>
   </header>
 
   <p class="ledger">
-    <span><b>7</b> baixa · <b>7</b> média · <b>4</b> alta</span>
+    <span><b>10</b> baixa · <b>11</b> média · <b>7</b> alta</span>
     <span class="sep">|</span>
-    <span><b>6</b> ajuste · <b>12</b> novo</span>
+    <span><b>13</b> ajuste · <b>15</b> novo</span>
+    <span class="sep">|</span>
+    <span class="entregue-nota"><b>12</b> entregues — as 7 de dificuldade baixa mais RPI-04, 07, 10, GER-01 e FB-06</span>
     <span class="sep">|</span>
     <span class="hint">dificuldade é estimativa a partir da leitura do código, não medição</span>
   </p>
@@ -482,9 +499,9 @@
         <p class="col-d">Risco baixo, efeito imediato na homologação do Fred.</p>
       </div>
 
-      <article class="card k-base" data-kind="base" data-wave="1" data-diff="baixa" data-nature="novo">
+      <article data-entregue="1" class="card k-base" data-kind="base" data-wave="1" data-diff="baixa" data-nature="novo">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-A" aria-label="Concluir: coluna do modelo na execução">
+          <input class="card-check" type="checkbox" id="t-A" checked aria-label="Concluir: coluna do modelo na execução">
           <span class="card-id">PEÇA A</span>
           <h3 class="card-title">Persistir o modelo efetivo na execução</h3>
         </div>
@@ -499,6 +516,7 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
           <span class="tag nat-novo">Novo</span>
           <span class="tag">models.py + database/</span>
@@ -506,9 +524,9 @@
         </div>
       </article>
 
-      <article class="card k-fix" data-kind="fix" data-wave="1" data-diff="baixa" data-nature="ajuste">
+      <article data-entregue="1" class="card k-fix" data-kind="fix" data-wave="1" data-diff="baixa" data-nature="ajuste">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-19" aria-label="Concluir: RPI-19">
+          <input class="card-check" type="checkbox" id="t-19" checked aria-label="Concluir: RPI-19">
           <span class="card-id">RPI-19</span>
           <h3 class="card-title">Aceite da revisão sem erros</h3>
         </div>
@@ -527,13 +545,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
           <span class="tag nat-ajuste">Ajuste</span><span class="tag">revision_result.html</span></div>
       </article>
 
-      <article class="card k-fix" data-kind="fix" data-wave="1" data-diff="baixa" data-nature="ajuste">
+      <article data-entregue="1" class="card k-fix" data-kind="fix" data-wave="1" data-diff="baixa" data-nature="ajuste">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-18" aria-label="Concluir: RPI-18">
+          <input class="card-check" type="checkbox" id="t-18" checked aria-label="Concluir: RPI-18">
           <span class="card-id">RPI-18</span>
           <h3 class="card-title">Modelo de LLM no debug</h3>
         </div>
@@ -552,6 +571,7 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
           <span class="tag nat-ajuste">Ajuste</span>
           <span class="tag">revision_result.html</span>
@@ -559,9 +579,9 @@
         </div>
       </article>
 
-      <article class="card k-build" data-kind="build" data-wave="1" data-diff="baixa" data-nature="ajuste">
+      <article data-entregue="1" class="card k-build" data-kind="build" data-wave="1" data-diff="baixa" data-nature="ajuste">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-23" aria-label="Concluir: RPI-23">
+          <input class="card-check" type="checkbox" id="t-23" checked aria-label="Concluir: RPI-23">
           <span class="card-id">RPI-23</span>
           <h3 class="card-title">Id Wrike aceita só números</h3>
         </div>
@@ -576,6 +596,7 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
           <span class="tag nat-ajuste">Ajuste</span><span class="tag">revision.html + blueprint</span></div>
       </article>
@@ -605,9 +626,9 @@
           <span class="tag nat-novo">Novo</span><span class="tag">index.html + petition_detail.html</span></div>
       </article>
 
-      <article class="card k-have" data-kind="have" data-wave="1" data-diff="media" data-nature="ajuste">
+      <article data-entregue="1" class="card k-have" data-kind="have" data-wave="1" data-diff="media" data-nature="ajuste">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-04" aria-label="Concluir: RPI-04">
+          <input class="card-check" type="checkbox" id="t-04" checked aria-label="Concluir: RPI-04">
           <span class="card-id">RPI-04</span>
           <h3 class="card-title">Filtros na lista de petições</h3>
         </div>
@@ -626,6 +647,7 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
           <span class="tag nat-ajuste">Ajuste</span><span class="tag">index.html + fap_review_service</span></div>
       </article>
@@ -652,6 +674,7 @@
           <div class="line">
             <span class="line-lab">O que fazer</span>
             <p>Sem Flask, sem rede, sem LLM. Recebe achados + texto do documento; devolve os saneados <strong>e a lista do que descartou, com o motivo</strong>.</p>
+            <p style="margin-top:6px"><strong>Parcial:</strong> o módulo roda com R1, R2, R3, R4 e R6. Falta só a R5 (riscos ancorados), que depende da decisão de produto do RPI-20 — por isso segue desmarcada. A R4 é a única que corrige em vez de descartar.</p>
           </div>
           <div class="line diag">
             <span class="line-lab">Por quê assim</span>
@@ -666,9 +689,9 @@
         </div>
       </article>
 
-      <article class="card k-build" data-kind="build" data-wave="2" data-diff="baixa" data-nature="novo">
+      <article data-entregue="1" class="card k-build" data-kind="build" data-wave="2" data-diff="baixa" data-nature="novo">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-12" aria-label="Concluir: RPI-12">
+          <input class="card-check" type="checkbox" id="t-12" checked aria-label="Concluir: RPI-12">
           <span class="card-id">RPI-12</span>
           <h3 class="card-title">Sugestão igual ao erro</h3>
         </div>
@@ -683,13 +706,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
           <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
 
-      <article class="card k-build" data-kind="build" data-wave="2" data-diff="baixa" data-nature="novo">
+      <article data-entregue="1" class="card k-build" data-kind="build" data-wave="2" data-diff="baixa" data-nature="novo">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-13" aria-label="Concluir: RPI-13">
+          <input class="card-check" type="checkbox" id="t-13" checked aria-label="Concluir: RPI-13">
           <span class="card-id">RPI-13</span>
           <h3 class="card-title">Duplicidade de apontamentos</h3>
         </div>
@@ -704,13 +728,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
           <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
 
-      <article class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
+      <article data-entregue="1" class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-07" aria-label="Concluir: RPI-07">
+          <input class="card-check" type="checkbox" id="t-07" checked aria-label="Concluir: RPI-07">
           <span class="card-id">RPI-07</span>
           <h3 class="card-title">Ignorar citação direta</h3>
         </div>
@@ -729,13 +754,14 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
           <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
       </article>
 
-      <article class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
+      <article data-entregue="1" class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-10" aria-label="Concluir: RPI-10">
+          <input class="card-check" type="checkbox" id="t-10" checked aria-label="Concluir: RPI-10">
           <span class="card-id">RPI-10</span>
           <h3 class="card-title">Prazo de 60 dias</h3>
         </div>
@@ -752,10 +778,16 @@
             <span class="line-lab">Validar com o Fred</span>
             <p>A frase do Edivan (“não contar o primeiro dia e contar o último”) daria <strong>31</strong>, contradizendo o exemplo dele. Vamos pelos exemplos: <code>(DIB − DCB) − 1</code>.</p>
           </div>
+          <div class="line diag">
+            <span class="line-lab">Falta em produção</span>
+            <p>O código está valendo — a R4 é determinística e não depende do manual. Falta só o texto do manual, que entra <strong>pelo agente de treinamento</strong>, com diff e aprovação: o manual de produção está muitas versões à frente do seed, e script que grava e ativa versão nova põe conteúdo em vigor sem ninguém ver o que mudou. Instrução pronta para colar na conversa está na spec.</p>
+          </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
-          <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span></div>
+          <span class="tag nat-novo">Novo</span><span class="tag dep">depende da Peça B</span>
+          <span class="tag dep">manual pelo treinamento</span></div>
       </article>
 
       <article class="card k-build" data-kind="build" data-wave="2" data-diff="media" data-nature="novo">
@@ -915,9 +947,9 @@
         </div>
       </article>
 
-      <article class="card k-have" data-kind="have" data-wave="4" data-diff="baixa" data-nature="ajuste">
+      <article data-entregue="1" class="card k-have" data-kind="have" data-wave="4" data-diff="baixa" data-nature="ajuste">
         <div class="card-top">
-          <input class="card-check" type="checkbox" id="t-03" aria-label="Concluir: RPI-03">
+          <input class="card-check" type="checkbox" id="t-03" checked aria-label="Concluir: RPI-03">
           <span class="card-id">RPI-03</span>
           <h3 class="card-title">Coerência entre lotes</h3>
         </div>
@@ -936,6 +968,7 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
           <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
           <span class="tag nat-ajuste">Ajuste</span><span class="tag">training.html</span></div>
       </article>
@@ -969,11 +1002,308 @@
       </article>
     </section>
 
+
+    <!-- ══ FORA DA R02 ═════════════════════════════════ -->
+    <section class="col" aria-label="Fora da R02">
+      <div class="col-head">
+        <div class="col-top">
+          <span class="col-n">FORA DA R02</span>
+          <span class="col-t">Chegou depois do briefing</span>
+          <span class="col-count" data-count>10</span>
+        </div>
+        <p class="col-d">Retorno de uso, ainda sem classificação. Está no Trello, não na remessa.</p>
+      </div>
+
+      <article class="card k-fix" data-kind="fix" data-wave="5" data-diff="media" data-nature="ajuste">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-fap01" aria-label="Concluir: FAP-01">
+          <span class="card-id">FAP-01</span>
+          <h3 class="card-title">Empresa em Procurações e não em Contestações</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Cartão “Verificar caso reportado pelo Gabriel”: a empresa já aparece no painel de Procurações e ainda não aparece no de Contestações.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p>As duas listas não têm a mesma forma. <code>fetch_procuracoes()</code> é uma chamada global, sem argumento — tudo que o login enxerga volta de uma vez. <code>fetch_contestacoes(cnpj, ano)</code> é por empresa e por vigência, e o cron só percorre o que já está em <code>fap_companies</code>.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Rodar antes o diagnóstico que já existe (<code>diag_fap_estado_vs_portal.py</code>) para separar as três causas possíveis: empresa ausente de <code>fap_companies</code>, 403 no ano (o log já escreve “sem procuração”), ou empresa sem contestação no período. O defeito de verdade pode ser da tela, que não distingue <em>não sincronizado</em> de <em>não tem</em>.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-ajuste">Ajuste</span>
+          <span class="tag">Trello · To Do</span>
+          <span class="tag">Painel FAP</span>
+        </div>
+      </article>
+
+      <article class="card k-build" data-kind="build" data-wave="5" data-diff="media" data-nature="novo">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-fb02" aria-label="Concluir: FB-02">
+          <span class="card-id">FB-02</span>
+          <h3 class="card-title">Falsos positivos por comparação textual</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>“S.A” apontado como divergente de “S.A.” na razão social, e NIT correto marcado como não correspondente à planilha.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Causa raiz</span>
+            <p>A conferência é feita só pelo prompt, que manda verificar se a razão social está “grafada de forma <strong>IDÊNTICA</strong> em TODAS as ocorrências”. Com essa instrução, apontar a diferença de um ponto é obediência, não falha do modelo. O NIT tem a mesma forma: comparação delegada ao modelo, sem normalização nenhuma antes.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Regra R7 no saneador — normalizar os dois lados (pontuação, espaços, caixa, sufixo societário) e descartar o achado quando coincidirem depois de normalizados. Mesmo formato da R1.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-novo">Novo</span>
+          <span class="tag">Trello · To Do</span>
+          <span class="tag dep">depende da Peça B</span>
+        </div>
+      </article>
+
+      <article class="card k-build" data-kind="build" data-wave="5" data-diff="media" data-nature="novo">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-fb07" aria-label="Concluir: FB-07">
+          <span class="card-id">FB-07</span>
+          <h3 class="card-title">E-mail de recuperação de senha</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Solicitar recuperação e receber o e-mail com link válido. Login pelo Google segue funcionando.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Causa raiz</span>
+            <p><strong>Não é configuração de SMTP.</strong> <code>forgot_password_post</code> valida o formato do endereço e devolve a mensagem de sucesso — não gera token, não grava nada e nunca chama o <code>email_service</code>. A tela responde “se o e-mail existir, você receberá as instruções” sem que exista envio nenhum atrás dela.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Construir o fluxo inteiro: token com validade e uso único, rota de redefinição e envio pelo <code>email_service</code>, que já existe e degrada com log quando não há SMTP. A resposta genérica da tela fica como está, para não revelar quais e-mails existem.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-novo">Novo</span>
+          <span class="tag">Trello · To Do</span>
+          <span class="tag">auth.py</span>
+        </div>
+      </article>
+
+      <article data-entregue="1" class="card k-fix" data-kind="fix" data-wave="5" data-diff="baixa" data-nature="ajuste">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-ger01" checked aria-label="Concluir: GER-01">
+          <span class="card-id">GER-01</span>
+          <h3 class="card-title">Máscara de CNPJ no template</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>O CNPJ sair formatado na peça gerada.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Causa raiz</span>
+            <p><code>{{cliente_cnpj}}</code> recebe <code>case.client.cnpj</code> cru, exatamente como foi digitado no cadastro. O formatador existe — <code>_format_cnpj</code> — mas é privado do blueprint <code>disputes_center</code> e o gerador não o enxerga.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Subir o formatador para <code>app/utils/</code> e aplicá-lo nos quatro pontos do gerador: o resumo do caso, os dois mapas de placeholder e a célula da tabela.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
+          <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
+          <span class="tag nat-ajuste">Ajuste</span>
+          <span class="tag">Trello · To Do</span>
+          <span class="tag">agent_document_generator.py</span>
+        </div>
+      </article>
+
+      <article class="card k-fix" data-kind="fix" data-wave="5" data-diff="alta" data-nature="ajuste">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-fb01" aria-label="Concluir: FB-01">
+          <span class="card-id">FB-01</span>
+          <h3 class="card-title">Anexo não analisado — o caso da CAT</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>No teste de 22/07 a data do acidente foi corrigida na inicial e a CAT com a data certa foi anexada. A análise usou a data errada e não avaliou a CAT.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p>PDF sem texto extraível não é recusado: segue para o modelo como arquivo e a leitura passa a ser visual. Uma CAT digitalizada cai exatamente aí — e nada no resultado diz que aquele anexo foi lido por imagem.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Reprocessar a CAT do teste antes de mexer em qualquer coisa, para saber se veio texto. Seja qual for o desfecho, a extração precisa dizer na tela quando leu por imagem e quando não extraiu nada: hoje o silêncio é indistinguível de sucesso.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Alta"><span class="dots">●●●</span> Alta</span>
+          <span class="tag nat-ajuste">Ajuste</span>
+          <span class="tag">Trello · Doing</span>
+          <span class="tag">fap_review_aux_service</span>
+        </div>
+      </article>
+
+      <article class="card k-fix" data-kind="fix" data-wave="5" data-diff="alta" data-nature="ajuste">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-fb03" aria-label="Concluir: FB-03">
+          <span class="card-id">FB-03</span>
+          <h3 class="card-title">Leitura de números em PDF</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Inversão de ordem de dígitos e datas incoerentes na extração feita pelo agente de anexos.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p>Provável mesma origem do FB-01. Para PDF o texto sai do Docling em markdown, com recuo no PyPDF2; nenhum dos dois preserva alinhamento de coluna em formulário, e quando não sai texto nenhum o número é lido do próprio pixel.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Não é caso de ajustar prompt. Validação determinística dos campos que têm forma fechada — NIT com 11 dígitos, benefício com 10, data plausível dentro da vigência — recusando o valor em vez de propagá-lo. É a ideia do saneador aplicada à extração.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Alta"><span class="dots">●●●</span> Alta</span>
+          <span class="tag nat-ajuste">Ajuste</span>
+          <span class="tag">Trello · Doing</span>
+          <span class="tag dep">irmão do FB-01</span>
+        </div>
+      </article>
+
+      <article class="card k-have" data-kind="have" data-wave="5" data-diff="baixa" data-nature="ajuste">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-fb04" aria-label="Concluir: FB-04">
+          <span class="card-id">FB-04</span>
+          <h3 class="card-title">Log de revisões dentro do caso</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Localizar e abrir a tentativa nº 4 dentro do mesmo processo.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p><strong>Já existe.</strong> O detalhe da petição lista todas as execuções de revisão — R1 a Rn, com status, documento, responsável, data e link para cada resultado, da mais recente para a mais antiga.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Confirmar com o Gabriel se o que falta é <em>chegar</em> nessa tela, e não o histórico em si. Se for navegação, o custo é um link na listagem.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
+          <span class="tag nat-ajuste">Ajuste</span>
+          <span class="tag">Trello · To Do</span>
+          <span class="tag">petition_detail.html</span>
+        </div>
+      </article>
+
+      <article class="card k-have" data-kind="have" data-wave="5" data-diff="media" data-nature="ajuste">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-fb05" aria-label="Concluir: FB-05">
+          <span class="card-id">FB-05</span>
+          <h3 class="card-title">Hierarquia e permissões por categoria</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Usuários da mesma categoria com autorizações diferentes, sem regra formalizada.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p>É como o sistema foi desenhado. O papel dá apenas o conjunto <em>padrão</em> (<code>ROLE_DEFAULT_MODULE_PERMISSIONS</code>); a permissão efetiva é gravada por usuário. Dois “advogados” divergirem é comportamento previsto, não defeito.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Decisão de produto antes de qualquer código: se a regra passar a ser por papel, alguém perde acesso que tem hoje.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Média"><span class="dots">●●○</span> Média</span>
+          <span class="tag nat-ajuste">Ajuste</span>
+          <span class="tag">Trello · To Do</span>
+          <span class="tag dep">exige decisão</span>
+        </div>
+      </article>
+
+      <article data-entregue="1" class="card k-have" data-kind="have" data-wave="5" data-diff="baixa" data-nature="ajuste">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-fb06" checked aria-label="Concluir: FB-06">
+          <span class="card-id">FB-06</span>
+          <h3 class="card-title">Contador de petições por advogado</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Contador de petições por advogado e por situação.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p><strong>Não é item novo.</strong> Já está dentro do RPI-04, na Onda 1: o contador por status ao lado do nome do advogado, de query agregada no serviço.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Fechar este cartão no Trello junto com o RPI-04. Mantê-lo aberto faz o mesmo trabalho ser cobrado duas vezes.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag entregue">Entregue</span>
+          <span class="tag diff" title="Dificuldade estimada: Baixa"><span class="dots">●○○</span> Baixa</span>
+          <span class="tag nat-ajuste">Ajuste</span>
+          <span class="tag">Trello · To Do</span>
+          <span class="tag dep">duplicata do RPI-04</span>
+        </div>
+      </article>
+
+      <article class="card k-build" data-kind="build" data-wave="5" data-diff="alta" data-nature="novo">
+        <div class="card-top">
+          <input class="card-check" type="checkbox" id="t-fb08" aria-label="Concluir: FB-08">
+          <span class="card-id">FB-08</span>
+          <h3 class="card-title">Download dos anexos das contestações</h3>
+        </div>
+        <div class="card-body">
+          <div class="line">
+            <span class="line-lab">Pedido</span>
+            <p>Baixar na plataforma os documentos anexos às contestações administrativas.</p>
+          </div>
+          <div class="line diag">
+            <span class="line-lab">Hoje</span>
+            <p>O que existe é <code>download_contestacao</code>, que chama <code>/contestacoes/{id}/imprimir</code> e devolve <strong>o PDF do julgamento</strong> — não os documentos que a empresa anexou.</p>
+          </div>
+          <div class="line">
+            <span class="line-lab">Mudança</span>
+            <p>Depende de descobrir se o gateway do FAP Web expõe endpoint de anexos. Sem isso não há escopo a estimar: o primeiro passo é inspeção do portal, não código.</p>
+          </div>
+        </div>
+        <div class="card-meta">
+          <span class="tag diff" title="Dificuldade estimada: Alta"><span class="dots">●●●</span> Alta</span>
+          <span class="tag nat-novo">Novo</span>
+          <span class="tag">Trello · To Do</span>
+          <span class="tag">fap_web_service</span>
+        </div>
+      </article>
+    </section>
+
+
   </div>
 
   <footer>
     <span>IntellexIA · módulo <strong>Revisor de Petições Iniciais</strong></span>
     <span>Design completo em <code>2026-09-02-remessa-r02-revisor-peticoes-design.md</code></span>
+    <span>Conferido contra o Trello em 04/09/2026</span>
     <span>Marcações ficam salvas neste navegador</span>
   </footer>
 
@@ -1004,7 +1334,8 @@
         { k: '1', n: 'ONDA 1', t: 'Destrava o aceite',      d: 'Risco baixo, efeito imediato na homologação do Fred.' },
         { k: '2', n: 'ONDA 2', t: 'Qualidade dos achados',  d: 'Todos saem da mesma peça: o saneador.' },
         { k: '3', n: 'ONDA 3', t: 'Grifo no documento',     d: 'Os dois requisitos saem do mesmo mecanismo.' },
-        { k: '4', n: 'ONDA 4', t: 'Controle de lotes',      d: 'Bloco mais pesado e o único sem nada pronto.' }
+        { k: '4', n: 'ONDA 4', t: 'Controle de lotes',      d: 'Bloco mais pesado e o único sem nada pronto.' },
+        { k: '5', n: 'FORA DA R02', t: 'Chegou depois do briefing', d: 'Retorno de uso, ainda sem classificação. Está no Trello, não na remessa.' }
       ]
     },
     dificuldade: {

@@ -16,6 +16,7 @@ from app.services import fap_vigencia_service
 from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 
 from app.utils.timezone import now_sp
+from app.utils.cnpj import formatar_cnpj
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
 from openpyxl import Workbook
@@ -753,10 +754,9 @@ def _get_cnpj_establishment_type(cnpj):
 
 
 def _format_cnpj(value):
-    digits = _normalize_cnpj_digits(value)
-    if len(digits) != 14:
-        return value or ''
-    return f'{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:14]}'
+    # A máscara vive em app/utils/cnpj.py — ter uma cópia privada aqui foi o
+    # que deixou o gerador de petições sem ela (GER-01).
+    return formatar_cnpj(value)
 
 
 def _matches_vigencia_filters(vigencia, resolved_client, client_id=None, client_cnpj='', client_root=''):

@@ -20,10 +20,12 @@ from pathlib import Path
 
 from sqlalchemy import func
 
+from app.agents.fap_review.finding_sanitizer import fingerprint_achado
 from app.models import (
     db, FapReviewAuditLog, FapReviewExecution, FapReviewPetition,
     FapReviewPromptVersion, FapReviewReferenceVersion,
 )
+from app.models import User as _Usuario
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,42 @@ TRIAGE_OUTCOME_STATUSES = {
 NEW_REVISION_BLOCKED_STATUSES = {'awaiting_approval', 'ready_for_filing', 'filed', 'archived'}
 
 MAX_IDENTIFIER_LENGTH = 96
+
+# Rótulo para execução sem modelo gravado. NUNCA substituir por um nome de
+# modelo "provável": foi um literal chutado no template que produziu o RPI-18,
+# com o debug anunciando gpt-4o-mini enquanto o Sonnet rodava. A configuração
+# do escritório pode ter mudado desde a execução — só o que foi gravado vale.
+MODEL_NOT_RECORDED = 'não registrado'
+
+_SO_DIGITOS = re.compile(r'[0-9]+')
+
+
+def describe_model_name(value: str | None) -> str:
+    """Modelo a exibir para uma execução; ausência é dita, não adivinhada."""
+    return str(value or '').strip() or MODEL_NOT_RECORDED
+
+
+def validate_wrike_identifier(raw: str | None) -> tuple[str, str | None]:
+    """Valida o Id Wrike da petição (RPI-23).
+
+    Só dígitos: texto livre quebra a busca por Id e impede relacionar os dados
+    com o Wrike depois. Devolve ``(valor_normalizado, mensagem_de_erro | None)``.
+
+    O valor é tratado como identificador, não como número — zero à esquerda é
+    preservado, e por isso a normalização apara as pontas mas não converte.
+    """
+    valor = str(raw or '').strip()
+
+    if not valor:
+        return '', 'Informe o Id Wrike da petição.'
+    if len(valor) > MAX_IDENTIFIER_LENGTH:
+        return valor, f'O Id Wrike pode ter no máximo {MAX_IDENTIFIER_LENGTH} caracteres.'
+    # `str.isdigit()` aceita '²' e '١٢٣'; ambos passariam e quebrariam
+    # exatamente a busca por Id que este requisito existe para proteger.
+    if not _SO_DIGITOS.fullmatch(valor):
+        return valor, 'O Id Wrike deve conter apenas números.'
+
+    return valor, None
 
 # Só revisão que falhou pode ser reexecutada com os mesmos arquivos.
 # 'completed' fica de fora para não sobrescrever achados já triados, e
@@ -207,6 +245,70 @@ def count_pending_review_queues(law_firm_id: int) -> dict:
         'awaiting_adjustments': counts.get('awaiting_adjustments', 0),
         'awaiting_approval': counts.get('awaiting_approval', 0),
     }
+
+
+SEM_REVISOR = 'Sem revisor'
+
+
+def agrupar_peticoes_por_advogado(linhas) -> list[dict]:
+    """Linhas ``(user_id, nome, status, quantidade)`` viram um grupo por advogado.
+
+    Separado da query de propósito: a forma do agrupamento — total somado,
+    quebra por status, ordenação — é o que a tela consome, e testá-la não pode
+    depender de banco.
+
+    Ordena por volume, porque é a fila maior que interessa primeiro; empate cai
+    na ordem alfabética, senão a lista dançaria a cada recarga. Petição ainda
+    sem revisão vira um grupo próprio, sempre por último: não é advogado, é a
+    ausência de um, e esconder essas petições faria o contador não fechar com a
+    listagem.
+    """
+    grupos: dict = {}
+    for user_id, nome, status, quantidade in linhas:
+        if not quantidade:
+            continue
+        grupo = grupos.setdefault(user_id, {
+            'user_id': user_id,
+            'name': (nome or '').strip() or SEM_REVISOR,
+            'total': 0,
+            'por_status': {},
+        })
+        grupo['total'] += quantidade
+        grupo['por_status'][status] = grupo['por_status'].get(status, 0) + quantidade
+
+    return sorted(
+        grupos.values(),
+        key=lambda g: (g['user_id'] is None, -g['total'], g['name'].lower()),
+    )
+
+
+def lawyer_petition_counts(law_firm_id: int) -> list[dict]:
+    """Petições por advogado e por situação — o contador do RPI-04.
+
+    O advogado é quem enviou a **última** revisão da petição, que é o nome já
+    exibido na linha da listagem. Arquivadas ficam fora: a listagem também as
+    esconde por padrão, e contador que não bate com o que se vê na tela mente.
+    """
+    linhas = (
+        db.session.query(
+            FapReviewExecution.user_id,
+            _Usuario.name,
+            FapReviewPetition.workflow_status,
+            func.count(FapReviewPetition.id),
+        )
+        .select_from(FapReviewPetition)
+        .outerjoin(FapReviewExecution,
+                   FapReviewExecution.id == FapReviewPetition.latest_revision_id)
+        .outerjoin(_Usuario, _Usuario.id == FapReviewExecution.user_id)
+        .filter(
+            FapReviewPetition.law_firm_id == law_firm_id,
+            FapReviewPetition.workflow_status != 'archived',
+        )
+        .group_by(FapReviewExecution.user_id, _Usuario.name,
+                  FapReviewPetition.workflow_status)
+        .all()
+    )
+    return agrupar_peticoes_por_advogado(linhas)
 
 
 def mark_petition_in_user_review(petition: FapReviewPetition | None) -> bool:
@@ -420,20 +522,14 @@ def normalize_finding_field(value: object) -> str:
 
 
 def build_finding_fingerprint(finding: dict | None) -> str:
-    """Gera fingerprint estável de um achado para persistir feedback do usuário."""
-    if not isinstance(finding, dict):
-        return ''
+    """Gera fingerprint estável de um achado para persistir feedback do usuário.
 
-    payload = {
-        'category': normalize_finding_field(finding.get('category')),
-        'severity': normalize_finding_field(finding.get('severity')),
-        'description': normalize_finding_field(finding.get('description')),
-        'location': normalize_finding_field(finding.get('location')),
-        'correction': normalize_finding_field(finding.get('correction')),
-        'manual_reference': normalize_finding_field(finding.get('manual_reference')),
-    }
-    serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
-    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+    Delega ao saneador (função pura, sem Flask) para que a identidade usada na
+    deduplicação dentro de uma revisão e a usada para reconhecer achado
+    descartado entre revisões sejam literalmente a mesma. Divergindo, um achado
+    marcado "não pertinente" voltaria a aparecer na revisão seguinte.
+    """
+    return fingerprint_achado(finding)
 
 
 

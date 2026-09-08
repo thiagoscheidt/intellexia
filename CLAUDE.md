@@ -6,6 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **IntellexIA** é uma plataforma de automação jurídica com IA, focada em **direito trabalhista e previdenciário** (especialmente casos de FAP — Fator Acidentário de Prevenção). O sistema gerencia processos judiciais, analisa documentos, gera petições e oferece uma base de conhecimento consultável via agentes de IA.
 
+### Quadro de tarefas (Trello)
+
+O quadro deste projeto é o **Quadro IntellexIA** — https://trello.com/b/3jm2AruF (id curto `3jm2AruF`).
+Há MCP do Trello configurado: ao consultar, criar ou mover cartões deste projeto, use **esse** quadro; não pergunte qual é nem crie quadro novo.
+
 ---
 
 ## Stack Tecnológico
