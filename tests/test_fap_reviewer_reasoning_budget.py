@@ -1,28 +1,47 @@
-"""
-Teste do orçamento de raciocínio do FapPetitionReviewerAgent.
+"""Teste da defesa contra resposta cortada no limite de saída do modelo.
 
-Cobre a falha de produção de 04/08/2026 (execução 53, token usage 1065): a
-revisão de uma petição de FAP retornou finish_reason='length' com 65.536 tokens
-de saída — o teto do anthropic/claude-sonnet-5. O texto que chegou tinha apenas
-26.025 chars (~8k tokens); os ~57k restantes foram consumidos por raciocínio
-interno, que sai do MESMO orçamento de saída que o JSON. O JSON veio cortado no
-meio, o parser devolveu {} e a revisão morreu com "A resposta do modelo não
-contém JSON válido para a revisão."
+CONTEXTO — o que a medição mostrou, e por que a defesa anterior não servia.
 
-Não era caso isolado: das 24 execuções anteriores, 3 (12,5%) já passavam de
-50.000 tokens de saída e a maior chegou a 56.251 (86% do teto). O tamanho da
-petição não prevê a falha — execuções com entrada de 194.399 e 169.924 tokens
-concluíram normalmente, enquanto a que quebrou tinha entrada de 143.951.
+A revisão FAP morria com "A resposta do modelo não contém JSON válido para a
+revisão." quando o raciocínio interno do modelo consumia o orçamento de saída e
+o JSON chegava cortado no meio. A correção de 04/08/2026 tentou conter isso
+enviando `reasoning.max_tokens`. Medido em 09/09/2026 contra o
+`anthropic/claude-sonnet-5` no OpenRouter, com prompt que força raciocínio longo:
+
+    orçamento pedido       raciocínio gasto
+    1.024 (sem max_tokens)          2.699
+    1.024 (com max_tokens)          3.813
+    nenhum controle                 2.785
+
+O parâmetro é aceito e **ignorado** — mandar `max_tokens` junto não muda nada.
+O que o provedor honra é ligar ou desligar:
+
+    reasoning.effort = low          0
+    reasoning.enabled = false       0
+
+Ou seja: raciocínio ligado (quantidade incontrolável) ou desligado. Não existe
+meio-termo, e portanto não existe orçamento a calibrar.
+
+Em produção o custo disso apareceu assim (`agent_token_usage`): até 11/08 o
+raciocínio ficava entre 8.216 e 13.467 tokens; de 14/08 em diante passou a
+35.267–65.536, sem nenhuma mudança nossa e com o mesmo modelo nas 47 execuções.
+As falhas começaram em 30/08 (três seguidas, com o raciocínio consumindo os
+65.536 tokens inteiros e sobrando ZERO para o texto) e seguiram em 08/09 e 09/09.
+
+A defesa, então, não é prever o tamanho do raciocínio — é detectar o corte
+(`finish_reason == 'length'`) e refazer a chamada sem raciocínio estendido,
+onde o orçamento inteiro fica disponível para o JSON.
 
 Verifica:
-1. O agente envia reasoning.max_tokens ao OpenRouter por padrão.
-2. O orçamento reservado deixa folga confortável para o JSON.
-3. O limite é configurável por env e pode ser desligado com 0.
+1. Resposta cortada é reconhecida pelo `finish_reason`.
+2. Truncamento dispara UMA nova tentativa, com o raciocínio desligado.
+3. Resposta normal não gera chamada extra.
+4. Segunda tentativa também cortada não vira terceira, e o erro diz a verdade.
+5. O construtor não envia mais o orçamento em tokens, que a medição reprovou.
 
 Uso: uv run python tests/test_fap_reviewer_reasoning_budget.py
 """
 
-import importlib
 import os
 import sys
 from pathlib import Path
@@ -36,17 +55,6 @@ import app.agents.fap_review.reviewer_agent as reviewer_module  # noqa: E402
 PASSED = 0
 FAILED = 0
 
-# Teto de saída observado no anthropic/claude-sonnet-5 via OpenRouter.
-MODEL_OUTPUT_CEILING = 65536
-# Maior JSON de revisão efetivamente observado: 26.025 chars ≈ 8k tokens — e ele
-# estava TRUNCADO, então o completo seria maior; estimamos 12-15k tokens para uma
-# revisão de 12 teses. (output_tokens do banco NÃO serve de referência aqui:
-# inclui o raciocínio, sem separar as duas parcelas.)
-# Exigimos folga >= 20k (~60-80k chars), ~2x esse pior caso estimado. O limite
-# guarda a invariante que quebrou em produção — raciocínio não pode consumir o
-# orçamento a ponto de não sobrar espaço para o JSON.
-MIN_JSON_HEADROOM = 20000
-
 
 def check(label: str, condition: bool, detail: str = "") -> None:
     global PASSED, FAILED
@@ -58,69 +66,150 @@ def check(label: str, condition: bool, detail: str = "") -> None:
         print(f"  ✗ {label} {detail}")
 
 
-def reload_with_env(**env: str):
-    """Recarrega o módulo com env alterado (limites são lidos no import)."""
-    previous = {k: os.environ.get(k) for k in env}
-    os.environ.update(env)
+class RespostaFalsa:
+    """Imita o AIMessage do LangChain no que o agente lê dele."""
+
+    def __init__(self, content: str, finish_reason: str):
+        self.content = content
+        self.response_metadata = {'finish_reason': finish_reason}
+        self.additional_kwargs: dict = {}
+        self.usage_metadata: dict = {}
+
+
+class LlmFalso:
+    """Registra as invocações e devolve as respostas na ordem programada."""
+
+    def __init__(self, respostas: list, extra_body: dict | None = None):
+        self.respostas = list(respostas)
+        self.extra_body = extra_body or {}
+        self.invocacoes = 0
+
+    def invoke(self, messages):
+        self.invocacoes += 1
+        return self.respostas.pop(0)
+
+
+def novo_agente():
+    return reviewer_module.FapPetitionReviewerAgent(
+        openai_api_key='test-key', model='anthropic/claude-sonnet-5')
+
+
+def test_deteccao_do_corte():
+    print("[1] Resposta cortada é reconhecida pelo finish_reason")
+    agente = novo_agente()
+    cortada = RespostaFalsa('{"findings": [{"desc', 'length')
+    inteira = RespostaFalsa('{"findings": []}', 'stop')
+
+    check("finish_reason=length é truncamento",
+          agente._resposta_truncada(cortada) is True)
+    check("finish_reason=stop não é truncamento",
+          agente._resposta_truncada(inteira) is False)
+    check("resposta sem metadata não é truncamento",
+          agente._resposta_truncada(RespostaFalsa('{}', '')) is False)
+
+
+def test_retentativa_sem_raciocinio():
+    print("[2] Truncamento dispara UMA nova tentativa, sem raciocínio")
+    agente = novo_agente()
+    cortada = RespostaFalsa('{"findings": [{"desc', 'length')
+    inteira = RespostaFalsa('{"findings": []}', 'stop')
+
+    agente.llm = LlmFalso([cortada])
+    segundo = LlmFalso([inteira])
+    agente._llm_sem_raciocinio = lambda: segundo
+
+    final, descartada = agente._invocar_com_retomada([])
+
+    check("a resposta usada é a da segunda tentativa", final is inteira)
+    check("a tentativa cortada volta para registro de tokens",
+          descartada is cortada)
+    check("o primeiro modelo foi chamado uma vez", agente.llm.invocacoes == 1,
+          f"(obteve {agente.llm.invocacoes})")
+    check("o segundo modelo foi chamado uma vez", segundo.invocacoes == 1,
+          f"(obteve {segundo.invocacoes})")
+
+
+def test_llm_de_retomada_desliga_o_raciocinio():
+    print("[3] O modelo da retomada desliga o raciocínio")
+    agente = novo_agente()
+    reserva = agente._llm_sem_raciocinio()
+    extra_body = getattr(reserva, 'extra_body', None) or {}
+    raciocinio = extra_body.get('reasoning') or {}
+
+    check("envia reasoning.enabled = False", raciocinio.get('enabled') is False,
+          f"(obteve {extra_body!r})")
+    check("não envia orçamento em tokens, medido como ignorado",
+          'max_tokens' not in raciocinio, f"(obteve {raciocinio!r})")
+    check("mantém o mesmo modelo da revisão",
+          getattr(reserva, 'model_name', None) == agente.model_name)
+
+
+def test_resposta_normal_nao_gera_chamada_extra():
+    print("[4] Resposta normal não paga o custo de uma segunda chamada")
+    agente = novo_agente()
+    inteira = RespostaFalsa('{"findings": []}', 'stop')
+    agente.llm = LlmFalso([inteira])
+    chamou_reserva = False
+
+    def reserva():
+        nonlocal chamou_reserva
+        chamou_reserva = True
+        return LlmFalso([inteira])
+
+    agente._llm_sem_raciocinio = reserva
+    final, descartada = agente._invocar_com_retomada([])
+
+    check("devolve a resposta original", final is inteira)
+    check("nada a descartar", descartada is None)
+    check("o modelo de reserva nem é construído", chamou_reserva is False)
+    check("uma única invocação", agente.llm.invocacoes == 1)
+
+
+def test_segunda_tentativa_cortada_nao_vira_terceira():
+    print("[5] Segunda tentativa cortada para por aí, com erro honesto")
+    agente = novo_agente()
+    cortada_1 = RespostaFalsa('{"findings": [{"desc', 'length')
+    cortada_2 = RespostaFalsa('{"findings": [{"outra', 'length')
+
+    agente.llm = LlmFalso([cortada_1])
+    segundo = LlmFalso([cortada_2])
+    agente._llm_sem_raciocinio = lambda: segundo
+
+    final, _ = agente._invocar_com_retomada([])
+    check("devolve a segunda tentativa", final is cortada_2)
+    check("não houve terceira chamada", segundo.invocacoes == 1)
+
+    # O erro precisa nomear o corte, não culpar o formato da resposta: é a
+    # diferença entre o advogado saber que a petição é grande demais e achar
+    # que o agente está quebrado.
     try:
-        return importlib.reload(reviewer_module)
-    finally:
-        for key, value in previous.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
+        agente._ensure_output_parsed({}, parsed_items=0, list_keys=('findings',),
+                                     parse_errors=[], truncada=True)
+        check("levanta erro de parse", False, "(não levantou)")
+    except reviewer_module.ReviewOutputParseError as erro:
+        texto = str(erro).lower()
+        check("a mensagem fala em corte no limite de saída",
+              'cortada' in texto or 'limite' in texto, f"(obteve {erro})")
+        check("a mensagem não atribui o problema ao formato do JSON",
+              'não contém json válido' not in texto, f"(obteve {erro})")
 
 
-def test_reasoning_budget_sent_by_default():
-    print("[1] Agente envia reasoning.max_tokens ao OpenRouter por padrão")
-    module = reload_with_env(FAP_REVIEW_REASONING_MAX_TOKENS='')
-    agent = module.FapPetitionReviewerAgent(openai_api_key='test-key',
-                                            model='anthropic/claude-sonnet-5')
-    extra_body = getattr(agent.llm, 'extra_body', None) or {}
-    check("extra_body definido no ChatOpenAI", bool(extra_body),
-          f"(obteve {extra_body!r})")
+def test_construtor_nao_envia_orcamento_reprovado():
+    print("[6] O construtor não envia mais o orçamento em tokens")
+    agente = novo_agente()
+    extra_body = getattr(agente.llm, 'extra_body', None) or {}
+    raciocinio = extra_body.get('reasoning') or {}
 
-    reasoning = extra_body.get('reasoning') or {}
-    budget = reasoning.get('max_tokens')
-    check("reasoning.max_tokens presente", isinstance(budget, int),
-          f"(obteve {budget!r})")
-
-    if isinstance(budget, int):
-        check("orçamento de raciocínio é positivo", budget > 0,
-              f"(obteve {budget})")
-        # O bug: raciocínio devorou ~57k dos 65.536 e sobraram ~8k para o JSON.
-        # O limite tem de reservar folga ampla para a resposta textual.
-        folga = MODEL_OUTPUT_CEILING - budget
-        check("folga para o JSON com margem sobre o maior caso real",
-              folga >= MIN_JSON_HEADROOM,
-              f"(folga {folga}, precisa >= {MIN_JSON_HEADROOM})")
-
-
-def test_reasoning_budget_is_configurable():
-    print("[2] Limite configurável por env")
-    module = reload_with_env(FAP_REVIEW_REASONING_MAX_TOKENS='4321')
-    agent = module.FapPetitionReviewerAgent(openai_api_key='test-key',
-                                            model='anthropic/claude-sonnet-5')
-    reasoning = (getattr(agent.llm, 'extra_body', None) or {}).get('reasoning') or {}
-    check("env sobrescreve o padrão", reasoning.get('max_tokens') == 4321,
-          f"(obteve {reasoning.get('max_tokens')!r})")
-
-
-def test_reasoning_budget_can_be_disabled():
-    print("[3] Zero desliga o envio (modelos sem suporte a reasoning)")
-    module = reload_with_env(FAP_REVIEW_REASONING_MAX_TOKENS='0')
-    agent = module.FapPetitionReviewerAgent(openai_api_key='test-key',
-                                            model='openai/gpt-mini-latest')
-    extra_body = getattr(agent.llm, 'extra_body', None) or {}
-    check("nenhum bloco reasoning enviado", 'reasoning' not in extra_body,
-          f"(obteve {extra_body!r})")
+    check("sem reasoning.max_tokens na chamada normal",
+          'max_tokens' not in raciocinio, f"(obteve {extra_body!r})")
 
 
 if __name__ == '__main__':
-    test_reasoning_budget_sent_by_default()
-    test_reasoning_budget_is_configurable()
-    test_reasoning_budget_can_be_disabled()
-    reload_with_env()  # restaura o módulo com o ambiente original
+    test_deteccao_do_corte()
+    test_retentativa_sem_raciocinio()
+    test_llm_de_retomada_desliga_o_raciocinio()
+    test_resposta_normal_nao_gera_chamada_extra()
+    test_segunda_tentativa_cortada_nao_vira_terceira()
+    test_construtor_nao_envia_orcamento_reprovado()
     print(f"\nResultado: {PASSED} ok, {FAILED} falhas")
     sys.exit(1 if FAILED else 0)

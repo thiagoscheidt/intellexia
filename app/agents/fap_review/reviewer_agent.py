@@ -150,18 +150,29 @@ class FapPetitionReviewerAgent:
     _SECTION_TITLE_MAX_CHARS = int(os.environ.get('FAP_REVIEW_SECTION_TITLE_MAX_CHARS', '160'))
     _NO_ACTIVE_PRIOR_ATTENTION_MARKER = '__NO_ACTIVE_PRIOR_ATTENTION_POINTS__'
 
-    # Teto de raciocínio enviado ao OpenRouter. Nos modelos com thinking (ex.:
-    # anthropic/claude-sonnet-5) o raciocínio sai do MESMO orçamento de saída que
-    # o JSON: em 04/08/2026 uma revisão queimou ~57k dos 65.536 tokens pensando,
-    # sobraram ~8k, o JSON veio cortado e a revisão morreu em ReviewOutputParseError.
+    # Nos modelos com thinking (ex.: anthropic/claude-sonnet-5) o raciocínio sai
+    # do MESMO orçamento de saída que o JSON. Quando ele consome tudo, o JSON vem
+    # cortado no meio e a revisão morre em ReviewOutputParseError — foi o que
+    # aconteceu em 30/08 (três seguidas), 08/09 e 09/09/2026.
     #
-    # É TETO, não meta: o modelo gasta só o que precisa, então um limite alto não
-    # encarece nem alonga as revisões comuns — ele só morde no caso extremo.
-    # Com 40k sobram ~25k para o JSON (~75-100k chars), cerca de 2x o maior caso
-    # real observado. Preferimos preservar a profundidade da análise jurídica a
-    # apertar a margem: raciocínio amputado degrada em silêncio, o estouro avisa.
-    # Use 0 para não enviar o parâmetro (modelos sem suporte a reasoning).
-    _REASONING_MAX_TOKENS = int(os.environ.get('FAP_REVIEW_REASONING_MAX_TOKENS') or '40000')
+    # NÃO EXISTE TETO A CONFIGURAR. O `reasoning.max_tokens` do OpenRouter é
+    # aceito e ignorado por este modelo. Medido em 09/09/2026, com prompt que
+    # força raciocínio longo e orçamento pedido de 1.024 tokens:
+    #
+    #     como a produção mandava (max_completion_tokens)   2.699 e 3.813
+    #     com `max_tokens` no campo que a doc exige          3.288
+    #     com o provedor fixado em `anthropic`               2.998
+    #
+    # A documentação promete o contrário; a medição venceu. O que o provedor
+    # honra é `effort` — mas ele reduz sem limitar (medido: `medium` → 182,
+    # `low` → 0, sem parâmetro → 2.785), e o gasto acompanha a dificuldade da
+    # tarefa. Reduzir não é garantir.
+    #
+    # Por isso a defesa está em `_invocar_com_retomada`: detectar o corte e
+    # refazer sem raciocínio, onde o orçamento inteiro sobra para o JSON. Este
+    # knob fica para conter o gasto sem deploy, se as falhas voltarem; vazio
+    # (padrão) não envia parâmetro nenhum.
+    _REASONING_EFFORT = (os.environ.get('FAP_REVIEW_REASONING_EFFORT') or '').strip().lower()
 
     _OUTPUT_SCHEMA_SINGLE = """{
   "theses": [
@@ -205,8 +216,8 @@ class FapPetitionReviewerAgent:
         # Com gpt-4o + temperature=0.0, OpenAI oferece determinismo
         # temperature=0.0 = máximo determinismo para o modelo (limites dependem do modelo)
         extra_body: dict[str, Any] = {}
-        if self._REASONING_MAX_TOKENS > 0:
-            extra_body['reasoning'] = {'max_tokens': self._REASONING_MAX_TOKENS}
+        if self._REASONING_EFFORT:
+            extra_body['reasoning'] = {'effort': self._REASONING_EFFORT}
 
         self.llm = ChatOpenAI(
             api_key=self.api_key,
@@ -383,7 +394,7 @@ INSTRUÇÕES DO PROJETO:
                 analysis_mode = "file_attachment"
 
             start_time = time.time()
-            response = self.llm.invoke(messages)
+            response, tentativa_descartada = self._invocar_com_retomada(messages)
             latency_ms = int((time.time() - start_time) * 1000)
             response_text = response.content
 
@@ -424,6 +435,14 @@ INSTRUÇÕES DO PROJETO:
                     },
                 }
             )
+
+            if tentativa_descartada is not None:
+                self._registrar_tentativa_descartada(
+                    tentativa_descartada,
+                    action_name="review_petition_single_version",
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                )
 
             # Persistir histórico completo e vincular ao token usage
             request_id = self._extract_response_request_id(response)
@@ -470,6 +489,7 @@ INSTRUÇÕES DO PROJETO:
                 parsed_items=len(theses) + len(findings) + len(missing_documents),
                 list_keys=('theses', 'findings', 'missing_documents'),
                 parse_errors=parse_errors,
+                truncada=self._resposta_truncada(response),
             )
 
             # Criar resultado com dados salvaguardados
@@ -577,7 +597,7 @@ INSTRUÇÕES DO PROJETO:
             ]
 
             start_time = time.time()
-            response = self.llm.invoke(messages)
+            response, tentativa_descartada = self._invocar_com_retomada(messages)
             latency_ms = int((time.time() - start_time) * 1000)
             response_text = response.content
 
@@ -620,6 +640,14 @@ INSTRUÇÕES DO PROJETO:
                     },
                 }
             )
+
+            if tentativa_descartada is not None:
+                self._registrar_tentativa_descartada(
+                    tentativa_descartada,
+                    action_name="review_petition_comparative",
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                )
 
             # Persistir histórico completo e vincular ao token usage
             request_id = self._extract_response_request_id(response)
@@ -668,6 +696,7 @@ INSTRUÇÕES DO PROJETO:
                 parsed_items=len(comparative_changes) + len(findings),
                 list_keys=('comparative_changes', 'findings'),
                 parse_errors=parse_errors,
+                truncada=self._resposta_truncada(response),
             )
 
             result = PetitionReviewResult(
@@ -704,8 +733,79 @@ INSTRUÇÕES DO PROJETO:
                 )
             )
 
+    # Resposta cortada no limite de saída
+
+    def _resposta_truncada(self, response: Any) -> bool:
+        """A resposta parou por limite de tokens, não por ter terminado.
+
+        Quando isso acontece o texto vem cortado no meio — inclusive no meio de
+        uma palavra — e o JSON não fecha. Entregá-lo ao parser produz o erro
+        errado ("não contém JSON válido"), que manda investigar o formato da
+        resposta quando o problema é tamanho.
+        """
+        metadata = getattr(response, 'response_metadata', None) or {}
+        return str(metadata.get('finish_reason') or '').strip().lower() == 'length'
+
+    def _llm_sem_raciocinio(self) -> ChatOpenAI:
+        """Modelo da retomada: mesmo modelo, sem raciocínio estendido.
+
+        É a única forma medida de garantir espaço para o JSON — `enabled: False`
+        zera o gasto de raciocínio (medido em 09/09/2026), então o orçamento de
+        saída inteiro fica para a resposta. Perde-se profundidade de análise, mas
+        a alternativa é a revisão morrer depois de dez minutos.
+        """
+        return ChatOpenAI(
+            api_key=self.api_key,
+            model=self.model_name,
+            temperature=self.temperature,
+            extra_body={'reasoning': {'enabled': False}},
+        )
+
+    def _invocar_com_retomada(self, messages: list) -> tuple[Any, Any | None]:
+        """Invoca o modelo e refaz uma vez se a resposta vier cortada.
+
+        Devolve (resposta_final, tentativa_descartada). A descartada volta para
+        quem chamou porque os tokens dela foram gastos de verdade — sumir com
+        eles esconderia o custo real da revisão no dashboard.
+
+        Uma retomada só: se a segunda também vier cortada, o problema é o
+        tamanho da saída e uma terceira chamada só queimaria mais dez minutos.
+        """
+        resposta = self.llm.invoke(messages)
+        if not self._resposta_truncada(resposta):
+            return resposta, None
+
+        print("[FapReviewer] resposta cortada no limite de saída "
+              "(finish_reason=length); refazendo sem raciocínio estendido")
+        segunda = self._llm_sem_raciocinio().invoke(messages)
+        if self._resposta_truncada(segunda):
+            print("[FapReviewer] a retomada também veio cortada — "
+                  "a saída exigida não cabe no orçamento do modelo")
+        return segunda, resposta
+
+    def _registrar_tentativa_descartada(self, resposta: Any, action_name: str,
+                                        user_id: int | None,
+                                        law_firm_id: int | None) -> None:
+        """Contabiliza os tokens da tentativa cortada, que foram cobrados."""
+        try:
+            self.token_usage_service.capture_and_store(
+                self._build_response_payload(resposta),
+                agent_name="FapPetitionReviewerAgent",
+                action_name=f"{action_name}_truncada",
+                print_prefix="[FapReviewer]",
+                model_name=self.model_name,
+                model_provider="openai",
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                metadata_payload={"descartada": True,
+                                  "motivo": "finish_reason=length"},
+            )
+        except Exception as exc:
+            # Contabilidade não pode derrubar a revisão que acabou de dar certo.
+            print(f"[FapReviewer] falha ao registrar tentativa descartada: {exc}")
+
     # Métodos auxiliares para parsing
-    
+
     def _parse_model_items(self, data: list, model_cls: type[BaseModel], label: str,
                            parse_errors: list[str] | None = None) -> list:
         """Valida itens um a um; item inválido é logado e coletado, sem derrubar os demais."""
@@ -760,13 +860,24 @@ INSTRUÇÕES DO PROJETO:
         return self._parse_model_items(data, ComparativeAnalysisChange, "comparative_change", parse_errors)
 
     def _ensure_output_parsed(self, result_dict: dict, *, parsed_items: int,
-                              list_keys: tuple[str, ...], parse_errors: list[str]) -> None:
+                              list_keys: tuple[str, ...], parse_errors: list[str],
+                              truncada: bool = False) -> None:
         """Falha alto quando a resposta do modelo não pôde ser aproveitada.
 
         Sem isso, uma resposta fora do schema vira revisão "concluída" com zero
         achados — indistinguível de uma petição sem problemas.
+
+        `truncada` separa as duas causas na mensagem: JSON malformado manda
+        investigar o prompt; saída cortada manda encurtar a petição ou a
+        resposta. Trocar uma pela outra custou um mês de investigação errada.
         """
         if not result_dict:
+            if truncada:
+                raise ReviewOutputParseError(
+                    "A resposta do modelo foi cortada no limite de tokens de saída, "
+                    "mesmo na segunda tentativa sem raciocínio estendido. A petição "
+                    "produz uma revisão maior do que cabe em uma resposta."
+                )
             raise ReviewOutputParseError(
                 "A resposta do modelo não contém JSON válido para a revisão."
             )
