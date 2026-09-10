@@ -10,6 +10,9 @@
   Contexto: alerta, law_firm, periodo_inicio, gerado_em, is_test.
   alerta.novas[]:     protocolo, outorgante, cnpj_raiz, tipo, situacao, data_inicio, data_fim
   alerta.alteradas[]: protocolo, outorgante, cnpj_raiz, mudancas[{campo, de, para}]
+  alerta.descobertas[]: vistas pela primeira vez, mas com cadastro antigo no portal
+                      (mesmos campos de novas + data_cadastro). Não contam como
+                      novidade; cortadas em LIMITE_POR_BLOCO, resto em restantes.
   alerta.ultimas[]:   contexto — últimas cadastradas no portal (data_cadastro),
                       já sem as que aparecem em novas. Não conta como novidade.
   Os links usam url_for(_external=True) — o serviço renderiza com base_url=APP_PUBLIC_URL.
@@ -144,6 +147,35 @@
             <div style="background:{{ FUNDO }};border:1px solid {{ BORDA }};border-radius:6px;padding:12px;color:{{ SUAVE }};font-size:13px;">
               Nenhuma mudança em procurações no período.
             </div>
+            {% endif %}
+
+            {# Ruído do portal, não evento: listado discreto, sem selo "Nova". #}
+            {% if alerta.descobertas %}
+            <h2 style="margin:20px 0 4px 0;color:{{ TEXTO }};font-size:16px;">
+              Apareceram agora no portal
+              <span style="color:{{ SUAVE }};font-weight:400;font-size:14px;">({{ alerta.totais.descobertas }})</span>
+            </h2>
+            <p style="margin:0 0 12px 0;color:{{ SUAVE }};font-size:12px;">
+              Não são procurações novas: têm cadastro antigo e só agora vieram na lista do portal FAP.
+            </p>
+            {% for item in alerta.descobertas %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+                   style="margin:0 0 6px 0;border:1px solid {{ BORDA }};border-radius:8px;background:{{ FUNDO }};">
+              <tr>
+                <td style="padding:9px 14px;font-size:12px;color:{{ SUAVE }};">
+                  {{ cartao_cabecalho(item, SUAVE, TEXTO) }}
+                  <div style="margin-top:4px;">
+                    Cadastrada em {{ item.data_cadastro }} · vigência {{ item.data_inicio }} a {{ item.data_fim }} · {{ item.situacao }}
+                  </div>
+                </td>
+              </tr>
+            </table>
+            {% endfor %}
+            {% if alerta.restantes.descobertas %}
+            <p style="margin:4px 0 0 0;color:{{ SUAVE }};font-size:12px;">
+              e mais {{ alerta.restantes.descobertas }} no painel de procurações.
+            </p>
+            {% endif %}
             {% endif %}
 
             {# Contexto do que mudou — não conta como novidade, ver build_procuracoes_alert. #}

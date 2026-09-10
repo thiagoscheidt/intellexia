@@ -80,6 +80,12 @@ SYNC_ATRASO_HORAS = 24
 LIMITE_POR_BLOCO = 10
 LIMITE_ULTIMAS = 5
 
+# "Nova" no alerta é procuração cadastrada no portal há pouco, não só protocolo
+# que o cron nunca tinha visto. O portal oscila: em 09/09/2026 17:00 a lista
+# passou a trazer 38 procurações de 2022–2025 que nunca tinham vindo, e todas
+# saíram como "Nova" ao lado da única nova de verdade.
+NOVA_CADASTRO_DIAS = 7
+
 
 # ---------------------------------------------------------------------------
 # Parsers do payload da API
@@ -288,6 +294,10 @@ def build_procuracoes_alert(law_firm_id: int, since: datetime, hoje: date | None
     Leva junto ``ultimas`` (as últimas cadastradas no portal) como contexto do
     que mudou. Elas **não** entram em ``has_novidades``: existem sempre numa base
     povoada, e contá-las faria o alerta disparar a cada execução do cron.
+
+    Procuração vista pela primeira vez mas com ``data_cadastro`` antiga vai para
+    ``descobertas``, não para ``novas``: já existia no portal, só não vinha na
+    lista. Também não dispara o e-mail sozinha — é ruído do portal, não evento.
     """
     hoje = hoje or date.today()
     rows = (
@@ -306,19 +316,25 @@ def build_procuracoes_alert(law_firm_id: int, since: datetime, hoje: date | None
 
     novas = []
     alteradas = []
+    descobertas = []
 
     for row in rows:
         base = _identificacao(row)
         if row.change_type == 'created':
             valores = _loads(row.new_values)
+            cadastro = _parse_datetime(valores.get('data_cadastro'))
             base.update({
                 'tipo': valores.get('tipo_procuracao_descricao') or valores.get('tipo_procuracao_codigo') or '—',
                 'situacao': valores.get('situacao_descricao') or valores.get('situacao_codigo') or '—',
                 'data_inicio': _fmt_valor('data_inicio', valores.get('data_inicio')),
                 'data_fim': _fmt_valor('data_fim', valores.get('data_fim')),
+                'data_cadastro': cadastro.strftime('%d/%m/%Y') if cadastro else '—',
                 'synced_at': row.synced_at,
             })
-            novas.append(base)
+            if _cadastro_recente(cadastro, row.synced_at):
+                novas.append(base)
+            else:
+                descobertas.append(base)
             continue
 
         antigos = _loads(row.old_values)
@@ -346,23 +362,40 @@ def build_procuracoes_alert(law_firm_id: int, since: datetime, hoje: date | None
     totais = {
         'novas': len(novas),
         'alteradas': len(alteradas),
+        'descobertas': len(descobertas),
+        # Só o que dispara o e-mail. Descobertas ficam de fora de propósito.
         'total': len(novas) + len(alteradas),
     }
 
-    # Contexto: as últimas cadastradas no portal, menos as que já estão em
-    # "novas" — senão a mesma procuração apareceria duas vezes no e-mail.
+    # Contexto: as últimas cadastradas no portal, menos as que já estão nos
+    # blocos acima — senão a mesma procuração apareceria duas vezes no e-mail.
     ultimas, _ = _ultimas_cadastradas(law_firm_id, since, hoje)
-    ja_listadas = {item['protocolo'] for item in novas}
+    ja_listadas = {item['protocolo'] for item in novas + descobertas}
     ultimas = [item for item in ultimas if item['protocolo'] not in ja_listadas]
 
     return {
         'novas': novas,
         'alteradas': alteradas,
+        'descobertas': descobertas[:LIMITE_POR_BLOCO],
+        'restantes': {'descobertas': max(0, len(descobertas) - LIMITE_POR_BLOCO)},
         'ultimas': ultimas,
         'totais': totais,
-        # Só mudança dispara o alerta. "ultimas" é contexto e existe sempre.
+        # Só mudança dispara o alerta. "ultimas" é contexto e existe sempre;
+        # "descobertas" é o portal devolvendo o que já existia.
         'has_novidades': totais['total'] > 0,
     }
+
+
+def _cadastro_recente(cadastro: datetime | None, synced_at: datetime | None) -> bool:
+    """A procuração vista pela primeira vez foi cadastrada no portal há pouco?
+
+    ``cadastro`` está em horário de Brasília e ``synced_at`` em UTC — converte
+    antes de comparar. Sem uma das datas não dá para afirmar que é antiga, e na
+    dúvida o alerta avisa: perder uma procuração nova custa mais que um ruído.
+    """
+    if cadastro is None or synced_at is None:
+        return True
+    return cadastro >= _sp_naive(synced_at) - timedelta(days=NOVA_CADASTRO_DIAS)
 
 
 def _linha_procuracao(rec, hoje: date) -> dict:

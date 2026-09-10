@@ -351,6 +351,51 @@ def teste_render_dos_emails(fid):
           'bloco de urgência aparece quando há item')
 
 
+def teste_antiga_vista_pela_primeira_vez(fid):
+    print('\n[12] Procuração antiga vista pela primeira vez não é "Nova"')
+    # Reproduz 09/09/2026 17:00: o portal passou a devolver a SMARTFIT
+    # (cadastrada horas antes) junto com 38 procurações de 2022–2025 que nunca
+    # tinham vindo na lista. As 39 saíram como "Nova" no e-mail.
+    limpar(fid)
+    recem = (datetime.now() - timedelta(hours=6)).isoformat()
+
+    svc_mod.sync_procuracoes(FakeService([
+        procuracao('414660', cnpj_raiz='07594978', data_cadastro=recem),
+        procuracao('4728', cnpj_raiz='07196033', situacao='EXPIRADA',
+                   data_fim='2024-08-30', data_cadastro='2023-08-01T09:00:00'),
+        procuracao('340607', cnpj_raiz='10557540',
+                   data_fim='2026-12-31', data_cadastro='2025-08-19T09:00:00'),
+    ]), fid)
+
+    since = _utcnow() - timedelta(minutes=5)
+    alerta = svc_mod.build_procuracoes_alert(fid, since=since)
+    novas = [i['protocolo'] for i in alerta['novas']]
+    descobertas = [i['protocolo'] for i in alerta.get('descobertas', [])]
+
+    check(novas == ['414660'], 'só a de cadastro recente é nova', str(novas))
+    check(sorted(descobertas) == ['340607', '4728'], 'as antigas vão para descobertas', str(descobertas))
+    check(alerta['totais'].get('descobertas') == 2, 'total de descobertas',
+          str(alerta['totais'].get('descobertas')))
+    check(alerta['totais']['total'] == 1, 'descobertas não entram no total que dispara',
+          f"total={alerta['totais']['total']}")
+    check(alerta['has_novidades'], 'a nova de verdade dispara o alerta')
+
+    html, _ = notification_service.render_procuracoes_alert(fid, since=since, is_test=True)
+    check(html.count('>Nova</span>') == 1, 'selo "Nova" só na recente',
+          f"{html.count('>Nova</span>')} selos")
+    check('Apareceram agora no portal' in html, 'bloco próprio para as antigas')
+
+    print('    — só antigas no período')
+    limpar(fid)
+    svc_mod.sync_procuracoes(FakeService([
+        procuracao('4730', cnpj_raiz='10557540', data_cadastro='2023-08-01T09:00:00'),
+    ]), fid)
+    alerta = svc_mod.build_procuracoes_alert(fid, since=_utcnow() - timedelta(minutes=5))
+    check(not alerta['novas'], 'nenhuma nova')
+    check(alerta['totais'].get('descobertas') == 1, 'a antiga fica registrada como descoberta')
+    check(not alerta['has_novidades'], 'antigas sozinhas NÃO disparam o alerta')
+
+
 def main():
     with app.app_context():
         firm = LawFirm.query.filter_by(name=FIRM_NAME).first()
@@ -373,6 +418,7 @@ def main():
             teste_alerta_fora_do_cron_horario(fid)
             teste_falha_na_busca(fid)
             teste_render_dos_emails(fid)
+            teste_antiga_vista_pela_primeira_vez(fid)
         finally:
             limpar(fid)
             if criado_aqui:
