@@ -67,6 +67,22 @@
         }
 
         .preview-error a { color: #842029; }
+
+        /* RPI-14: trecho não localizado é dito na tela — parar no começo em
+           silêncio parecia defeito do botão. */
+        .preview-aviso {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            margin: -1.5rem -2rem 1rem;
+            padding: .6rem 2rem;
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            font-size: .82rem;
+            line-height: 1.4;
+            color: #664d03;
+            background: #fff3cd;
+            border-bottom: 1px solid #ffecb5;
+        }
     </style>
 </head>
 
@@ -102,7 +118,41 @@
 
             const blocks = Array.from(document.querySelectorAll(
                 '.docx-preview p, .docx-preview h1, .docx-preview h2, .docx-preview h3, .docx-preview h4, .docx-preview li, .docx-preview td'));
+            // O modelo copia linha de tabela juntando as células ("Item | Vigência
+            // do FAP | CNPJ"): célula a célula esse trecho nunca casa.
+            const rows = Array.from(document.querySelectorAll('.docx-preview tr'));
+            // textContent da linha cola uma célula na outra ("Item" + "Vigência" vira
+            // "ItemVigência") e o trecho nunca casaria: junta com espaço.
+            function rowText(row) {
+                return Array.from(row.cells).map(function (cell) { return cell.textContent; }).join(' ');
+            }
+            function findRow(needle) {
+                for (const row of rows) {
+                    if (normalize(rowText(row)).includes(needle)) return row;
+                }
+                return null;
+            }
             if (!normalize(target) && !normalize(excerpt)) return;
+
+            // Rolagem instantânea: a suave atravessava dezenas de milhares de pixels
+            // e o documento "pulava" segundos depois de abrir. As imagens embutidas
+            // só ganham altura quando terminam de carregar e empurram o trecho para
+            // baixo — por isso reposiciona de novo no load da página.
+            function position(element) {
+                function go() { element.scrollIntoView({ block: 'center' }); }
+                go();
+                if (document.readyState !== 'complete') {
+                    window.addEventListener('load', go, { once: true });
+                }
+            }
+
+            function warn(message) {
+                const aviso = document.createElement('div');
+                aviso.className = 'preview-aviso';
+                aviso.setAttribute('role', 'status');
+                aviso.textContent = message;
+                document.body.insertBefore(aviso, document.body.firstChild);
+            }
 
             // Título de seção: heading real, ou parágrafo curto todo em maiúsculas /
             // todo em negrito (padrão comum em petições)
@@ -197,7 +247,7 @@
             // uma janela com as primeiras/últimas palavras.
             const excerptPhrase = normalize(excerpt);
             if (excerptPhrase) {
-                let match = findIn(blocks, excerptPhrase);
+                let match = findIn(blocks, excerptPhrase) || findRow(excerptPhrase);
                 if (!match) {
                     const excerptWords = excerptPhrase.split(' ');
                     if (excerptWords.length >= 6) {
@@ -208,7 +258,7 @@
                 }
                 if (match) {
                     match.classList.add('preview-highlight');
-                    match.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    position(match);
                     return;
                 }
             }
@@ -232,7 +282,15 @@
                 matches.sort(function (a, b) {
                     return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
                 });
-                matches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (excerptPhrase) {
+                    warn('O trecho exato deste apontamento não foi encontrado no documento. '
+                        + 'Destacada a seção mais provável pela localização.');
+                }
+                position(matches[0]);
+            } else {
+                warn((excerptPhrase ? 'O trecho' : 'A localização') + ' deste apontamento não foi encontrad'
+                    + (excerptPhrase ? 'o' : 'a') + ' no documento — exibindo o início. '
+                    + 'Use a localização indicada no apontamento para conferir.');
             }
         })();
     </script>

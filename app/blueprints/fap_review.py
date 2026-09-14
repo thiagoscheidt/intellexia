@@ -46,7 +46,7 @@ from app.services.openrouter_models_service import fetch_openrouter_text_models_
 from app.services import fap_review_service as _svc
 from app.services import fap_training_diff_service as _diff_svc
 from app.services import fap_review_aux_service as _aux_svc
-from app.utils.document_utils import render_docx_preview_html
+from app.utils.document_utils import localizar_pagina_pdf, render_docx_preview_html
 from app.utils.timezone import now_sp
 
 logger = logging.getLogger(__name__)
@@ -2404,7 +2404,7 @@ def revision_main_document_preview(execution_id: int):
         return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
 
     if path.suffix.lower() != '.docx':
-        return redirect(url_for('fap_review.revision_main_document', execution_id=execution_id))
+        return redirect(_url_do_pdf_na_pagina(execution_id, path))
 
     try:
         content_html = render_docx_preview_html(path)
@@ -2420,6 +2420,26 @@ def revision_main_document_preview(execution_id: int):
         highlight_excerpt=(request.args.get('trecho') or '').strip(),
         download_url=url_for('fap_review.revision_main_document', execution_id=execution_id),
     )
+
+
+# "página 3", "pagina 3", "page 3", "p. 3" — como o modelo às vezes escreve na
+# localização. Fronteira de palavra para "p." não casar o fim de outra palavra.
+_PAGINA_NA_LOCALIZACAO = re.compile(r'\b(?:p[áa]gina|page|p\.)\s*(\d+)', re.IGNORECASE)
+
+
+def _url_do_pdf_na_pagina(execution_id: int, path: Path) -> str:
+    """RPI-14: o PDF abre na página do trecho do achado.
+
+    O visualizador de PDF do navegador não procura texto, só abre numa página.
+    Primeiro o trecho literal do achado; sem ele, a página citada na
+    localização; sem nenhum dos dois, o início — nunca uma página chutada.
+    """
+    url = url_for('fap_review.revision_main_document', execution_id=execution_id)
+    pagina = localizar_pagina_pdf(path, request.args.get('trecho') or '')
+    if pagina is None:
+        citada = _PAGINA_NA_LOCALIZACAO.search(request.args.get('destaque') or '')
+        pagina = int(citada.group(1)) if citada else None
+    return f'{url}#page={pagina}' if pagina else url
 
 
 def _send_execution_file(execution_id: int, file_path: str, download_name: str, missing_message: str):

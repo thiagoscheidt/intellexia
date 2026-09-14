@@ -107,3 +107,62 @@ def strip_html_text(value):
         return ''
     text = re.sub(r'(?is)<(style|script)[^>]*>.*?</\1>', ' ', str(value))
     return Markup(text).striptags()
+
+
+# ── RPI-14: "Ver no documento" em PDF ───────────────────────────────────
+# O navegador mostra o PDF no visualizador nativo, que não grifa texto nem
+# procura trecho — só abre numa página (#page=N). Então quem procura é o
+# servidor, e o botão abre o PDF já na página certa.
+
+# Trecho curto demais casa em qualquer página e não prova localização.
+_MINIMO_TRECHO_PDF = 8
+
+
+def normalizar_para_busca(texto):
+    """Mesma normalização do preview DOCX: sem acento, sem caixa, sem pontuação.
+
+    O modelo copia o trecho com pequenas diferenças ("S/A" contra "S.A.",
+    quebra de linha no meio), e a extração do PDF também não preserva espaços.
+    """
+    import re
+    import unicodedata
+
+    decomposto = unicodedata.normalize('NFD', str(texto or ''))
+    sem_acento = ''.join(ch for ch in decomposto if unicodedata.category(ch) != 'Mn')
+    return re.sub(r'\s+', ' ', re.sub(r'[^a-z0-9\s]', ' ', sem_acento.lower())).strip()
+
+
+def localizar_pagina_pdf(file_path, trecho):
+    """Página (a partir de 1) em que o trecho aparece no PDF, ou ``None``.
+
+    Trecho que atravessa a quebra de página abre na página onde começa. Não
+    achou, trecho curto demais, arquivo ilegível ou PDF só de imagem: ``None`` —
+    abrir numa página chutada é pior do que abrir no início.
+    """
+    alvo = normalizar_para_busca(trecho)
+    if len(alvo) < _MINIMO_TRECHO_PDF:
+        return None
+
+    try:
+        import fitz  # PyMuPDF
+
+        with fitz.open(str(file_path)) as documento:
+            paginas = [normalizar_para_busca(pagina.get_text()) for pagina in documento]
+    except Exception:
+        return None
+
+    for numero, texto in enumerate(paginas, start=1):
+        if alvo in texto:
+            return numero
+
+    # Atravessando a quebra: procura no texto corrido e devolve a página em que
+    # a ocorrência começa.
+    corrido = ''
+    inicios = []
+    for texto in paginas:
+        inicios.append(len(corrido))
+        corrido += texto + ' '
+    posicao = corrido.find(alvo)
+    if posicao < 0:
+        return None
+    return max(numero for numero, inicio in enumerate(inicios, start=1) if inicio <= posicao)
