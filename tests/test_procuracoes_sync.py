@@ -396,6 +396,92 @@ def teste_antiga_vista_pela_primeira_vez(fid):
     check(not alerta['has_novidades'], 'antigas sozinhas NÃO disparam o alerta')
 
 
+def teste_zeros_a_esquerda_na_ingestao(fid):
+    print('\n[13] Retorno da homologação: o portal manda número e o zero some')
+    limpar(fid)
+    # 00.482.840 chega da API como o inteiro 482840; o CPF, como 7488971.
+    item = procuracao('P-ZERO', cnpj_raiz='00482840')
+    item['cpfOutorgado'] = 7488971
+    svc_mod.sync_procuracoes(FakeService([item]), fid)
+
+    rec = FapWebProcuracao.query.filter_by(law_firm_id=fid, protocolo='P-ZERO').first()
+    check(rec.cnpj_raiz_outorgante == '00482840', 'raiz gravada com os 8 dígitos',
+          repr(rec.cnpj_raiz_outorgante))
+    check(rec.cpf_outorgado == '00007488971', 'CPF gravado com os 11 dígitos',
+          repr(rec.cpf_outorgado))
+    linha = historico(fid)[-1]
+    check(linha.cnpj_raiz_outorgante == '00482840', 'histórico também guarda com zero',
+          repr(linha.cnpj_raiz_outorgante))
+
+
+def teste_base_antiga_sem_zero_nao_vira_mudanca(fid):
+    print('\n[14] Registro gravado antes da correção não gera histórico falso')
+    limpar(fid)
+    item = procuracao('P-VELHA', cnpj_raiz='03227056')
+    item['cpfOutorgado'] = 7488971
+    svc_mod.sync_procuracoes(FakeService([item]), fid)
+
+    # Simula a base de produção: o que foi gravado com str(int) antes do conserto.
+    rec = FapWebProcuracao.query.filter_by(law_firm_id=fid, protocolo='P-VELHA').first()
+    rec.cnpj_raiz_outorgante = '3227056'
+    rec.cpf_outorgado = '7488971'
+    db.session.commit()
+    antes = len(historico(fid))
+
+    stats = svc_mod.sync_procuracoes(FakeService([item]), fid)
+    # Sem isso, a primeira sincronização depois do deploy escreveria ~3.700
+    # linhas de "mudança" de 3227056 para 03227056 — que não mudou nada.
+    check(stats['unchanged'] == 1 and stats['updated'] == 0,
+          'conta como inalterada, não como atualizada', str(stats))
+    check(len(historico(fid)) == antes, 'histórico não cresceu',
+          f'{antes} → {len(historico(fid))}')
+    rec = FapWebProcuracao.query.filter_by(law_firm_id=fid, protocolo='P-VELHA').first()
+    check(rec.cnpj_raiz_outorgante == '03227056', 'mas o valor gravado é corrigido',
+          repr(rec.cnpj_raiz_outorgante))
+    check(rec.cpf_outorgado == '00007488971', 'o CPF também', repr(rec.cpf_outorgado))
+
+
+def teste_filtro_por_cnpj_raiz(fid):
+    print('\n[15] Filtro "Nome ou CNPJ raiz" acha com e sem máscara')
+    limpar(fid)
+    svc_mod.sync_procuracoes(FakeService([
+        procuracao('P-F1', cnpj_raiz='00482840', nome='LIDERANCA LIMPEZA'),
+        procuracao('P-F2', cnpj_raiz='84590900', nome='LIMGER EMPRESA'),
+    ]), fid)
+
+    def achou(termo):
+        q = svc_mod.filtrar_por_outorgante(
+            FapWebProcuracao.query.filter_by(law_firm_id=fid), termo)
+        return sorted(r.protocolo for r in q.all())
+
+    check(achou('00.482.840') == ['P-F1'], 'com máscara, como aparece na tela', str(achou('00.482.840')))
+    check(achou('00482840') == ['P-F1'], 'só dígitos, como vem de outro módulo')
+    check(achou('482840') == ['P-F1'], 'sem os zeros, como o usuário lembrava')
+    check(achou('limpeza') == ['P-F1'], 'nome continua funcionando')
+    check(achou('') == ['P-F1', 'P-F2'], 'termo vazio não filtra')
+
+    # Base de produção antes do script: a raiz ainda está gravada sem os zeros,
+    # e a pessoa copia da tela nova o valor mascarado.
+    rec = FapWebProcuracao.query.filter_by(law_firm_id=fid, protocolo='P-F1').first()
+    rec.cnpj_raiz_outorgante = '482840'
+    db.session.commit()
+    check(achou('00.482.840') == ['P-F1'], 'acha registro antigo copiando a máscara da tela',
+          str(achou('00.482.840')))
+    check(achou('00482840') == ['P-F1'], 'acha registro antigo pelos 8 dígitos')
+
+
+def teste_emails_recebem_raiz_completa(fid):
+    print('\n[16] E-mails: a raiz chega com zero no bloco de dados')
+    limpar(fid)
+    svc_mod.sync_procuracoes(FakeService([procuracao('P-MAIL', cnpj_raiz='00482840')]), fid)
+    rec = FapWebProcuracao.query.filter_by(law_firm_id=fid, protocolo='P-MAIL').first()
+    rec.cnpj_raiz_outorgante = '482840'   # registro antigo, anterior ao conserto
+    db.session.commit()
+    linha = svc_mod._linha_procuracao(rec, date.today())
+    check(linha['cnpj_raiz'] == '00482840', 'linha do digest completa os zeros',
+          repr(linha['cnpj_raiz']))
+
+
 def main():
     with app.app_context():
         firm = LawFirm.query.filter_by(name=FIRM_NAME).first()
@@ -419,6 +505,10 @@ def main():
             teste_falha_na_busca(fid)
             teste_render_dos_emails(fid)
             teste_antiga_vista_pela_primeira_vez(fid)
+            teste_zeros_a_esquerda_na_ingestao(fid)
+            teste_base_antiga_sem_zero_nao_vira_mudanca(fid)
+            teste_filtro_por_cnpj_raiz(fid)
+            teste_emails_recebem_raiz_completa(fid)
         finally:
             limpar(fid)
             if criado_aqui:

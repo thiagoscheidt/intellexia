@@ -1,4 +1,4 @@
-"""Formatação de CNPJ para exibição.
+"""Formatação de CNPJ (completo e raiz) e CPF para exibição.
 
 Fonte única da máscara. Antes existia uma cópia privada no blueprint
 ``disputes_center`` — e foi justamente por ser privada que o gerador de
@@ -30,3 +30,48 @@ def formatar_cnpj(valor) -> str:
     if len(digitos) != TAMANHO_CNPJ:
         return valor if valor else ''
     return f'{digitos[:2]}.{digitos[2:5]}.{digitos[5:8]}/{digitos[8:12]}-{digitos[12:14]}'
+
+
+# ── Identificadores que o portal FAP manda como número ──────────────────
+# A API de procurações devolve CNPJ raiz e CPF como inteiro: 00.482.840
+# chega como 482840. Depois disso, str() não tem como saber quantos zeros
+# faltam — só o tamanho do documento sabe (retorno da homologação de
+# "Máscara de CNPJ no template", Painel FAP → Procurações).
+
+TAMANHO_CNPJ_RAIZ = 8
+TAMANHO_CPF = 11
+
+
+def completar_zeros(valor, tamanho: int) -> str | None:
+    """Só os dígitos, completados com zero à esquerda até ``tamanho``.
+
+    ``None`` e vazio viram ``None``, para a coluna continuar nula. Mais dígitos
+    do que o tamanho não é zero faltando, é outro dado: volta como veio, sem
+    corte — cortar inventaria um documento que não existe.
+    """
+    digitos = apenas_digitos(None if valor is None else str(valor))
+    if not digitos:
+        return None
+    if len(digitos) > tamanho:
+        return digitos
+    return digitos.zfill(tamanho)
+
+
+def formatar_cnpj_raiz(valor) -> str:
+    """``482840`` → ``'00.482.840'``. O que não cabe em 8 dígitos volta como veio."""
+    digitos = completar_zeros(valor, TAMANHO_CNPJ_RAIZ)
+    if digitos is None:
+        return ''
+    if len(digitos) != TAMANHO_CNPJ_RAIZ:
+        return str(valor)
+    return f'{digitos[:2]}.{digitos[2:5]}.{digitos[5:8]}'
+
+
+def formatar_cpf(valor) -> str:
+    """``7488971`` → ``'000.074.889-71'``. O que não cabe em 11 dígitos volta como veio."""
+    digitos = completar_zeros(valor, TAMANHO_CPF)
+    if digitos is None:
+        return ''
+    if len(digitos) != TAMANHO_CPF:
+        return str(valor)
+    return f'{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:11]}'

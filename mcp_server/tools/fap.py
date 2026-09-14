@@ -647,13 +647,17 @@ def list_fap_procuracoes_handler(
 ) -> dict:
     """Procurações eletrônicas sincronizadas do portal FAP Web."""
     from app.models import FapWebProcuracao
+    from app.utils.cnpj import TAMANHO_CNPJ_RAIZ, completar_zeros
 
     limit = clamp_limit(limit, 100)
     offset = clamp_offset(offset)
 
     query = FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id)
     if cnpj_raiz:
-        query = query.filter(FapWebProcuracao.cnpj_raiz_outorgante == cnpj_raiz)
+        # O banco guarda os 8 dígitos; quem chama pode mandar com máscara ou sem
+        # os zeros à esquerda, que é como a raiz vinha antes da correção.
+        query = query.filter(FapWebProcuracao.cnpj_raiz_outorgante
+                             == completar_zeros(cnpj_raiz, TAMANHO_CNPJ_RAIZ))
     if situacao_codigo:
         query = query.filter(FapWebProcuracao.situacao_codigo == situacao_codigo)
 
@@ -671,7 +675,7 @@ def list_fap_procuracoes_handler(
             "situacao_codigo": p.situacao_codigo,
             "data_inicio": _iso(p.data_inicio),
             "data_fim": _iso(p.data_fim),
-            "cnpj_raiz_outorgante": p.cnpj_raiz_outorgante,
+            "cnpj_raiz_outorgante": completar_zeros(p.cnpj_raiz_outorgante, TAMANHO_CNPJ_RAIZ),
             "empresa_outorgante": p.nome_empresa_outorgante,
             "ultima_sincronizacao": _iso(p.last_synced_at),
         }

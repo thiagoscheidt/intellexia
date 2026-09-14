@@ -160,6 +160,12 @@ from app.utils.timezone import format_datetime_sp, format_date_sp
 app.add_template_filter(format_datetime_sp, name='datetime_sp')
 app.add_template_filter(format_date_sp, name='date_sp')
 
+# CNPJ raiz e CPF chegam do portal FAP como número e perdem o zero à esquerda;
+# os filtros devolvem os zeros e aplicam a máscara.
+from app.utils.cnpj import formatar_cnpj_raiz, formatar_cpf
+app.add_template_filter(formatar_cnpj_raiz, name='cnpj_raiz')
+app.add_template_filter(formatar_cpf, name='cpf')
+
 # Prioridade de correção do Revisor: separa o nível do plano de ação (fonte
 # única em fap_review_service, usada pelo resultado e pelo detalhe da petição)
 from app.services.fap_review_service import split_correction_priority

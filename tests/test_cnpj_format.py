@@ -14,7 +14,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.utils.cnpj import apenas_digitos, formatar_cnpj
+from app.utils.cnpj import (
+    apenas_digitos, completar_zeros, formatar_cnpj, formatar_cnpj_raiz, formatar_cpf,
+)
 
 _falhas = []
 
@@ -125,6 +127,69 @@ def test_disputes_center_usa_o_mesmo_formatador():
           'ainda há montagem manual da máscara')
 
 
+# ── Retorno da homologação: zeros à esquerda em Procurações ─────────────
+# O portal FAP manda CNPJ raiz e CPF como NÚMERO. 00.482.840 chega como
+# 482840, e str() não tem como saber que faltam dois zeros.
+
+def test_completar_zeros():
+    print('\n7. completar_zeros — devolve os zeros que o número comeu')
+
+    check('raiz de 6 dígitos volta a ter 8', completar_zeros(482840, 8) == '00482840',
+          completar_zeros(482840, 8))
+    check('aceita string', completar_zeros('3227056', 8) == '03227056')
+    check('já completo não muda', completar_zeros('84590900', 8) == '84590900')
+    check('com máscara vira só dígitos', completar_zeros('00.482.840', 8) == '00482840')
+    check('CPF de 7 dígitos volta a ter 11', completar_zeros(7488971, 11) == '00007488971',
+          completar_zeros(7488971, 11))
+    check('None continua None', completar_zeros(None, 8) is None)
+    check('vazio vira None', completar_zeros('', 8) is None)
+    # Mais dígitos que o tamanho não é zero faltando: é outro dado. Cortar
+    # inventaria um documento; devolve os dígitos como vieram.
+    check('dígitos demais não são cortados', completar_zeros('123456789', 8) == '123456789')
+
+
+def test_formatar_cnpj_raiz():
+    print('\n8. formatar_cnpj_raiz — o caso do print do Fred')
+
+    check('482840 → 00.482.840', formatar_cnpj_raiz(482840) == '00.482.840',
+          formatar_cnpj_raiz(482840))
+    check('3227056 → 03.227.056', formatar_cnpj_raiz('3227056') == '03.227.056')
+    check('sem zero faltando', formatar_cnpj_raiz('84590900') == '84.590.900')
+    check('idempotente', formatar_cnpj_raiz('00.482.840') == '00.482.840')
+    check('None vira vazio', formatar_cnpj_raiz(None) == '')
+    check('lixo passa intacto', formatar_cnpj_raiz('123456789') == '123456789')
+
+
+def test_formatar_cpf():
+    print('\n9. formatar_cpf — o CPF do outorgado, que perdia 4 zeros')
+
+    # 000.074.889-71 tem dígito verificador válido: os zeros eram mesmo zeros.
+    check('7488971 → 000.074.889-71', formatar_cpf(7488971) == '000.074.889-71',
+          formatar_cpf(7488971))
+    check('CPF completo', formatar_cpf('12345678901') == '123.456.789-01')
+    check('idempotente', formatar_cpf('000.074.889-71') == '000.074.889-71')
+    check('None vira vazio', formatar_cpf(None) == '')
+
+
+def test_tela_de_procuracoes_usa_os_filtros():
+    print('\n10. Procurações — a tela não imprime mais o número cru')
+
+    tela = (Path(__file__).resolve().parent.parent
+            / 'templates' / 'fap_panel' / 'procuracoes.html').read_text(encoding='utf-8')
+    check('raiz do outorgante passa pelo filtro',
+          'r.cnpj_raiz_outorgante | cnpj_raiz' in tela)
+    check('CPF do outorgado passa pelo filtro', 'r.cpf_outorgado | cpf' in tela)
+    check('raiz do outorgado passa pelo filtro', 'r.cnpj_raiz_outorgado | cnpj_raiz' in tela)
+
+    from main import app
+    with app.app_context():
+        filtros = app.jinja_env.filters
+        check('filtros registrados no Jinja', 'cnpj_raiz' in filtros and 'cpf' in filtros)
+        if 'cnpj_raiz' in filtros:
+            check('filtro renderiza a máscara',
+                  app.jinja_env.from_string('{{ 482840 | cnpj_raiz }}').render() == '00.482.840')
+
+
 def main() -> int:
     test_apenas_digitos()
     test_formata_cnpj_cru()
@@ -132,6 +197,10 @@ def main() -> int:
     test_devolve_como_veio_quando_nao_da()
     test_gerador_formata_nos_quatro_pontos()
     test_disputes_center_usa_o_mesmo_formatador()
+    test_completar_zeros()
+    test_formatar_cnpj_raiz()
+    test_formatar_cpf()
+    test_tela_de_procuracoes_usa_os_filtros()
 
     print('\n' + '=' * 62)
     if _falhas:
