@@ -249,6 +249,13 @@ def count_pending_review_queues(law_firm_id: int) -> dict:
 
 SEM_REVISOR = 'Sem revisor'
 
+# Petição sem status gravado não é arquivada — e `!= 'archived'` sozinho, em
+# SQL, deixaria o NULL de fora da conta.
+PETITION_NOT_ARCHIVED = db.or_(
+    FapReviewPetition.workflow_status.is_(None),
+    FapReviewPetition.workflow_status != 'archived',
+)
+
 
 def agrupar_peticoes_por_advogado(linhas) -> list[dict]:
     """Linhas ``(user_id, nome, status, quantidade)`` viram um grupo por advogado.
@@ -650,10 +657,19 @@ def translate_finding_category(category: str | None) -> str:
 
 
 def build_lawyer_statistics(law_firm_id: int) -> dict:
-    """Consolida score e métricas dos advogados a partir do histórico de revisões."""
-    revisions = FapReviewExecution.query.filter_by(
-        law_firm_id=law_firm_id,
-        execution_type='revision',
+    """Consolida score e métricas dos advogados a partir do histórico de revisões.
+
+    Revisão de petição arquivada fica de fora (RPI-09): arquivar é como se tira
+    da conta um caso de teste ou um projeto duplicado por erro de Id Wrike, e
+    eles não podem pesar no desempenho de ninguém. Revisão sem petição
+    vinculada continua contando.
+    """
+    revisions = FapReviewExecution.query.outerjoin(
+        FapReviewPetition, FapReviewPetition.id == FapReviewExecution.petition_id,
+    ).filter(
+        FapReviewExecution.law_firm_id == law_firm_id,
+        FapReviewExecution.execution_type == 'revision',
+        db.or_(FapReviewPetition.id.is_(None), PETITION_NOT_ARCHIVED),
     ).order_by(
         FapReviewExecution.created_at.asc(),
         FapReviewExecution.id.asc(),

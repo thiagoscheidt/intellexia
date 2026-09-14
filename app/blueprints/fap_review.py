@@ -1143,7 +1143,12 @@ def index():
     """Dashboard principal do módulo"""
     law_firm_id = get_current_law_firm_id()
 
-    total_petitions = FapReviewPetition.query.filter_by(law_firm_id=law_firm_id).count()
+    # Arquivada sai dos números gerais (RPI-09) — continua na tela, pelo filtro
+    # "Arquivadas", mas caso de teste e duplicata não inflam o painel.
+    total_petitions = FapReviewPetition.query.filter(
+        FapReviewPetition.law_firm_id == law_firm_id,
+        _svc.PETITION_NOT_ARCHIVED,
+    ).count()
     ready_petitions = FapReviewPetition.query.filter_by(
         law_firm_id=law_firm_id,
         workflow_status='ready_for_filing',
@@ -1160,9 +1165,12 @@ def index():
         law_firm_id=law_firm_id,
         workflow_status='awaiting_approval',
     ).count()
-    total_revisions = FapReviewExecution.query.filter_by(
-        law_firm_id=law_firm_id,
-        execution_type='revision',
+    total_revisions = FapReviewExecution.query.outerjoin(
+        FapReviewPetition, FapReviewPetition.id == FapReviewExecution.petition_id,
+    ).filter(
+        FapReviewExecution.law_firm_id == law_firm_id,
+        FapReviewExecution.execution_type == 'revision',
+        or_(FapReviewPetition.id.is_(None), _svc.PETITION_NOT_ARCHIVED),
     ).count()
 
     _priority_order = case(

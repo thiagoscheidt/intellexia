@@ -304,6 +304,110 @@ def test_rpi04_contagem_bate_com_o_banco():
               f'{arquivadas} arquivada(s) no banco')
 
 
+# ── RPI-09 — arquivar pela lista, com reflexo nas estatísticas ──────────
+
+def test_rpi09_botao_arquivar_na_lista():
+    print('\n21. RPI-09 — arquivar direto da linha da lista')
+
+    index = (RAIZ / 'templates' / 'fap_review' / 'index.html').read_text(encoding='utf-8')
+    check('a linha tem botão de arquivar', 'archive-petition-btn' in index)
+    # Mesma regra do botão do detalhe: fora de aprovação só admin arquiva, e o
+    # endpoint já recusa. Botão que aparece e depois dá 403 é pior que nenhum.
+    trecho = re.search(r'\{%-? if petition\.workflow_status != \'archived\'[^%]*%\}\s*'
+                       r'<button type="button" class="btn btn-sm btn-outline-dark archive-petition-btn',
+                       index)
+    check('só aparece para quem pode arquivar', trecho is not None)
+    check('confirma antes de arquivar', "Arquivar \"${title}\"?" in index)
+    check('usa a rota de status que já existe',
+          "workflow_status: 'archived'" in index)
+
+
+def _escritorio_com_uma_arquivada():
+    """Escritório descartável: uma petição ativa e uma arquivada, uma revisão cada."""
+    import json as _json
+    from main import app
+    from app.models import db, LawFirm, User, FapReviewPetition, FapReviewExecution
+
+    firm = LawFirm(name='__TESTE_RPI09__', cnpj='00000000000191')
+    db.session.add(firm); db.session.flush()
+    user = User(law_firm_id=firm.id, name='Advogada Teste', email='rpi09@teste.invalid',
+                password_hash='x', role='admin')
+    db.session.add(user); db.session.flush()
+
+    achados = _json.dumps({'findings': [
+        {'category': 'CAT-1', 'severity': 'CRÍTICO', 'description': 'x'},
+        {'category': 'CAT-2', 'severity': 'FORMAL', 'description': 'y'},
+    ]})
+    peticoes = []
+    for titulo, status, wrike in (('Ativa', 'in_review', '101'), ('Caso de teste', 'archived', '102')):
+        pet = FapReviewPetition(law_firm_id=firm.id, title=titulo,
+                                office_document_identifier=wrike, workflow_status=status)
+        db.session.add(pet); db.session.flush()
+        exe = FapReviewExecution(law_firm_id=firm.id, user_id=user.id, petition_id=pet.id,
+                                 execution_type='revision', status='completed',
+                                 revision_number=1, result_json=achados)
+        db.session.add(exe); db.session.flush()
+        pet.latest_revision_id = exe.id
+        peticoes.append(pet)
+    db.session.commit()
+    return firm, user
+
+
+def _remover_escritorio(firm_id):
+    from app.models import (db, LawFirm, User, UserPageVisit,
+                            FapReviewAuditLog, FapReviewPetition, FapReviewExecution)
+    db.session.rollback()
+    # Abrir a tela pelo test_client grava visita de página (middleware de
+    # auditoria de acesso) — sem apagá-la, a FK impede remover o usuário.
+    UserPageVisit.query.filter_by(law_firm_id=firm_id).delete()
+    FapReviewAuditLog.query.filter_by(law_firm_id=firm_id).delete()
+    FapReviewPetition.query.filter_by(law_firm_id=firm_id).update({'latest_revision_id': None})
+    FapReviewExecution.query.filter_by(law_firm_id=firm_id).delete()
+    FapReviewPetition.query.filter_by(law_firm_id=firm_id).delete()
+    User.query.filter_by(law_firm_id=firm_id).delete()
+    LawFirm.query.filter_by(id=firm_id).delete()
+    db.session.commit()
+
+
+def test_rpi09_estatisticas_ignoram_arquivadas():
+    print('\n22. RPI-09 — petição arquivada sai dos números')
+
+    from main import app
+    from app.models import db, LawFirm
+    from app.services.fap_review_service import build_lawyer_statistics
+
+    with app.app_context():
+        velho = LawFirm.query.filter_by(name='__TESTE_RPI09__').first()
+        if velho:
+            _remover_escritorio(velho.id)
+        firm, user = _escritorio_com_uma_arquivada()
+        firm_id, user_id, role, nome = firm.id, user.id, user.role, user.name
+        try:
+            stats = build_lawyer_statistics(firm_id)
+            advogado = stats['lawyers'][0] if stats['lawyers'] else {}
+            check('desempenho conta só a revisão da petição ativa',
+                  advogado.get('total_revisions') == 1, str(advogado.get('total_revisions')))
+            check('achados da arquivada não entram',
+                  advogado.get('total_findings') == 2, str(advogado.get('total_findings')))
+            check('visão geral também', stats['overview'].get('total_revisions') == 1,
+                  str(stats['overview'].get('total_revisions')))
+
+            client = app.test_client()
+            with client.session_transaction() as sessao:
+                sessao.update(user_id=user_id, law_firm_id=firm_id, user_role=role, user_name=nome)
+            html = client.get('/fap-review/').data.decode('utf-8')
+            valores = re.findall(r'<div class="sc-value">\s*([^<]+?)\s*</div>', html)
+            check('card "total de petições" não conta a arquivada',
+                  bool(valores) and valores[0] == '1', str(valores[:1]))
+            check('"revisões realizadas" não conta a da arquivada',
+                  '1 revisões realizadas' in html,
+                  (re.search(r'\d+ revisões realizadas', html) or [''])[0])
+            check('a arquivada continua acessível pelo filtro próprio',
+                  'Arquivadas (1)' in html)
+        finally:
+            _remover_escritorio(firm_id)
+
+
 def main() -> int:
     print('=' * 62)
     print('REMESSA R02 — regras do Revisor de Petições')
@@ -329,6 +433,8 @@ def main() -> int:
     test_rpi04_seletor_existe_na_tela()
     test_rpi04_busca_textual_filtra_dentro_da_selecao()
     test_rpi04_contagem_bate_com_o_banco()
+    test_rpi09_botao_arquivar_na_lista()
+    test_rpi09_estatisticas_ignoram_arquivadas()
 
     print('\n' + '=' * 62)
     if _falhas:
