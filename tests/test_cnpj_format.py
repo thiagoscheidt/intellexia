@@ -128,8 +128,9 @@ def test_disputes_center_usa_o_mesmo_formatador():
 
 
 # ── Retorno da homologação: zeros à esquerda em Procurações ─────────────
-# O portal FAP manda CNPJ raiz e CPF como NÚMERO. 00.482.840 chega como
-# 482840, e str() não tem como saber que faltam dois zeros.
+# O portal FAP manda CNPJ raiz e CPF como NÚMERO: 00.482.840 chega como
+# 482840 e fica gravado assim. A correção é só de exibição — a máscara
+# devolve os zeros na tela, sem mexer no dado.
 
 def test_completar_zeros():
     print('\n7. completar_zeros — devolve os zeros que o número comeu')

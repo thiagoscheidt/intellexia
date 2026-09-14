@@ -54,9 +54,7 @@ from app.services import fap_group_service
 from app.services import fap_group_import_service
 from app.services import fap_procuracoes_service
 from app.services.fap_procuracoes_service import filtrar_por_outorgante
-from app.utils.cnpj import (
-    TAMANHO_CNPJ_RAIZ, TAMANHO_CPF, completar_zeros, formatar_cnpj_raiz, formatar_cpf,
-)
+from app.utils.cnpj import formatar_cnpj_raiz, formatar_cpf
 from app.services.fap_web_service import (
     FapWebAuthPayload, FapWebService, build_fap_service, resolve_fap_auth, slug_situacao,
 )
@@ -2310,10 +2308,10 @@ def sync_procuracoes_list():
             'situacao_descricao':       r.situacao_descricao or '',
             'data_inicio':              r.data_inicio.strftime('%d/%m/%Y') if r.data_inicio else '',
             'data_fim':                 r.data_fim.strftime('%d/%m/%Y') if r.data_fim else '',
-            'cnpj_raiz_outorgante':     completar_zeros(r.cnpj_raiz_outorgante, TAMANHO_CNPJ_RAIZ) or '',
+            'cnpj_raiz_outorgante':     r.cnpj_raiz_outorgante or '',
             'nome_empresa_outorgante':  r.nome_empresa_outorgante or '',
-            'cpf_outorgado':            completar_zeros(r.cpf_outorgado, TAMANHO_CPF) or '',
-            'cnpj_raiz_outorgado':      completar_zeros(r.cnpj_raiz_outorgado, TAMANHO_CNPJ_RAIZ) or '',
+            'cpf_outorgado':            r.cpf_outorgado or '',
+            'cnpj_raiz_outorgado':      r.cnpj_raiz_outorgado or '',
             'data_cadastro':            r.data_cadastro.strftime('%d/%m/%Y %H:%M') if r.data_cadastro else '',
             'last_synced_at':           r.last_synced_at.strftime('%d/%m/%Y %H:%M') if r.last_synced_at else '',
         }

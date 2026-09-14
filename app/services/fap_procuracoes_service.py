@@ -27,7 +27,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 from app.models import db, FapWebProcuracao, FapWebProcuracaoChangeHistory
-from app.utils.cnpj import TAMANHO_CNPJ_RAIZ, TAMANHO_CPF, apenas_digitos, completar_zeros
+from app.utils.cnpj import TAMANHO_CNPJ_RAIZ, apenas_digitos, completar_zeros
 from app.utils.timezone import SP_TZ
 
 logger = logging.getLogger(__name__)
@@ -110,14 +110,9 @@ def _parse_datetime(value):
         return None
 
 
-# CNPJ raiz e CPF chegam da API como NÚMERO: 00.482.840 vira 482840. Guardar
-# str(valor) perdia os zeros — na tela, no Excel, nos e-mails e em qualquer
-# cruzamento com as outras tabelas FAP, que guardam a raiz com os 8 dígitos.
-DOCUMENT_FIELDS = {
-    'cnpj_raiz_outorgante': TAMANHO_CNPJ_RAIZ,
-    'cpf_outorgado': TAMANHO_CPF,
-    'cnpj_raiz_outorgado': TAMANHO_CNPJ_RAIZ,
-}
+def _as_str(value):
+    """CNPJ/CPF chegam como número na API — normaliza para string, mantendo None."""
+    return None if value is None else str(value)
 
 
 def _fields_from_item(item: dict) -> dict:
@@ -131,10 +126,10 @@ def _fields_from_item(item: dict) -> dict:
         'situacao_descricao': situacao.get('descricao'),
         'data_inicio': _parse_date(item.get('dataInicio')),
         'data_fim': _parse_date(item.get('dataFim')),
-        'cnpj_raiz_outorgante': completar_zeros(item.get('cnpjRaizOutorgante'), TAMANHO_CNPJ_RAIZ),
+        'cnpj_raiz_outorgante': _as_str(item.get('cnpjRaizOutorgante')),
         'nome_empresa_outorgante': item.get('nomeEmpresaOutorgante'),
-        'cpf_outorgado': completar_zeros(item.get('cpfOutorgado'), TAMANHO_CPF),
-        'cnpj_raiz_outorgado': completar_zeros(item.get('cnpjRaizOutorgado'), TAMANHO_CNPJ_RAIZ),
+        'cpf_outorgado': _as_str(item.get('cpfOutorgado')),
+        'cnpj_raiz_outorgado': _as_str(item.get('cnpjRaizOutorgado')),
         'data_cadastro': _parse_datetime(item.get('dataCadastro')),
     }
 
@@ -142,10 +137,11 @@ def _fields_from_item(item: dict) -> dict:
 def filtrar_por_outorgante(query, termo: str | None):
     """Filtro "Nome ou CNPJ raiz" — fonte única da tela e do Excel.
 
-    A tela mostra a raiz com máscara (00.482.840) e o banco guarda só dígitos:
-    procurar o texto digitado como veio não acharia quem copiou da própria
-    tela. Com dígitos no termo, compara também só os dígitos — o que acha
-    ``00.482.840``, ``00482840`` e o ``482840`` que a pessoa lembrava de antes.
+    Só consulta, nunca grava. O portal manda a raiz como número e ela fica no
+    banco sem os zeros (``482840``), enquanto a tela mostra com máscara
+    (``00.482.840``). O filtro acha pelas três formas: com máscara, só os
+    dígitos e sem os zeros. As condições antigas continuam todas — só se
+    acrescentam outras, então nada que achava antes deixa de achar.
     """
     termo = (termo or '').strip()
     if not termo:
@@ -157,9 +153,8 @@ def filtrar_por_outorgante(query, termo: str | None):
     if digitos and digitos != termo:
         condicoes.append(FapWebProcuracao.cnpj_raiz_outorgante.ilike(f'%{digitos}%'))
     if len(digitos) == TAMANHO_CNPJ_RAIZ and digitos.startswith('0'):
-        # Registro gravado antes da correção guarda "482840": "00482840" não é
-        # substring dele. Igualdade exata, e não LIKE — "1" sem os zeros de
-        # "00000001" casaria meia base.
+        # O banco guarda "482840", e "00482840" não é substring dele. Igualdade
+        # exata, e não LIKE — "1" sem os zeros de "00000001" casaria meia base.
         condicoes.append(FapWebProcuracao.cnpj_raiz_outorgante == digitos.lstrip('0'))
     return query.filter(db.or_(*condicoes))
 
@@ -233,20 +228,12 @@ def sync_procuracoes(svc, law_firm_id: int) -> dict:
         for name in TRACKED_FIELDS:
             atual = getattr(existing, name)
             novo = fields[name]
-            if name in DOCUMENT_FIELDS:
-                # Registro gravado antes da correção guarda "3227056". Comparar
-                # cru faria a primeira sincronização pós-deploy registrar
-                # milhares de "mudanças" de 3227056 para 03227056.
-                atual = completar_zeros(atual, DOCUMENT_FIELDS[name])
             if atual != novo:
                 changed_old[name] = atual
                 changed_new[name] = novo
 
         if not changed_new:
-            # Nada mudou: só marca que foi conferida agora — e cura em silêncio
-            # o documento gravado sem os zeros, que não é mudança do portal.
-            for name in DOCUMENT_FIELDS:
-                setattr(existing, name, fields[name])
+            # Nada mudou: só marca que foi conferida agora.
             existing.last_synced_at = now
             existing.raw_data = json.dumps(item, ensure_ascii=False)
             unchanged += 1
@@ -461,16 +448,14 @@ def _renovadas(vigentes: list, vencidas: list) -> set:
     for rec in vigentes:
         if not rec.data_fim:
             continue
-        chave = (completar_zeros(rec.cnpj_raiz_outorgante, TAMANHO_CNPJ_RAIZ),
-                 rec.tipo_procuracao_codigo)
+        chave = (rec.cnpj_raiz_outorgante, rec.tipo_procuracao_codigo)
         atual = mais_recente.get(chave)
         if atual is None or rec.data_fim > atual:
             mais_recente[chave] = rec.data_fim
 
     suprimidos = set()
     for rec in vencidas:
-        chave = (completar_zeros(rec.cnpj_raiz_outorgante, TAMANHO_CNPJ_RAIZ),
-                 rec.tipo_procuracao_codigo)
+        chave = (rec.cnpj_raiz_outorgante, rec.tipo_procuracao_codigo)
         posterior = mais_recente.get(chave)
         if posterior and rec.data_fim and posterior > rec.data_fim:
             suprimidos.add(rec.protocolo)
