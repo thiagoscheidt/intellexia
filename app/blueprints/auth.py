@@ -1,6 +1,12 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
+import hashlib
+
+from flask import (Blueprint, current_app, render_template, request, redirect, url_for, session,
+                   jsonify, flash)
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from sqlalchemy import func
 from app.models import db, User, LawFirm
+from app.services import email_service
+from app.utils.urls import app_public_url
 from app.services.google_oauth import (google_client, google_login_enabled, google_redirect_uri,
                                        sanitize_picture_url)
 from app.utils.permissions import get_landing_endpoint
@@ -291,18 +297,122 @@ def register_post():
 def forgot_password():
     return render_template('forgot_password.html')
 
+# ── Recuperação de senha (FB-07) ────────────────────────────────────────
+# Antes a tela respondia "você receberá as instruções" sem enviar nada.
+#
+# O link não depende de tabela: carrega um token assinado com a SECRET_KEY, com
+# validade, e amarrado a um resumo do hash da senha atual. Trocou a senha, o hash
+# muda e o link morre — é isso que o torna de uso único, sem gravar nada.
+
+RECUPERACAO_SALT = 'redefinir-senha'
+RECUPERACAO_VALIDADE_SEGUNDOS = 60 * 60
+MIN_PASSWORD_LENGTH = 6  # mesma regra da troca de senha no perfil
+RECUPERACAO_MSG = ('Se o email existir em nosso sistema, você receberá as instruções '
+                   'para redefinir sua senha.')
+
+
+def _serializador_recuperacao():
+    return URLSafeTimedSerializer(current_app.secret_key, salt=RECUPERACAO_SALT)
+
+
+def _marca_da_senha(user):
+    """Resumo do hash atual. Não expõe o hash; só muda quando a senha muda."""
+    return hashlib.sha256((user.password_hash or '').encode('utf-8')).hexdigest()[:16]
+
+
+def gerar_token_redefinicao(user):
+    return _serializador_recuperacao().dumps({'uid': user.id, 'marca': _marca_da_senha(user)})
+
+
+def usuario_do_token(token, max_idade=RECUPERACAO_VALIDADE_SEGUNDOS):
+    """Usuário dono de um token ainda válido, ou ``None``.
+
+    Inválido é: assinatura errada, vencido, conta inexistente ou inativa, ou
+    senha já trocada desde que o link foi gerado.
+    """
+    try:
+        dados = _serializador_recuperacao().loads(token, max_age=max_idade)
+    except (SignatureExpired, BadSignature):
+        return None
+    if not isinstance(dados, dict):
+        return None
+    user = db.session.get(User, dados.get('uid'))
+    if not user or not user.is_active or not user.law_firm or not user.law_firm.is_active:
+        return None
+    if dados.get('marca') != _marca_da_senha(user):
+        return None
+    return user
+
+
+def _enviar_link_redefinicao(user):
+    link = app_public_url().rstrip('/') + url_for('auth.reset_password', token=gerar_token_redefinicao(user))
+    contexto = {'user': user, 'link': link, 'validade_minutos': RECUPERACAO_VALIDADE_SEGUNDOS // 60}
+    enviado = email_service.send_email(
+        user.email,
+        'Redefinição de senha — IntellexIA',
+        render_template('emails/redefinir_senha.html', **contexto),
+        text=render_template('emails/redefinir_senha.txt', **contexto),
+    )
+    if not enviado:
+        # A resposta à tela continua genérica (não revela quem tem conta); quem
+        # precisa saber que o e-mail não saiu é quem cuida do servidor.
+        logger.warning('Link de redefinição de senha não enviado (user_id=%s)', user.id)
+
+
 @auth_bp.route('/forgot-password', methods=['POST'])
 def forgot_password_post():
-    email = request.form.get('email')
-    
+    email = (request.form.get('email') or '').strip()
+
     if not email:
         return jsonify({"success": False, "message": "Email é obrigatório"})
-    
+
     email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
     if not email_pattern.match(email):
         return jsonify({"success": False, "message": "Email inválido"})
-    
-    return jsonify({"success": True, "message": "Se o email existir em nosso sistema, você receberá as instruções para redefinir sua senha."})
+
+    user = User.query.filter(func.lower(User.email) == email.lower()).first()
+    if user and user.is_active and user.law_firm and user.law_firm.is_active:
+        _enviar_link_redefinicao(user)
+
+    # Mesma resposta exista ou não a conta: a tela não pode servir para descobrir
+    # quais e-mails estão cadastrados.
+    return jsonify({"success": True, "message": RECUPERACAO_MSG})
+
+
+@auth_bp.route('/reset-password/<token>', methods=['GET'])
+def reset_password(token):
+    return render_template('reset_password.html', token=token, valido=usuario_do_token(token) is not None)
+
+
+@auth_bp.route('/reset-password/<token>', methods=['POST'])
+def reset_password_post(token):
+    user = usuario_do_token(token)
+    if user is None:
+        return jsonify({"success": False, "message": "Este link expirou ou já foi usado. Peça um novo."})
+
+    password = request.form.get('password') or ''
+    password_confirm = request.form.get('password_confirm') or ''
+
+    if not password or not password_confirm:
+        return jsonify({"success": False, "message": "Preencha a nova senha e a confirmação"})
+    if password != password_confirm:
+        return jsonify({"success": False, "message": "As senhas não coincidem"})
+    if len(password) < MIN_PASSWORD_LENGTH:
+        return jsonify({"success": False,
+                        "message": f"A senha deve ter pelo menos {MIN_PASSWORD_LENGTH} caracteres"})
+
+    try:
+        user.set_password(password)
+        user.updated_at = datetime.now()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception('Erro ao redefinir senha (user_id=%s)', user.id)
+        return jsonify({"success": False, "message": "Não foi possível redefinir a senha. Tente novamente."})
+
+    logger.info('Senha redefinida pelo link de recuperação (user_id=%s)', user.id)
+    return jsonify({"success": True, "message": "Senha redefinida. Você já pode entrar com a nova senha.",
+                    "redirect": url_for('auth.login')})
 
 @auth_bp.route('/logout')
 def logout():

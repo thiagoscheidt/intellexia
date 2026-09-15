@@ -23,7 +23,8 @@ def init_app_middlewares(app):
     def check_session():
         """Verifica autenticação antes de cada requisição"""
         public_endpoints = ['auth.login', 'auth.login_post', 'auth.register', 'auth.register_post',
-                           'auth.forgot_password', 'auth.forgot_password_post', 'static',
+                           'auth.forgot_password', 'auth.forgot_password_post',
+                           'auth.reset_password', 'auth.reset_password_post', 'static',
                            'auth.google_login', 'auth.google_callback',
                            'favicon']
         

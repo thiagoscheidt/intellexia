@@ -1,0 +1,42 @@
+{#
+  Link de redefinição de senha (FB-07).
+
+  Restrições de cliente de e-mail: sem Bootstrap, sem <style> externo — tudo em
+  tabelas com CSS inline.
+
+  Contexto: user, link (absoluto, montado com app_public_url), validade_minutos.
+#}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<body style="margin:0;padding:0;background:#f8f9fa;font-family:Arial,Helvetica,sans-serif;color:#212529;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8f9fa;padding:24px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+             style="max-width:520px;background:#ffffff;border:1px solid #dee2e6;border-radius:8px;">
+        <tr><td style="padding:28px 28px 8px;">
+          <div style="font-size:18px;font-weight:700;">Redefinição de senha</div>
+        </td></tr>
+        <tr><td style="padding:8px 28px;font-size:14px;line-height:1.6;">
+          Olá, {{ user.name }}.<br><br>
+          Recebemos um pedido para redefinir a senha da sua conta no IntellexIA.
+          Para escolher uma nova senha, use o botão abaixo.
+        </td></tr>
+        <tr><td style="padding:16px 28px;">
+          <a href="{{ link }}"
+             style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 22px;border-radius:6px;">
+            Escolher nova senha
+          </a>
+        </td></tr>
+        <tr><td style="padding:8px 28px 4px;font-size:12px;line-height:1.6;color:#6c757d;">
+          O link vale por {{ validade_minutos }} minutos e só pode ser usado uma vez.
+          Se o botão não funcionar, copie este endereço no navegador:<br>
+          <span style="word-break:break-all;color:#212529;">{{ link }}</span>
+        </td></tr>
+        <tr><td style="padding:12px 28px 28px;font-size:12px;line-height:1.6;color:#6c757d;">
+          Se não foi você que pediu, ignore este e-mail: sua senha continua a mesma.
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>

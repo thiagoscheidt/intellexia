@@ -1,0 +1,10 @@
+Olá, {{ user.name }}.
+
+Recebemos um pedido para redefinir a senha da sua conta no IntellexIA.
+Para escolher uma nova senha, abra o endereço abaixo:
+
+{{ link }}
+
+O link vale por {{ validade_minutos }} minutos e só pode ser usado uma vez.
+
+Se não foi você que pediu, ignore este e-mail: sua senha continua a mesma.
