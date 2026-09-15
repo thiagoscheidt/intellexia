@@ -16,6 +16,7 @@ rota usa um escritório descartável, removido no fim.
     uv run python tests/test_fap_review_ver_no_documento.py
 """
 
+import json
 import re
 import sys
 import tempfile
@@ -95,6 +96,29 @@ def test_trecho_que_atravessa_a_quebra_de_pagina():
           str(localizar_pagina_pdf(pdf, 'exclusão do benefício decorre do nexo')))
 
 
+def test_formulario_com_rotulo_e_valor_intercalados():
+    print('\n4b. PDF — formulário (CAT): rótulo e valor não saem juntos no texto')
+
+    # Medido numa CAT real: a extração do PDF intercala as colunas
+    # ("19 data do acidente 23 houve afastamento 27 07 2018"), e o modelo
+    # devolve o trecho montado ("19 - Data do Acidente: 27/07/2018"). A frase
+    # contínua não existe no PDF; as palavras existem, na mesma página.
+    pdf = _pdf([
+        'CAT - Comunicação de Acidente de Trabalho\n19 - Data do Acidente:\n23 - Houve afastamento?\n'
+        '27/07/2018\nSim\n22 - Tipo:\nUrbana\nTRAJETO\n25 - Local do acidente:\nVIA PUBLICA',
+        'Atestado médico\nCID S82\nEmitente: Dr. Fulano\nData: 28/07/2018',
+    ])
+    check('acha a página pelo conjunto de palavras',
+          localizar_pagina_pdf(pdf, '19 - Data do Acidente: 27/07/2018') == 1,
+          str(localizar_pagina_pdf(pdf, '19 - Data do Acidente: 27/07/2018')))
+    check('outro campo do mesmo formulário', localizar_pagina_pdf(pdf, '22 - Tipo: TRAJETO') == 1)
+    # Palavras soltas que existem nas duas páginas não bastam para escolher.
+    check('empate entre páginas não vira chute', localizar_pagina_pdf(pdf, 'Data 2018 acidente médico') is None,
+          str(localizar_pagina_pdf(pdf, 'Data 2018 acidente médico')))
+    check('metade das palavras não basta', localizar_pagina_pdf(pdf, 'Data do Acidente em Curitiba no Paraná') is None,
+          str(localizar_pagina_pdf(pdf, 'Data do Acidente em Curitiba no Paraná')))
+
+
 def test_nao_acha_nao_chuta():
     print('\n4. PDF — sem o trecho, não inventa página')
 
@@ -160,6 +184,35 @@ def test_rota_abre_o_pdf_na_pagina():
             r = client.get(f'{base}/preview', query_string={'trecho': 'não existe', 'destaque': 'Dos pedidos'})
             destino = r.headers.get('Location', '')
             check('sem trecho nem página, abre no início', '#page=' not in destino, destino)
+
+            # RPI-25: "ver trecho" nos dados extraídos dos anexos, pelo mesmo caminho.
+            print('\n5b. RPI-25 — "ver trecho" do dado extraído abre o anexo no lugar certo')
+            from docx import Document as _Docx
+            anexo_docx = Path(tempfile.mkdtemp()) / 'laudo.docx'
+            documento = _Docx()
+            documento.add_paragraph('Laudo pericial.')
+            documento.add_paragraph('Conclusão: incapacidade temporária de 30 dias.')
+            documento.save(anexo_docx)
+            exe = db.session.get(FapReviewExecution, exe_id)
+            exe.auxiliary_documents_json = json.dumps([
+                {'name': '2. CAT.pdf', 'path': str(pdf)},
+                {'name': 'laudo.docx', 'path': str(anexo_docx)},
+            ])
+            db.session.commit()
+            aux = f'/fap-review/revision/{exe_id}/document/aux'
+
+            r = client.get(f'{aux}/0/preview', query_string={'trecho': 'Dá-se à causa o valor'})
+            destino = r.headers.get('Location', '')
+            check('anexo PDF abre na página do trecho', r.status_code == 302 and destino.endswith(f'{aux}/0#page=3'),
+                  f'{r.status_code} {destino}')
+
+            r = client.get(f'{aux}/1/preview', query_string={'trecho': 'incapacidade temporária de 30 dias'})
+            html = r.data.decode('utf-8')
+            check('anexo DOCX abre o preview', r.status_code == 200 and 'docx-preview' in html, str(r.status_code))
+            check('com o trecho para grifar', 'incapacidade tempor' in html and 'excerpt' in html)
+
+            r = client.get(f'{aux}/9/preview', query_string={'trecho': 'x'})
+            check('anexo inexistente não quebra', r.status_code in (302, 404), str(r.status_code))
         finally:
             remover(firm_id)
 
@@ -178,12 +231,26 @@ def test_preview_docx():
     check('linha de tabela junta as células com espaço', "join(' ')" in preview)
 
 
+def test_botao_ver_trecho_nos_anexos():
+    print('\n7b. RPI-25 — dado extraído do anexo tem botão "ver trecho"')
+
+    resultado = (RAIZ / 'templates' / 'fap_review' / 'revision_result.html').read_text(encoding='utf-8')
+    check('botão no dado extraído', 'view-aux-excerpt-btn' in resultado)
+    check('só quando há trecho e arquivo', re.search(
+        r'\{% if fact\.source_excerpt and aux_link %\}\s*<button[^>]*view-aux-excerpt-btn', resultado) is not None)
+    check('abre no mesmo modal do "ver no documento"',
+          'data-preview-url' in resultado and 'dataset.previewUrl' in resultado)
+
+
 def test_modal_do_resultado():
     print('\n7. Modal — aviso de carregamento e PDF pela rota que localiza')
 
     resultado = (RAIZ / 'templates' / 'fap_review' / 'revision_result.html').read_text(encoding='utf-8')
     check('há aviso de carregamento sobre o documento', 'findingPageLoading' in resultado)
     check('o aviso sai quando o documento carrega', "findingPageIframe.addEventListener('load'" in resultado)
+    # Navegador que baixa PDF em vez de exibir nunca dispara o load do iframe.
+    check('o aviso tem prazo e não prende o modal', 'FINDING_PAGE_LOADING_MAX_MS' in resultado
+          and 'setTimeout(hideFindingPageLoading' in resultado)
     check('PDF passa pela rota que localiza a página',
           resultado.count('/preview?') >= 1 and '#page=${pageNumber}' not in resultado)
 
@@ -192,9 +259,11 @@ def main() -> int:
     test_acha_a_pagina_do_trecho()
     test_tolera_acento_caixa_e_pontuacao()
     test_trecho_que_atravessa_a_quebra_de_pagina()
+    test_formulario_com_rotulo_e_valor_intercalados()
     test_nao_acha_nao_chuta()
     test_rota_abre_o_pdf_na_pagina()
     test_preview_docx()
+    test_botao_ver_trecho_nos_anexos()
     test_modal_do_resultado()
 
     print('\n' + '=' * 62)

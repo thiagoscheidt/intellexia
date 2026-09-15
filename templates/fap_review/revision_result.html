@@ -1410,7 +1410,19 @@
                                             {% for fact in benefit.facts %}
                                             <div class="small">
                                                 <span class="fw-semibold">{{ fact.label }}:</span> {{ fact.value }}
-                                                {% if fact.source_excerpt %}
+                                                {# RPI-25: de onde o dado saiu, no próprio anexo — mesmo modal do
+                                                   "ver no documento" da petição. #}
+                                                {% if fact.source_excerpt and aux_link %}
+                                                <button type="button" class="btn btn-link btn-sm p-0 ms-1 align-baseline view-aux-excerpt-btn"
+                                                    data-bs-toggle="modal" data-bs-target="#findingPageModal"
+                                                    data-preview-url="{{ aux_link }}/preview"
+                                                    data-download-url="{{ aux_link }}"
+                                                    data-file-name="{{ doc.file_name }}"
+                                                    data-excerpt="{{ fact.source_excerpt }}"
+                                                    title="{{ fact.source_excerpt }}">
+                                                    <i class="bi bi-quote"></i> ver trecho
+                                                </button>
+                                                {% elif fact.source_excerpt %}
                                                 <i class="bi bi-quote text-muted" title="{{ fact.source_excerpt }}"></i>
                                                 {% endif %}
                                             </div>
@@ -2200,9 +2212,39 @@
         bindPetitionStatusButton('reopenPetitionButton', 'awaiting_adjustments',
             'Petição reaberta para ajustes.', 'Não foi possível reabrir a petição.');
 
+        // Aviso "Carregando documento…" sobre o iframe. Tem prazo: navegador que
+        // baixa PDF em vez de exibir nunca dispara o load do iframe, e sem prazo o
+        // aviso cobriria o modal para sempre.
+        const FINDING_PAGE_LOADING_MAX_MS = 12000;
+        let findingPageLoadingTimer = null;
+        function showFindingPageLoading() {
+            const loading = document.getElementById('findingPageLoading');
+            if (!loading) return;
+            loading.hidden = false;
+            clearTimeout(findingPageLoadingTimer);
+            findingPageLoadingTimer = setTimeout(hideFindingPageLoading, FINDING_PAGE_LOADING_MAX_MS);
+        }
+        function hideFindingPageLoading() {
+            clearTimeout(findingPageLoadingTimer);
+            const loading = document.getElementById('findingPageLoading');
+            if (loading) loading.hidden = true;
+        }
+
         if (findingPageModal) {
             findingPageModal.addEventListener('show.bs.modal', function (e) {
                 const btn = e.relatedTarget;
+
+                // RPI-25: "ver trecho" de um dado extraído abre o anexo, não a petição.
+                if (btn.dataset.previewUrl) {
+                    document.getElementById('findingPageSubtitle').textContent =
+                        `${btn.dataset.fileName} • Trecho: "${btn.dataset.excerpt}"`;
+                    document.getElementById('findingPageDownloadLink').href = btn.dataset.downloadUrl;
+                    showFindingPageLoading();
+                    document.getElementById('findingPageIframe').src =
+                        `${btn.dataset.previewUrl}?trecho=${encodeURIComponent(btn.dataset.excerpt || '')}`;
+                    return;
+                }
+
                 const findingNumber = btn.dataset.findingNumber;
                 const location = btn.dataset.location;
                 const executionId = document.querySelector('[data-execution-id]')?.dataset.executionId;
@@ -2220,8 +2262,7 @@
 
                 // O aviso cobre o iframe até o documento novo terminar de carregar:
                 // antes disso ele ainda mostra o do achado anterior.
-                const loading = document.getElementById('findingPageLoading');
-                if (loading) loading.hidden = false;
+                showFindingPageLoading();
 
                 // A mesma rota serve os dois formatos. DOCX vira preview HTML que grifa
                 // o trecho; PDF é redirecionado para o arquivo já na página do trecho,
@@ -2235,10 +2276,7 @@
             if (findingPageIframe) {
                 // O load do iframe dispara depois do load da página interna, quando o
                 // preview já reposicionou o trecho com as imagens carregadas.
-                findingPageIframe.addEventListener('load', function () {
-                    const loading = document.getElementById('findingPageLoading');
-                    if (loading) loading.hidden = true;
-                });
+                findingPageIframe.addEventListener('load', hideFindingPageLoading);
             }
         }
     });

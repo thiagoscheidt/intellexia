@@ -2404,7 +2404,8 @@ def revision_main_document_preview(execution_id: int):
         return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
 
     if path.suffix.lower() != '.docx':
-        return redirect(_url_do_pdf_na_pagina(execution_id, path))
+        return redirect(_url_na_pagina(
+            url_for('fap_review.revision_main_document', execution_id=execution_id), path))
 
     try:
         content_html = render_docx_preview_html(path)
@@ -2427,14 +2428,16 @@ def revision_main_document_preview(execution_id: int):
 _PAGINA_NA_LOCALIZACAO = re.compile(r'\b(?:p[áa]gina|page|p\.)\s*(\d+)', re.IGNORECASE)
 
 
-def _url_do_pdf_na_pagina(execution_id: int, path: Path) -> str:
-    """RPI-14: o PDF abre na página do trecho do achado.
+def _url_na_pagina(url: str, path: Path) -> str:
+    """RPI-14/RPI-25: o PDF abre na página do trecho.
 
     O visualizador de PDF do navegador não procura texto, só abre numa página.
-    Primeiro o trecho literal do achado; sem ele, a página citada na
-    localização; sem nenhum dos dois, o início — nunca uma página chutada.
+    Primeiro o trecho; sem ele, a página citada na localização; sem nenhum dos
+    dois, o início — nunca uma página chutada. Arquivo que não é PDF abre como
+    está.
     """
-    url = url_for('fap_review.revision_main_document', execution_id=execution_id)
+    if path.suffix.lower() != '.pdf':
+        return url
     pagina = localizar_pagina_pdf(path, request.args.get('trecho') or '')
     if pagina is None:
         citada = _PAGINA_NA_LOCALIZACAO.search(request.args.get('destaque') or '')
@@ -2484,6 +2487,52 @@ def revision_auxiliary_document(execution_id: int, doc_index: int):
         str(doc['path']),
         str(doc.get('name') or ''),
         'Arquivo auxiliar não foi encontrado no armazenamento.',
+    )
+
+
+@fap_review_bp.route('/revision/<int:execution_id>/document/aux/<int:doc_index>/preview', methods=['GET'])
+@require_law_firm
+def revision_auxiliary_document_preview(execution_id: int, doc_index: int):
+    """RPI-25: "ver trecho" de um dado extraído do anexo.
+
+    Mesmo caminho do "ver no documento" da petição: DOCX vira preview com o
+    trecho grifado; PDF abre na página do trecho; o resto abre como está.
+    """
+    law_firm_id = get_current_law_firm_id()
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    try:
+        aux_docs = json.loads(execution.auxiliary_documents_json or '[]')
+    except (TypeError, json.JSONDecodeError):
+        aux_docs = []
+
+    doc = aux_docs[doc_index] if 0 <= doc_index < len(aux_docs) and isinstance(aux_docs[doc_index], dict) else {}
+    path = Path(str(doc.get('path') or ''))
+    if not doc.get('path') or not path.is_file():
+        flash('Documento auxiliar não encontrado nesta execução.', 'warning')
+        return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
+
+    file_url = url_for('fap_review.revision_auxiliary_document', execution_id=execution_id, doc_index=doc_index)
+    if path.suffix.lower() != '.docx':
+        return redirect(_url_na_pagina(file_url, path))
+
+    try:
+        content_html = render_docx_preview_html(path)
+    except ValueError as e:
+        current_app.logger.warning('Falha no preview DOCX do anexo %s/%s: %s', execution_id, doc_index, e)
+        content_html = None
+
+    return render_template(
+        'fap_review/document_preview.html',
+        content_html=content_html,
+        document_filename=str(doc.get('name') or path.name),
+        highlight_text='',
+        highlight_excerpt=(request.args.get('trecho') or '').strip(),
+        download_url=file_url,
     )
 
 

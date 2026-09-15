@@ -163,6 +163,42 @@ def localizar_pagina_pdf(file_path, trecho):
         inicios.append(len(corrido))
         corrido += texto + ' '
     posicao = corrido.find(alvo)
-    if posicao < 0:
+    if posicao >= 0:
+        return max(numero for numero, inicio in enumerate(inicios, start=1) if inicio <= posicao)
+
+    return _pagina_pelas_palavras(alvo, paginas)
+
+
+# Fração das palavras do trecho que a página precisa conter para ser escolhida
+# quando a frase contínua não existe.
+_COBERTURA_MINIMA = 0.8
+
+
+def _pagina_pelas_palavras(alvo, paginas):
+    """Segunda tentativa, para formulário: a página com quase todas as palavras.
+
+    Medido numa CAT real: a extração do PDF intercala as colunas do formulário
+    ("19 data do acidente 23 houve afastamento 27 07 2018"), e o modelo devolve
+    o trecho montado como rótulo mais valor ("19 - Data do Acidente:
+    27/07/2018"). A frase contínua nunca existe no PDF, e 0 de 4 trechos eram
+    achados. As palavras existem, na mesma página.
+
+    Conta só palavra com dígito ou com 3 letras ou mais — "de", "do" e "a"
+    estão em qualquer página e não provam nada. Exige 80% das palavras e uma
+    página que vença as outras: empate é ambíguo, e aí devolve ``None``.
+    """
+    palavras = {p for p in alvo.split() if len(p) >= 3 or any(c.isdigit() for c in p)}
+    if len(palavras) < 2:
         return None
-    return max(numero for numero, inicio in enumerate(inicios, start=1) if inicio <= posicao)
+
+    coberturas = []
+    for numero, texto in enumerate(paginas, start=1):
+        presentes = set(texto.split())
+        coberturas.append((len(palavras & presentes) / len(palavras), numero))
+    coberturas.sort(reverse=True)
+
+    melhor, pagina = coberturas[0]
+    segunda = coberturas[1][0] if len(coberturas) > 1 else 0
+    if melhor < _COBERTURA_MINIMA or melhor == segunda:
+        return None
+    return pagina
