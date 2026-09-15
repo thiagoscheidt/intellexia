@@ -354,9 +354,11 @@ def _escritorio_com_uma_arquivada():
 
 
 def _remover_escritorio(firm_id):
-    from app.models import (db, LawFirm, User, UserPageVisit,
+    from app.models import (db, LawFirm, User, UserPageVisit, FapReviewSetting,
                             FapReviewAuditLog, FapReviewPetition, FapReviewExecution)
     db.session.rollback()
+    # A tela de treinamento cria as configurações padrão do escritório no acesso.
+    FapReviewSetting.query.filter_by(law_firm_id=firm_id).delete()
     # Abrir a tela pelo test_client grava visita de página (middleware de
     # auditoria de acesso) — sem apagá-la, a FK impede remover o usuário.
     UserPageVisit.query.filter_by(law_firm_id=firm_id).delete()
@@ -408,6 +410,59 @@ def test_rpi09_estatisticas_ignoram_arquivadas():
             _remover_escritorio(firm_id)
 
 
+# ── RPI-02 (parte do histórico) — lotes de treinamento sem corte em 12 ──
+
+def test_rpi02_historico_paginado_com_usuario():
+    print('\n23. RPI-02 — histórico de treinamento completo, paginado, com quem rodou')
+
+    from datetime import datetime, timedelta
+    from main import app
+    from app.models import db, LawFirm, User, FapReviewExecution
+
+    with app.app_context():
+        velho = LawFirm.query.filter_by(name='__TESTE_RPI09__').first()
+        if velho:
+            _remover_escritorio(velho.id)
+        firm = LawFirm(name='__TESTE_RPI09__', cnpj='00000000000191')
+        db.session.add(firm); db.session.flush()
+        user = User(law_firm_id=firm.id, name='Advogada Treino', email='rpi02@teste.invalid',
+                    password_hash='x', role='admin')
+        db.session.add(user); db.session.flush()
+        base = datetime(2026, 9, 1, 8, 0)
+        for i in range(25):
+            db.session.add(FapReviewExecution(
+                law_firm_id=firm.id, user_id=user.id, execution_type='training',
+                status='completed', main_document_filename=f'lote-{i:02d}.docx',
+                created_at=base + timedelta(hours=i)))
+        db.session.commit()
+        firm_id, user_id = firm.id, user.id
+
+        try:
+            client = app.test_client()
+            with client.session_transaction() as sessao:
+                sessao.update(user_id=user_id, law_firm_id=firm_id, user_role='admin', user_name='Advogada Treino')
+
+            html = client.get('/fap-review/training').data.decode('utf-8')
+            ids = re.findall(r'<td class="ps-3"><span class="text-muted small">(\d+)</span></td>', html)
+            check('primeira página não corta em 12', len(ids) == 20, str(len(ids)))
+            # O nome também está no cabeçalho (usuário logado): olha a célula da tabela.
+            check('mostra quem rodou o lote',
+                  re.search(r'class="[^"]*training-user[^"]*"[^>]*>\s*Advogada Treino', html) is not None)
+            check('tem paginação', 'page=2' in html)
+
+            html2 = client.get('/fap-review/training?page=2').data.decode('utf-8')
+            ids2 = re.findall(r'<td class="ps-3"><span class="text-muted small">(\d+)</span></td>', html2)
+            check('segunda página traz o resto', len(ids2) == 5, str(len(ids2)))
+            check('nenhum lote repetido nem perdido entre as páginas',
+                  len(set(ids) | set(ids2)) == 25 and not set(ids) & set(ids2))
+            check('mais recente primeiro', ids and int(ids[0]) == max(int(x) for x in ids + ids2))
+
+            r = client.get('/fap-review/training?page=99')
+            check('página além do fim não quebra', r.status_code in (200, 404), str(r.status_code))
+        finally:
+            _remover_escritorio(firm_id)
+
+
 def main() -> int:
     print('=' * 62)
     print('REMESSA R02 — regras do Revisor de Petições')
@@ -435,6 +490,7 @@ def main() -> int:
     test_rpi04_contagem_bate_com_o_banco()
     test_rpi09_botao_arquivar_na_lista()
     test_rpi09_estatisticas_ignoram_arquivadas()
+    test_rpi02_historico_paginado_com_usuario()
 
     print('\n' + '=' * 62)
     if _falhas:

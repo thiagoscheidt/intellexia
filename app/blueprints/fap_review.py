@@ -2891,21 +2891,34 @@ def training_compare():
         return redirect(url_for('fap_review.training_comparison', execution_id=execution.id))
 
 
+TRAINING_HISTORY_PER_PAGE = 20
+
+
 @fap_review_bp.route('/training')
 @require_law_firm
 @require_admin_user
 def training():
-    """Entrada do treinamento: a escolha do modo e a atividade recente."""
+    """Entrada do treinamento: a escolha do modo e o histórico dos lotes."""
     law_firm_id = get_current_law_firm_id()
     setting = _get_fap_setting(law_firm_id)
 
-    recent = FapReviewExecution.query.filter(
+    # RPI-02: histórico completo, paginado — antes cortava nos 12 mais recentes e
+    # o lote de semanas atrás, que é o que se quer rastrear, sumia da tela. O
+    # desempate pelo id é o que impede lote repetido ou pulado entre páginas
+    # quando dois têm o mesmo created_at.
+    page = request.args.get('page', 1, type=int)
+    history = FapReviewExecution.query.options(
+        joinedload(FapReviewExecution.user),
+    ).filter(
         FapReviewExecution.law_firm_id == law_firm_id,
         FapReviewExecution.execution_type.in_(_svc.TRAINING_EXECUTION_TYPES),
-    ).order_by(FapReviewExecution.created_at.desc()).limit(12).all()
+    ).order_by(
+        FapReviewExecution.created_at.desc(),
+        FapReviewExecution.id.desc(),
+    ).paginate(page=page, per_page=TRAINING_HISTORY_PER_PAGE, error_out=False)
 
     rows = []
-    for execution in recent:
+    for execution in history.items:
         payload = _load_training_payload(execution)
         # RPI-03: a coerência entre lotes não precisa de mecanismo novo — o
         # versionamento com ativação já existe. Precisa ficar visível: com que
@@ -2935,7 +2948,8 @@ def training():
                 **_svc.summarize_training_execution(execution.status, payload),
             })
 
-    return render_template('fap_review/training.html', setting=setting, comparison_rows=rows)
+    return render_template('fap_review/training.html', setting=setting, comparison_rows=rows,
+                           history=history)
 
 
 # ---------------------------------------------------------------------------

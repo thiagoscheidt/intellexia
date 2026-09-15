@@ -143,12 +143,14 @@
     {% endif %}
 
     <div class="card info-card">
-      <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-clock-history text-primary"></i> Atividade recente</div>
+      <div class="card-header d-flex align-items-center gap-2"><i class="bi bi-clock-history text-primary"></i> Histórico de treinamento
+        {% if history and history.total %}<span class="badge rounded-pill bg-light text-dark border ms-auto">{{ history.total }} lote{{ 's' if history.total != 1 }}</span>{% endif %}
+      </div>
       <div class="card-body p-0">
         {% if comparison_rows %}
         <div class="table-responsive"><table class="table table-hover mb-0">
           <thead class="table-light"><tr>
-            <th class="ps-3">#</th><th>Tipo</th><th>Assunto</th><th>Modelo</th><th>Situação</th><th>O que foi gravado</th><th>Data</th><th class="pe-3"></th>
+            <th class="ps-3">#</th><th>Tipo</th><th>Assunto</th><th>Modelo</th><th>Por</th><th>Situação</th><th>O que foi gravado</th><th>Data</th><th class="pe-3"></th>
           </tr></thead>
           <tbody>
             {% for row in comparison_rows %}
@@ -167,6 +169,7 @@
                       title="Rodou com um modelo diferente do configurado agora — os resultados podem divergir">outro</span>
                 {% endif %}
               </td>
+              <td class="small text-nowrap training-user">{{ row.execution.user.name if row.execution.user else '—' }}</td>
               <td>
                 <span class="badge rounded-pill bg-{{ row.situation.style }}-subtle text-{{ row.situation.style }}-emphasis border border-{{ row.situation.style }}-subtle px-2 py-1">
                   <i class="{{ row.situation.icon }} me-1"></i>{{ row.situation.label }}
@@ -189,6 +192,31 @@
             {% endfor %}
           </tbody>
         </table></div>
+        {% if history.pages > 1 %}
+        <div class="px-3 py-2 border-top d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <small class="text-muted">Página {{ history.page }} de {{ history.pages }}</small>
+          <nav aria-label="Paginação do histórico">
+            <ul class="pagination pagination-sm mb-0">
+              {% if history.has_prev %}
+              <li class="page-item"><a class="page-link" href="{{ url_for('fap_review.training', page=history.prev_num) }}" aria-label="Anterior"><i class="bi bi-chevron-left"></i></a></li>
+              {% endif %}
+              {% for page_num in history.iter_pages() %}
+              {% if page_num %}
+              <li class="page-item {% if page_num == history.page %}active{% endif %}"><a class="page-link" href="{{ url_for('fap_review.training', page=page_num) }}">{{ page_num }}</a></li>
+              {% else %}
+              <li class="page-item disabled"><span class="page-link">…</span></li>
+              {% endif %}
+              {% endfor %}
+              {% if history.has_next %}
+              <li class="page-item"><a class="page-link" href="{{ url_for('fap_review.training', page=history.next_num) }}" aria-label="Próxima"><i class="bi bi-chevron-right"></i></a></li>
+              {% endif %}
+            </ul>
+          </nav>
+        </div>
+        {% endif %}
+        {% elif history and history.page > 1 %}
+        <div class="text-center py-5 text-muted"><i class="bi bi-inbox fs-1 d-block mb-2"></i>Esta página não existe.
+          <a href="{{ url_for('fap_review.training') }}">Voltar ao início do histórico</a></div>
         {% else %}
         <div class="text-center py-5 text-muted"><i class="bi bi-inbox fs-1 d-block mb-2"></i>Nenhum treinamento ainda</div>
         {% endif %}
