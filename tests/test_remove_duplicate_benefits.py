@@ -127,6 +127,23 @@ def main():
         db.session.commit()
         check('fica a de documento mais novo', fica.id == 10, fica.id)
 
+        print('\n2b. status em português, como a importação grava em produção')
+        beneficio(20, '7000000020', first_instance_status='Indeferido',
+                  second_instance_status='Indeferido')
+        beneficio(21, '7000000020', first_instance_status='Indeferido')
+        historico(20, 22, datetime(2026, 1, 1))   # documento MAIS VELHO que o da outra
+        historico(21, 23, datetime(2026, 5, 1))
+        db.session.commit()
+        grupos, _ = rdb.agrupar(Benefit.query.filter_by(benefit_number='7000000020').all())
+        fica, _, _ = rdb.mesclar(grupos[0], rdb._referencias([20, 21]))
+        db.session.commit()
+        check('"Indeferido" na 2ª instância vence mesmo com documento mais velho', fica.id == 20,
+              fica.id)
+        check('pesos por vocabulário',
+              [rdb.peso_status(v) for v in (None, '', 'Pendente', 'Em análise', 'analyzing',
+                                            'Indeferido', 'Deferimento Parcial', 'approved')]
+              == [0, 0, 1, 2, 2, 3, 3, 3])
+
         # ── o que não é duplicata ────────────────────────────────────────
         print('\n3. o que não pode ser mesclado')
         beneficio(30, '7000000030', anos='2025')

@@ -36,6 +36,7 @@ Uso:
 import argparse
 import re
 import sys
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -64,8 +65,27 @@ CAMPOS_COMPLEMENTARES = (
     'fap_contestation_topic', 'fap_contestation_topics_json', 'justification', 'opinion',
 )
 
-# Quanto maior, mais adiantada a instância.
-_PESO_STATUS = {'approved': 3, 'rejected': 3, 'analyzing': 2, 'pending': 1}
+
+
+def peso_status(valor) -> int:
+    """Quanto maior, mais adiantada a instância.
+
+    O banco tem os dois vocabulários: o código normalizado ('rejected',
+    'analyzing') e o rótulo em português que a importação grava ('Indeferido',
+    'Em análise', 'Deferimento Parcial'). Por palavra-chave e sem acento, como o
+    `_map_status` do serviço — "indeferido" contém "deferido", mas os dois são
+    decisão, então a ordem não importa aqui.
+    """
+    texto = unicodedata.normalize('NFKD', str(valor or '')).encode('ascii', 'ignore').decode().lower()
+    if not texto.strip():
+        return 0
+    if any(p in texto for p in ('defer', 'approved', 'rejected', 'prejudic')):
+        return 3
+    if any(p in texto for p in ('analis', 'analy', 'review')):
+        return 2
+    if 'pend' in texto:
+        return 1
+    return 2  # status desconhecido mas preenchido: algo aconteceu na instância
 
 
 def _digitos(valor) -> str:
@@ -98,8 +118,8 @@ def _referencias(ids) -> dict:
 def chave_de_adiantamento(beneficio, referencia):
     """Ordena do menos para o mais adiantado; o último da lista fica."""
     return (
-        _PESO_STATUS.get(beneficio.second_instance_status, 0),
-        _PESO_STATUS.get(beneficio.first_instance_status, 0),
+        peso_status(beneficio.second_instance_status),
+        peso_status(beneficio.first_instance_status),
         referencia or datetime.min,
         beneficio.updated_at or datetime.min,
         -beneficio.id,  # empate total: fica o de menor id
