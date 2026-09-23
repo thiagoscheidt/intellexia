@@ -39,6 +39,21 @@ AGENT_REGISTRY = [
         'default': lambda: os.getenv('JUDICIAL_CONTESTATION_ANALYSIS_MODEL') or agents_config.DEFAULT_MODEL_ROBUST,
     },
     {
+        'key': 'jurisprudence_extractor',
+        'group': GROUP_READING,
+        'label': 'Leitura de decisões (Jurisprudência)',
+        'description': 'Lê cada sentença, acórdão ou embargos enviado à Base de Jurisprudência e '
+                       'classifica processo, resultado, teses e fundamentos.',
+        'default': lambda: os.getenv('JURISPRUDENCE_EXTRACTOR_MODEL') or agents_config.DEFAULT_MODEL_ROBUST,
+    },
+    {
+        'key': 'jurisprudence_thesis_mapper',
+        'group': GROUP_READING,
+        'label': 'Correspondência de teses (Jurisprudência)',
+        'description': 'Sugere a tese do catálogo para cada tese que aparece nas decisões da base.',
+        'default': lambda: os.getenv('JURISPRUDENCE_THESIS_MAPPER_MODEL') or agents_config.DEFAULT_MODEL_ROBUST,
+    },
+    {
         'key': 'generated_document',
         'group': GROUP_GENERATION,
         'label': 'Gerador de documentos',

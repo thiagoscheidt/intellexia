@@ -28,7 +28,10 @@ Instale o Chromium uma vez no servidor:
 
 Execução manual:
   uv run --with playwright python scripts/fap_navegar_portal.py
-  uv run --with playwright python scripts/fap_navegar_portal.py --screenshot /tmp/fap_navegar.png
+  uv run --with playwright python scripts/fap_navegar_portal.py --gravar /tmp/fap_navegacao   # vídeo + print de cada passo
+  uv run --with playwright python scripts/fap_navegar_portal.py --visivel                     # janela (precisa de tela)
+
+Os prints e o vídeo mostram dados de clientes — não compartilhe.
 
 Cron sugerido (a cada 10 minutos, com lock):
   */10 * * * * cd /sites/intellexia && flock -n /tmp/intellexia_fap_navegar.lock \
@@ -58,6 +61,7 @@ load_dotenv(project_root / '.env')
 BASE = 'https://fap-mps.dataprev.gov.br'
 DOMINIO = 'fap-mps.dataprev.gov.br'
 TIMEOUT_MS = 60_000
+VIEWPORT = {'width': 1366, 'height': 900}
 
 EXIT_OK = 0
 EXIT_ERRO = 1
@@ -121,17 +125,34 @@ def _resumo_lista(itens) -> str:
     return f'{len(itens)} ({a_cnpj} outorgadas a CNPJ)'
 
 
-def navegar(auth, screenshot: str | None) -> tuple[bool, str, str, list[str]]:
+def navegar(auth, screenshot: str | None = None, visivel: bool = False,
+            gravar: str | None = None) -> tuple[bool, str, str, list[str]]:
     from playwright.sync_api import sync_playwright
+
+    pasta = Path(gravar) if gravar else None
+    if pasta:
+        pasta.mkdir(parents=True, exist_ok=True)
+    acompanhar = visivel or pasta is not None
+
+    passo = 0
+
+    def registrar(page, nome: str) -> None:
+        nonlocal passo
+        if pasta:
+            passo += 1
+            page.screenshot(path=str(pasta / f'{passo:02d}_{nome}.png'))
 
     visitadas: list[str] = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # --visivel/--gravar são para acompanhar; o cron roda sem janela e sem pausa.
+        browser = p.chromium.launch(headless=not visivel, slow_mo=800 if acompanhar else 0)
         try:
             ctx = browser.new_context(
                 user_agent=auth.effective_user_agent,
                 locale='pt-BR',
-                viewport={'width': 1366, 'height': 900},
+                viewport=VIEWPORT,
+                record_video_dir=str(pasta) if pasta else None,
+                record_video_size=VIEWPORT if pasta else None,
             )
             ctx.add_cookies([
                 {'name': k, 'value': v, 'domain': DOMINIO, 'path': '/', 'secure': True}
@@ -148,10 +169,15 @@ def navegar(auth, screenshot: str | None) -> tuple[bool, str, str, list[str]]:
                 if resp_token.status in (401, 403):
                     raise SessaoExpirada(f'HTTP {resp_token.status} em /oauth2/token')
                 completa, vinculadas = _resumo_vinculadas(resp_token.json())
+                page.wait_for_load_state('networkidle')
+                registrar(page, 'inicio')
 
                 lista = 'não carregou'
                 for rotulo, href in ROTAS:
                     page.locator(MENU_PRINCIPAL).click()
+                    if acompanhar:
+                        page.wait_for_timeout(1000)
+                        registrar(page, f'menu_antes_de_{href.strip("/")}')
                     item = page.locator(f'a[href="{href}"]:visible').first
                     if href == '/procuracoes':
                         with page.expect_response(_eh_lista_procuracoes) as info_lista:
@@ -163,13 +189,20 @@ def navegar(auth, screenshot: str | None) -> tuple[bool, str, str, list[str]]:
                     else:
                         item.click()
                     page.wait_for_load_state('networkidle')
+                    if acompanhar:
+                        page.wait_for_timeout(2500)
+                    registrar(page, href.strip('/'))
                     visitadas.append(rotulo)
+                if visivel:
+                    page.wait_for_timeout(5000)
             finally:
                 if screenshot:
                     try:
                         page.screenshot(path=screenshot)
                     except Exception:
                         pass
+                # O vídeo só é gravado em disco quando o contexto fecha.
+                ctx.close()
         finally:
             browser.close()
 
@@ -180,6 +213,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description='Navega pelo portal FAP com a sessão do FAP_AUTH_JSON.')
     parser.add_argument('--screenshot', default=None,
                         help='grava um print da última tela neste caminho (contém dados de clientes)')
+    parser.add_argument('--visivel', action='store_true',
+                        help='abre o navegador com janela e em câmera lenta, para acompanhar (precisa de tela)')
+    parser.add_argument('--gravar', default=None, metavar='PASTA',
+                        help='grava vídeo (.webm) e um print de cada passo nesta pasta, em câmera lenta')
     args = parser.parse_args()
 
     if not os.environ.get('FAP_AUTH_JSON', '').strip():
@@ -197,7 +234,7 @@ def main() -> int:
         return EXIT_ERRO
 
     try:
-        completa, vinculadas, lista, visitadas = navegar(auth, args.screenshot)
+        completa, vinculadas, lista, visitadas = navegar(auth, args.screenshot, args.visivel, args.gravar)
     except SessaoExpirada as e:
         _log(f'ERRO: sessão FAP expirada ({e}). Atualize FAP_AUTH_JSON no .env.')
         return EXIT_SESSAO_EXPIRADA
@@ -208,6 +245,8 @@ def main() -> int:
     estado = 'completa' if completa else 'PARCIAL'
     _log(f"Sessão {estado} · empresas vinculadas: {vinculadas} · procurações: {lista} · "
          f"navegou: {' → '.join(visitadas)}")
+    if args.gravar:
+        _log(f'Vídeo e prints em {args.gravar}')
     return EXIT_OK
 
 

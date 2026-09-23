@@ -1,0 +1,288 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+{% from "jurisprudence/_macros.html" import res_pill, copiar, script_copiar %}
+
+{% block title %}Base de Jurisprudência - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jurisprudence.css') }}">
+{% endblock %}
+
+{% macro faceta(titulo, chave, contagem, nomes, selecionados, limite=8) %}
+{% set itens = contagem.items() | list %}
+{% for sel in selecionados if sel not in contagem %}{% set _ = itens.append((sel, 0)) %}{% endfor %}
+{% set itens = itens | sort(attribute='1', reverse=True) %}
+{% if itens %}
+<div class="facet">
+  <h6>{{ titulo }}</h6>
+  {% for valor, n in itens %}
+  {% set ligado = valor in selecionados %}
+  {% if loop.index == limite + 1 %}<div class="collapse" id="mais-{{ chave }}">{% endif %}
+  <a class="facet-item {{ 'on' if ligado }}" href="{{ alternar(chave, valor) }}">
+    <span class="rotulo"><i class="bi {{ 'bi-check2-square' if ligado else 'bi-square' }} me-1"></i>{{ nomes.get(valor, valor) if nomes else valor }}</span>
+    <span class="n">{{ n }}</span>
+  </a>
+  {% if loop.last and loop.length > limite %}</div>
+  <a class="small" data-bs-toggle="collapse" href="#mais-{{ chave }}" role="button">+ {{ loop.length - limite }} {{ 'itens' }}</a>
+  {% endif %}
+  {% endfor %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+<div class="jur-page">
+
+{% call page_hero(title='Base de Jurisprudência',
+                  subtitle='Decisões FAP classificadas por tese e resultado · ' ~ totais.decisoes ~ ' decisões em ' ~ totais.processos ~ ' processos',
+                  icon='bi bi-journal-bookmark') %}
+<div class="d-flex flex-column align-items-md-end gap-2">
+  <div class="d-flex flex-wrap gap-2">
+    <a href="{{ url_for('jurisprudence.teses') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left-right me-1"></i>Teses
+      {% if pendentes %}<span class="badge rounded-pill text-bg-warning ms-1" title="teses ainda sem correspondência no catálogo">{{ pendentes }}</span>{% endif %}
+    </a>
+    <a href="{{ url_for('jurisprudence.importar') }}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-file-earmark-spreadsheet me-1"></i>Importar planilha
+    </a>
+    <a href="{{ url_for('jurisprudence.enviar') }}" class="btn btn-primary btn-sm">
+      <i class="bi bi-cloud-arrow-up me-1"></i>Enviar decisões
+      {% if envios_ativos %}<span class="badge rounded-pill text-bg-light ms-1" title="lendo agora">{{ envios_ativos }}</span>{% endif %}
+    </a>
+  </div>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+      <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}">Painel de Processos</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Base de Jurisprudência</li>
+    </ol>
+  </nav>
+</div>
+{% endcall %}
+
+{% if not totais.decisoes %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-journal-bookmark display-4 text-body-secondary"></i>
+    <h5 class="mt-3">A base ainda está vazia</h5>
+    <p class="text-body-secondary mb-4">Traga a planilha que o escritório já tem (formato Banco Mestre FAP) ou envie os PDFs das decisões para a IA ler.</p>
+    <div class="d-flex flex-wrap justify-content-center gap-2">
+      <a href="{{ url_for('jurisprudence.importar') }}" class="btn btn-outline-primary"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Importar planilha</a>
+      <a href="{{ url_for('jurisprudence.enviar') }}" class="btn btn-primary"><i class="bi bi-cloud-arrow-up me-1"></i>Enviar decisões</a>
+    </div>
+  </div>
+</div>
+{% else %}
+
+<form method="get" class="card border-0 shadow-sm mb-3">
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-lg-9">
+        <div class="input-group">
+          <span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
+          <input type="search" name="q" value="{{ filtros.q }}" class="form-control" autofocus
+                 placeholder="Termo, nº do processo (com ou sem pontuação), empresa, relator ou precedente">
+        </div>
+        <div class="form-text">
+          <i class="bi bi-lightbulb me-1"></i>Todos os termos precisam aparecer. Sinônimos valem: <em>trajeto</em> também acha <em>percurso</em> e <em>in itinere</em>. Use aspas para uma expressão exata.
+        </div>
+      </div>
+      <div class="col-lg-3 d-grid align-self-start">
+        <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>Buscar</button>
+      </div>
+    </div>
+    {% for chave in ['tese', 'tese_livre', 'resultado', 'tribunal', 'tipo', 'uf', 'vigencia', 'de', 'ate', 'ordem', 'agrupar', 'livres'] %}
+      {% for v in request.args.getlist(chave) %}<input type="hidden" name="{{ chave }}" value="{{ v }}">{% endfor %}
+    {% endfor %}
+  </div>
+</form>
+
+<div class="row g-3">
+  <aside class="col-lg-3">
+    <div class="card border-0 shadow-sm"><div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <strong class="small">Filtros</strong>
+        {% if filtros.ativos %}<a href="{{ url_for('jurisprudence.index', q=filtros.q or None) }}" class="small">limpar</a>{% endif %}
+      </div>
+
+      {% if mostrar_livres %}
+        {{ faceta('Tese (como veio na decisão)', 'tese_livre', r.facetas.teses, r.nomes_teses, filtros.teses) }}
+      {% else %}
+        {{ faceta('Tese (catálogo)', 'tese', r.facetas.catalogo, r.nomes_catalogo, filtros.catalogo) }}
+      {% endif %}
+      <div class="form-check form-switch small mt-1 mb-2">
+        <input class="form-check-input" type="checkbox" id="sw-livres" {{ 'checked' if mostrar_livres }}
+               onchange="window.location='{{ com(livres=None if mostrar_livres else '1', tese=None, tese_livre=None) }}'">
+        <label class="form-check-label" for="sw-livres">ver teses como vieram na decisão</label>
+      </div>
+
+      <div class="facet">
+        <h6>Resultado</h6>
+        {% for chave, rotulo in resultado_labels.items() %}
+        {% set ligado = chave in filtros.resultados %}
+        <a class="facet-item {{ 'on' if ligado }}" href="{{ alternar('resultado', chave) }}">
+          <span>{{ res_pill(chave) }}</span><span class="n">{{ r.facetas.resultado.get(chave, 0) }}</span>
+        </a>
+        {% endfor %}
+      </div>
+
+      {{ faceta('Tribunal', 'tribunal', r.facetas.tribunal, None, filtros.tribunais, 6) }}
+
+      <div class="facet">
+        <h6>Instância</h6>
+        {% for chave, rotulo in tipo_labels.items() if r.facetas.tipo.get(chave) or chave in filtros.tipos %}
+        {% set ligado = chave in filtros.tipos %}
+        <a class="facet-item {{ 'on' if ligado }}" href="{{ alternar('tipo', chave) }}">
+          <span><i class="bi {{ 'bi-check2-square' if ligado else 'bi-square' }} me-1"></i>{{ rotulo }}</span>
+          <span class="n">{{ r.facetas.tipo.get(chave, 0) }}</span>
+        </a>
+        {% endfor %}
+      </div>
+
+      <form method="get" id="form-filtros-extras">
+        {% for chave in ['q', 'tese', 'tese_livre', 'resultado', 'tribunal', 'tipo', 'ordem', 'agrupar', 'livres'] %}
+          {% for v in request.args.getlist(chave) %}<input type="hidden" name="{{ chave }}" value="{{ v }}">{% endfor %}
+        {% endfor %}
+        <div class="facet">
+          <h6><label for="f-uf">UF de origem</label></h6>
+          <select class="form-select form-select-sm" name="uf" id="f-uf" onchange="this.form.submit()">
+            <option value="">Todas</option>
+            {% for uf, n in r.facetas.uf.items() | sort %}
+            <option value="{{ uf }}" {{ 'selected' if uf == filtros.uf }}>{{ uf }} ({{ n }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="facet">
+          <h6><label for="f-vig">Vigência FAP</label></h6>
+          <select class="form-select form-select-sm" name="vigencia" id="f-vig" onchange="this.form.submit()">
+            <option value="">Qualquer</option>
+            {% for ano in r.anos_vigencia %}
+            <option value="{{ ano }}" {{ 'selected' if ano == filtros.vigencia }}>{{ ano }}</option>
+            {% endfor %}
+          </select>
+          <div class="form-text">decisões cuja vigência inclui o ano (ex.: "2017 a 2021" vale para 2019)</div>
+        </div>
+        <div class="facet">
+          <h6>Julgada entre</h6>
+          <div class="d-flex flex-column gap-1">
+            <input type="month" name="de" class="form-control form-control-sm" style="min-width:0"
+                   value="{{ filtros.de.strftime('%Y-%m') if filtros.de else '' }}" aria-label="De">
+            <input type="month" name="ate" class="form-control form-control-sm" style="min-width:0"
+                   value="{{ filtros.ate.strftime('%Y-%m') if filtros.ate else '' }}" aria-label="Até">
+            <button class="btn btn-sm btn-outline-secondary">Aplicar período</button>
+          </div>
+        </div>
+      </form>
+    </div></div>
+  </aside>
+
+  <div class="col-lg-9">
+    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
+        <div>
+          <strong class="fs-5">{{ r.total }}</strong> {{ 'decisão' if r.total == 1 else 'decisões' }}
+          em <strong>{{ r.processos }}</strong> {{ 'processo' if r.processos == 1 else 'processos' }}
+          {% if not filtros.ativos %}<span class="text-body-secondary small">· toda a base</span>{% endif %}
+        </div>
+        <div class="small text-body-secondary">Como tem decidido</div>
+      </div>
+      {% if r.total %}
+      <div class="exito mb-2" role="img" aria-label="Distribuição dos resultados">
+        {% for e in r.exito if e.n %}
+        <a href="{{ alternar('resultado', e.resultado) }}" class="{{ e.resultado }}" style="width: {{ '%.2f' | format(e.pct) }}%"
+           title="{{ e.rotulo }} · {{ e.n }}"></a>
+        {% endfor %}
+      </div>
+      <div class="d-flex flex-wrap gap-3 small">
+        {% for e in r.exito %}
+        <a class="exito-legenda" href="{{ alternar('resultado', e.resultado) }}">
+          <span class="dot" style="background: var(--jur-{{ {'favoravel': 'fav', 'parcial': 'par', 'desfavoravel': 'des'}[e.resultado] }})"></span>{{ e.rotulo }}
+          <strong>{{ e.n }}</strong> ({{ '%.0f' | format(e.pct) }}%)
+        </a>
+        {% endfor %}
+        <span class="ms-auto text-body-secondary"><i class="bi bi-info-circle me-1"></i>contado por decisão, na visão da empresa</span>
+      </div>
+      {% endif %}
+    </div></div>
+
+    {% if r.total %}
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <div class="btn-group btn-group-sm" role="group" aria-label="Agrupamento">
+        <a class="btn btn-outline-secondary {{ 'active' if filtros.agrupar == 'processo' }}" href="{{ com(agrupar=None) }}">
+          <i class="bi bi-diagram-2 me-1"></i>Por processo</a>
+        <a class="btn btn-outline-secondary {{ 'active' if filtros.agrupar == 'decisao' }}" href="{{ com(agrupar='decisao') }}">
+          <i class="bi bi-list-ul me-1"></i>Por decisão</a>
+      </div>
+      <select class="form-select form-select-sm w-auto" aria-label="Ordenar"
+              onchange="window.location=this.value">
+        {% for chave, rotulo in ordens.items() %}
+        <option value="{{ com(ordem=None if chave == 'recentes' else chave) }}" {{ 'selected' if filtros.ordem == chave }}>{{ rotulo }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% for c in r.cartoes %}
+    <div class="card border-0 shadow-sm proc-card mb-3"><div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+        <div>
+          <span class="proc-num">{{ c.processo or 'sem número de processo' }}</span>
+          {% if c.parte_autora %}<span class="text-body-secondary">·</span> <strong>{{ c.parte_autora }}</strong>{% endif %}
+          {% if c.vigencia %}<span class="badge text-bg-light border ms-1">FAP {{ c.vigencia }}</span>{% endif %}
+        </div>
+        {% if c.virada %}<span class="virada"><i class="bi bi-arrow-up-right-circle-fill me-1"></i>virou no acórdão</span>{% endif %}
+      </div>
+
+      <div class="trilha mb-3">
+        {% for d in c.trilha %}
+        <a class="trilha-step {{ 'achada' if d.id in c.achadas and c.trilha | length > 1 }}" href="{{ url_for('jurisprudence.decisao', decision_id=d.id) }}">
+          <div class="t-tipo">{{ d.tipo_documento | jur_tipo }}</div>
+          <div class="t-org">{{ ' · '.join([d.tribunal, d.orgao_julgador] | select | list) if d.tipo_documento != 'sentenca' else (d.orgao_julgador or d.tribunal or '—') }}</div>
+          <div class="d-flex justify-content-between align-items-center gap-2 mt-1">
+            <span class="t-data">{{ d.data_julgamento.strftime('%d/%m/%Y') if d.data_julgamento else 'sem data' }}</span>
+            {{ res_pill(d.resultado) }}
+          </div>
+        </a>
+        {% endfor %}
+        {% for faltando in c.faltando %}
+        <div class="trilha-step vazio"><div class="t-tipo">{{ faltando }}</div><div class="t-org">não consta na base</div></div>
+        {% endfor %}
+      </div>
+
+      {% if c.teses %}
+      <div class="mb-2">
+        {% for t in c.teses[:6] %}<a class="tese-chip {{ 'destaque' if t.destaque }} text-decoration-none" href="{{ com(tese_livre=t.id, livres='1', tese=None) }}" title="filtrar por esta tese">{{ t.nome }}</a>{% endfor %}
+        {% if c.teses | length > 6 %}<span class="tese-chip">+{{ c.teses | length - 6 }}</span>{% endif %}
+      </div>
+      {% endif %}
+      {% if c.trecho %}<p class="snippet mb-2">{{ c.trecho | safe }}</p>{% endif %}
+      <div class="d-flex flex-wrap justify-content-end gap-2">
+        {{ copiar(c.citacao) }}
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('jurisprudence.decisao', decision_id=c.destaque.id) }}">
+          <i class="bi bi-eye me-1"></i>Ver {{ 'decisões' if c.trilha | length > 1 else 'decisão' }}</a>
+      </div>
+    </div></div>
+    {% endfor %}
+
+    {% if r.paginas > 1 %}
+    <nav aria-label="Páginas"><ul class="pagination pagination-sm justify-content-center flex-wrap">
+      <li class="page-item {{ 'disabled' if r.pagina == 1 }}"><a class="page-link" href="{{ com(pagina=r.pagina - 1) }}">‹</a></li>
+      {% for p in range(1, r.paginas + 1) if p == 1 or p == r.paginas or (p - r.pagina) | abs <= 2 %}
+        {% if not loop.first and p - loop.previtem > 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+        <li class="page-item {{ 'active' if p == r.pagina }}"><a class="page-link" href="{{ com(pagina=p) }}">{{ p }}</a></li>
+      {% endfor %}
+      <li class="page-item {{ 'disabled' if r.pagina == r.paginas }}"><a class="page-link" href="{{ com(pagina=r.pagina + 1) }}">›</a></li>
+    </ul></nav>
+    {% endif %}
+
+    {% else %}
+    <div class="card border-0 shadow-sm"><div class="card-body text-center py-5">
+      <i class="bi bi-search display-5 text-body-secondary"></i>
+      <h5 class="mt-3">Nenhuma decisão com esses critérios</h5>
+      <p class="text-body-secondary mb-0">Tire um filtro ou troque um termo. Todos os termos da busca precisam aparecer na decisão.</p>
+    </div></div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+</div>
+{{ script_copiar() }}
+{% endblock %}

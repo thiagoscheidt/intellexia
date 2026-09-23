@@ -21,6 +21,7 @@ from app.blueprints.disputes_center import disputes_center_bp
 from app.blueprints.fap_panel import fap_panel_bp
 from app.blueprints.fap_review import fap_review_bp
 from app.blueprints.impugnacao_references import impugnacao_references_bp
+from app.blueprints.jurisprudence import jurisprudence_bp
 from app.blueprints.docs import docs_bp
 from app.blueprints.communications import communications_bp
 from app.blueprints.dou import dou_bp
@@ -46,6 +47,7 @@ __all__ = [
     'fap_panel_bp',
     'fap_review_bp',
     'impugnacao_references_bp',
+    'jurisprudence_bp',
     'docs_bp',
     'communications_bp',
     'dou_bp',

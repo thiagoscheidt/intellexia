@@ -1,0 +1,215 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+{% from "jurisprudence/_macros.html" import res_pill, copiar, script_copiar %}
+
+{% block title %}{{ d.tipo_documento | jur_tipo }} {{ d.processo or '' }} - Base de Jurisprudência{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jurisprudence.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="jur-page">
+
+{% set titulo = (d.tipo_documento | jur_tipo(False)) ~ ((' · ' ~ d.tribunal) if d.tribunal else '') ~ ((' · ' ~ d.orgao_julgador) if d.orgao_julgador and d.tipo_documento != 'sentenca' else '') %}
+{% call page_hero(title=titulo,
+                  subtitle=(d.processo or 'sem número de processo') ~ ((' · ' ~ d.parte_autora) if d.parte_autora else ''),
+                  icon='bi bi-bank') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}">Painel de Processos</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('jurisprudence.index') }}">Base de Jurisprudência</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ d.tipo_documento | jur_tipo }}</li>
+  </ol>
+</nav>
+{% endcall %}
+
+{% if em_leitura %}
+<div class="alert alert-info d-flex align-items-center gap-2" id="aviso-leitura">
+  <span class="spinner-border spinner-border-sm"></span>
+  A IA está relendo esta decisão. A página atualiza quando terminar; o que foi corrigido à mão fica como está.
+</div>
+<script>setTimeout(() => window.location.reload(), 8000);</script>
+{% endif %}
+
+{% if trilha | length > 1 %}
+<div class="card border-0 shadow-sm mb-3"><div class="card-body py-2">
+  <div class="d-flex flex-wrap align-items-center gap-2 small">
+    <span class="text-body-secondary me-1">Neste processo:</span>
+    {% for irma in trilha %}
+      {% if not loop.first %}<i class="bi bi-chevron-right text-body-secondary"></i>{% endif %}
+      {% if irma.id == d.id %}
+      <span class="btn btn-sm btn-primary disabled opacity-100">{{ irma.tipo_documento | jur_tipo }}
+        · {{ irma.data_julgamento.strftime('%d/%m/%Y') if irma.data_julgamento else 'sem data' }}</span>
+      {% else %}
+      <a href="{{ url_for('jurisprudence.decisao', decision_id=irma.id) }}" class="btn btn-sm btn-outline-secondary">
+        {{ irma.tipo_documento | jur_tipo }} · {{ irma.data_julgamento.strftime('%d/%m/%Y') if irma.data_julgamento else 'sem data' }}
+        {{ res_pill(irma.resultado, extra='ms-1') }}</a>
+      {% endif %}
+    {% endfor %}
+  </div>
+</div></div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-body border-0 pt-3">
+        <ul class="nav nav-tabs card-header-tabs" role="tablist">
+          <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#t-resumo" type="button">Resumo</button></li>
+          {% if d.ementa %}<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-ementa" type="button">Ementa</button></li>{% endif %}
+          {% set n_args = (d.argumentos_acolhidos_json or []) | length + (d.argumentos_rejeitados_json or []) | length %}
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-args" type="button">Argumentos <span class="badge text-bg-light border">{{ n_args }}</span></button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-fund" type="button">Fundamentos <span class="badge text-bg-light border">{{ (d.fundamentos_json or []) | length }}</span></button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-prec" type="button">Precedentes <span class="badge text-bg-light border">{{ precedentes | length }}</span></button></li>
+          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-pdf" type="button"><i class="bi bi-file-earmark-pdf"></i> PDF</button></li>
+        </ul>
+      </div>
+      <div class="card-body tab-content">
+        <div class="tab-pane fade show active" id="t-resumo">
+          {% if d.motivo_resultado %}
+          <div class="secao-titulo mb-1">Por que esse resultado</div>
+          <p>{{ d.motivo_resultado }}</p>
+          {% endif %}
+          {% if d.resumo_executivo %}
+          <div class="secao-titulo mb-1 mt-4">A história do caso</div>
+          <p class="mb-0" style="white-space: pre-line">{{ d.resumo_executivo }}</p>
+          {% endif %}
+          {% if not d.motivo_resultado and not d.resumo_executivo %}<p class="text-body-secondary mb-0">Sem resumo registrado.</p>{% endif %}
+        </div>
+
+        {% if d.ementa %}
+        <div class="tab-pane fade" id="t-ementa">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+            {% if d.ementa_modo == 'resumo' %}
+            <span class="badge text-bg-warning"><i class="bi bi-exclamation-triangle me-1"></i>resumo — não é transcrição</span>
+            {% else %}
+            <span class="badge text-bg-light border"><i class="bi bi-quote me-1"></i>transcrição</span>
+            {% endif %}
+            {{ copiar(d.ementa, 'Copiar ementa') }}
+          </div>
+          <div class="ementa">{{ d.ementa }}</div>
+        </div>
+        {% endif %}
+
+        <div class="tab-pane fade" id="t-args">
+          <div class="row g-4">
+            <div class="col-md-6">
+              <div class="small fw-bold mb-1" style="color: var(--jur-fav)"><i class="bi bi-check-circle-fill me-1"></i>Acolhidos</div>
+              <ul class="lista-linhas">
+                {% for a in d.argumentos_acolhidos_json or [] %}<li>{{ a }}</li>{% else %}<li class="text-body-secondary">nenhum registrado</li>{% endfor %}
+              </ul>
+            </div>
+            <div class="col-md-6">
+              <div class="small fw-bold mb-1" style="color: var(--jur-des)"><i class="bi bi-x-circle-fill me-1"></i>Rejeitados</div>
+              <ul class="lista-linhas">
+                {% for a in d.argumentos_rejeitados_json or [] %}<li>{{ a }}</li>{% else %}<li class="text-body-secondary">nenhum registrado</li>{% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-pane fade" id="t-fund">
+          <ul class="lista-linhas">
+            {% for f in d.fundamentos_json or [] %}<li>{{ f }}</li>{% else %}<li class="text-body-secondary">nenhum registrado</li>{% endfor %}
+          </ul>
+        </div>
+
+        <div class="tab-pane fade" id="t-prec">
+          <ul class="lista-linhas">
+            {% for p in precedentes %}
+            <li class="d-flex justify-content-between gap-2">
+              <span>{{ p.texto }}</span>
+              {% if p.decision_id %}<a class="small text-nowrap" href="{{ url_for('jurisprudence.decisao', decision_id=p.decision_id) }}"><i class="bi bi-box-arrow-in-up-right me-1"></i>está na base</a>{% endif %}
+            </li>
+            {% else %}<li class="text-body-secondary">nenhum citado</li>{% endfor %}
+          </ul>
+        </div>
+
+        <div class="tab-pane fade" id="t-pdf">
+          {% if pdf_disponivel %}
+          <div class="ratio" style="--bs-aspect-ratio: 120%">
+            <iframe src="{{ url_for('jurisprudence.decisao_pdf', decision_id=d.id) }}" title="PDF da decisão" class="rounded border"></iframe>
+          </div>
+          {% else %}
+          <div class="text-center text-body-secondary py-4">
+            <i class="bi bi-file-earmark-pdf display-5"></i>
+            <p class="mt-2 mb-3">O PDF desta decisão não está no sistema.
+              {% if d.drive_link %}<br>Ela veio da planilha, e o arquivo está no Drive do escritório.{% endif %}</p>
+            {% if d.drive_link %}<a class="btn btn-sm btn-outline-secondary mb-3" href="{{ d.drive_link }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir no Drive</a>{% endif %}
+          </div>
+          {% endif %}
+          <form method="post" enctype="multipart/form-data" action="{{ url_for('jurisprudence.anexar_pdf', decision_id=d.id) }}"
+                class="d-flex flex-wrap gap-2 align-items-center mt-2">
+            <input type="file" name="arquivo" accept="application/pdf,.pdf" class="form-control form-control-sm" style="max-width: 360px" required>
+            <button class="btn btn-sm btn-outline-primary">{{ 'Trocar PDF' if pdf_disponivel else 'Anexar PDF' }}</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+      <div class="mb-3">{{ res_pill(d.resultado, False, 'fs-6') }}</div>
+      <dl class="dec-meta mb-0">
+        <dt>Tribunal · órgão</dt><dd>{{ ' · '.join([d.tribunal, d.orgao_julgador] | select | list) or '—' }}{% if d.uf %} <span class="text-body-secondary">({{ d.uf }})</span>{% endif %}</dd>
+        {% if d.relator %}<dt>{{ 'Juiz(a)' if d.tipo_documento == 'sentenca' else 'Relator(a)' }}</dt><dd>{{ d.relator }}</dd>{% endif %}
+        {% if d.classe_processual %}<dt>Classe</dt><dd>{{ d.classe_processual }}</dd>{% endif %}
+        <dt>Julgado em</dt><dd>{{ d.data_julgamento.strftime('%d/%m/%Y') if d.data_julgamento else '—' }}</dd>
+        <dt>Vigência FAP</dt><dd>{{ d.vigencia_texto or '—' }}</dd>
+        <dt>Teses</dt>
+        <dd>
+          {% for t in d.theses %}<a class="tese-chip text-decoration-none" href="{{ url_for('jurisprudence.index', tese_livre=t.id, livres='1') }}">{{ t.name }}</a>{% else %}—{% endfor %}
+          {% if catalogo %}
+          <div class="small text-body-secondary mt-1">no catálogo:
+            {% for c in catalogo %}<span class="cat-chip">{{ c.name }}</span>{% endfor %}</div>
+          {% elif d.theses %}
+          <div class="small text-body-secondary mt-1">nenhuma ligada ao catálogo ainda ·
+            <a href="{{ url_for('jurisprudence.teses') }}">ligar</a></div>
+          {% endif %}
+        </dd>
+      </dl>
+    </div></div>
+
+    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+      <div class="small fw-bold mb-2"><i class="bi bi-clipboard me-1"></i>Citação pronta</div>
+      <div class="citacao-box mb-2">{{ citacao }}</div>
+      <div class="d-flex flex-wrap gap-2">
+        {{ copiar(citacao, 'Copiar citação', 'btn btn-sm btn-outline-primary flex-fill') }}
+        {% if d.ementa and d.ementa_modo != 'resumo' %}
+        {{ copiar(d.ementa ~ '\n' ~ citacao, 'Ementa + citação', 'btn btn-sm btn-outline-secondary flex-fill') }}
+        {% endif %}
+      </div>
+    </div></div>
+
+    <div class="card border-0 shadow-sm"><div class="card-body small">
+      <div class="text-body-secondary mb-2"><i class="bi bi-clock-history me-1"></i>Origem</div>
+      <div>
+        {% if d.source == 'planilha' %}Importada da planilha{% if d.original_filename %} ({{ d.original_filename }}){% endif %}
+        {% else %}Lida pela IA do PDF <strong>{{ d.original_filename or '' }}</strong>{% if d.extraction_model %} · {{ d.extraction_model }}{% endif %}{% endif %}
+        em {{ d.created_at.strftime('%d/%m/%Y') }}{% if d.created_by %} por {{ d.created_by.name }}{% endif %}.
+      </div>
+      {% if d.manual_fields_json %}
+      <div class="mt-2 text-body-secondary"><i class="bi bi-pencil-square me-1"></i>{{ d.manual_fields_json | length }} campo(s) corrigido(s) à mão — a IA não os sobrescreve.</div>
+      {% endif %}
+      <div class="d-flex flex-wrap gap-2 mt-3">
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('jurisprudence.editar', decision_id=d.id) }}"><i class="bi bi-pencil me-1"></i>Corrigir dados</a>
+        <form method="post" action="{{ url_for('jurisprudence.reprocessar', decision_id=d.id) }}">
+          <button class="btn btn-sm btn-outline-secondary" {{ 'disabled' if not pdf_disponivel or em_leitura }}
+                  title="{{ 'Anexe o PDF para reprocessar' if not pdf_disponivel else 'Ler o PDF de novo com a IA' }}">
+            <i class="bi bi-arrow-repeat me-1"></i>Reprocessar com IA</button>
+        </form>
+        {% if session.get('user_role') == 'admin' %}
+        <form method="post" action="{{ url_for('jurisprudence.excluir', decision_id=d.id) }}"
+              onsubmit="return confirm('Excluir esta decisão da base? Não dá para desfazer.')">
+          <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Excluir</button>
+        </form>
+        {% endif %}
+      </div>
+    </div></div>
+  </div>
+</div>
+</div>
+{{ script_copiar() }}
+{% endblock %}

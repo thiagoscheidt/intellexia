@@ -1,0 +1,87 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Corrigir decisão - Base de Jurisprudência{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jurisprudence.css') }}">
+{% endblock %}
+
+{% macro linhas(lista) %}{{ (lista or []) | join('\n') }}{% endmacro %}
+{% macro manual(campo) %}{% if campo in (d.manual_fields_json or []) %}<span class="badge text-bg-light border ms-1" title="corrigido à mão — a IA não sobrescreve">à mão</span>{% endif %}{% endmacro %}
+
+{% block content %}
+<div class="jur-page">
+{% call page_hero(title='Corrigir dados da decisão', subtitle=(d.processo or 'sem número de processo'), icon='bi bi-pencil-square') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('jurisprudence.index') }}">Base de Jurisprudência</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('jurisprudence.decisao', decision_id=d.id) }}">{{ d.tipo_documento | jur_tipo }}</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Corrigir</li>
+  </ol>
+</nav>
+{% endcall %}
+
+<div class="alert alert-light border small">
+  <i class="bi bi-shield-check me-1"></i>O campo que você mudar aqui fica protegido: reprocessar a decisão com a IA não o sobrescreve.
+  Listas (teses, fundamentos, argumentos, precedentes) têm <strong>um item por linha</strong>.
+</div>
+
+<form method="post" class="card border-0 shadow-sm"><div class="card-body">
+  <div class="row g-3">
+    <div class="col-md-5"><label class="form-label">Processo {{ manual('processo') }}</label>
+      <input name="processo" class="form-control" value="{{ d.processo or '' }}"></div>
+    <div class="col-md-3"><label class="form-label">Instância {{ manual('tipo_documento') }}</label>
+      <select name="tipo_documento" class="form-select">
+        {% for k, v in tipo_labels.items() %}<option value="{{ k }}" {{ 'selected' if d.tipo_documento == k }}>{{ v }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-4"><label class="form-label">Resultado para a empresa {{ manual('resultado') }}</label>
+      <select name="resultado" class="form-select">
+        {% for k, v in resultado_labels.items() %}<option value="{{ k }}" {{ 'selected' if d.resultado == k }}>{{ v }}</option>{% endfor %}
+      </select></div>
+
+    <div class="col-md-2"><label class="form-label">Tribunal {{ manual('tribunal') }}</label>
+      <input name="tribunal" class="form-control" value="{{ d.tribunal or '' }}" placeholder="TRF4"></div>
+    <div class="col-md-5"><label class="form-label">Órgão julgador {{ manual('orgao_julgador') }}</label>
+      <input name="orgao_julgador" class="form-control" value="{{ d.orgao_julgador or '' }}" placeholder="2ª Turma · 2ª Vara Federal de Blumenau"></div>
+    <div class="col-md-1"><label class="form-label">UF {{ manual('uf') }}</label>
+      <input name="uf" class="form-control" maxlength="2" value="{{ d.uf or '' }}"></div>
+    <div class="col-md-4"><label class="form-label">Data do julgamento {{ manual('data_julgamento') }}</label>
+      <input type="date" name="data_julgamento" class="form-control" value="{{ d.data_julgamento.isoformat() if d.data_julgamento else '' }}"></div>
+
+    <div class="col-md-6"><label class="form-label">Relator(a) / juiz(a) {{ manual('relator') }}</label>
+      <input name="relator" class="form-control" value="{{ d.relator or '' }}"></div>
+    <div class="col-md-6"><label class="form-label">Classe processual {{ manual('classe_processual') }}</label>
+      <input name="classe_processual" class="form-control" value="{{ d.classe_processual or '' }}" placeholder="Apelação Cível"></div>
+
+    <div class="col-md-8"><label class="form-label">Parte autora {{ manual('parte_autora') }}</label>
+      <input name="parte_autora" class="form-control" value="{{ d.parte_autora or '' }}"></div>
+    <div class="col-md-4"><label class="form-label">Vigência FAP {{ manual('vigencia_texto') }}</label>
+      <input name="vigencia_fap" class="form-control" value="{{ d.vigencia_texto or '' }}" placeholder="2017 a 2021"></div>
+
+    <div class="col-12"><label class="form-label">Por que esse resultado {{ manual('motivo_resultado') }}</label>
+      <textarea name="motivo_resultado" class="form-control" rows="3">{{ d.motivo_resultado or '' }}</textarea></div>
+    <div class="col-12"><label class="form-label">Resumo do caso {{ manual('resumo_executivo') }}</label>
+      <textarea name="resumo_executivo" class="form-control" rows="5">{{ d.resumo_executivo or '' }}</textarea></div>
+    <div class="col-12"><label class="form-label">Ementa {{ manual('ementa') }}</label>
+      <textarea name="ementa" class="form-control" rows="6">{{ d.ementa or '' }}</textarea></div>
+
+    <div class="col-md-6"><label class="form-label">Teses {{ manual('teses_brutas_json') }}</label>
+      <textarea name="teses" class="form-control" rows="5">{{ linhas(d.teses_brutas_json) }}</textarea></div>
+    <div class="col-md-6"><label class="form-label">Precedentes citados {{ manual('precedentes_json') }}</label>
+      <textarea name="precedentes" class="form-control" rows="5">{{ linhas(d.precedentes_json) }}</textarea></div>
+    <div class="col-md-6"><label class="form-label">Argumentos acolhidos {{ manual('argumentos_acolhidos_json') }}</label>
+      <textarea name="argumentos_acolhidos" class="form-control" rows="5">{{ linhas(d.argumentos_acolhidos_json) }}</textarea></div>
+    <div class="col-md-6"><label class="form-label">Argumentos rejeitados {{ manual('argumentos_rejeitados_json') }}</label>
+      <textarea name="argumentos_rejeitados" class="form-control" rows="5">{{ linhas(d.argumentos_rejeitados_json) }}</textarea></div>
+    <div class="col-12"><label class="form-label">Fundamentos {{ manual('fundamentos_json') }}</label>
+      <textarea name="fundamentos" class="form-control" rows="5">{{ linhas(d.fundamentos_json) }}</textarea></div>
+  </div>
+</div>
+<div class="card-footer bg-body d-flex justify-content-between">
+  <a class="btn btn-outline-secondary" href="{{ url_for('jurisprudence.decisao', decision_id=d.id) }}">Cancelar</a>
+  <button class="btn btn-success"><i class="bi bi-check2 me-1"></i>Salvar correções</button>
+</div>
+</form>
+</div>
+{% endblock %}

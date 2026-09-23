@@ -1,0 +1,30 @@
+{% macro res_pill(resultado, curto=True, extra='') -%}
+<span class="res-pill res-{{ resultado or 'none' }} {{ extra }}">{{ resultado | jur_resultado(curto) }}</span>
+{%- endmacro %}
+
+{% macro copiar(texto, rotulo='Copiar citação', classes='btn btn-sm btn-outline-secondary') -%}
+<button type="button" class="{{ classes }} js-copiar" data-texto="{{ texto }}">
+  <i class="bi bi-clipboard me-1"></i><span>{{ rotulo }}</span>
+</button>
+{%- endmacro %}
+
+{% macro script_copiar() -%}
+<script>
+  document.addEventListener('click', function (e) {
+    const botao = e.target.closest('.js-copiar');
+    if (!botao) return;
+    const rotulo = botao.querySelector('span');
+    const original = rotulo ? rotulo.textContent : '';
+    const pronto = () => { if (rotulo) { rotulo.textContent = 'Copiado'; setTimeout(() => rotulo.textContent = original, 1600); } };
+    const texto = botao.dataset.texto || '';
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texto).then(pronto).catch(() => alert('Não foi possível copiar.'));
+    } else {
+      const area = document.createElement('textarea');
+      area.value = texto; document.body.appendChild(area); area.select();
+      try { document.execCommand('copy'); pronto(); } catch (err) { alert('Não foi possível copiar.'); }
+      area.remove();
+    }
+  });
+</script>
+{%- endmacro %}

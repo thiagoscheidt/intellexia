@@ -624,6 +624,45 @@ class FapContestationJudgmentReportService:
             if year and str(year).strip()
         }
 
+    @staticmethod
+    def _iniciar_transacao_read_committed() -> None:
+        """Abre a transação do processamento em READ COMMITTED (só MySQL).
+
+        No REPEATABLE READ padrão a transação enxerga o banco como estava na
+        primeira leitura dela — e o processamento lê o relatório e o cliente
+        antes de pegar a trava da vigência. O segundo relatório esperaria a
+        trava, o primeiro gravaria os benefícios, e mesmo assim a busca do
+        segundo não os veria: a trava serializaria sem deduplicar. O SQLAlchemy
+        devolve o isolamento padrão quando a conexão volta ao pool.
+        """
+        if db.engine.dialect.name == 'mysql':
+            db.session.connection(execution_options={'isolation_level': 'READ COMMITTED'})
+
+    @staticmethod
+    def _travar_vigencia_do_relatorio(vigencia_record: FapVigenciaCnpj | None) -> None:
+        """Serializa os relatórios do mesmo escritório + CNPJ + vigência.
+
+        Sem isso, dois relatórios com os mesmos NBs processados ao mesmo tempo
+        (a linha de 1ª e a de 2ª instância do portal apontam para o mesmo
+        protocolo e baixam o mesmo PDF) procuravam o benefício antes de o outro
+        gravar, nenhum achava, e os dois inseriam. Em 27/08/2026 os relatórios
+        33389 e 33390 — o mesmo arquivo, a 2 s um do outro — duplicaram os
+        benefícios da empresa inteira.
+
+        A trava é a linha de `fap_vigencia_cnpjs` (única por escritório + CNPJ
+        + vigência), em FOR UPDATE: cai sozinha no commit ou no rollback, sem
+        risco de ficar presa numa conexão do pool. Relatório sem CNPJ ou ano
+        legível na capa não tem linha de vigência e segue sem trava.
+        """
+        if vigencia_record is None:
+            return
+        (
+            FapVigenciaCnpj.query
+            .filter_by(id=vigencia_record.id)
+            .with_for_update()
+            .one()
+        )
+
     def _find_existing_benefit_for_report(
         self,
         *,
@@ -2442,6 +2481,8 @@ class FapContestationJudgmentReportService:
                 vigencia_year_raw=validity_year,
             )
 
+        self._travar_vigencia_do_relatorio(employer_vigencia_record)
+
         # Diagnóstico: quantos blocos, quantos NBs distintos e quantas repetições.
         empty_number_count = 0
         number_counts: dict[str, int] = {}
@@ -3307,6 +3348,9 @@ class FapContestationJudgmentReportService:
         report.error_message = None
         report.updated_at = datetime.now()
         db.session.commit()
+        # Tem de vir logo após o commit, antes de qualquer acesso a `report`
+        # (que já abriria a próxima transação com o isolamento padrão).
+        self._iniciar_transacao_read_committed()
 
         try:
             extraction_started_at = perf_counter()

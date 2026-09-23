@@ -122,7 +122,7 @@ intellexia/
 
 ### Blueprints Registrados
 
-`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `access_audit`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`, `docs`, `communications`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
+`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `access_audit`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`, `docs`, `communications`, `dou`, `jurisprudence`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
 
 **Função de cada blueprint:**
 
@@ -151,6 +151,7 @@ intellexia/
 | `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
 | `dou` | `/dou` | **Diário Oficial**: acervo do DOU capturado do INLABS (Imprensa Nacional). Captura diária dos ZIPs de XML das seções `DO1 DO2 DO3 DO1E DO2E DO3E` mais os PDFs assinados, quebrando cada edição matéria a matéria. Acervo em três níveis — edições por data (espelha a listagem do INLABS, com o PDF assinado) → edição do dia (aba por seção, salto para o dia vizinho **do acervo**, busca em título/ementa, filtro por órgão-raiz e tipo, atalho por linha para a **folha** daquela página) → matéria (o inteiro teor, em texto) — mais o **leitor** e a tela de captura (cobertura, falhas, reprocesso). O **leitor** (`/dou/edicao/<data>/pagina/<n>?secao=DO1`) é a folha assinada em tela cheia, no modelo do visualizador da Imprensa Nacional: aba por caderno, `‹ ›`, "ir para a página" e **Sumário da edição** (`_sumario_da_edicao`: órgão-raiz → primeira página, conferido linha a linha contra o `<select>` do portal oficial). **O texto do ato não entra no leitor** — a folha é A3 e qualquer coisa dividindo espaço com ela fica ilegível; a ponte de volta é a lista de matérias da página, no rodapé. O "ir para" é GET sem JavaScript e **redireciona para o endereço canônico** `/pagina/<n>`, para o que fica na barra do navegador ser copiável. A folha do leitor vem de `/dou/edicao/<id>/pagina/<n>.pdf`, **uma página por vez** (`_entregar_recorte(..., vizinhas=False)`) — no leitor o `›` já leva à seguinte, e mandar três fazia a folha escolhida dividir a tela com duas que ninguém pediu; a tela da matéria continua com as vizinhas (`/dou/materia/<id>/pagina.pdf`), porque um edital começa numa página e termina na outra. `_total_paginas` lê o `page_count` do PDF a cada requisição (1–4 ms mesmo nos 44 MB da Seção 3 — não vale coluna no banco). Órgão é sempre recortado na **raiz** da hierarquia (`dou_search_service.orgao_raiz`), no filtro, no agrupamento e no sumário: a hierarquia completa tem ~104 valores por seção contra ~27 raízes, e agrupar por ela dava 36 grupos para 50 linhas. **Alertas** (`/dou/alertas`) têm duas origens no mesmo registro: os CNPJs da carteira cruzados com cada matéria capturada (seção "Alertas de cliente no DOU") e as **regras de palavra-chave** configuradas em `/dou/regras` (seção "Alertas por palavra-chave no DOU"). A matéria que casa as duas é **um** alerta com dois motivos |
 | `communications` | `/comunicacoes` | **Monitoramento de Processos**: comunicações processuais por fonte de informação (`ProcessCommunication.source` — hoje só `comunica_pje`; novas fontes = nova constante `SOURCE_*` + rótulo em `SOURCE_LABELS`). Radar por OAB, inteiro teor, controle de lidas, descoberta automática de processos. O nome de exibição é "Monitoramento de Processos"; endpoint/URL/módulo permanecem `communications` |
+| `jurisprudence` | `/process-panel/jurisprudencia` | **Base de Jurisprudência** (submódulo do Painel de Processos, permissão `process_panel`): decisões FAP (sentença, acórdão, embargos) classificadas por tese e resultado — importadas da planilha do escritório (formato Banco Mestre FAP) ou lidas de PDF pela IA — com pesquisa por processo, correspondência de teses com o catálogo e uso na geração da impugnação. Ver a seção "Base de Jurisprudência" |
 
 ### Documentação do usuário (Manual + Assistente "pergunte ao manual")
 
@@ -512,6 +513,113 @@ Tela em `/dou/regras`; o motor de casamento é módulo à parte do
   acorda pela regra — senão um dia sem citação de cliente e com portaria nova
   sairia como "nada a relatar".
 
+### Base de Jurisprudência (`jurisprudence_*`)
+
+Submódulo do Painel de Processos (`app/blueprints/jurisprudence.py`,
+`/process-panel/jurisprudencia`). Traz para dentro do sistema a base de
+decisões que os advogados mantinham numa planilha Google alimentada por IA (o
+"Banco Mestre FAP", 515 decisões de 289 processos). Design em
+`docs/superpowers/specs/2026-09-22-base-jurisprudencia-design.md`. Tabelas
+`jurisprudence_decisions`, `jurisprudence_theses` (+ ligações N:N com a decisão
+e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
+`law_firm_id` — criadas por `database/add_jurisprudence_tables.py`.
+
+- **Duas portas, um formato.** Planilha (`jurisprudence_import_service`: conferir
+  → importar) e PDF (`jurisprudence_upload_service` + `JurisprudenceDecisionExtractorAgent`)
+  passam pelo mesmo `jurisprudence_service.normalizar_registro`. A normalização é
+  pura, em `jurisprudence_normalizer`: medido na planilha, pedir padronização
+  no prompt não bastou — 155 textos de tribunal para 8 siglas, SENTENÇA e
+  SENTENCA misturados, 251 grafias de tese para 219 chaves. Resultado e
+  instância são valores fechados; tribunal vira sigla + órgão + UF (a UF sai do
+  número CNJ: TRF4 70 PR, 71 RS, 72 SC; TRF3 60 MS, 61 SP).
+- **Duplicata = processo (dígitos) + instância + data.** A planilha real tem 6
+  decisões processadas duas vezes pela ferramenta anterior; a segunda é pulada.
+  No PDF, mesmo processo e instância vai para "revisar" com a leitura guardada
+  em `extracted_json`, e o advogado decide (manter, substituir, guardar as
+  duas) — nunca descartar em silêncio.
+- **Correção manual sobrevive ao reprocessamento**: o campo editado entra em
+  `manual_fields_json` e `atualizar_da_ia` não o sobrescreve.
+- **Teses: texto livre + correspondência curada.** A decisão guarda a tese como
+  veio; `jurisprudence_theses` liga N:N ao catálogo do painel, que é mais fino
+  ("ACIDENTE DE TRAJETO" ↔ Trajeto B91/B92/B93/B94). Nome idêntico ao do
+  catálogo liga sozinho; o resto a IA sugere (`JurisprudenceThesisMapperAgent`)
+  e a pessoa confirma. Variantes se **mesclam** (`merged_into_id`) e a grafia
+  mesclada continua resolvendo para a canônica nas próximas importações;
+  desfazer usa `teses_brutas_json`. **No prompt do mapeador, `catalogo_id` e
+  `tese_id` têm nomes diferentes de propósito**: com os dois chamados `id`, o
+  modelo trocava um pelo outro ("id 6" era ERRO NA BASE ESTATISTICA na base e
+  "60 DIAS" no catálogo) e sugeria ligação absurda com motivo coerente.
+- **Busca em SQL + Python, sem Meilisearch**: escala de centenas a poucos
+  milhares de decisões por escritório; nada de índice para reconstruir. Todos
+  os termos (E), cada um expandido pelos sinônimos da ferramenta antiga; número
+  de processo com ou sem pontuação; facetas disjuntivas. **Um cartão por
+  processo** com a trilha sentença → acórdão → embargos (162 dos 289 processos
+  têm mais de uma peça) e selo "virou no acórdão".
+- **Leitura do PDF**: saída estruturada (57% das falhas da ferramenta anterior
+  eram JSON malformado/cortado). Resposta cortada ou inválida ganha UMA nova
+  tentativa sem raciocínio e com a ementa resumida — marcada `ementa_modo =
+  'resumo'`, e a tela e o prompt da geração avisam para não citar paráfrase
+  como transcrição. Modelos em Configurações de IA (`jurisprudence_extractor`,
+  `jurisprudence_thesis_mapper`, padrão `DEFAULT_MODEL_ROBUST`).
+- **Fila persistida**, lida em thread; `processing` parado há mais de 20 min é
+  travado. `scripts/process_jurisprudence_uploads.py` retoma a fila depois de
+  restart (seguro para cron).
+- **Na geração da impugnação** o passo "Documentos" ganha "Jurisprudência a
+  citar" por tese do catálogo (favoráveis, mesmo TRF, instância mais alta e mais
+  recentes primeiro; desfavoráveis aparecem desmarcadas). A escolha vai em
+  `confirmed_documents_json['jurisprudence']` (pares decisão + tese, sem coluna
+  nova) e `jurisprudence_generation_service.bloco_do_prompt` entra no prompt
+  **antes** das peças-modelo (o `_shrink_user_prompt` corta pelo fim). Decisão
+  desfavorável marcada vai rotulada CONTRÁRIA: para rebater, nunca citar a favor.
+
+### Sessão do portal FAP e automação de navegador (Playwright)
+
+**A sessão do `FAP_AUTH_JSON` pode estar viva e mesmo assim incompleta.** O
+portal só devolve o que envolve o CNPJ do escritório (e as empresas que o CPF
+representa) enquanto a sessão guarda as **empresas vinculadas** do gov.br —
+campo `empresasVinculadas` de `GET /gateway/oauth2/token`. Quando elas somem, o
+campo vira `{"errors":[{"code":"ACCESSTOKEN_MUSTBENOTEXPIRED"}]}` e:
+
+- `/procuracoes` traz só as outorgadas ao CPF do login (medido: 2830 contra
+  3029) — foi o que atrasou o alerta da SMARTFIT em 09/09/2026;
+- `/procuracoes/empresas` perde empresas (613 contra 653), e a poda do
+  `sync_companies` apaga as que não têm contestação;
+- `/vigencias/{ano}/empresa/{cnpj}/contestacoes` responde **403** para essas
+  empresas, e o `fap_sync_cron.py` registra como "acesso negado (sem
+  procuração)" — a procuração existe, falta a sessão (96 empresas em 10/09).
+
+Medido em 10–11/09/2026: um login rendeu ~10h30 de lista completa ao longo do
+dia, com uma queda de 25 min no meio, e depois ficou parcial a noite toda.
+**Nada além de login novo no gov.br recupera**: keep-alive, filtro
+`cnpjRaizOutorgado`, header `X-Authz`, trocar `ROUTEID` (sessão só existe num
+nó; outro dá 401), `POST /gateway/oauth2/refresh-token` (500), abrir ou navegar
+no portal — com Playwright ou com o navegador real. **Relogar derruba a sessão
+anterior** (401 na hora): a troca do `FAP_AUTH_JSON` e do cookie do keep-alive
+tem de vir junto do login. O gov.br **não faz login silencioso** (pede senha de
+novo); automatizar só com certificado A1, e guardar cookie de sessão do gov.br
+no servidor dá acesso a todos os serviços gov.br do CPF — não fazer.
+
+**Automação de navegador** — referência em `scripts/fap_navegar_portal.py`,
+para reaproveitar em outros portais (logar, navegar, tirar prints):
+
+- **Playwright não está no pyproject**: `uv run --with playwright python ...`.
+  No servidor, instalar o Chromium uma vez:
+  `uv run --with playwright playwright install --with-deps chromium`.
+- **Entrar logado no FAP só com cookie não basta.** O frontend exige
+  `idp=fapgovbridp` e um `sessionId` qualquer no `sessionStorage`
+  (`add_init_script`); sem eles mostra a tela de login e não chama a API.
+- **Navegar é clicando.** Abrir `/procuracoes` pelo endereço faz o portal voltar
+  para `/`. Menu: `button[aria-label="Abrir Menu Principal"]` → `a[href="/procuracoes"]`,
+  `/contestacoes-eletronicas`, `/consultar-fap` — cada link existe duas vezes no
+  DOM, então `:visible` + `.first`.
+- **Ler o dado do tráfego da página**, com `page.expect_response(...)` em volta
+  do clique, em vez de disparar requisição paralela.
+- **O servidor de desenvolvimento não tem tela** (acesso pelo VSCode remoto):
+  `--visivel` não aparece para ninguém. Para demonstrar, `--gravar PASTA` grava
+  vídeo `.webm` + um print por passo em câmera lenta, que o VSCode abre direto.
+- **Prints e vídeo mostram dados de clientes**: gravar em `instance/` (ignorado
+  pelo git), nunca em pasta versionada.
+
 ### Timezone
 
 Todas as datas de exibição usam `America/Sao_Paulo`. Filtros Jinja: `datetime_sp`, `date_sp`. Helper: `app.utils.timezone.now_sp()`. Datetimes sem `tzinfo` são tratados como UTC antes da conversão.
@@ -605,6 +713,7 @@ Pergunta do usuário
 - Status bruto do FAP Web é normalizado: `"em andamento"`, `"EM ANÁLISE"` → `"analyzing"`.
 - Tópicos FAP de um benefício ficam em `Benefit.fap_contestation_topics_json` (array JSON). Campo legado `fap_contestation_topic` (string única) ainda existe.
 - `FapWebContestacao` com mesmo `(contestacao_id, cnpj_raiz)` → UPDATE, não INSERT (deduplicação).
+- **Relatórios do mesmo CNPJ + vigência nunca processam em paralelo.** A linha de 1ª e a de 2ª instância do portal compartilham o protocolo e baixam o mesmo PDF; processados juntos, cada um procurava o NB antes de o outro gravar e os dois inseriam (27/08/2026, relatórios 33389/33390). `process_single_report` abre a transação em **READ COMMITTED** e `_upsert_benefits_from_report` trava a linha de `fap_vigencia_cnpjs` em `FOR UPDATE` até o commit. As duas peças são necessárias: no REPEATABLE READ a trava serializa mas o segundo relatório continua lendo o snapshot anterior e duplica igual (`tests/test_fap_report_corrida_beneficio.py`, precisa de MySQL). Duplicatas antigas: `database/remove_duplicate_benefits.py` mescla na linha **mais adiantada** (2ª instância decidida vence), não na mais antiga — depois da duplicata só a de menor id recebia os relatórios seguintes.
 - Marcar primeira instância como deferida pode ser feito em lote para todos os benefícios de uma vigência.
 - Prompt do classificador é customizável por escritório sem alterar código.
 
@@ -662,6 +771,13 @@ FapReview.revision [POST]
 | `dou_search_service`                   | Busca no acervo do DOU (Meilisearch): extração e normalização de CNPJ/processo, indexação e consulta com facetas — fonte única da tela de busca |
 | `dou_alert_service`                    | Alertas no DOU: validação de CNPJ (mod 11), carteira do escritório, casamento exato e por raiz, gravação dos hits de regra, geração e triagem — fonte única da tela `/dou/alertas`, do gancho na ingestão, do digest e do backfill |
 | `dou_rule_service`                     | Regras de palavra-chave do DOU: normalização, casamento por fronteira de palavra (sem modo OU), peneira SQL e o teste antes de salvar — **não sabe o que é alerta**, devolve `{article_id: [rule_id]}`. Ver a seção "Alertas por palavra-chave no DOU" |
+| `jurisprudence_normalizer`             | Base de Jurisprudência: normalização pura (instância, resultado, tribunal/órgão/UF, vigência, sinônimos da busca, citação pronta) |
+| `jurisprudence_service`                | Base de Jurisprudência: registro bruto → decisão (planilha, PDF e correção manual pelo mesmo caminho), resolução de teses, duplicata |
+| `jurisprudence_import_service`         | Importação da planilha Banco Mestre FAP: conferência sem gravar + importação idempotente |
+| `jurisprudence_search_service`         | Pesquisa da base (SQL + Python): sinônimos, facetas disjuntivas, cartão por processo, trecho grifado — fonte única da tela e da busca do wizard |
+| `jurisprudence_thesis_service`         | Correspondência de teses: ligar, mesclar/desfazer, sem equivalente, sugestões da IA em segundo plano |
+| `jurisprudence_upload_service`         | Fila dos PDFs lidos pela IA: envio, leitura, duplicata para revisar, tentar de novo, reprocessar decisão |
+| `jurisprudence_generation_service`     | Jurisprudência na impugnação: sugestões por tese para o wizard e o bloco do prompt |
 | `process_radar_service`                | Radar da Mesa de Trabalho (providências IA + publicações não lidas + movimentação DataJud) — fonte única do widget do Painel de Processos (`build_radar`) e do e-mail Resumo do Radar (`build_radar_digest`) |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |

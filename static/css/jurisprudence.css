@@ -1,0 +1,102 @@
+/* Base de Jurisprudência — telas em templates/jurisprudence/.
+ *
+ * Tudo escopado em .jur-page. Link com cor própria usa `.jur-page a.xxx`:
+ * o app declara `[data-bs-theme="dark"] a` com especificidade (0,1,1), que
+ * venceria uma classe só (a mesma armadilha do badge FAP do DOU).
+ */
+.jur-page { --jur-fav: #198754; --jur-par: #b45309; --jur-des: #dc3545; --jur-soft: var(--bs-secondary-bg);
+  --jur-acc: #4f46e5; --jur-acc-soft: rgba(79, 70, 229, .12); }
+[data-bs-theme="dark"] .jur-page { --jur-fav: #4ade80; --jur-par: #fbbf24; --jur-des: #f87171;
+  --jur-acc: #a5b4fc; --jur-acc-soft: rgba(165, 180, 252, .14); }
+
+/* resultado */
+.jur-page .res-pill { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; font-weight: 700;
+  letter-spacing: .02em; padding: .15rem .55rem; border-radius: 999px; border: 1px solid currentColor;
+  white-space: nowrap; line-height: 1.4; background: transparent; }
+.jur-page .res-pill::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+.jur-page .res-favoravel { color: var(--jur-fav); }
+.jur-page .res-parcial { color: var(--jur-par); }
+.jur-page .res-desfavoravel { color: var(--jur-des); }
+.jur-page .res-none { color: var(--bs-secondary-color); }
+
+/* barra de êxito */
+.jur-page .exito { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--jur-soft); }
+.jur-page .exito > a { display: block; height: 100%; transition: filter .15s; }
+.jur-page .exito > a:hover { filter: brightness(1.12); }
+.jur-page .exito .favoravel { background: var(--jur-fav); }
+.jur-page .exito .parcial { background: var(--jur-par); }
+.jur-page .exito .desfavoravel { background: var(--jur-des); }
+.jur-page a.exito-legenda { text-decoration: none; color: var(--bs-body-color); }
+.jur-page a.exito-legenda:hover { text-decoration: underline; }
+.jur-page .dot { display: inline-block; width: .65rem; height: .65rem; border-radius: 50%; margin-right: .3rem; }
+
+/* facetas */
+.jur-page .facet h6 { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--bs-secondary-color); margin: 0 0 .45rem; }
+.jur-page .facet + .facet { border-top: 1px solid var(--bs-border-color-translucent); padding-top: .8rem; margin-top: .8rem; }
+.jur-page a.facet-item { display: flex; justify-content: space-between; align-items: center; gap: .5rem; font-size: .86rem;
+  padding: .18rem .35rem; border-radius: 6px; color: var(--bs-body-color); text-decoration: none; }
+.jur-page a.facet-item:hover { background: var(--jur-soft); }
+.jur-page a.facet-item.on { background: var(--jur-acc-soft); font-weight: 600; }
+.jur-page .facet-item .n { font-size: .75rem; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+.jur-page .facet-item .rotulo { min-width: 0; overflow-wrap: anywhere; }
+
+/* cartão de processo */
+.jur-page .proc-card { border-radius: 14px; }
+.jur-page .proc-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .86rem; }
+.jur-page .trilha { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .6rem; }
+.jur-page a.trilha-step { display: block; border: 1px solid var(--bs-border-color); border-radius: 10px; padding: .55rem .7rem;
+  background: var(--bs-body-bg); color: var(--bs-body-color); text-decoration: none;
+  transition: border-color .15s, box-shadow .15s; }
+.jur-page a.trilha-step:hover { border-color: var(--jur-acc); box-shadow: 0 0 0 3px var(--jur-acc-soft); }
+.jur-page a.trilha-step.achada { border-color: var(--jur-acc); }
+.jur-page .trilha-step.vazio { border: 1px dashed var(--bs-border-color); border-radius: 10px; padding: .55rem .7rem;
+  color: var(--bs-secondary-color); }
+.jur-page .t-tipo { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700;
+  color: var(--bs-secondary-color); }
+.jur-page .t-org { font-size: .82rem; overflow-wrap: anywhere; }
+.jur-page .t-data { font-size: .75rem; color: var(--bs-secondary-color); }
+.jur-page .virada { font-size: .72rem; font-weight: 600; color: var(--jur-fav); white-space: nowrap; }
+
+.jur-page .tese-chip { display: inline-block; font-size: .7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 6px;
+  background: var(--jur-soft); color: var(--bs-body-color); margin: 0 .25rem .25rem 0; letter-spacing: .02em; }
+.jur-page .tese-chip.destaque { background: var(--jur-acc-soft); color: var(--jur-acc); }
+.jur-page .cat-chip { display: inline-flex; align-items: center; gap: .25rem; font-size: .75rem; padding: .15rem .5rem;
+  border-radius: 6px; background: rgba(25, 135, 84, .12); color: var(--jur-fav); font-weight: 600; margin: .1rem .2rem .1rem 0; }
+.jur-page .cat-chip.sugestao { background: rgba(124, 58, 237, .12); color: #6d28d9; border: 1px dashed currentColor; }
+[data-bs-theme="dark"] .jur-page .cat-chip.sugestao { color: #c4b5fd; }
+.jur-page .snippet { font-size: .88rem; color: var(--bs-secondary-color); }
+.jur-page mark { padding: 0 .1rem; background: rgba(250, 204, 21, .35); color: inherit; border-radius: 2px; }
+
+/* decisão */
+.jur-page .dec-meta dt { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--bs-secondary-color); font-weight: 600; }
+.jur-page .dec-meta dd { margin-bottom: .6rem; overflow-wrap: anywhere; }
+.jur-page .lista-linhas { list-style: none; padding: 0; margin: 0; }
+.jur-page .lista-linhas li { padding: .45rem 0; border-bottom: 1px solid var(--bs-border-color-translucent); font-size: .92rem; }
+.jur-page .lista-linhas li:last-child { border-bottom: 0; }
+.jur-page .ementa { font-family: Georgia, "Times New Roman", serif; font-size: .95rem; line-height: 1.6;
+  white-space: pre-line; text-align: justify; }
+.jur-page .citacao-box { font-family: Georgia, serif; font-size: .9rem; background: var(--jur-soft); border-radius: 10px;
+  padding: .8rem 1rem; overflow-wrap: anywhere; }
+.jur-page .secao-titulo { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700;
+  color: var(--bs-secondary-color); }
+
+/* envio / importação */
+.jur-page .dropzone { border: 2px dashed var(--bs-border-color); border-radius: 14px; padding: 2rem 1rem; text-align: center;
+  background: var(--bs-body-bg); transition: border-color .15s, background .15s; }
+.jur-page .dropzone.arrastando, .jur-page .dropzone:hover { border-color: var(--jur-acc); background: var(--jur-acc-soft); }
+.jur-page .passos { display: flex; gap: .5rem; }
+.jur-page .passos .passo { flex: 1; font-size: .82rem; padding: .5rem .7rem; border-radius: 10px; background: var(--jur-soft);
+  color: var(--bs-secondary-color); }
+.jur-page .passos .passo.feito { color: var(--jur-fav); }
+.jur-page .passos .passo.atual { background: var(--jur-acc-soft); color: var(--jur-acc); font-weight: 600; }
+.jur-page .kpi { border-radius: 12px; padding: .8rem 1rem; background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color-translucent); height: 100%; }
+.jur-page .kpi .v { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.jur-page .kpi .l { font-size: .78rem; color: var(--bs-secondary-color); }
+.jur-page .variante { font-size: .75rem; color: var(--bs-secondary-color); }
+
+@media (max-width: 767.98px) {
+  .jur-page .passos { flex-direction: column; }
+}

@@ -1,0 +1,1012 @@
+<!doctype html>
+<html lang="pt-BR" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mockup · Base de Jurisprudência</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="/static/css/adminlte.css">
+  <link rel="stylesheet" href="/static/css/intellexia-dark.css">
+  <link rel="stylesheet" href="/static/css/intellexia-ui.css">
+  <style>
+    /* ---------- cromo do app (reproduz base.html + page_hero) ---------- */
+    body { background: var(--bs-tertiary-bg); }
+    .page-hero { background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%); }
+    .page-hero-icon { width: 56px; height: 56px; background: #fff; box-shadow: 0 6px 14px rgba(102,126,234,.18); }
+    .page-hero-icon__glyph { font-size: 1.6rem; color: #667eea; }
+    [data-bs-theme="dark"] .page-hero { background: linear-gradient(135deg, #1b1f2a 0%, #23283a 100%); }
+    [data-bs-theme="dark"] .page-hero-icon { background: #111827; box-shadow: 0 6px 14px rgba(0,0,0,.45); }
+    [data-bs-theme="dark"] .page-hero-icon__glyph { color: #9aa7ff; }
+
+    /* faixa do mockup: fica fora da tela real */
+    .mk-bar { position: relative; background: #1f2937; color: #e5e7eb; }
+    .mk-bar .nav-link { color: #cbd5e1; font-size: .85rem; padding: .35rem .7rem; border-radius: 999px; }
+    .mk-bar .nav-link.active { background: #6366f1; color: #fff; }
+    .mk-bar .mk-tag { background: #f59e0b; color: #111; font-weight: 700; font-size: .7rem; letter-spacing: .06em; }
+    .mk-note { border-left: 3px solid #f59e0b; background: rgba(245,158,11,.08); font-size: .82rem; }
+    .mk-note b { color: #b45309; }
+    [data-bs-theme="dark"] .mk-note b { color: #fbbf24; }
+    .mk-screen { display: none; }
+    .mk-screen.active { display: block; }
+
+    .fake-header { background: var(--bs-body-bg); }
+    .fake-sidebar { width: 56px; background: #343a40; min-height: calc(100vh - 44px); }
+    .fake-sidebar i { color: #adb5bd; font-size: 1.15rem; display: block; text-align: center; padding: .7rem 0; }
+    .fake-sidebar i.on { color: #fff; background: rgba(255,255,255,.08); }
+
+    /* ---------- tokens da tela ---------- */
+    .jur-page { --jur-fav: #198754; --jur-par: #d97706; --jur-des: #dc3545; --jur-soft: var(--bs-secondary-bg); }
+    [data-bs-theme="dark"] .jur-page { --jur-fav: #4ade80; --jur-par: #fbbf24; --jur-des: #f87171; }
+
+    .res-pill { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; font-weight: 700;
+      letter-spacing: .03em; padding: .18rem .55rem; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+    .res-pill::before { content: ""; width: .5rem; height: .5rem; border-radius: 50%; background: currentColor; }
+    .res-fav { color: var(--jur-fav); }
+    .res-par { color: var(--jur-par); }
+    .res-des { color: var(--jur-des); }
+
+    /* barra de êxito */
+    .exito { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--jur-soft); }
+    .exito > a { display: block; height: 100%; transition: filter .15s; }
+    .exito > a:hover { filter: brightness(1.12); }
+    .exito .fav { background: var(--jur-fav); } .exito .par { background: var(--jur-par); } .exito .des { background: var(--jur-des); }
+    .exito-legend a { text-decoration: none; color: var(--bs-body-color); }
+    .exito-legend a:hover { text-decoration: underline; }
+    .exito-legend .dot { display: inline-block; width: .65rem; height: .65rem; border-radius: 50%; margin-right: .3rem; }
+
+    /* facetas */
+    .facet h6 { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-secondary-color); margin: 0 0 .45rem; }
+    .facet + .facet { border-top: 1px solid var(--bs-border-color-translucent); padding-top: .8rem; margin-top: .8rem; }
+    .facet-item { display: flex; justify-content: space-between; align-items: center; font-size: .86rem; padding: .18rem .35rem;
+      border-radius: 6px; cursor: pointer; color: var(--bs-body-color); text-decoration: none; }
+    .facet-item:hover { background: var(--jur-soft); }
+    .facet-item.on { background: rgba(99,102,241,.12); font-weight: 600; }
+    .facet-item .n { font-size: .75rem; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
+    .facet-more { font-size: .78rem; }
+
+    /* card de processo */
+    .proc-card { border-radius: 14px; }
+    .proc-card .proc-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .86rem; }
+    .trilha { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; position: relative; }
+    .trilha-step { border: 1px solid var(--bs-border-color); border-radius: 10px; padding: .55rem .7rem; background: var(--bs-body-bg);
+      position: relative; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+    .trilha-step:hover { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+    .trilha-step.vazio { border-style: dashed; background: transparent; cursor: default; color: var(--bs-secondary-color); }
+    .trilha-step.vazio:hover { border-color: var(--bs-border-color); box-shadow: none; }
+    .trilha-step .t-tipo { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; color: var(--bs-secondary-color); }
+    .trilha-step .t-org { font-size: .82rem; }
+    .trilha-step .t-data { font-size: .75rem; color: var(--bs-secondary-color); }
+    .trilha-step:not(:last-child)::after { content: "\F285"; font-family: bootstrap-icons; position: absolute; right: -.62rem; top: 50%;
+      transform: translateY(-50%); font-size: .75rem; color: var(--bs-secondary-color); background: var(--bs-body-bg); z-index: 1; }
+    .virada { font-size: .72rem; font-weight: 600; color: var(--jur-fav); }
+    .tese-chip { display: inline-block; font-size: .7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 6px;
+      background: var(--jur-soft); color: var(--bs-body-color); margin: 0 .25rem .25rem 0; letter-spacing: .02em; }
+    .tese-chip.match { background: rgba(99,102,241,.14); color: #4338ca; }
+    [data-bs-theme="dark"] .tese-chip.match { color: #c7d2fe; }
+    .snippet { font-size: .88rem; color: var(--bs-secondary-color); }
+    .snippet mark { padding: 0 .1rem; background: rgba(250,204,21,.35); color: inherit; border-radius: 2px; }
+
+    /* decisão */
+    .dec-meta dt { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--bs-secondary-color); font-weight: 600; }
+    .dec-meta dd { margin-bottom: .6rem; }
+    .arg-list li { padding: .45rem 0; border-bottom: 1px solid var(--bs-border-color-translucent); font-size: .92rem; }
+    .arg-list li:last-child { border-bottom: 0; }
+    .ementa { font-family: Georgia, "Times New Roman", serif; font-size: .95rem; line-height: 1.6; text-align: justify; }
+    .ementa .cab { font-weight: 700; }
+    .citacao-box { font-family: Georgia, serif; font-size: .9rem; background: var(--jur-soft); border-radius: 10px; padding: .8rem 1rem; }
+
+    /* upload / fila */
+    .dropzone { border: 2px dashed var(--bs-border-color); border-radius: 14px; padding: 2.2rem 1rem; text-align: center; background: var(--bs-body-bg); }
+    .dropzone:hover { border-color: #6366f1; background: rgba(99,102,241,.04); }
+    .steps { display: flex; gap: .5rem; counter-reset: s; }
+    .steps .st { flex: 1; font-size: .82rem; padding: .5rem .7rem; border-radius: 10px; background: var(--jur-soft); color: var(--bs-secondary-color); }
+    .steps .st.done { color: var(--jur-fav); }
+    .steps .st.cur { background: rgba(99,102,241,.14); color: #4338ca; font-weight: 600; }
+    [data-bs-theme="dark"] .steps .st.cur { color: #c7d2fe; }
+    .kpi { border-radius: 12px; padding: .8rem 1rem; background: var(--bs-body-bg); border: 1px solid var(--bs-border-color-translucent); height: 100%; }
+    .kpi .v { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .kpi .l { font-size: .78rem; color: var(--bs-secondary-color); }
+    .norm-row { font-size: .86rem; }
+    .norm-row code { font-size: .8rem; }
+
+    /* correspondência */
+    .map-row td { vertical-align: middle; }
+    .variante { font-size: .75rem; color: var(--bs-secondary-color); }
+    .cat-chip { display: inline-flex; align-items: center; gap: .25rem; font-size: .75rem; padding: .15rem .5rem; border-radius: 6px;
+      background: rgba(25,135,84,.12); color: var(--jur-fav); font-weight: 600; margin: .1rem .2rem .1rem 0; }
+    .cat-chip.sug { background: rgba(124,58,237,.12); color: #7c3aed; border: 1px dashed currentColor; }
+    [data-bs-theme="dark"] .cat-chip.sug { color: #c4b5fd; }
+    .cat-chip .x { opacity: .6; cursor: pointer; }
+
+    /* geração */
+    .tese-block { border: 1px solid var(--bs-border-color); border-radius: 12px; }
+    .tese-block + .tese-block { margin-top: .8rem; }
+    .src-col h6 { font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--bs-secondary-color); }
+    .src-item { display: flex; gap: .55rem; padding: .45rem .55rem; border-radius: 8px; font-size: .86rem; }
+    .src-item:hover { background: var(--jur-soft); }
+    .cov { font-size: .75rem; font-weight: 600; }
+
+    .table-sm td, .table-sm th { font-size: .86rem; }
+    @media (max-width: 767.98px) {
+      .trilha { grid-template-columns: 1fr; }
+      .trilha-step:not(:last-child)::after { content: "\F282"; right: 50%; top: auto; bottom: -.72rem; transform: translateX(50%); }
+      .fake-sidebar { display: none; }
+      .steps { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ================= FAIXA DO MOCKUP (não faz parte da tela) ================= -->
+<div class="mk-bar px-3 py-2 d-flex flex-wrap align-items-center gap-2">
+  <span class="badge mk-tag">MOCKUP</span>
+  <span class="small me-2 opacity-75">dados fictícios · números de êxito, grafias e contagens vêm da planilha real</span>
+  <ul class="nav gap-1 flex-wrap" id="mk-nav">
+    <li><a class="nav-link active" href="#" data-screen="pesquisa"><i class="bi bi-search me-1"></i>1 · Pesquisa</a></li>
+    <li><a class="nav-link" href="#" data-screen="decisao"><i class="bi bi-file-earmark-text me-1"></i>2 · Decisão</a></li>
+    <li><a class="nav-link" href="#" data-screen="importar"><i class="bi bi-file-earmark-spreadsheet me-1"></i>3 · Importar planilha</a></li>
+    <li><a class="nav-link" href="#" data-screen="enviar"><i class="bi bi-file-earmark-pdf me-1"></i>4 · Enviar decisões</a></li>
+    <li><a class="nav-link" href="#" data-screen="teses"><i class="bi bi-arrow-left-right me-1"></i>5 · Correspondência de teses</a></li>
+    <li><a class="nav-link" href="#" data-screen="geracao"><i class="bi bi-magic me-1"></i>6 · Na geração da impugnação</a></li>
+  </ul>
+  <button class="btn btn-sm btn-outline-light ms-auto" id="mk-theme"><i class="bi bi-moon-stars"></i></button>
+  <button class="btn btn-sm btn-outline-light" id="mk-notes" title="Mostrar/ocultar notas de design"><i class="bi bi-chat-square-text"></i> notas</button>
+</div>
+
+<!-- ================= cromo do app ================= -->
+<nav class="fake-header navbar shadow-sm px-3 py-1">
+  <div class="d-flex align-items-center gap-3 small">
+    <i class="bi bi-list fs-5"></i>
+    <span class="fw-semibold"><i class="bi bi-building me-2"></i>Escritório Exemplo Advocacia</span>
+    <span class="badge rounded-pill text-bg-light border d-none d-md-inline"><i class="bi bi-alarm me-1"></i>Prazos <span class="badge rounded-pill text-bg-danger">3</span></span>
+  </div>
+  <div class="small text-body-secondary"><i class="bi bi-person-circle me-1"></i>Advogada Exemplo</div>
+</nav>
+
+<div class="d-flex">
+  <div class="fake-sidebar">
+    <i class="bi bi-speedometer2"></i><i class="bi bi-kanban on"></i><i class="bi bi-broadcast"></i>
+    <i class="bi bi-file-earmark-check"></i><i class="bi bi-newspaper"></i><i class="bi bi-journal-bookmark"></i>
+  </div>
+
+<main class="flex-grow-1 p-3 p-lg-4 jur-page" style="min-width:0">
+
+<!-- ======================================================================
+     1 · PESQUISA
+     ====================================================================== -->
+<section class="mk-screen active" id="pesquisa">
+
+  <div class="row mb-4"><div class="col-12"><div class="card border-0 shadow-sm" style="border-radius:16px;overflow:hidden">
+    <div class="card-body page-hero">
+      <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon"><i class="bi bi-journal-bookmark page-hero-icon__glyph"></i></div>
+          <div>
+            <h1 class="h4 mb-1" style="font-weight:700;letter-spacing:.2px">Base de Jurisprudência</h1>
+            <small class="text-muted">Decisões FAP classificadas por tese e resultado · <strong>515</strong> decisões em <strong>289</strong> processos</small>
+          </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <a href="#" class="btn btn-outline-secondary btn-sm" data-go="teses"><i class="bi bi-arrow-left-right me-1"></i>Teses <span class="badge rounded-pill text-bg-warning ms-1">176</span></a>
+          <a href="#" class="btn btn-outline-primary btn-sm" data-go="importar"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Importar planilha</a>
+          <a href="#" class="btn btn-primary btn-sm" data-go="enviar"><i class="bi bi-cloud-arrow-up me-1"></i>Enviar decisões</a>
+        </div>
+      </div>
+      <nav class="mt-2"><ol class="breadcrumb mb-0 bg-transparent small">
+        <li class="breadcrumb-item"><a href="#">Painel de Processos</a></li>
+        <li class="breadcrumb-item active">Base de Jurisprudência</li>
+      </ol></nav>
+    </div>
+  </div></div></div>
+
+  <div class="mk-note p-2 px-3 mb-3 rounded">
+    <b>Nota:</b> o badge <b>176</b> em "Teses" é pendência (teses da base ainda sem correspondência no catálogo), não volume, e some quando zera. É a mesma regra dos chips da header.
+  </div>
+
+  <!-- busca -->
+  <form class="card border-0 shadow-sm mb-3" onsubmit="return false">
+    <div class="card-body">
+      <div class="row g-2">
+        <div class="col-lg-9">
+          <div class="input-group">
+            <span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
+            <input type="search" class="form-control" value="trajeto prorrogação"
+                   placeholder="Termo, nº do processo (com ou sem pontuação), empresa, relator ou precedente">
+          </div>
+          <div class="form-text">
+            <i class="bi bi-lightbulb me-1"></i>Busca por sinônimos: <em>trajeto</em> também acha <em>percurso</em>, <em>in itinere</em>, <em>casa-trabalho</em>.
+          </div>
+        </div>
+        <div class="col-lg-3 d-grid">
+          <button class="btn btn-primary"><i class="bi bi-search me-1"></i>Buscar</button>
+        </div>
+      </div>
+    </div>
+  </form>
+
+  <div class="row g-3">
+    <!-- facetas -->
+    <aside class="col-lg-3">
+      <div class="card border-0 shadow-sm"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <strong class="small">Filtros</strong><a href="#" class="small">limpar</a>
+        </div>
+
+        <div class="facet">
+          <h6>Tese (catálogo)</h6>
+          <a class="facet-item on"><span><i class="bi bi-check2-square me-1"></i>Trajeto - B91</span><span class="n">200</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>Trajeto - B94</span><span class="n">61</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>Restabelecimento de benefício</span><span class="n">34</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>Concessão duplicada</span><span class="n">22</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>Rotatividade</span><span class="n">19</span></a>
+          <a href="#" class="facet-more">+ 14 teses</a>
+          <div class="form-check form-switch mt-2 small">
+            <input class="form-check-input" type="checkbox" id="sw-livre">
+            <label class="form-check-label" for="sw-livre">ver teses como vieram na decisão</label>
+          </div>
+        </div>
+
+        <div class="facet">
+          <h6>Resultado</h6>
+          <a class="facet-item"><span class="res-pill res-fav">Favorável</span><span class="n">81</span></a>
+          <a class="facet-item"><span class="res-pill res-par">Parcialmente</span><span class="n">102</span></a>
+          <a class="facet-item"><span class="res-pill res-des">Desfavorável</span><span class="n">17</span></a>
+        </div>
+
+        <div class="facet">
+          <h6>Tribunal</h6>
+          <a class="facet-item on"><span><i class="bi bi-check2-square me-1"></i>TRF4</span><span class="n">200</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>TRF3</span><span class="n">58</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>TRF5</span><span class="n">12</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>STJ</span><span class="n">3</span></a>
+        </div>
+
+        <div class="facet">
+          <h6>Instância</h6>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>Sentença</span><span class="n">108</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>Acórdão</span><span class="n">41</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>Embargos de declaração</span><span class="n">51</span></a>
+        </div>
+
+        <div class="facet">
+          <h6>UF</h6>
+          <select class="form-select form-select-sm"><option>Todas</option><option selected>SC (126)</option><option>RS (41)</option><option>PR (33)</option></select>
+        </div>
+
+        <div class="facet">
+          <h6>Vigência FAP</h6>
+          <select class="form-select form-select-sm"><option>Qualquer</option><option>2017</option><option>2018</option><option>2019</option><option>2020</option></select>
+          <div class="form-text">decisão que cubra o ano escolhido (ex.: "2017 a 2021" vale para 2019)</div>
+        </div>
+
+        <div class="facet">
+          <h6>Julgada entre</h6>
+          <div class="d-flex flex-column gap-1">
+            <input type="month" class="form-control form-control-sm" style="min-width:0" value="2023-01">
+            <input type="month" class="form-control form-control-sm" style="min-width:0" value="2026-08">
+          </div>
+        </div>
+      </div></div>
+    </aside>
+
+    <!-- resultados -->
+    <div class="col-lg-9">
+      <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
+          <div><strong class="fs-5">200</strong> decisões em <strong>143</strong> processos
+            <span class="text-body-secondary small">· Trajeto - B91 · TRF4</span></div>
+          <div class="small text-body-secondary">Como tem decidido</div>
+        </div>
+        <div class="exito mb-2" title="clique numa faixa para filtrar">
+          <a href="#" class="fav" style="width:40.5%" title="Favorável · 81"></a>
+          <a href="#" class="par" style="width:51%" title="Parcialmente favorável · 102"></a>
+          <a href="#" class="des" style="width:8.5%" title="Desfavorável · 17"></a>
+        </div>
+        <div class="exito-legend d-flex flex-wrap gap-3 small">
+          <a href="#"><span class="dot" style="background:var(--jur-fav)"></span>Favorável <strong>81</strong> (41%)</a>
+          <a href="#"><span class="dot" style="background:var(--jur-par)"></span>Parcialmente <strong>102</strong> (51%)</a>
+          <a href="#"><span class="dot" style="background:var(--jur-des)"></span>Desfavorável <strong>17</strong> (8%)</a>
+          <span class="ms-auto text-body-secondary"><i class="bi bi-info-circle me-1"></i>contado por decisão, na visão da empresa</span>
+        </div>
+      </div></div>
+
+      <div class="mk-note p-2 px-3 mb-3 rounded">
+        <b>Nota:</b> os números são reais. Na planilha, <em>acidente de trajeto</em> no TRF4 tem 200 decisões: 81 favoráveis, 102 parcialmente e 17 desfavoráveis. O total sai da soma das facetas, não do "estimado" do Meilisearch, que para em 1.000 (mesma lição do DOU).
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <div class="btn-group btn-group-sm" role="group">
+          <input type="radio" class="btn-check" name="agrup" id="ag-proc" checked>
+          <label class="btn btn-outline-secondary" for="ag-proc"><i class="bi bi-diagram-2 me-1"></i>Por processo</label>
+          <input type="radio" class="btn-check" name="agrup" id="ag-dec">
+          <label class="btn btn-outline-secondary" for="ag-dec"><i class="bi bi-list-ul me-1"></i>Por decisão</label>
+        </div>
+        <select class="form-select form-select-sm w-auto">
+          <option>Mais relevantes</option><option>Julgadas mais recentemente</option><option>Instância mais alta primeiro</option>
+        </select>
+      </div>
+
+      <!-- card 1: processo com virada -->
+      <div class="card border-0 shadow-sm proc-card mb-3"><div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+          <div>
+            <span class="proc-num">5012345-67.2021.4.04.7205</span>
+            <span class="text-body-secondary">·</span>
+            <strong>Metalúrgica Vale do Itajaí S.A.</strong>
+            <span class="badge text-bg-light border ms-1">FAP 2017 a 2021</span>
+          </div>
+          <span class="virada"><i class="bi bi-arrow-up-right-circle-fill me-1"></i>virou no acórdão</span>
+        </div>
+
+        <div class="trilha mb-3">
+          <div class="trilha-step" data-go="decisao">
+            <div class="t-tipo">Sentença</div>
+            <div class="t-org">2ª Vara Federal de Blumenau</div>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+              <span class="t-data">14/03/2024</span><span class="res-pill res-des">Desfavorável</span>
+            </div>
+          </div>
+          <div class="trilha-step" data-go="decisao">
+            <div class="t-tipo">Acórdão</div>
+            <div class="t-org">TRF4 · 2ª Turma</div>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+              <span class="t-data">12/05/2026</span><span class="res-pill res-par">Parcialmente</span>
+            </div>
+          </div>
+          <div class="trilha-step vazio">
+            <div class="t-tipo">Embargos</div>
+            <div class="t-org">não consta na base</div>
+          </div>
+        </div>
+
+        <div class="mb-2">
+          <span class="tese-chip match">ACIDENTE DE TRAJETO</span><span class="tese-chip">ERRO NA FREQUENCIA</span><span class="tese-chip">PRORROGACAO DE BENEFICIO</span><span class="tese-chip">RETROATIVIDADE</span><span class="tese-chip">+1</span>
+        </div>
+        <p class="snippet mb-2">
+          …a Turma acolheu a exclusão dos benefícios decorrentes de <mark>acidente de trajeto</mark> do cálculo do índice de frequência, com efeitos desde a vigência 2017, mas manteve o custo da <mark>prorrogação</mark> do benefício por entender que…
+        </p>
+        <div class="d-flex flex-wrap justify-content-end gap-2">
+          <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-clipboard me-1"></i>Copiar citação</button>
+          <button class="btn btn-sm btn-outline-primary" data-go="decisao"><i class="bi bi-eye me-1"></i>Ver decisões</button>
+        </div>
+      </div></div>
+
+      <!-- card 2: só sentença -->
+      <div class="card border-0 shadow-sm proc-card mb-3"><div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+          <div>
+            <span class="proc-num">5003321-10.2023.4.04.7207</span>
+            <span class="text-body-secondary">·</span>
+            <strong>Frigorífico Campos Gerais S.A.</strong>
+            <span class="badge text-bg-light border ms-1">FAP 2019 a 2023</span>
+          </div>
+        </div>
+        <div class="trilha mb-3">
+          <div class="trilha-step" data-go="decisao">
+            <div class="t-tipo">Sentença</div>
+            <div class="t-org">1ª Vara Federal de Tubarão</div>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+              <span class="t-data">02/02/2025</span><span class="res-pill res-fav">Favorável</span>
+            </div>
+          </div>
+          <div class="trilha-step vazio"><div class="t-tipo">Acórdão</div><div class="t-org">não consta na base</div></div>
+          <div class="trilha-step vazio"><div class="t-tipo">Embargos</div><div class="t-org">não consta na base</div></div>
+        </div>
+        <div class="mb-2">
+          <span class="tese-chip match">ACIDENTE DE TRAJETO</span><span class="tese-chip">TAXA DE ROTATIVIDADE</span>
+        </div>
+        <p class="snippet mb-2">
+          …julgo procedente o pedido para determinar o recálculo do FAP com a exclusão dos eventos de <mark>trajeto</mark> (B91), na linha da Resolução CNPS nº 1.329/2017, e do cômputo da <mark>prorrogação</mark>…
+        </p>
+        <div class="d-flex flex-wrap justify-content-end gap-2">
+          <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-clipboard me-1"></i>Copiar citação</button>
+          <button class="btn btn-sm btn-outline-primary" data-go="decisao"><i class="bi bi-eye me-1"></i>Ver decisões</button>
+        </div>
+      </div></div>
+
+      <!-- card 3: sentença + embargos, desfavorável -->
+      <div class="card border-0 shadow-sm proc-card mb-3"><div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+          <div>
+            <span class="proc-num">5021890-44.2022.4.04.7201</span>
+            <span class="text-body-secondary">·</span>
+            <strong>Transportes Rio Tubarão Ltda.</strong>
+            <span class="badge text-bg-light border ms-1">FAP 2020</span>
+          </div>
+        </div>
+        <div class="trilha mb-3">
+          <div class="trilha-step" data-go="decisao">
+            <div class="t-tipo">Sentença</div>
+            <div class="t-org">3ª Vara Federal de Joinville</div>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+              <span class="t-data">20/09/2024</span><span class="res-pill res-des">Desfavorável</span>
+            </div>
+          </div>
+          <div class="trilha-step" data-go="decisao">
+            <div class="t-tipo">Embargos</div>
+            <div class="t-org">3ª Vara Federal de Joinville</div>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+              <span class="t-data">11/11/2024</span><span class="res-pill res-des">Desfavorável</span>
+            </div>
+          </div>
+          <div class="trilha-step vazio"><div class="t-tipo">Acórdão</div><div class="t-org">não consta na base</div></div>
+        </div>
+        <div class="mb-2"><span class="tese-chip match">ACIDENTE DE TRAJETO</span><span class="tese-chip">AUSENCIA DE REQUERIMENTO ADMINISTRATIVO</span></div>
+        <p class="snippet mb-2">
+          …o pedido de exclusão dos eventos de <mark>trajeto</mark> não foi submetido à contestação administrativa, razão pela qual reconheço a falta de interesse…
+        </p>
+        <div class="d-flex flex-wrap justify-content-end gap-2">
+          <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-clipboard me-1"></i>Copiar citação</button>
+          <button class="btn btn-sm btn-outline-primary" data-go="decisao"><i class="bi bi-eye me-1"></i>Ver decisões</button>
+        </div>
+      </div></div>
+
+      <nav><ul class="pagination pagination-sm justify-content-center">
+        <li class="page-item disabled"><a class="page-link">‹</a></li><li class="page-item active"><a class="page-link">1</a></li>
+        <li class="page-item"><a class="page-link">2</a></li><li class="page-item"><a class="page-link">3</a></li>
+        <li class="page-item disabled"><a class="page-link">…</a></li><li class="page-item"><a class="page-link">8</a></li>
+        <li class="page-item"><a class="page-link">›</a></li>
+      </ul></nav>
+
+      <div class="mk-note p-2 px-3 rounded">
+        <b>Nota:</b> o padrão é <b>um card por processo</b>. Na planilha, 162 dos 289 processos têm mais de uma peça, e por decisão o mesmo caso apareceria três vezes. A trilha mostra a <em>virada</em>: sentença perdida e acórdão ganho é o precedente mais forte de citar. "Por decisão" continua disponível para quem quer a lista plana.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================================
+     2 · DECISÃO
+     ====================================================================== -->
+<section class="mk-screen" id="decisao">
+  <div class="row mb-4"><div class="col-12"><div class="card border-0 shadow-sm" style="border-radius:16px;overflow:hidden">
+    <div class="card-body page-hero">
+      <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon"><i class="bi bi-bank page-hero-icon__glyph"></i></div>
+          <div>
+            <h1 class="h4 mb-1" style="font-weight:700">Acórdão · TRF4 · 2ª Turma</h1>
+            <small class="text-muted"><span class="proc-num">5012345-67.2021.4.04.7205</span> · Metalúrgica Vale do Itajaí S.A.</small>
+          </div>
+        </div>
+        <nav><ol class="breadcrumb mb-0 bg-transparent small">
+          <li class="breadcrumb-item"><a href="#">Painel de Processos</a></li>
+          <li class="breadcrumb-item"><a href="#" data-go="pesquisa">Base de Jurisprudência</a></li>
+          <li class="breadcrumb-item active">Acórdão</li>
+        </ol></nav>
+      </div>
+    </div>
+  </div></div></div>
+
+  <!-- navegação dentro do processo -->
+  <div class="card border-0 shadow-sm mb-3"><div class="card-body py-2">
+    <div class="d-flex flex-wrap align-items-center gap-2 small">
+      <span class="text-body-secondary me-1">Neste processo:</span>
+      <a href="#" class="btn btn-sm btn-outline-secondary">Sentença · 14/03/2024 <span class="res-pill res-des ms-1">Desfavorável</span></a>
+      <i class="bi bi-chevron-right text-body-secondary"></i>
+      <a href="#" class="btn btn-sm btn-primary">Acórdão · 12/05/2026 <span class="res-pill ms-1" style="color:#fff">Parcialmente</span></a>
+      <i class="bi bi-chevron-right text-body-secondary"></i>
+      <span class="btn btn-sm btn-outline-secondary disabled">Embargos · não consta</span>
+    </div>
+  </div></div>
+
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body border-0 pt-3">
+          <ul class="nav nav-tabs card-header-tabs" id="dec-tabs">
+            <li class="nav-item"><a class="nav-link active" href="#" data-tab="t-resumo">Resumo</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="t-ementa">Ementa</a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="t-args">Argumentos <span class="badge text-bg-light border">5</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="t-fund">Fundamentos <span class="badge text-bg-light border">4</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="t-prec">Precedentes <span class="badge text-bg-light border">3</span></a></li>
+            <li class="nav-item"><a class="nav-link" href="#" data-tab="t-pdf"><i class="bi bi-file-earmark-pdf"></i> PDF</a></li>
+          </ul>
+        </div>
+        <div class="card-body">
+          <div class="dec-tab" id="t-resumo">
+            <h6 class="text-body-secondary text-uppercase small fw-bold">Por que esse resultado</h6>
+            <p>A Turma acolheu a exclusão dos benefícios de acidente de trajeto do índice de frequência, reconhecendo que eventos ocorridos fora do ambiente de trabalho não refletem o risco da atividade. Rejeitou, porém, a exclusão do custo das prorrogações, por entender que a prorrogação integra o mesmo benefício acidentário.</p>
+            <h6 class="text-body-secondary text-uppercase small fw-bold mt-4">A história do caso</h6>
+            <p class="mb-0">A empresa ajuizou ação de revisão do FAP das vigências 2017 a 2021 pedindo a exclusão de benefícios de trajeto, de benefícios em duplicidade (CAT + NTEP) e do custo de prorrogações. A sentença julgou improcedente por ausência de prova do nexo. Em apelação, o TRF4 reformou parcialmente: excluiu os eventos de trajeto e os registros duplicados, determinou o recálculo com repetição do indébito e manteve o custo das prorrogações. Sucumbência recíproca.</p>
+          </div>
+          <div class="dec-tab d-none" id="t-ementa">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="badge text-bg-light border"><i class="bi bi-quote me-1"></i>transcrição literal</span>
+              <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-clipboard me-1"></i>Copiar ementa</button>
+            </div>
+            <div class="ementa">
+              <p><span class="cab">TRIBUTÁRIO. PREVIDENCIÁRIO. FATOR ACIDENTÁRIO DE PREVENÇÃO – FAP. ACIDENTE DE TRAJETO. EXCLUSÃO. PRORROGAÇÃO DE BENEFÍCIO. CUSTO. MANUTENÇÃO. REPETIÇÃO DO INDÉBITO.</span></p>
+              <p>1. Os acidentes de trajeto não guardam relação com o risco ambiental do trabalho e devem ser excluídos do cálculo do FAP, na esteira da Resolução CNPS nº 1.329/2017.</p>
+              <p>2. A prorrogação do benefício acidentário não constitui evento autônomo, integrando o custo do benefício originário.</p>
+              <p>3. Apelação parcialmente provida.</p>
+            </div>
+            <div class="form-text mt-2">Quando o modelo não consegue transcrever, a ementa vem resumida e o selo muda para <span class="badge text-bg-warning">resumo — não é transcrição</span>, para ninguém citar paráfrase como literal.</div>
+          </div>
+          <div class="dec-tab d-none" id="t-args">
+            <div class="row g-4">
+              <div class="col-md-6">
+                <h6 class="small fw-bold" style="color:var(--jur-fav)"><i class="bi bi-check-circle-fill me-1"></i>Acolhidos</h6>
+                <ul class="list-unstyled arg-list mb-0">
+                  <li>Acidente de trajeto não reflete o risco ambiental do trabalho</li>
+                  <li>Duplicidade CAT + NTEP para o mesmo evento infla a frequência</li>
+                  <li>Aplicação retroativa da exclusão às vigências anteriores a 2018</li>
+                </ul>
+              </div>
+              <div class="col-md-6">
+                <h6 class="small fw-bold" style="color:var(--jur-des)"><i class="bi bi-x-circle-fill me-1"></i>Rejeitados</h6>
+                <ul class="list-unstyled arg-list mb-0">
+                  <li>Exclusão do custo das prorrogações do benefício</li>
+                  <li>Honorários integralmente à conta da União</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="dec-tab d-none" id="t-fund">
+            <ul class="list-unstyled arg-list mb-0">
+              <li>O FAP deve medir o risco ambiental da atividade; eventos externos ao ambiente de trabalho distorcem o índice.</li>
+              <li>A Resolução CNPS nº 1.329/2017 excluiu o trajeto a partir de 2018, sem vedar o reconhecimento para vigências anteriores.</li>
+              <li>A prorrogação é continuidade do mesmo benefício, não um novo evento acidentário.</li>
+              <li>Registro duplicado do mesmo acidente (CAT e NTEP) deve ser contado uma única vez.</li>
+            </ul>
+          </div>
+          <div class="dec-tab d-none" id="t-prec">
+            <ul class="list-unstyled arg-list mb-0">
+              <li class="d-flex justify-content-between gap-2"><span>TRF4 AC 5029271-50.2020.4.04.7200</span><a href="#" class="small"><i class="bi bi-box-arrow-in-up-right me-1"></i>está na base</a></li>
+              <li class="d-flex justify-content-between gap-2"><span>TRF4 AC 5011807-33.2022.4.04.7009</span><a href="#" class="small"><i class="bi bi-box-arrow-in-up-right me-1"></i>está na base</a></li>
+              <li class="d-flex justify-content-between gap-2"><span>STJ REsp 1.999.888/SC</span><span class="small text-body-secondary">fora da base</span></li>
+            </ul>
+          </div>
+          <div class="dec-tab d-none" id="t-pdf">
+            <div class="ratio ratio-4x3 rounded border d-flex align-items-center justify-content-center bg-body-secondary">
+              <div class="d-flex flex-column align-items-center justify-content-center text-body-secondary">
+                <i class="bi bi-file-earmark-pdf display-5"></i><div class="small">PDF da decisão, em tela</div>
+              </div>
+            </div>
+            <div class="alert alert-light border small mt-2 mb-0"><i class="bi bi-google me-1"></i>Decisão importada da planilha: o PDF está no Drive do escritório. <a href="#">Abrir no Drive</a> · <a href="#">Anexar PDF aqui</a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+        <div class="mb-3"><span class="res-pill res-par fs-6">Parcialmente favorável</span></div>
+        <dl class="dec-meta mb-0">
+          <dt>Tribunal · órgão</dt><dd>TRF4 · 2ª Turma</dd>
+          <dt>Relatora</dt><dd>Des. Federal Ana Exemplo Martins</dd>
+          <dt>Classe</dt><dd>Apelação Cível</dd>
+          <dt>Julgado em</dt><dd>12/05/2026</dd>
+          <dt>Vigência FAP</dt><dd>2017 a 2021</dd>
+          <dt>Teses</dt>
+          <dd>
+            <span class="tese-chip match">ACIDENTE DE TRAJETO</span><span class="tese-chip">ERRO NA FREQUENCIA</span><span class="tese-chip">PRORROGACAO DE BENEFICIO</span><span class="tese-chip">RETROATIVIDADE</span><span class="tese-chip">DUPLICIDADE DE BENEFICIO</span>
+            <div class="small text-body-secondary mt-1">no catálogo: <span class="cat-chip">Trajeto - B91</span><span class="cat-chip">Concessão duplicada</span></div>
+          </dd>
+        </dl>
+      </div></div>
+
+      <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+        <h6 class="small fw-bold mb-2"><i class="bi bi-clipboard me-1"></i>Citação pronta</h6>
+        <div class="citacao-box mb-2">(TRF4, AC 5012345-67.2021.4.04.7205, 2ª Turma, Rel. Des. Federal Ana Exemplo Martins, julgado em 12/05/2026)</div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-primary flex-fill">Copiar citação</button>
+          <button class="btn btn-sm btn-outline-secondary flex-fill">Citação + ementa</button>
+        </div>
+      </div></div>
+
+      <div class="card border-0 shadow-sm"><div class="card-body small">
+        <div class="text-body-secondary mb-2"><i class="bi bi-clock-history me-1"></i>Origem</div>
+        <div>Importada da planilha <strong>BANCO_MESTRE_FAP.xlsx</strong> em 22/09/2026 por Advogada Exemplo</div>
+        <div class="d-flex gap-2 mt-3">
+          <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil me-1"></i>Corrigir dados</button>
+          <button class="btn btn-sm btn-outline-secondary" title="Exige o PDF"><i class="bi bi-arrow-repeat me-1"></i>Reprocessar com IA</button>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="mk-note p-2 px-3 mt-3 rounded">
+    <b>Nota:</b> "Corrigir dados" existe porque a IA erra, e a correção humana precisa sobreviver ao reprocessamento. "Reprocessar" só fica ativo com o PDF anexado: da planilha vem só o link do Drive.
+  </div>
+</section>
+
+<!-- ======================================================================
+     3 · IMPORTAR PLANILHA
+     ====================================================================== -->
+<section class="mk-screen" id="importar">
+  <div class="row mb-4"><div class="col-12"><div class="card border-0 shadow-sm" style="border-radius:16px;overflow:hidden">
+    <div class="card-body page-hero">
+      <div class="d-flex align-items-center gap-3">
+        <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon"><i class="bi bi-file-earmark-spreadsheet page-hero-icon__glyph"></i></div>
+        <div>
+          <h1 class="h4 mb-1" style="font-weight:700">Importar base estruturada</h1>
+          <small class="text-muted">Planilha no formato do Banco Mestre FAP (.xlsx)</small>
+        </div>
+      </div>
+    </div>
+  </div></div></div>
+
+  <div class="steps mb-3">
+    <div class="st done"><i class="bi bi-check-circle-fill me-1"></i>1 · Arquivo</div>
+    <div class="st cur"><i class="bi bi-2-circle-fill me-1"></i>2 · Conferência</div>
+    <div class="st"><i class="bi bi-3-circle me-1"></i>3 · Importação</div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <div><i class="bi bi-file-earmark-excel text-success me-1"></i><strong>BANCO_MESTRE_FAP.xlsx</strong> <span class="text-body-secondary small">· aba DOCUMENTOS · 21 colunas reconhecidas</span></div>
+      <a href="#" class="small">trocar arquivo</a>
+    </div>
+    <div class="row g-2">
+      <div class="col-6 col-md-3"><div class="kpi"><div class="v">515</div><div class="l">decisões lidas</div></div></div>
+      <div class="col-6 col-md-3"><div class="kpi"><div class="v" style="color:var(--jur-fav)">515</div><div class="l">novas na base</div></div></div>
+      <div class="col-6 col-md-3"><div class="kpi"><div class="v">0</div><div class="l">já existem (processo + tipo)</div></div></div>
+      <div class="col-6 col-md-3"><div class="kpi"><div class="v" style="color:var(--jur-par)">80</div><div class="l">com campo faltando</div></div></div>
+    </div>
+  </div></div>
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="card border-0 shadow-sm h-100"><div class="card-body">
+        <h6 class="fw-bold mb-3"><i class="bi bi-magic me-1"></i>O que será padronizado na importação</h6>
+        <table class="table table-sm align-middle mb-0">
+          <tbody>
+          <tr class="norm-row"><td>Instância</td><td><code>SENTENÇA</code> + <code>SENTENCA</code> → Sentença</td><td class="text-end text-body-secondary">65 linhas</td></tr>
+          <tr class="norm-row"><td>Resultado</td><td><code>FAVORÁVEL</code> + <code>FAVORAVEL</code> → Favorável</td><td class="text-end text-body-secondary">4 linhas</td></tr>
+          <tr class="norm-row"><td>Tribunal</td><td>155 textos → <strong>8 tribunais</strong> + <strong>110 unidades</strong><br><span class="variante">"TRF4 - 2a Vara Federal de Blumenau" → TRF4 · 2ª Vara Federal de Blumenau · SC</span></td><td class="text-end text-body-secondary">515 linhas</td></tr>
+          <tr class="norm-row"><td>Teses</td><td>251 grafias → <strong>219 teses</strong><br><span class="variante">"PRORROGAÇÃO DE BENEFÍCIO" = "PRORROGACAO DE BENEFICIO"</span></td><td class="text-end text-body-secondary">32 unificadas</td></tr>
+          <tr class="norm-row"><td>Vigência</td><td><code>2018.0</code> → 2018 · <code>2017 a 2021</code> → 2017–2021</td><td class="text-end text-body-secondary">436 linhas</td></tr>
+          <tr class="norm-row"><td>Instância rara</td><td>"DECISÃO DE ADMISSIBILIDADE DE RECURSO ESPECIAL" → <em>Outra</em></td><td class="text-end text-body-secondary">1 linha</td></tr>
+          </tbody>
+        </table>
+      </div></div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+        <h6 class="fw-bold mb-2"><i class="bi bi-exclamation-triangle text-warning me-1"></i>Entram, mas com aviso</h6>
+        <ul class="small mb-0 ps-3">
+          <li><strong>79</strong> sem vigência FAP: não aparecem no filtro de vigência</li>
+          <li><strong>1</strong> sem data de julgamento</li>
+          <li><strong>6</strong> sem parte autora</li>
+        </ul>
+        <a href="#" class="small d-inline-block mt-2">baixar lista (.xlsx)</a>
+      </div></div>
+      <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+        <h6 class="fw-bold mb-2"><i class="bi bi-arrow-left-right me-1"></i>Teses e o catálogo</h6>
+        <div class="small">
+          <div class="d-flex justify-content-between"><span>ligadas automaticamente</span><strong style="color:var(--jur-fav)">43</strong></div>
+          <div class="d-flex justify-content-between"><span>sem correspondência → vão para revisão</span><strong style="color:var(--jur-par)">176</strong></div>
+        </div>
+        <div class="form-text">A decisão entra de qualquer jeito. A tese sem correspondência só não aparece no filtro do catálogo nem na geração até alguém ligá-la.</div>
+      </div></div>
+      <div class="card border-0 shadow-sm"><div class="card-body small">
+        <h6 class="fw-bold mb-2"><i class="bi bi-slash-circle text-body-secondary me-1"></i>Não será importado</h6>
+        <div>Abas <code>ERROS_LOG</code>, <code>RESULTADOS</code>, <code>DOCUMENTO_TESE</code>, <code>ARGUMENTOS_VENCEDORES</code>: log e agregados, que aqui são recalculados a partir das decisões.</div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mt-3"><div class="card-body">
+    <h6 class="fw-bold mb-2">Amostra</h6>
+    <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead><tr><th>Processo</th><th>Instância</th><th>Tribunal</th><th>Resultado</th><th>Teses</th><th></th></tr></thead>
+      <tbody>
+        <tr><td class="proc-num">5012345-67.2021.4.04.7205</td><td>Acórdão</td><td>TRF4 · 2ª Turma</td><td><span class="res-pill res-par">Parcialmente</span></td><td class="small">4</td><td><i class="bi bi-check-circle text-success"></i></td></tr>
+        <tr><td class="proc-num">5003321-10.2023.4.04.7207</td><td>Sentença</td><td>TRF4 · 1ª VF Tubarão</td><td><span class="res-pill res-fav">Favorável</span></td><td class="small">2</td><td><i class="bi bi-check-circle text-success"></i></td></tr>
+        <tr><td class="proc-num">0801234-22.2022.4.05.8300</td><td>Sentença</td><td>TRF5 · 5ª VF Recife</td><td><span class="res-pill res-des">Desfavorável</span></td><td class="small">1</td><td><i class="bi bi-exclamation-triangle text-warning" title="sem vigência FAP"></i></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div></div>
+
+  <div class="d-flex justify-content-between align-items-center mt-3">
+    <a href="#" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Voltar</a>
+    <button class="btn btn-success"><i class="bi bi-check2 me-1"></i>Importar 515 decisões</button>
+  </div>
+  <div class="mk-note p-2 px-3 mt-3 rounded">
+    <b>Nota:</b> todos os números desta tela saíram da planilha real. Reimportar a mesma planilha não duplica nada: a chave é processo + instância + data. Decisão já corrigida à mão não é sobrescrita.
+  </div>
+</section>
+
+<!-- ======================================================================
+     4 · ENVIAR DECISÕES (PDF)
+     ====================================================================== -->
+<section class="mk-screen" id="enviar">
+  <div class="row mb-4"><div class="col-12"><div class="card border-0 shadow-sm" style="border-radius:16px;overflow:hidden">
+    <div class="card-body page-hero">
+      <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon"><i class="bi bi-cloud-arrow-up page-hero-icon__glyph"></i></div>
+          <div>
+            <h1 class="h4 mb-1" style="font-weight:700">Enviar decisões</h1>
+            <small class="text-muted">Sentenças, acórdãos e embargos em PDF: a IA lê e classifica</small>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-cpu me-1"></i>Modelo: Claude Sonnet 5</button>
+      </div>
+    </div>
+  </div></div></div>
+
+  <div class="dropzone mb-3">
+    <i class="bi bi-file-earmark-pdf display-5 text-danger"></i>
+    <h5 class="mt-2 mb-1">Arraste os PDFs das decisões aqui</h5>
+    <p class="text-body-secondary small mb-3">Vários de uma vez. Cada arquivo vira uma decisão, e o processo e a instância vêm de dentro do documento.</p>
+    <button class="btn btn-primary btn-sm"><i class="bi bi-folder2-open me-1"></i>Escolher arquivos</button>
+  </div>
+
+  <div class="card border-0 shadow-sm"><div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <h6 class="fw-bold mb-0">Fila de processamento</h6>
+      <div class="d-flex gap-2 small">
+        <span class="badge rounded-pill text-bg-light border">na fila 3</span>
+        <span class="badge rounded-pill text-bg-primary">lendo 1</span>
+        <span class="badge rounded-pill text-bg-success">concluídas 4</span>
+        <span class="badge rounded-pill text-bg-warning">revisar 1</span>
+        <span class="badge rounded-pill text-bg-danger">falhou 1</span>
+      </div>
+    </div>
+    <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Arquivo</th><th>Resultado da leitura</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        <tr>
+          <td><i class="bi bi-file-earmark-pdf text-danger me-1"></i>Acórdão - METALURGICA VALE.pdf</td>
+          <td class="small">Acórdão · TRF4 · <span class="res-pill res-par">Parcialmente</span> · 4 teses</td>
+          <td><span class="badge text-bg-success">concluída</span></td>
+          <td class="text-end"><a href="#" data-go="decisao" class="small">abrir</a></td>
+        </tr>
+        <tr>
+          <td><i class="bi bi-file-earmark-pdf text-danger me-1"></i>Sentença - FRIGORIFICO CG.pdf</td>
+          <td class="small">Sentença · TRF4 · 1ª VF Tubarão · <span class="res-pill res-fav">Favorável</span></td>
+          <td><span class="badge text-bg-success">concluída</span></td>
+          <td class="text-end"><a href="#" class="small">abrir</a></td>
+        </tr>
+        <tr>
+          <td><i class="bi bi-file-earmark-pdf text-danger me-1"></i>ED - TRANSPORTES RT.pdf</td>
+          <td class="small text-body-secondary">
+            <i class="bi bi-link-45deg me-1"></i>Mesmo processo de <strong>1 decisão</strong> já na base: embargos vinculados à sentença.
+          </td>
+          <td><span class="badge text-bg-success">concluída</span></td>
+          <td class="text-end"><a href="#" class="small">abrir</a></td>
+        </tr>
+        <tr>
+          <td><i class="bi bi-file-earmark-pdf text-danger me-1"></i>Sentença - TEXTIL SERRA AZUL.pdf</td>
+          <td class="small">
+            <i class="bi bi-files me-1 text-warning"></i>Já existe uma <strong>sentença</strong> deste processo, de 03/04/2025.
+            <div class="mt-1"><a href="#" class="me-2">manter a da base</a><a href="#" class="me-2">substituir</a><a href="#">guardar as duas</a></div>
+          </td>
+          <td><span class="badge text-bg-warning">revisar</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><i class="bi bi-file-earmark-pdf text-danger me-1"></i>Acórdão ED - CERAMICA SUL.pdf</td>
+          <td class="small"><div class="progress" style="height:6px"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width:60%"></div></div><span class="text-body-secondary">lendo o documento (38 páginas)…</span></td>
+          <td><span class="badge text-bg-primary">lendo</span></td>
+          <td></td>
+        </tr>
+        <tr>
+          <td><i class="bi bi-file-earmark-pdf text-danger me-1"></i>Sentença - DIGITALIZADA.pdf</td>
+          <td class="small" style="color:var(--jur-des)"><i class="bi bi-exclamation-octagon me-1"></i>O PDF é imagem sem texto e a leitura não achou número de processo nem dispositivo.</td>
+          <td><span class="badge text-bg-danger">falhou</span></td>
+          <td class="text-end text-nowrap"><a href="#" class="small me-2">tentar de novo</a><a href="#" class="small text-body-secondary">descartar</a></td>
+        </tr>
+        <tr class="text-body-secondary"><td><i class="bi bi-file-earmark-pdf me-1"></i>Acórdão - POLIMEROS NORTE.pdf</td><td class="small">—</td><td><span class="badge text-bg-light border">na fila</span></td><td></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div></div>
+
+  <div class="mk-note p-2 px-3 mt-3 rounded">
+    <b>Nota:</b> a leitura roda em segundo plano, e dá para fechar a tela. O motivo da falha é dito em português, com "tentar de novo" na linha, porque no Google os erros ficavam numa aba com status "PENDENTE" que nunca mudava. Duplicata não é descartada em silêncio: o advogado decide.
+  </div>
+</section>
+
+<!-- ======================================================================
+     5 · CORRESPONDÊNCIA DE TESES
+     ====================================================================== -->
+<section class="mk-screen" id="teses">
+  <div class="row mb-4"><div class="col-12"><div class="card border-0 shadow-sm" style="border-radius:16px;overflow:hidden">
+    <div class="card-body page-hero">
+      <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon"><i class="bi bi-arrow-left-right page-hero-icon__glyph"></i></div>
+          <div>
+            <h1 class="h4 mb-1" style="font-weight:700">Correspondência de teses</h1>
+            <small class="text-muted">Como as teses que aparecem nas decisões se ligam ao catálogo do Painel</small>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-outline-primary"><i class="bi bi-stars me-1"></i>Sugerir com IA para as pendentes</button>
+      </div>
+    </div>
+  </div></div></div>
+
+  <div class="card border-0 shadow-sm mb-3"><div class="card-body py-2">
+    <div class="d-flex flex-wrap align-items-center gap-3">
+      <div class="btn-group btn-group-sm">
+        <input type="radio" class="btn-check" name="tf" id="tf1" checked><label class="btn btn-outline-secondary" for="tf1">Pendentes <span class="badge text-bg-warning">176</span></label>
+        <input type="radio" class="btn-check" name="tf" id="tf2"><label class="btn btn-outline-secondary" for="tf2">Com sugestão da IA <span class="badge text-bg-light border">58</span></label>
+        <input type="radio" class="btn-check" name="tf" id="tf3"><label class="btn btn-outline-secondary" for="tf3">Ligadas <span class="badge text-bg-light border">43</span></label>
+        <input type="radio" class="btn-check" name="tf" id="tf4"><label class="btn btn-outline-secondary" for="tf4">Sem equivalente</label>
+      </div>
+      <input type="search" class="form-control form-control-sm ms-auto" style="max-width:260px" placeholder="Filtrar teses…">
+    </div>
+  </div></div>
+
+  <div class="card border-0 shadow-sm"><div class="card-body p-0">
+    <div class="table-responsive">
+    <table class="table align-middle mb-0">
+      <thead><tr><th class="ps-3">Tese nas decisões</th><th class="text-end">Decisões</th><th>Tese(s) do catálogo</th><th class="pe-3"></th></tr></thead>
+      <tbody>
+        <tr class="map-row">
+          <td class="ps-3"><strong>ACIDENTE DE TRAJETO</strong><div class="variante">também grafada: TRAJETO · ACIDENTE IN ITINERE</div></td>
+          <td class="text-end">284</td>
+          <td><span class="cat-chip">Trajeto - B91 <span class="x">×</span></span><span class="cat-chip">Trajeto - B92 <span class="x">×</span></span><span class="cat-chip">Trajeto - B93 <span class="x">×</span></span><span class="cat-chip">Trajeto - B94 <span class="x">×</span></span></td>
+          <td class="pe-3 text-end"><span class="badge text-bg-success">ligada</span></td>
+        </tr>
+        <tr class="map-row">
+          <td class="ps-3"><strong>DUPLICIDADE DE BENEFICIO</strong>
+            <div class="variante">+ 5 variantes: BENEFICIOS EM DUPLICIDADE · BENEFICIO CONCEDIDO EM DUPLICIDADE · DUPLICIDADE DE BENEFICIOS · BENEFICIO EM DUPLICIDADE · DUPLICIDADE DE REGISTRO</div></td>
+          <td class="text-end">43</td>
+          <td><span class="cat-chip sug"><i class="bi bi-stars"></i> Concessão duplicada de benefício</span><span class="cat-chip sug"><i class="bi bi-stars"></i> CAT duplicada</span></td>
+          <td class="pe-3 text-end text-nowrap"><button class="btn btn-sm btn-success"><i class="bi bi-check2"></i> Aceitar</button> <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></button></td>
+        </tr>
+        <tr class="map-row">
+          <td class="ps-3"><strong>AUSENCIA DE VINCULO EMPREGATICIO</strong><div class="variante">+ 3 variantes: AUSENCIA DE VINCULO · SEGURADO SEM VINCULO · BENEFICIO SEM VINCULO EMPREGATICIO</div></td>
+          <td class="text-end">50</td>
+          <td><span class="cat-chip sug"><i class="bi bi-stars"></i> Outra empresa</span></td>
+          <td class="pe-3 text-end text-nowrap"><button class="btn btn-sm btn-success"><i class="bi bi-check2"></i> Aceitar</button> <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></button></td>
+        </tr>
+        <tr class="map-row">
+          <td class="ps-3"><strong>BENEFICIO CONCEDIDO JUDICIALMENTE</strong></td>
+          <td class="text-end">79</td>
+          <td><select class="form-select form-select-sm" style="max-width:320px"><option>Escolher tese(s) do catálogo…</option><option>Judicial</option><option>Revogação da tutela / liminar</option></select></td>
+          <td class="pe-3 text-end"><span class="badge text-bg-warning">pendente</span></td>
+        </tr>
+        <tr class="map-row">
+          <td class="ps-3"><strong>HONORARIOS ADVOCATICIOS</strong><div class="variante">+ 1 variante: DISPENSA DE HONORARIOS SUCUMBENCIAIS</div></td>
+          <td class="text-end">19</td>
+          <td class="text-body-secondary small"><i class="bi bi-dash-circle me-1"></i>marcada como <em>sem equivalente</em>: tema processual, não tese de FAP</td>
+          <td class="pe-3 text-end"><span class="badge text-bg-light border">sem equivalente</span></td>
+        </tr>
+        <tr class="map-row">
+          <td class="ps-3"><strong>BIS IN IDEM</strong></td>
+          <td class="text-end">14</td>
+          <td><select class="form-select form-select-sm" style="max-width:320px"><option>Escolher tese(s) do catálogo…</option></select>
+            <div class="small mt-1"><a href="#"><i class="bi bi-plus-circle me-1"></i>criar "Bis in idem" no catálogo</a></div></td>
+          <td class="pe-3 text-end"><span class="badge text-bg-warning">pendente</span></td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div></div>
+
+  <div class="mk-note p-2 px-3 mt-3 rounded">
+    <b>Nota:</b> as variantes são reais. Só de "duplicidade" a planilha tem seis grafias para a mesma ideia. A IA agrupa e sugere, mas só a pessoa confirma. Nada entra no catálogo sem clique, e "sem equivalente" tira a tese da fila sem forçar uma ligação errada. A correspondência é do escritório: vale para as decisões já importadas e para as próximas.
+  </div>
+</section>
+
+<!-- ======================================================================
+     6 · NA GERAÇÃO DA IMPUGNAÇÃO
+     ====================================================================== -->
+<section class="mk-screen" id="geracao">
+  <div class="row mb-4"><div class="col-12"><div class="card border-0 shadow-sm" style="border-radius:16px;overflow:hidden">
+    <div class="card-body page-hero">
+      <div class="d-flex align-items-center gap-3">
+        <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon"><i class="bi bi-magic page-hero-icon__glyph"></i></div>
+        <div>
+          <h1 class="h4 mb-1" style="font-weight:700">Gerar impugnação à contestação</h1>
+          <small class="text-muted"><span class="proc-num">5009876-12.2025.4.04.7205</span> · Cerâmica Sul Ltda. · 2ª VF Blumenau (TRF4)</small>
+        </div>
+      </div>
+    </div>
+  </div></div></div>
+
+  <div class="steps mb-3">
+    <div class="st done"><i class="bi bi-check-circle-fill me-1"></i>1 · Benefícios e teses</div>
+    <div class="st cur"><i class="bi bi-2-circle-fill me-1"></i>2 · Documentos e referências</div>
+    <div class="st"><i class="bi bi-3-circle me-1"></i>3 · Instruções e gerar</div>
+  </div>
+
+  <div class="card border-0 shadow-sm"><div class="card-body">
+    <p class="small text-body-secondary mb-3">Para cada tese: as <strong>peças-modelo</strong> dão estrutura e estilo, e a <strong>jurisprudência</strong> dá as decisões a citar. Por padrão vêm as do mesmo TRF, favoráveis, das instâncias mais altas e mais recentes.</p>
+
+    <div class="tese-block p-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <div><strong>Trajeto - B91</strong> <span class="text-body-secondary small">· 7 benefícios</span></div>
+        <span class="cov" style="color:var(--jur-fav)"><i class="bi bi-check-circle-fill me-1"></i>coberta: 1 modelo · 3 decisões</span>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-5 src-col">
+          <h6><i class="bi bi-bookmark-star me-1"></i>Peças-modelo</h6>
+          <label class="src-item"><input class="form-check-input mt-1" type="checkbox" checked>
+            <span>Impugnação TRF4 — trajeto e rotatividade <span class="badge text-bg-light border">nota 9</span></span></label>
+          <label class="src-item"><input class="form-check-input mt-1" type="checkbox">
+            <span>Impugnação TRF4 — trajeto (modelo curto)</span></label>
+        </div>
+        <div class="col-md-7 src-col">
+          <h6><i class="bi bi-journal-bookmark me-1"></i>Jurisprudência a citar</h6>
+          <label class="src-item"><input class="form-check-input mt-1" type="checkbox" checked>
+            <span><span class="res-pill res-par me-1">Parc.</span>TRF4 · 2ª Turma · AC 5012345-67.2021 · 12/05/2026
+              <div class="small text-body-secondary">acolheu exclusão do trajeto com efeito desde 2017</div></span></label>
+          <label class="src-item"><input class="form-check-input mt-1" type="checkbox" checked>
+            <span><span class="res-pill res-fav me-1">Fav.</span>TRF4 · 1ª Turma · AC 5029271-50.2020 · 08/08/2025
+              <div class="small text-body-secondary">trajeto não reflete o risco ambiental do trabalho</div></span></label>
+          <label class="src-item"><input class="form-check-input mt-1" type="checkbox" checked>
+            <span><span class="res-pill res-fav me-1">Fav.</span>2ª VF Blumenau · Sentença · 02/02/2025
+              <div class="small text-body-secondary"><i class="bi bi-geo-alt me-1"></i>mesma vara deste processo</div></span></label>
+          <a href="#" class="small ms-2"><i class="bi bi-search me-1"></i>buscar outra na base…</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="tese-block p-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <div><strong>Concessão duplicada de benefício</strong> <span class="text-body-secondary small">· 2 benefícios</span></div>
+        <span class="cov" style="color:var(--jur-par)"><i class="bi bi-exclamation-circle-fill me-1"></i>sem peça-modelo · 2 decisões</span>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-5 src-col">
+          <h6><i class="bi bi-bookmark-star me-1"></i>Peças-modelo</h6>
+          <div class="small text-body-secondary px-2">Nenhuma no acervo para esta tese. A argumentação vai se apoiar só na jurisprudência.</div>
+        </div>
+        <div class="col-md-7 src-col">
+          <h6><i class="bi bi-journal-bookmark me-1"></i>Jurisprudência a citar</h6>
+          <label class="src-item"><input class="form-check-input mt-1" type="checkbox" checked>
+            <span><span class="res-pill res-fav me-1">Fav.</span>TRF4 · 2ª Turma · AC 5011807-33.2022 · 21/03/2026
+              <div class="small text-body-secondary">CAT + NTEP para o mesmo evento: contar uma única vez</div></span></label>
+          <label class="src-item"><input class="form-check-input mt-1" type="checkbox">
+            <span><span class="res-pill res-des me-1">Desf.</span>TRF3 · 6ª Turma · AC 5001122-09.2021 · 10/10/2024
+              <div class="small text-body-secondary"><i class="bi bi-shield-exclamation me-1"></i>contrária: a IA usa para antecipar e rebater, não para citar a favor</div></span></label>
+        </div>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="mk-note p-2 px-3 mt-3 rounded">
+    <b>Nota:</b> é o mesmo passo 2 que já existe ("Peças-modelo de referência", com cobertura por tese), agora com uma segunda coluna. Com isso o agente de enriquecimento passa a citar decisões reais e marcadas pelo advogado, em vez de trechos garimpados das peças-modelo. Decisão desfavorável pode ser marcada de propósito, para a peça rebater o entendimento contrário.
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+  // troca de telas
+  function go(screen) {
+    document.querySelectorAll('.mk-screen').forEach(s => s.classList.toggle('active', s.id === screen));
+    document.querySelectorAll('#mk-nav .nav-link').forEach(a => a.classList.toggle('active', a.dataset.screen === screen));
+    window.scrollTo({ top: 0 });
+    history.replaceState(null, '', '#' + screen);
+  }
+  document.querySelectorAll('[data-screen]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.screen); }));
+  document.querySelectorAll('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.go); }));
+  if (location.hash && document.getElementById(location.hash.slice(1))) go(location.hash.slice(1));
+
+  // abas da decisão
+  document.querySelectorAll('#dec-tabs [data-tab]').forEach(a => a.addEventListener('click', e => {
+    e.preventDefault();
+    document.querySelectorAll('#dec-tabs .nav-link').forEach(x => x.classList.toggle('active', x === a));
+    document.querySelectorAll('.dec-tab').forEach(t => t.classList.toggle('d-none', t.id !== a.dataset.tab));
+  }));
+
+  // facetas clicáveis
+  document.querySelectorAll('.facet-item').forEach(f => f.addEventListener('click', () => {
+    f.classList.toggle('on');
+    const i = f.querySelector('i.bi-square, i.bi-check2-square');
+    if (i) { i.classList.toggle('bi-square'); i.classList.toggle('bi-check2-square'); }
+  }));
+
+  // tema e notas
+  document.getElementById('mk-theme').addEventListener('click', () => {
+    const h = document.documentElement;
+    h.dataset.bsTheme = h.dataset.bsTheme === 'dark' ? 'light' : 'dark';
+  });
+  document.getElementById('mk-notes').addEventListener('click', () => {
+    document.querySelectorAll('.mk-note').forEach(n => n.classList.toggle('d-none'));
+  });
+</script>
+</body>
+</html>

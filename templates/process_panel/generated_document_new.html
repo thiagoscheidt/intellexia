@@ -685,6 +685,30 @@ breadcrumbs=[
                     Nenhuma peça-modelo selecionada — o documento será gerado sem referências de estilo.
                   </div>
                 </div>
+
+                <!-- Jurisprudência a citar (Base de Jurisprudência) -->
+                <div class="mb-3 d-none" id="docs-jurisprudence-block">
+                  <div class="review-section-label mb-2">
+                    <i class="bi bi-journal-bookmark me-1"></i>Jurisprudência a Citar
+                  </div>
+                  <p class="text-muted small mb-2">
+                    Decisões da <a href="{{ url_for('jurisprudence.index') }}" target="_blank">Base de Jurisprudência</a>
+                    ligadas às teses selecionadas: primeiro as favoráveis, do mesmo TRF, de instância mais alta e mais
+                    recentes. As marcadas vão ao prompt com a citação pronta; a <strong>contrária</strong> marcada serve
+                    para a peça antecipar e rebater o entendimento, nunca para citar a favor.
+                  </p>
+                  <div id="docs-jurisprudence-status" class="small mb-2 d-none"></div>
+                  <div id="docs-jurisprudence-container" class="d-flex flex-column gap-2"></div>
+                  <div class="mt-2">
+                    <div class="input-group input-group-sm" style="max-width: 520px">
+                      <span class="input-group-text"><i class="bi bi-search"></i></span>
+                      <input type="search" class="form-control" id="jur-busca-termo"
+                        placeholder="Buscar outra decisão na base (termo ou nº do processo)">
+                      <button type="button" class="btn btn-outline-secondary" id="jur-busca-btn">Buscar</button>
+                    </div>
+                    <div id="jur-busca-resultados" class="d-flex flex-column gap-1 mt-2"></div>
+                  </div>
+                </div>
               </div>
 
               <div class="step-actions">
@@ -967,6 +991,137 @@ breadcrumbs=[
     // ── Documentos (step 3) ─────────────────────────────────────────────
     const PREVIEW_URL = "{{ url_for('process_panel.generated_document_preview', process_id=process.id) }}";
     const REFERENCE_FILE_URL_BASE = "{{ url_for('impugnacao_references.list_references') }}";
+    const JUR_API_BUSCA = "{{ url_for('jurisprudence.api_buscar') }}";
+    const JUR_DECISAO_URL = "{{ url_for('jurisprudence.decisao', decision_id=0) }}".replace(/0$/, '');
+    const JUR_RESULTADO_CLS = { favoravel: 'text-bg-success', parcial: 'text-bg-warning', desfavoravel: 'text-bg-danger' };
+
+    // ── Jurisprudência a citar (Base de Jurisprudência) ──────────────────
+    function renderJurisprudenceRow(d, thesisId) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'review-benefit-card d-flex align-items-start gap-2';
+      const label = document.createElement('label');
+      label.className = 'd-flex align-items-start gap-2 mb-0 flex-grow-1 min-w-0';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.name = 'confirmed_jurisprudence[]';
+      chk.value = d.id + ':' + (thesisId || '');
+      chk.checked = !!d.marcada;
+      chk.className = 'mt-1';
+      chk.addEventListener('change', buildSummary);
+      label.appendChild(chk);
+
+      const body = document.createElement('div');
+      body.className = 'flex-grow-1 min-w-0';
+      const head = document.createElement('div');
+      head.className = 'd-flex align-items-center gap-2 flex-wrap mb-1';
+      const res = document.createElement('span');
+      res.className = 'badge ' + (JUR_RESULTADO_CLS[d.resultado] || 'text-bg-secondary');
+      res.style.fontSize = '.68rem';
+      res.textContent = d.contraria ? 'Contrária' : (d.resultado_rotulo || '—');
+      head.appendChild(res);
+      const titulo = document.createElement('span');
+      titulo.className = 'fw-semibold small';
+      titulo.textContent = [d.tipo, d.tribunal, d.orgao, d.data].filter(Boolean).join(' · ');
+      head.appendChild(titulo);
+      [['mesma_vara', 'Mesma vara', 'bg-primary text-white'], ['mesmo_trf', 'Mesmo TRF', 'bg-info text-white']]
+        .forEach(([chave, texto, cls]) => {
+          if (!d[chave]) return;
+          const b = document.createElement('span');
+          b.className = 'badge ' + cls;
+          b.style.fontSize = '.65rem';
+          b.textContent = texto;
+          head.appendChild(b);
+        });
+      body.appendChild(head);
+      if (d.motivo) {
+        const motivo = document.createElement('div');
+        motivo.className = 'benefit-meta mb-1';
+        motivo.textContent = d.motivo;
+        body.appendChild(motivo);
+      }
+      const cit = document.createElement('div');
+      cit.className = 'small text-muted';
+      cit.textContent = d.citacao || '';
+      body.appendChild(cit);
+      label.appendChild(body);
+      wrapper.appendChild(label);
+
+      const abrir = document.createElement('a');
+      abrir.href = JUR_DECISAO_URL + d.id;
+      abrir.target = '_blank';
+      abrir.rel = 'noopener';
+      abrir.className = 'btn btn-sm btn-outline-secondary flex-shrink-0';
+      abrir.title = 'Abrir a decisão';
+      abrir.innerHTML = '<i class="bi bi-box-arrow-up-right"></i>';
+      wrapper.appendChild(abrir);
+      return wrapper;
+    }
+
+    function renderJurisprudence(data, isImpugnacao) {
+      const block = document.getElementById('docs-jurisprudence-block');
+      const container = document.getElementById('docs-jurisprudence-container');
+      const status = document.getElementById('docs-jurisprudence-status');
+      container.textContent = '';
+      document.getElementById('jur-busca-resultados').textContent = '';
+      status.classList.add('d-none');
+      if (!isImpugnacao) { block.classList.add('d-none'); return; }
+      block.classList.remove('d-none');
+
+      const grupos = data.jurisprudencia || [];
+      if (data.jurisprudencia_erro) {
+        status.className = 'alert alert-warning py-2 px-3 small mb-2';
+        status.textContent = 'Base de Jurisprudência indisponível agora — o documento será gerado sem ela.';
+        return;
+      }
+      if (!grupos.length) {
+        status.className = 'text-muted small fst-italic mb-2';
+        status.textContent = 'Nenhuma tese do catálogo selecionada — use a busca abaixo para escolher decisões.';
+        return;
+      }
+      grupos.forEach(g => {
+        const titulo = document.createElement('div');
+        titulo.className = 'small fw-semibold mt-1';
+        titulo.textContent = g.tese + ' · ' + g.total_na_base + (g.total_na_base === 1 ? ' decisão na base' : ' decisões na base');
+        container.appendChild(titulo);
+        if (!g.decisoes.length) {
+          const vazio = document.createElement('div');
+          vazio.className = 'text-muted small fst-italic ps-1';
+          vazio.textContent = 'Nenhuma decisão ligada a esta tese. Ligue as teses em Base de Jurisprudência › Teses.';
+          container.appendChild(vazio);
+          return;
+        }
+        g.decisoes.forEach(d => container.appendChild(renderJurisprudenceRow(d, g.thesis_id)));
+      });
+    }
+
+    function buscarJurisprudencia() {
+      const termo = document.getElementById('jur-busca-termo').value.trim();
+      const alvo = document.getElementById('jur-busca-resultados');
+      alvo.textContent = '';
+      if (termo.length < 2) return;
+      fetch(JUR_API_BUSCA + '?q=' + encodeURIComponent(termo), { credentials: 'same-origin' })
+        .then(r => r.ok ? r.json() : Promise.reject())
+        .then(dados => {
+          const lista = dados.decisoes || [];
+          if (!lista.length) {
+            alvo.innerHTML = '<div class="text-muted small fst-italic ps-1">Nada encontrado.</div>';
+            return;
+          }
+          const marcados = new Set(Array.from(document.querySelectorAll('input[name="confirmed_jurisprudence[]"]'))
+            .map(el => el.value.split(':')[0]));
+          lista.forEach(d => {
+            if (marcados.has(String(d.id))) return;
+            d.contraria = d.resultado === 'desfavoravel';
+            d.marcada = false;
+            alvo.appendChild(renderJurisprudenceRow(d, ''));
+          });
+        })
+        .catch(() => { alvo.innerHTML = '<div class="text-danger small ps-1">A busca falhou. Tente de novo.</div>'; });
+    }
+    document.getElementById('jur-busca-btn').addEventListener('click', buscarJurisprudencia);
+    document.getElementById('jur-busca-termo').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); buscarJurisprudencia(); }
+    });
     const CAMADA_BADGE = {
       juiz: { label: 'Mesmo juiz', cls: 'bg-success text-white' },
       vara: { label: 'Mesma vara', cls: 'bg-primary text-white' },
@@ -1306,6 +1461,7 @@ breadcrumbs=[
         updateReferencesUncheckedWarning();
       }
 
+      renderJurisprudence(data, isImpugnacao);
       updateThesisCoverage();
     }
 
@@ -1397,8 +1553,10 @@ breadcrumbs=[
         docsLine.textContent = 'Não confirmados — fluxo padrão';
       } else {
         const attCount = document.querySelectorAll('input[name="confirmed_attachment_ids[]"]:checked').length;
+        const jurCount = document.querySelectorAll('input[name="confirmed_jurisprudence[]"]:checked').length;
         docsLine.textContent = refsChecked.length + ' peça' + (refsChecked.length === 1 ? '' : 's') + '-modelo · '
-          + attCount + ' anexo' + (attCount === 1 ? '' : 's');
+          + attCount + ' anexo' + (attCount === 1 ? '' : 's')
+          + (isImpugnacao ? ' · ' + jurCount + (jurCount === 1 ? ' decisão' : ' decisões') + ' da base' : '');
       }
     }
 

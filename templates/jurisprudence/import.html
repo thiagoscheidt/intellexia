@@ -1,0 +1,143 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+{% from "jurisprudence/_macros.html" import res_pill %}
+
+{% block title %}Importar planilha - Base de Jurisprudência{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jurisprudence.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="jur-page">
+{% call page_hero(title='Importar base estruturada', subtitle='Planilha no formato do Banco Mestre FAP (.xlsx)', icon='bi bi-file-earmark-spreadsheet') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('jurisprudence.index') }}">Base de Jurisprudência</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Importar planilha</li>
+  </ol>
+</nav>
+{% endcall %}
+
+<div class="passos mb-3">
+  <div class="passo {{ 'feito' if conferencia else 'atual' }}"><i class="bi {{ 'bi-check-circle-fill' if conferencia else 'bi-1-circle-fill' }} me-1"></i>1 · Arquivo</div>
+  <div class="passo {{ 'atual' if conferencia }}"><i class="bi bi-2-circle{{ '-fill' if conferencia }} me-1"></i>2 · Conferência</div>
+  <div class="passo"><i class="bi bi-3-circle me-1"></i>3 · Importação</div>
+</div>
+
+{% if not conferencia %}
+<form method="post" enctype="multipart/form-data" class="card border-0 shadow-sm">
+  <div class="card-body">
+    <label class="dropzone d-block" for="arquivo">
+      <i class="bi bi-file-earmark-excel display-5 text-success"></i>
+      <h5 class="mt-2 mb-1">Escolha a planilha</h5>
+      <p class="text-body-secondary small mb-3">
+        A aba <strong>DOCUMENTOS</strong>, com as colunas <code>processo</code>, <code>tipo_documento</code>,
+        <code>resultado</code>, <code>teses</code>, <code>ementa</code>… Nada é gravado antes da conferência.
+      </p>
+      <input type="file" id="arquivo" name="arquivo" accept=".xlsx" class="form-control mx-auto" style="max-width: 420px" required
+             onchange="this.form.submit()">
+    </label>
+  </div>
+</form>
+{% else %}
+{% set c = conferencia %}
+<div class="card border-0 shadow-sm mb-3"><div class="card-body">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div><i class="bi bi-file-earmark-excel text-success me-1"></i><strong>{{ c.arquivo }}</strong>
+      <span class="text-body-secondary small">· aba {{ c.aba }} · {{ c.colunas }} colunas reconhecidas</span></div>
+    <a href="{{ url_for('jurisprudence.importar') }}" class="small">trocar arquivo</a>
+  </div>
+  <div class="row g-2">
+    <div class="col-6 col-md-3"><div class="kpi"><div class="v">{{ c.lidas }}</div><div class="l">decisões lidas</div></div></div>
+    <div class="col-6 col-md-3"><div class="kpi"><div class="v" style="color: var(--jur-fav)">{{ c.novas }}</div><div class="l">novas na base</div></div></div>
+    <div class="col-6 col-md-3"><div class="kpi"><div class="v">{{ c.ja_existem + c.repetidas_na_planilha }}</div>
+      <div class="l">já existem ou repetidas{% if c.repetidas_na_planilha %} ({{ c.repetidas_na_planilha }} repetidas na própria planilha){% endif %}</div></div></div>
+    <div class="col-6 col-md-3"><div class="kpi"><div class="v" style="color: var(--jur-par)">{{ c.com_aviso }}</div><div class="l">com campo faltando</div></div></div>
+  </div>
+</div></div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <h6 class="fw-bold mb-3"><i class="bi bi-magic me-1"></i>O que será padronizado</h6>
+      {% set p = c.padronizacao %}
+      <table class="table table-sm align-middle mb-0">
+        <tbody>
+          <tr><td>Instância</td>
+            <td>{{ p.tipos_brutos }} grafias →
+              {% for k, n in p.tipos.items() %}<span class="text-nowrap">{{ tipo_labels.get(k, k) }} ({{ n }})</span>{{ ', ' if not loop.last }}{% endfor %}</td>
+            <td class="text-end text-body-secondary text-nowrap">{{ p.tipos_unificados }} linhas</td></tr>
+          <tr><td>Resultado</td><td>{{ p.resultados_brutos }} grafias → Favorável, Parcialmente, Desfavorável</td>
+            <td class="text-end text-body-secondary text-nowrap">{{ p.resultados_unificados }} linhas</td></tr>
+          <tr><td>Tribunal</td>
+            <td>{{ p.tribunais_brutos }} textos → <strong>{{ p.siglas | length }} tribunais</strong> + <strong>{{ p.orgaos }} órgãos</strong>
+              <div class="variante">"TRF4 - 2a Vara Federal de Blumenau" → TRF4 · 2ª Vara Federal de Blumenau · SC</div></td>
+            <td class="text-end text-body-secondary text-nowrap">{{ c.lidas }} linhas</td></tr>
+          <tr><td>Teses</td>
+            <td>{{ p.teses_brutas }} grafias → <strong>{{ p.teses }} teses</strong>
+              <div class="variante">"PRORROGAÇÃO DE BENEFÍCIO" = "PRORROGACAO DE BENEFICIO"</div></td>
+            <td class="text-end text-body-secondary text-nowrap">{{ p.teses_brutas - p.teses }} unificadas</td></tr>
+          <tr><td>Vigência</td><td><code>2018.0</code> → 2018 · <code>2017 a 2021</code> mantido</td>
+            <td class="text-end text-body-secondary text-nowrap">{{ p.vigencias_convertidas }} linhas</td></tr>
+        </tbody>
+      </table>
+    </div></div>
+  </div>
+  <div class="col-lg-5">
+    {% if c.avisos %}
+    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+      <h6 class="fw-bold mb-2"><i class="bi bi-exclamation-triangle text-warning me-1"></i>Entram, mas com aviso</h6>
+      <ul class="small mb-0 ps-3">
+        {% for motivo, n in c.avisos %}<li><strong>{{ n }}</strong> {{ motivo }}</li>{% endfor %}
+      </ul>
+    </div></div>
+    {% endif %}
+    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+      <h6 class="fw-bold mb-2"><i class="bi bi-arrow-left-right me-1"></i>Teses e o catálogo do painel</h6>
+      <div class="small">
+        <div class="d-flex justify-content-between"><span>ligadas automaticamente</span><strong style="color: var(--jur-fav)">{{ c.teses.ligadas }}</strong></div>
+        <div class="d-flex justify-content-between"><span>sem correspondência → vão para revisão</span><strong style="color: var(--jur-par)">{{ c.teses.pendentes }}</strong></div>
+      </div>
+      <div class="form-text">A decisão entra de qualquer jeito. A tese sem correspondência só não aparece no filtro do catálogo nem na geração da peça até alguém ligá-la — e a IA sugere a ligação.</div>
+    </div></div>
+    {% if c.outras_abas %}
+    <div class="card border-0 shadow-sm"><div class="card-body small">
+      <h6 class="fw-bold mb-2"><i class="bi bi-slash-circle text-body-secondary me-1"></i>Não será importado</h6>
+      Abas {% for a in c.outras_abas %}<code>{{ a }}</code>{{ ', ' if not loop.last }}{% endfor %}: log e agregados da ferramenta anterior. Aqui eles saem das próprias decisões.
+    </div></div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card border-0 shadow-sm mt-3"><div class="card-body">
+  <h6 class="fw-bold mb-2">Amostra, já padronizada</h6>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0 align-middle">
+      <thead><tr><th>Processo</th><th>Instância</th><th>Tribunal · órgão</th><th>Resultado</th><th>Teses</th><th>Citação</th></tr></thead>
+      <tbody>
+        {% for a in c.amostra %}
+        <tr>
+          <td class="proc-num text-nowrap">{{ a.processo or '—' }}</td>
+          <td>{{ tipo_labels.get(a.tipo_documento, '—') }}</td>
+          <td>{{ ' · '.join([a.tribunal, a.orgao_julgador] | select | list) }}{% if a.uf %} <span class="text-body-secondary">({{ a.uf }})</span>{% endif %}</td>
+          <td>{{ res_pill(a.resultado) }}</td>
+          <td class="small">{{ a.teses_brutas_json | length }}</td>
+          <td class="small text-body-secondary">{{ a.citacao }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div></div>
+
+<form method="post" action="{{ url_for('jurisprudence.confirmar_importacao', token=token) }}"
+      class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3"
+      onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').innerHTML = '<span class=&quot;spinner-border spinner-border-sm me-1&quot;></span>Importando…';">
+  <a href="{{ url_for('jurisprudence.importar') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Voltar</a>
+  <button class="btn btn-success" {{ 'disabled' if not c.novas }}>
+    <i class="bi bi-check2 me-1"></i>{{ 'Importar ' ~ c.novas ~ (' decisão' if c.novas == 1 else ' decisões') if c.novas else 'Nada novo para importar' }}</button>
+</form>
+{% endif %}
+</div>
+{% endblock %}

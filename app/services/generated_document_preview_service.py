@@ -295,10 +295,26 @@ def build_documents_preview(
             referencias_erro = True
             cobertura_teses = []
 
+    # ── Jurisprudência a citar (Base de Jurisprudência, só impugnação) ──
+    # Independente das peças-modelo: a base vive no banco, não no Qdrant, e
+    # continua disponível quando a busca de referências está fora do ar.
+    jurisprudencia = None
+    jurisprudencia_erro = False
+    if is_impugnacao:
+        try:
+            from app.services.jurisprudence_generation_service import sugestoes_por_tese
+            jurisprudencia = sugestoes_por_tese(
+                law_firm_id, process, [t_id for _, t_id in parsed_selections if t_id])
+        except Exception as error:
+            print(f"[generated_document_preview] jurisprudência indisponível: {error}")
+            jurisprudencia_erro = True
+
     return {
         "contestacao": contestacao,
         "beneficios": beneficios,
         "referencias": referencias,
         "referencias_erro": referencias_erro,
         "cobertura_teses": cobertura_teses,
+        "jurisprudencia": jurisprudencia,
+        "jurisprudencia_erro": jurisprudencia_erro,
     }

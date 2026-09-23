@@ -660,6 +660,31 @@ breadcrumbs=[
           {% else %}
           <div class="small text-muted fst-italic mb-0">Nenhum anexo confirmado.</div>
           {% endif %}
+
+          {% if used_documents.jurisprudence is not none %}
+          <div class="text-muted mb-1 mt-3"
+            style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
+            Jurisprudência citada
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1"
+              style="font-size:.65rem">{{ used_documents.jurisprudence | length }}</span>
+          </div>
+          {% if used_documents.jurisprudence %}
+          <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
+            {% for item in used_documents.jurisprudence %}
+            {% set d = item.decisao %}
+            <li class="d-flex align-items-center gap-2 small min-w-0">
+              <i class="bi bi-journal-bookmark text-muted flex-shrink-0"></i>
+              <a href="{{ url_for('jurisprudence.decisao', decision_id=d.id) }}" target="_blank"
+                class="text-decoration-none text-truncate"
+                title="{{ item.tese or '' }}">{{ d.tipo_documento | jur_tipo }} · {{ d.tribunal or '' }} · {{ d.processo or '' }}</a>
+              {% if d.resultado == 'desfavoravel' %}<span class="badge text-bg-danger ms-auto flex-shrink-0" style="font-size:.6rem">contrária</span>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="small text-muted fst-italic mb-0">Nenhuma decisão da base marcada.</div>
+          {% endif %}
+          {% endif %}
         </div>
       </div>
       {% endif %}

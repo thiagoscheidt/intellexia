@@ -44,6 +44,7 @@ ENDPOINT_MODULE_MAP = {
     'fap_review.': 'fap_review',
     'process_panel.': 'process_panel',
     'impugnacao_references.': 'process_panel',
+    'jurisprudence.': 'process_panel',
     'communications.': 'communications',
     'dou.': 'dou',
     'cases.': 'cases',

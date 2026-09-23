@@ -4481,3 +4481,208 @@ class DouSyncRun(db.Model):
 
     def __repr__(self):
         return f'<DouSyncRun {self.modo} {self.iniciado_em} status={self.status}>'
+
+
+# ── Base de Jurisprudência (submódulo do Painel de Processos) ─────────────
+#
+# Decisões FAP (sentença, acórdão, embargos) classificadas por tese e
+# resultado, importadas da planilha do escritório ou lidas de PDF pela IA.
+# Tudo por escritório (law_firm_id). Ver docs/superpowers/specs/
+# 2026-09-22-base-jurisprudencia-design.md.
+
+jurisprudence_decision_theses = db.Table(
+    'jurisprudence_decision_theses',
+    db.Column('decision_id', db.Integer,
+              db.ForeignKey('jurisprudence_decisions.id', ondelete='CASCADE'),
+              primary_key=True),
+    db.Column('thesis_id', db.Integer,
+              db.ForeignKey('jurisprudence_theses.id', ondelete='CASCADE'),
+              primary_key=True, index=True),
+)
+
+jurisprudence_thesis_catalog_links = db.Table(
+    'jurisprudence_thesis_catalog_links',
+    db.Column('thesis_id', db.Integer,
+              db.ForeignKey('jurisprudence_theses.id', ondelete='CASCADE'),
+              primary_key=True),
+    db.Column('legal_thesis_id', db.Integer,
+              db.ForeignKey('judicial_legal_theses.id', ondelete='CASCADE'),
+              primary_key=True, index=True),
+)
+
+
+class JurisprudenceThesis(db.Model):
+    """Tabela jurisprudence_theses - tese como aparece nas decisões.
+
+    A decisão diz "ACIDENTE DE TRAJETO"; o catálogo do painel separa Trajeto
+    B91, B92, B93 e B94. Esta tabela guarda a tese das decisões (uma linha por
+    grafia normalizada) e a liga, N:N, ao catálogo (`JudicialLegalThesis`).
+
+    Variantes da mesma ideia ("DUPLICIDADE DE BENEFICIO", "BENEFICIOS EM
+    DUPLICIDADE"…) são **mescladas**: a variante aponta para a canônica em
+    `merged_into_id`, as decisões passam para a canônica, e a grafia continua
+    resolvendo para ela nas próximas importações.
+    """
+    __tablename__ = 'jurisprudence_theses'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'key', name='uq_jurisprudence_theses_firm_key'),
+    )
+
+    STATUS_PENDENTE = 'pendente'
+    STATUS_LIGADA = 'ligada'
+    STATUS_SEM_EQUIVALENTE = 'sem_equivalente'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    # Chave normalizada (sem acento, maiúsculas, espaços únicos) — o que
+    # decide se duas grafias são a mesma tese.
+    key = db.Column(db.String(255), nullable=False)
+    name = db.Column(db.String(255), nullable=False)
+
+    status = db.Column(db.String(20), nullable=False, default=STATUS_PENDENTE, index=True)
+    merged_into_id = db.Column(db.Integer, db.ForeignKey('jurisprudence_theses.id'), index=True)
+
+    # Sugestão da IA: {"catalog_ids": [...], "merge_into_id": int|null, "motivo": str}
+    suggestion_json = db.Column(db.JSON)
+    suggestion_requested_at = db.Column(db.DateTime)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    merged_into = db.relationship('JurisprudenceThesis', remote_side=[id])
+    catalog_theses = db.relationship(
+        'JudicialLegalThesis',
+        secondary=jurisprudence_thesis_catalog_links,
+        order_by='JudicialLegalThesis.name',
+    )
+
+    def __repr__(self):
+        return f'<JurisprudenceThesis {self.id} {self.key}>'
+
+
+class JurisprudenceDecision(db.Model):
+    """Tabela jurisprudence_decisions - uma decisão judicial FAP classificada.
+
+    Duplicata = mesmo processo (só dígitos) + instância + data de julgamento.
+    Campo corrigido à mão entra em `manual_fields_json` e o reprocessamento
+    pela IA não o sobrescreve.
+    """
+    __tablename__ = 'jurisprudence_decisions'
+    __table_args__ = (
+        db.Index('ix_jurisprudence_decisions_firm_processo', 'law_firm_id', 'processo_digits'),
+    )
+
+    TIPO_SENTENCA = 'sentenca'
+    TIPO_ACORDAO = 'acordao'
+    TIPO_EMBARGOS = 'embargos'
+    TIPO_OUTRA = 'outra'
+
+    RESULTADO_FAVORAVEL = 'favoravel'
+    RESULTADO_PARCIAL = 'parcial'
+    RESULTADO_DESFAVORAVEL = 'desfavoravel'
+
+    SOURCE_PLANILHA = 'planilha'
+    SOURCE_PDF = 'pdf'
+
+    EMENTA_LITERAL = 'literal'
+    EMENTA_RESUMO = 'resumo'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    processo = db.Column(db.String(60))
+    processo_digits = db.Column(db.String(25), index=True)
+    tribunal = db.Column(db.String(20), index=True)        # sigla: TRF4, STJ…
+    orgao_julgador = db.Column(db.String(255))             # turma ou vara
+    uf = db.Column(db.String(2), index=True)
+    relator = db.Column(db.String(255))
+    data_julgamento = db.Column(db.Date, index=True)
+    tipo_documento = db.Column(db.String(20), index=True)
+    classe_processual = db.Column(db.String(255))
+    resultado = db.Column(db.String(20), index=True)
+    motivo_resultado = db.Column(db.Text)
+    parte_autora = db.Column(db.String(255))
+
+    vigencia_texto = db.Column(db.String(60))
+    vigencia_inicio = db.Column(db.Integer)
+    vigencia_fim = db.Column(db.Integer)
+
+    ementa = db.Column(db.Text)
+    ementa_modo = db.Column(db.String(10))                 # literal | resumo
+    resumo_executivo = db.Column(db.Text)
+    fundamentos_json = db.Column(db.JSON)
+    precedentes_json = db.Column(db.JSON)
+    argumentos_acolhidos_json = db.Column(db.JSON)
+    argumentos_rejeitados_json = db.Column(db.JSON)
+    palavras_chave_json = db.Column(db.JSON)
+    teses_brutas_json = db.Column(db.JSON)                 # como vieram da fonte
+
+    # Texto normalizado de todos os campos — é nele que a busca procura.
+    search_text = db.Column(db.Text)
+
+    source = db.Column(db.String(20), nullable=False, default=SOURCE_PLANILHA)
+    drive_link = db.Column(db.String(500))
+    pdf_path = db.Column(db.String(500))
+    original_filename = db.Column(db.String(255))
+    extraction_model = db.Column(db.String(120))
+    manual_fields_json = db.Column(db.JSON)
+
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    created_by = db.relationship('User')
+    theses = db.relationship(
+        'JurisprudenceThesis',
+        secondary=jurisprudence_decision_theses,
+        order_by='JurisprudenceThesis.name',
+    )
+
+    def __repr__(self):
+        return f'<JurisprudenceDecision {self.id} {self.processo} {self.tipo_documento}>'
+
+
+class JurisprudenceUpload(db.Model):
+    """Tabela jurisprudence_uploads - fila dos PDFs enviados para leitura da IA.
+
+    Persistida para o motivo da falha ficar na tela, com "tentar de novo" na
+    linha — na ferramenta anterior os erros iam para uma aba que ninguém
+    atualizava. `extracted_json` guarda a leitura quando a decisão fica em
+    "revisar" (duplicata), até o advogado decidir.
+    """
+    __tablename__ = 'jurisprudence_uploads'
+
+    STATUS_QUEUED = 'queued'
+    STATUS_PROCESSING = 'processing'
+    STATUS_DONE = 'done'
+    STATUS_REVIEW = 'review'
+    STATUS_FAILED = 'failed'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_hash = db.Column(db.String(64), index=True)
+
+    status = db.Column(db.String(20), nullable=False, default=STATUS_QUEUED, index=True)
+    error_message = db.Column(db.Text)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    extracted_json = db.Column(db.JSON)
+    model_used = db.Column(db.String(120))
+
+    decision_id = db.Column(db.Integer, db.ForeignKey('jurisprudence_decisions.id', ondelete='SET NULL'))
+    duplicate_of_id = db.Column(db.Integer, db.ForeignKey('jurisprudence_decisions.id', ondelete='SET NULL'))
+
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    started_at = db.Column(db.DateTime)
+    finished_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    decision = db.relationship('JurisprudenceDecision', foreign_keys=[decision_id])
+    duplicate_of = db.relationship('JurisprudenceDecision', foreign_keys=[duplicate_of_id])
+
+    def __repr__(self):
+        return f'<JurisprudenceUpload {self.id} {self.original_filename} {self.status}>'

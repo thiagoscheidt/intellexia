@@ -3492,6 +3492,12 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
                 contestation_summary_payload = _resolve_latest_contestation_summary_payload(
                     process, law_firm_id)
 
+            jurisprudence_block = ''
+            if generated_doc.document_type == 'impugnacao_contestacao':
+                from app.services import jurisprudence_generation_service
+                jurisprudence_block = jurisprudence_generation_service.bloco_do_prompt(
+                    law_firm_id, jurisprudence_generation_service.pares_confirmados(confirmed))
+
             agent = AgentGeneratedDocument(model_name=model_name)
             result_dict, full_text = agent.dispatch(
                 generated_doc.document_type,
@@ -3502,6 +3508,7 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
                 contestation_summary_payload=contestation_summary_payload,
                 law_firm_id=law_firm_id,
                 allowed_reference_ids=allowed_reference_ids,
+                jurisprudence_block=jurisprudence_block,
             )
 
             # Enriquecimento jurisprudencial (apenas para impugnação)
@@ -3639,9 +3646,12 @@ def generated_document_create(process_id):
                 if value > 0:
                     out.append(value)
             return out
+        from app.services.jurisprudence_generation_service import pares_do_formulario
         confirmed_documents = {
             'reference_ids': _int_list('confirmed_reference_ids[]'),
             'attachment_ids': _int_list('confirmed_attachment_ids[]'),
+            # Base de Jurisprudência: pares {decision_id, thesis_id} marcados no passo Documentos.
+            'jurisprudence': pares_do_formulario(request.form.getlist('confirmed_jurisprudence[]')),
         }
 
     title = DOCUMENT_TYPE_LABELS.get(document_type, document_type)
@@ -3731,9 +3741,16 @@ def generated_document_detail(process_id, doc_id):
                     JudicialProcessAttachment.law_firm_id == law_firm_id)
             .all()
         } if att_ids else {}
+        from app.services import jurisprudence_generation_service
+        pares = jurisprudence_generation_service.pares_confirmados(confirmed)
         used_documents = {
             'references': [{'id': rid, 'ref': refs_by_id.get(rid)} for rid in ref_ids],
             'attachments': [{'id': aid, 'att': atts_by_id.get(aid)} for aid in att_ids],
+            # None = versão de antes da Base de Jurisprudência (seção oculta).
+            'jurisprudence': None if pares is None else [
+                {'decisao': decisao, 'tese': tese}
+                for decisao, tese in jurisprudence_generation_service.carregar(law_firm_id, pares)
+            ],
         }
 
     return render_template(

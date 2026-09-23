@@ -245,9 +245,9 @@
 
         {% if can_view_module('process_panel') or can_view_module('communications') %}
         <li
-          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.') or request.endpoint.startswith('communications.')) else '' }}">
+          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.') or request.endpoint.startswith('jurisprudence.') or request.endpoint.startswith('communications.')) else '' }}">
           <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.') or request.endpoint.startswith('communications.')) else '' }}">
+            class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.') or request.endpoint.startswith('jurisprudence.') or request.endpoint.startswith('communications.')) else '' }}">
             <i class="nav-icon bi bi-diagram-3-fill"></i>
             <p style="line-height: 1.15;">
               Painel de Processos
@@ -299,6 +299,14 @@
                 style="font-size: 0.9em;">
                 <i class="nav-icon bi bi-card-list" style="margin-right: 8px; color: #6c757d;"></i>
                 <p style="margin-left: 15px;">Benefícios dos Processos</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('jurisprudence.index') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('jurisprudence.') else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-journal-bookmark" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Base de Jurisprudência</p>
               </a>
             </li>
             {% if session.get('user_role') == 'admin' %}

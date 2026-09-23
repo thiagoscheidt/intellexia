@@ -1,0 +1,186 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Correspondência de teses - Base de Jurisprudência{% endblock %}
+
+{% block extra_css %}
+{# O base.html traz só o select2.min.css; o tema bootstrap-5 é folha à parte. #}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jurisprudence.css') }}">
+{% endblock %}
+
+{% block content %}
+{% set voltar = request.full_path %}
+<div class="jur-page">
+{% call page_hero(title='Correspondência de teses', subtitle='Como as teses que aparecem nas decisões se ligam ao catálogo do Painel', icon='bi bi-arrow-left-right') %}
+<div class="d-flex flex-column align-items-md-end gap-2">
+  <form method="post" action="{{ url_for('jurisprudence.teses_sugerir') }}">
+    <button class="btn btn-sm btn-outline-primary" {{ 'disabled' if dados.sugestao_em_andamento or not dados.totais.pendentes }}>
+      <i class="bi bi-stars me-1"></i>Sugerir com IA para as pendentes</button>
+  </form>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+      <li class="breadcrumb-item"><a href="{{ url_for('jurisprudence.index') }}">Base de Jurisprudência</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Teses</li>
+    </ol>
+  </nav>
+</div>
+{% endcall %}
+
+{% if dados.sugestao_em_andamento %}
+<div class="alert alert-info d-flex align-items-center gap-2">
+  <span class="spinner-border spinner-border-sm"></span>
+  A IA está analisando {{ dados.sugestao_em_andamento }} tese(s). As sugestões aparecem aqui quando terminar — nada é aplicado sem o seu clique.
+</div>
+{% endif %}
+{% if not dados.catalogo %}
+<div class="alert alert-warning">O catálogo de teses do painel está vazio. Cadastre as teses em Configurações › Teses jurídicas para poder ligar.</div>
+{% endif %}
+
+<div class="card border-0 shadow-sm mb-3"><div class="card-body py-2">
+  <form method="get" class="d-flex flex-wrap align-items-center gap-2">
+    <div class="btn-group btn-group-sm flex-wrap" role="group">
+      {% for chave, rotulo in [('pendentes', 'Pendentes'), ('sugeridas', 'Com sugestão da IA'), ('ligadas', 'Ligadas'),
+                               ('sem_equivalente', 'Sem equivalente'), ('todas', 'Todas')] %}
+      <a class="btn btn-outline-secondary {{ 'active' if filtro == chave }}" href="{{ url_for('jurisprudence.teses', filtro=chave, q=q or None) }}">
+        {{ rotulo }} <span class="badge {{ 'text-bg-warning' if chave == 'pendentes' and dados.totais[chave] else 'text-bg-light border' }}">{{ dados.totais[chave] }}</span></a>
+      {% endfor %}
+    </div>
+    <input type="hidden" name="filtro" value="{{ filtro }}">
+    <input type="search" name="q" value="{{ q }}" class="form-control form-control-sm ms-auto" style="max-width: 260px" placeholder="Filtrar teses…">
+  </form>
+</div></div>
+
+<div class="card border-0 shadow-sm"><div class="card-body p-0">
+  {% if not dados.linhas %}
+  <div class="text-center text-body-secondary py-5">
+    {% if filtro == 'pendentes' %}<i class="bi bi-check2-circle display-5" style="color: var(--jur-fav)"></i><p class="mt-2 mb-0">Nenhuma tese pendente. Todas as teses das decisões estão resolvidas.</p>
+    {% else %}<p class="mb-0">Nada neste filtro.</p>{% endif %}
+  </div>
+  {% else %}
+  <div class="table-responsive">
+  <table class="table align-middle mb-0">
+    <thead><tr><th class="ps-3">Tese nas decisões</th><th class="text-end">Decisões</th><th style="min-width: 320px">Tese(s) do catálogo</th><th class="pe-3"></th></tr></thead>
+    <tbody>
+    {% for linha in dados.linhas %}
+      {% set t = linha.tese %}{% set s = linha.sugestao %}
+      <tr>
+        <td class="ps-3">
+          <strong>{{ t.name }}</strong>
+          {% if linha.variantes %}
+          <div class="variante mt-1">também grafada:
+            {% for v in linha.variantes %}
+            <form method="post" action="{{ url_for('jurisprudence.tese_acao', thesis_id=v.id, acao='desfazer-mescla') }}" class="d-inline">
+              <input type="hidden" name="voltar" value="{{ voltar }}">
+              <span class="text-nowrap">{{ v.name }}<button class="btn btn-link btn-sm p-0 ms-1 align-baseline text-body-secondary" title="separar de novo"
+                onclick='return confirm({{ ("Separar “" ~ v.name ~ "” desta tese?") | tojson }})'><i class="bi bi-x-circle"></i></button></span>{{ ' ·' if not loop.last }}
+            </form>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </td>
+        <td class="text-end"><a href="{{ url_for('jurisprudence.index', tese_livre=t.id, livres='1') }}">{{ linha.decisoes }}</a></td>
+        <td>
+          {% if s %}
+            <div class="mb-1">
+            {% if s.mesclar_em %}<span class="cat-chip sugestao"><i class="bi bi-stars"></i> mesclar em {{ s.mesclar_em[1] }}</span>
+            {% elif s.sem_equivalente %}<span class="cat-chip sugestao"><i class="bi bi-stars"></i> sem equivalente</span>
+            {% else %}{% for c in s.catalogo %}<span class="cat-chip sugestao"><i class="bi bi-stars"></i> {{ c.name }}</span>{% endfor %}{% endif %}
+            </div>
+            {% if s.motivo %}<div class="variante">{{ s.motivo }}</div>{% endif %}
+          {% elif t.status == 'ligada' %}
+            {% for c in t.catalog_theses %}<span class="cat-chip">{{ c.name }}</span>{% endfor %}
+          {% elif t.status == 'sem_equivalente' %}
+            <span class="small text-body-secondary"><i class="bi bi-dash-circle me-1"></i>sem equivalente no catálogo</span>
+          {% else %}
+            <span class="small text-body-secondary">ainda sem correspondência</span>
+          {% endif %}
+
+          <div class="collapse mt-2" id="ligar-{{ t.id }}">
+            <form method="post" action="{{ url_for('jurisprudence.tese_acao', thesis_id=t.id, acao='ligar') }}" class="d-flex gap-2 align-items-start">
+              <input type="hidden" name="voltar" value="{{ voltar }}">
+              <select name="catalogo" multiple class="form-select form-select-sm js-select2" data-placeholder="Teses do catálogo…" style="width: 100%">
+                {% set atuais = t.catalog_theses | map(attribute='id') | list %}
+                {% for c in dados.catalogo %}<option value="{{ c.id }}" {{ 'selected' if c.id in atuais }}>{{ c.name }}</option>{% endfor %}
+              </select>
+              <button class="btn btn-sm btn-primary text-nowrap">Ligar</button>
+            </form>
+          </div>
+          <div class="collapse mt-2" id="mesclar-{{ t.id }}">
+            <form method="post" action="{{ url_for('jurisprudence.tese_acao', thesis_id=t.id, acao='mesclar') }}" class="d-flex gap-2 align-items-start">
+              <input type="hidden" name="voltar" value="{{ voltar }}">
+              <select name="canonica" class="form-select form-select-sm js-select2" data-placeholder="Mesclar em qual tese?" style="width: 100%" required>
+                <option value=""></option>
+                {% for outra in dados.canonicas if outra.id != t.id %}<option value="{{ outra.id }}">{{ outra.name }}</option>{% endfor %}
+              </select>
+              <button class="btn btn-sm btn-primary text-nowrap">Mesclar</button>
+            </form>
+            <div class="form-text">As decisões passam para a tese escolhida, e esta grafia continua levando a ela nas próximas importações.</div>
+          </div>
+        </td>
+        <td class="pe-3 text-end text-nowrap">
+          {% if s %}
+          <form method="post" action="{{ url_for('jurisprudence.tese_acao', thesis_id=t.id, acao='aceitar') }}" class="d-inline">
+            <input type="hidden" name="voltar" value="{{ voltar }}">
+            <button class="btn btn-sm btn-success"><i class="bi bi-check2"></i> Aceitar</button>
+          </form>
+          {% endif %}
+          <div class="dropdown d-inline">
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">Ações</button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" data-bs-toggle="collapse" href="#ligar-{{ t.id }}"><i class="bi bi-link-45deg me-1"></i>{{ 'Editar ligação' if t.status == 'ligada' else 'Ligar ao catálogo…' }}</a></li>
+              <li><a class="dropdown-item" data-bs-toggle="collapse" href="#mesclar-{{ t.id }}"><i class="bi bi-intersect me-1"></i>Mesclar em outra tese…</a></li>
+              {% if t.status != 'sem_equivalente' %}
+              <li><form method="post" action="{{ url_for('jurisprudence.tese_acao', thesis_id=t.id, acao='sem-equivalente') }}">
+                <input type="hidden" name="voltar" value="{{ voltar }}">
+                <button class="dropdown-item"><i class="bi bi-dash-circle me-1"></i>Sem equivalente</button></form></li>
+              {% endif %}
+              {% if t.status != 'pendente' %}
+              <li><form method="post" action="{{ url_for('jurisprudence.tese_acao', thesis_id=t.id, acao='reabrir') }}">
+                <input type="hidden" name="voltar" value="{{ voltar }}">
+                <button class="dropdown-item"><i class="bi bi-arrow-counterclockwise me-1"></i>Voltar para pendentes</button></form></li>
+              {% endif %}
+              {% if s %}
+              <li><form method="post" action="{{ url_for('jurisprudence.tese_acao', thesis_id=t.id, acao='descartar-sugestao') }}">
+                <input type="hidden" name="voltar" value="{{ voltar }}">
+                <button class="dropdown-item"><i class="bi bi-x me-1"></i>Descartar sugestão</button></form></li>
+              {% endif %}
+              {% if is_admin %}
+              <li><hr class="dropdown-divider"></li>
+              <li><form method="post" action="{{ url_for('jurisprudence.tese_acao', thesis_id=t.id, acao='criar-no-catalogo') }}"
+                        onsubmit='return confirm({{ ("Criar “" ~ t.name ~ "” como tese nova no catálogo do painel?") | tojson }})'>
+                <input type="hidden" name="voltar" value="{{ voltar }}">
+                <button class="dropdown-item"><i class="bi bi-plus-circle me-1"></i>Criar no catálogo</button></form></li>
+              {% endif %}
+            </ul>
+          </div>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div></div>
+<p class="small text-body-secondary mt-2"><i class="bi bi-info-circle me-1"></i>A correspondência é do escritório: vale para as decisões já na base e para as próximas. Nada entra no catálogo sem clique.</p>
+</div>
+
+<script>
+  document.addEventListener('shown.bs.collapse', function (e) {
+    if (!window.jQuery || !jQuery.fn.select2) return;
+    jQuery(e.target).find('.js-select2').each(function () {
+      if (jQuery(this).data('select2')) return;
+      jQuery(this).select2({ theme: 'bootstrap-5', width: '100%', placeholder: jQuery(this).data('placeholder'),
+                             allowClear: !this.multiple, language: { noResults: () => 'Nada encontrado' } });
+    });
+  });
+  {% if dados.sugestao_em_andamento %}
+  (function conferir() {
+    fetch('{{ url_for('jurisprudence.teses_sugestoes_status') }}', {credentials: 'same-origin'})
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && !d.em_andamento) window.location.reload(); else setTimeout(conferir, 5000); })
+      .catch(() => setTimeout(conferir, 10000));
+  })();
+  {% endif %}
+</script>
+{% endblock %}

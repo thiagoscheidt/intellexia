@@ -1,0 +1,156 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+{% from "jurisprudence/_macros.html" import res_pill %}
+
+{% block title %}Enviar decisões - Base de Jurisprudência{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jurisprudence.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="jur-page">
+{% call page_hero(title='Enviar decisões', subtitle='Sentenças, acórdãos e embargos em PDF: a IA lê e classifica', icon='bi bi-cloud-arrow-up') %}
+<div class="d-flex flex-column align-items-md-end gap-2">
+  <span class="badge text-bg-light border" title="Troque em Painel de Processos › Configurações de IA"><i class="bi bi-cpu me-1"></i>Modelo: {{ modelo }}</span>
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+      <li class="breadcrumb-item"><a href="{{ url_for('jurisprudence.index') }}">Base de Jurisprudência</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Enviar decisões</li>
+    </ol>
+  </nav>
+</div>
+{% endcall %}
+
+<form method="post" enctype="multipart/form-data" id="form-envio">
+  <label class="dropzone d-block mb-3" id="dropzone" for="arquivos">
+    <i class="bi bi-file-earmark-pdf display-5 text-danger"></i>
+    <h5 class="mt-2 mb-1">Arraste os PDFs das decisões aqui</h5>
+    <p class="text-body-secondary small mb-3">Vários de uma vez (até 50). Cada arquivo vira uma decisão; o processo e a instância vêm de dentro do documento.</p>
+    <span class="btn btn-primary btn-sm"><i class="bi bi-folder2-open me-1"></i>Escolher arquivos</span>
+    <input type="file" id="arquivos" name="arquivos" accept="application/pdf,.pdf" multiple class="d-none">
+  </label>
+</form>
+
+<div class="card border-0 shadow-sm"><div class="card-body">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h6 class="fw-bold mb-0">Fila de leitura</h6>
+    <div class="d-flex flex-wrap gap-2 small">
+      {% set k = p.contagem %}
+      {% if k.queued %}<span class="badge rounded-pill text-bg-light border">na fila {{ k.queued }}</span>{% endif %}
+      {% if k.processing %}<span class="badge rounded-pill text-bg-primary">lendo {{ k.processing }}</span>{% endif %}
+      {% if k.done %}<span class="badge rounded-pill text-bg-success">concluídas {{ k.done }}</span>{% endif %}
+      {% if k.review %}<span class="badge rounded-pill text-bg-warning">revisar {{ k.review }}</span>{% endif %}
+      {% if k.failed %}<span class="badge rounded-pill text-bg-danger">falhou {{ k.failed }}</span>{% endif %}
+    </div>
+  </div>
+  {% if not p.linhas %}
+  <p class="text-body-secondary mb-0">Nenhum arquivo enviado ainda.</p>
+  {% else %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Arquivo</th><th>Leitura</th><th>Situação</th><th class="text-end">Ações</th></tr></thead>
+      <tbody>
+      {% for l in p.linhas %}
+        {% set u = l.upload %}
+        <tr>
+          <td class="small"><i class="bi bi-file-earmark-pdf text-danger me-1"></i>{{ u.original_filename }}
+            <div class="text-body-secondary">{{ u.created_at.strftime('%d/%m %H:%M') }}{% if u.attempts > 1 %} · {{ u.attempts }} tentativas{% endif %}</div></td>
+          <td class="small">
+            {% if l.estado == 'done' and l.lido %}
+              {{ l.lido.tipo }} · {{ ' · '.join([l.lido.tribunal, l.lido.orgao] | select | list) }} · {{ res_pill(l.lido.resultado) }} · {{ l.lido.teses }} tese(s)
+            {% elif l.estado == 'review' %}
+              {% if u.duplicate_of %}
+              <i class="bi bi-files text-warning me-1"></i>{{ l.mensagem or 'Já existe' }}
+              {% if not l.mensagem %}uma {{ u.duplicate_of.tipo_documento | jur_tipo | lower }} deste processo{% endif %}
+              <a href="{{ url_for('jurisprudence.decisao', decision_id=u.duplicate_of.id) }}">
+                ({{ u.duplicate_of.tipo_documento | jur_tipo }}{{ ' de ' ~ u.duplicate_of.data_julgamento.strftime('%d/%m/%Y') if u.duplicate_of.data_julgamento }})</a>.
+              {% if l.lido %}<div class="text-body-secondary">Leitura nova: {{ l.lido.tipo }} · {{ res_pill(l.lido.resultado) }} · {{ l.lido.teses }} tese(s)</div>{% endif %}
+              {% endif %}
+            {% elif l.estado == 'processing' %}
+              <div class="progress" style="height: 6px"><div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div></div>
+              <span class="text-body-secondary">lendo o documento…</span>
+            {% elif l.estado == 'failed' %}
+              <span style="color: var(--jur-des)"><i class="bi bi-exclamation-octagon me-1"></i>{{ l.mensagem or 'Falhou.' }}</span>
+            {% else %}
+              <span class="text-body-secondary">aguardando</span>
+            {% endif %}
+          </td>
+          <td>
+            {% set rotulos = {'queued': ('text-bg-light border', 'na fila'), 'processing': ('text-bg-primary', 'lendo'),
+                              'done': ('text-bg-success', 'concluída'), 'review': ('text-bg-warning', 'revisar'),
+                              'failed': ('text-bg-danger', 'falhou')} %}
+            <span class="badge {{ rotulos[l.estado][0] }}">{{ rotulos[l.estado][1] }}</span>
+          </td>
+          <td class="text-end">
+            <div class="d-flex flex-wrap justify-content-end gap-1">
+            {% if l.estado == 'done' and u.decision_id %}
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('jurisprudence.decisao', decision_id=u.decision_id) }}">abrir</a>
+            {% elif l.estado == 'review' %}
+              {% for acao, rotulo, estilo in [('manter', 'manter a da base', 'btn-outline-secondary'),
+                                             ('substituir', 'substituir', 'btn-outline-warning'),
+                                             ('guardar_ambas', 'guardar as duas', 'btn-outline-primary')]
+                   if acao == 'manter' or u.extracted_json %}
+              <form method="post" action="{{ url_for('jurisprudence.resolver_envio', upload_id=u.id) }}">
+                <input type="hidden" name="acao" value="{{ acao }}">
+                <button class="btn btn-sm {{ estilo }}">{{ rotulo }}</button>
+              </form>
+              {% endfor %}
+              {% if not u.extracted_json %}
+              <form method="post" action="{{ url_for('jurisprudence.tentar_de_novo', upload_id=u.id) }}">
+                <button class="btn btn-sm btn-outline-primary">ler mesmo assim</button></form>
+              {% endif %}
+            {% elif l.estado == 'failed' %}
+              <form method="post" action="{{ url_for('jurisprudence.tentar_de_novo', upload_id=u.id) }}">
+                <button class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat me-1"></i>tentar de novo</button></form>
+            {% endif %}
+            {% if l.estado in ('failed', 'review', 'queued') %}
+              <form method="post" action="{{ url_for('jurisprudence.descartar_envio', upload_id=u.id) }}"
+                    onsubmit="return confirm('Descartar este arquivo da fila?')">
+                <button class="btn btn-sm btn-link text-body-secondary">descartar</button></form>
+            {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div></div>
+<p class="small text-body-secondary mt-2"><i class="bi bi-info-circle me-1"></i>A leitura roda em segundo plano: pode fechar esta tela. Duplicata não é descartada sozinha — quem decide é você.</p>
+</div>
+
+<script>
+  (function () {
+    const zona = document.getElementById('dropzone');
+    const campo = document.getElementById('arquivos');
+    const form = document.getElementById('form-envio');
+    const enviar = () => { if (campo.files.length) { zona.querySelector('h5').textContent = 'Enviando ' + campo.files.length + ' arquivo(s)…'; form.submit(); } };
+    campo.addEventListener('change', enviar);
+    ['dragenter', 'dragover'].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.add('arrastando'); }));
+    ['dragleave', 'drop'].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.remove('arrastando'); }));
+    zona.addEventListener('drop', e => {
+      const pdfs = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+      if (!pdfs.length) { alert('Só PDF.'); return; }
+      const dt = new DataTransfer(); pdfs.forEach(f => dt.items.add(f)); campo.files = dt.files; enviar();
+    });
+
+    // Enquanto houver leitura em andamento, confere a cada 5 s e recarrega
+    // quando algo mudar de estado.
+    {% if p.ativos %}
+    let assinatura = null;
+    const conferir = () => fetch('{{ url_for('jurisprudence.enviar_status') }}', {credentials: 'same-origin'})
+      .then(r => r.ok ? r.json() : null)
+      .then(dados => {
+        if (!dados) return;
+        const atual = JSON.stringify(dados.assinatura);
+        if (assinatura !== null && atual !== assinatura) { window.location.reload(); return; }
+        assinatura = atual;
+        if (dados.ativos) setTimeout(conferir, 5000); else window.location.reload();
+      }).catch(() => setTimeout(conferir, 10000));
+    conferir();
+    {% endif %}
+  })();
+</script>
+{% endblock %}

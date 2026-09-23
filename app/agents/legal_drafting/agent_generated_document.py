@@ -868,6 +868,7 @@ class AgentGeneratedDocument:
         contestation_summary_payload: Optional[dict] = None,
         law_firm_id: Optional[int] = None,
         allowed_reference_ids: Optional[list[int]] = None,
+        jurisprudence_block: str = '',
     ) -> GeneratedImpugnacaoContestacao:
         """
         Gera Impugnação à Contestação da União.
@@ -902,6 +903,11 @@ class AgentGeneratedDocument:
             user_prompt_sections.append(contestation_summary_ctx)
         if regional_jurisprudence_hint:
             user_prompt_sections.append(regional_jurisprudence_hint)
+        # Jurisprudência escolhida pelo advogado na Base de Jurisprudência.
+        # Antes das peças-modelo: _shrink_user_prompt corta pelo fim, e a
+        # escolha explícita do advogado vale mais que referência de estilo.
+        if jurisprudence_block:
+            user_prompt_sections.append(jurisprudence_block)
         if style_references_block:
             user_prompt_sections.append(style_references_block)
 
@@ -2202,6 +2208,7 @@ class AgentGeneratedDocument:
         contestation_summary_payload: Optional[dict] = None,
         law_firm_id: Optional[int] = None,
         allowed_reference_ids: Optional[list[int]] = None,
+        jurisprudence_block: str = '',
     ):
         """
         Despacha para o método correto e retorna (result_dict, full_text).
@@ -2216,6 +2223,7 @@ class AgentGeneratedDocument:
                 contestation_summary_payload=contestation_summary_payload,
                 law_firm_id=law_firm_id,
                 allowed_reference_ids=allowed_reference_ids,
+                jurisprudence_block=jurisprudence_block,
             )
         elif document_type == "manifestacao":
             result = self.generate_manifestacao(process, selections, instructions)
