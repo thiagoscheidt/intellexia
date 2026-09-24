@@ -14,6 +14,7 @@ Regras implementadas até aqui (remessa R02):
     R3 — RPI-07: o achado cai dentro de uma citação direta.
     R4 — RPI-10: o intervalo entre DCB e DIB está contado errado.
     R6 — falso positivo em que o próprio achado diz não haver divergência.
+    R7 — FB-02: petição x anexo/planilha divergindo só na formatação.
 
 A R4 é a única que **corrige** em vez de descartar. A correção não pode ser
 silenciosa pelo mesmo motivo do descarte, então fica gravada no próprio achado,
@@ -323,6 +324,55 @@ def _correcao_ja_atendida(achado: dict, documento: str) -> str | None:
     return None
 
 
+# ── R7 ──────────────────────────────────────────────────────────────────
+# FB-02: no cruzamento com os documentos auxiliares, o modelo aponta como
+# divergente "S.A" contra "S.A." e um NIT escrito com pontos contra o mesmo NIT
+# só em dígitos. O anexo vem do órgão com a grafia dele; a petição não está
+# errada por isso. Vale SÓ para petição x anexo/planilha: dentro da própria
+# petição o manual exige grafia idêntica, e esse achado continua.
+
+# Sinal de que o achado compara com fonte externa: nome de arquivo, planilha
+# ou documento auxiliar. "Anexo" sozinho não conta — a tabela de documentos
+# anexos é parte da petição.
+_ORIGEM_EXTERNA = re.compile(
+    r'\.(?:pdf|docx?|xlsx?|csv)\b|\bplanilha\b|\bdocumentos?\s+auxiliar(?:es)?\b',
+    re.IGNORECASE)
+
+# Identificador (NB 10 dígitos, NIT/CPF 11, CEI 12, CNPJ 14) compara só dígitos.
+# Número que não é identificador — valor, data — não: "1.000,00" e "10.000,0"
+# têm os mesmos dígitos e são valores diferentes.
+_SO_IDENTIFICADOR = re.compile(r'^[\d.\-/\s]+$')
+_MINIMO_DIGITOS_IDENTIFICADOR = 10
+
+# Só pontuação e espaço. Caixa e acento continuam valendo (ver normalizar_espacos).
+_PONTUACAO = re.compile(r'[\s.,;:/\-]+')
+
+
+def _forma_comparavel(valor: str) -> tuple[str, str]:
+    if any(c.isdigit() for c in valor):
+        if _SO_IDENTIFICADOR.match(valor):
+            digitos = re.sub(r'\D', '', valor)
+            if len(digitos) >= _MINIMO_DIGITOS_IDENTIFICADOR:
+                return 'identificador', digitos
+        return 'literal', valor
+    return 'texto', _PONTUACAO.sub('', valor)
+
+
+def _divergencia_so_de_formatacao(achado: dict) -> str | None:
+    """Motivo do descarte, se os valores contrapostos só diferem na formatação."""
+    texto = ' '.join(str(achado.get(campo) or '') for campo in ('description', 'correction'))
+    if not _ORIGEM_EXTERNA.search(texto):
+        return None
+    valores = {v for v in trechos_citados(texto) if len(v) >= _MINIMO_PROPOSTA}
+    # Com um valor só não há contraposição para julgar.
+    if len(valores) < 2:
+        return None
+    if len({_forma_comparavel(v) for v in valores}) != 1:
+        return None
+    return ('a divergência com o documento de origem é só de formatação: '
+            + ' x '.join(f'"{v}"' for v in sorted(valores)))
+
+
 def sanear(achados: list, documento_texto: str = '') -> tuple[list, list[dict]]:
     """Aplica as regras de saneamento a uma lista de achados.
 
@@ -334,7 +384,7 @@ def sanear(achados: list, documento_texto: str = '') -> tuple[list, list[dict]]:
 
     Returns:
         (mantidos, descartes), onde cada descarte é
-        ``{'regra': 'R1'|'R2'|'R3'|'R6', 'motivo': str, 'achado': dict}``.
+        ``{'regra': 'R1'|'R2'|'R3'|'R4'|'R6'|'R7', 'motivo': str, 'achado': dict}``.
     """
     documento = normalizar_espacos(documento_texto)
     spans_citados = _spans_de_citacao(documento) if documento else []
@@ -361,6 +411,11 @@ def sanear(achados: list, documento_texto: str = '') -> tuple[list, list[dict]]:
         motivo = _correcao_ja_atendida(achado, documento) if documento else None
         if motivo:
             descartes.append({'regra': 'R1', 'motivo': motivo, 'achado': achado})
+            continue
+
+        motivo = _divergencia_so_de_formatacao(achado)
+        if motivo:
+            descartes.append({'regra': 'R7', 'motivo': motivo, 'achado': achado})
             continue
 
         acao, correcao, motivo = _recalcular_intervalo(achado)

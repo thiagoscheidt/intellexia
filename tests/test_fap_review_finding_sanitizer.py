@@ -500,6 +500,57 @@ def test_r4_precisa_de_exatamente_duas_datas():
           mantidos3 and mantidos3[0]['description'] == original3)
 
 
+# ── R7 — FB-02: petição x anexo/planilha divergindo só na formatação ─────
+
+def _regras(achados, documento=PETICAO):
+    mantidos, descartes = sanear(achados, documento)
+    return len(mantidos), [d['regra'] for d in descartes]
+
+
+def test_r7_razao_social_so_pontuacao_contra_anexo():
+    print('\n32. R7 — razão social que difere do anexo só na pontuação')
+    a = achado(description='A razão social "SENDAS DISTRIBUIDORA S.A" diverge da CAT_joao.pdf, '
+                           'que traz "SENDAS DISTRIBUIDORA S.A."',
+               correction='Conferir a grafia com o documento auxiliar.')
+    mantidos, regras = _regras([a])
+    check('descartado pela R7', mantidos == 0 and regras == ['R7'], f'{mantidos} {regras}')
+
+    b = achado(description='Razão social na petição: "SENDAS DISTRIBUIDORA S/A"; na planilha: '
+                           '"SENDAS DISTRIBUIDORA S.A."')
+    mantidos, regras = _regras([b])
+    check('S/A contra S.A. da planilha também sai', mantidos == 0 and regras == ['R7'], f'{mantidos} {regras}')
+
+
+def test_r7_nit_formatado_contra_digitos():
+    print('\n33. R7 — NIT igual, escrito com e sem pontuação')
+    a = achado(description='O NIT "123.45678.90-1" não corresponde ao da planilha, "12345678901".')
+    mantidos, regras = _regras([a])
+    check('NIT com os mesmos dígitos sai', mantidos == 0 and regras == ['R7'], f'{mantidos} {regras}')
+
+
+def test_r7_preserva_divergencia_dentro_da_peticao():
+    print('\n34. R7 — dentro da própria petição o rigor do manual continua')
+    # Revisão 62: tabela de anexos da petição com "S.A" e qualificação com "S.A.".
+    a = achado(description='A razão social aparece como "SENDAS DISTRIBUIDORA S.A" na tabela de '
+                           'documentos anexos e "SENDAS DISTRIBUIDORA S.A." na qualificação.')
+    mantidos, regras = _regras([a])
+    check('achado interno mantido', mantidos == 1 and regras == [], f'{mantidos} {regras}')
+
+
+def test_r7_preserva_divergencia_real():
+    print('\n35. R7 — divergência de verdade contra o anexo continua')
+    casos = {
+        'forma societária diferente': 'A petição traz "SENDAS DISTRIBUIDORA S.A." e a CAT_x.pdf "SENDAS DISTRIBUIDORA LTDA".',
+        'NIT com outro dígito': 'O NIT "123.45678.90-1" diverge da planilha, que traz "12345678902".',
+        'valor com vírgula em outro lugar': 'O valor "1.000,00" diverge da planilha, que traz "10.000,0".',
+        'data com dígitos trocados': 'A data "1/12/2020" diverge da CAT_x.pdf, que traz "11/2/2020".',
+        'um valor só entre aspas': 'A razão social diverge da planilha: "SENDAS DISTRIBUIDORA S.A".',
+    }
+    for nome, descricao in casos.items():
+        mantidos, regras = _regras([achado(description=descricao)])
+        check(nome, mantidos == 1 and 'R7' not in regras, f'{mantidos} {regras}')
+
+
 def main() -> int:
     print('=' * 62)
     print('SANEADOR DE ACHADOS — Revisor FAP')
@@ -536,6 +587,11 @@ def main() -> int:
     test_r4_descarta_quando_o_intervalo_derruba_a_tese()
     test_r4_so_atua_em_achado_da_tese_dos_60_dias()
     test_r4_precisa_de_exatamente_duas_datas()
+
+    test_r7_razao_social_so_pontuacao_contra_anexo()
+    test_r7_nit_formatado_contra_digitos()
+    test_r7_preserva_divergencia_dentro_da_peticao()
+    test_r7_preserva_divergencia_real()
 
     print('\n' + '=' * 62)
     if _falhas:
