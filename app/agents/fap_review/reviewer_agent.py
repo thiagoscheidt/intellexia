@@ -503,7 +503,7 @@ INSTRUÇÕES DO PROJETO:
                 missing_documents=missing_documents,
                 sanitizer_discards=sanitizer_discards,
                 executive_summary=self._build_executive_summary(
-                    result_dict.get('executive_summary', {}), findings),
+                    result_dict.get('executive_summary', {}), findings, missing_documents),
                 new_patterns=[],
             )
 
@@ -905,14 +905,21 @@ INSTRUÇÕES DO PROJETO:
                 correction_priority="N/A"
             )
 
-    def _build_executive_summary(self, data: dict, findings: list[FindingItem]) -> ExecutiveSummary:
+    def _build_executive_summary(self, data: dict, findings: list[FindingItem],
+                                 missing_documents: list | None = None) -> ExecutiveSummary:
         """Resumo executivo com totais recontados dos achados efetivamente mantidos.
 
         O modelo conta os próprios achados, mas o saneamento (ex.: falso positivo
         de razão social) pode descartar itens — sem a recontagem, a tela mostraria
         "1 crítico" com lista sem nenhum.
+
+        RPI-20: risco decorre de problema não corrigido. Sem achado e sem
+        documento em falta, o modelo ainda escreve riscos genéricos da tese —
+        esses saem, senão uma petição limpa parece ter pendência.
         """
         summary = self._parse_executive_summary(data)
+        if not findings and not missing_documents:
+            summary.main_legal_risks = []
         severities = [str(f.severity or "").strip().upper() for f in findings]
         summary.total_findings = len(findings)
         summary.critical_findings = sum(1 for s in severities if s == "CRÍTICO")

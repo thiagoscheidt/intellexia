@@ -1092,7 +1092,10 @@
                             </div>
                         </div>
 
-                        {% if result_data.executive_summary.main_legal_risks %}
+                        {# RPI-20: o agente já zera os riscos sem achado nem documento em falta;
+                           a condição aqui cobre as revisões gravadas antes disso. #}
+                        {% if result_data.executive_summary.main_legal_risks
+                              and (result_data.findings or result_data.missing_documents) %}
                         <div class="mb-3 p-3 rounded"
                             style="background: rgba(220, 53, 69, 0.05); border-left: 4px solid #dc3545;">
                             <div class="d-flex align-items-center gap-2 mb-2">
