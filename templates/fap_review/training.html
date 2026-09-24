@@ -150,7 +150,7 @@
         {% if comparison_rows %}
         <div class="table-responsive"><table class="table table-hover mb-0">
           <thead class="table-light"><tr>
-            <th class="ps-3">#</th><th>Tipo</th><th>Assunto</th><th>Modelo</th><th>Por</th><th>Situação</th><th>O que foi gravado</th><th>Data</th><th class="pe-3"></th>
+            <th class="ps-3">#</th><th>Tipo</th><th>Assunto</th><th>Modelo</th><th>Prompt</th><th>Por</th><th>Situação</th><th>O que foi gravado</th><th>Data</th><th class="pe-3"></th>
           </tr></thead>
           <tbody>
             {% for row in comparison_rows %}
@@ -167,6 +167,27 @@
                 {% elif row.execution.model_name %}
                 <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1"
                       title="Rodou com um modelo diferente do configurado agora — os resultados podem divergir">outro</span>
+                {% else %}
+                <i class="bi bi-info-circle text-muted ms-1"
+                   title="Lote anterior a 04/09/2026, quando o modelo passou a ser gravado"></i>
+                {% endif %}
+              </td>
+              {# RPI-02: com que versão de prompt o lote rodou, contra a vigente. #}
+              {% set prompt = row.prompt %}
+              <td class="small">
+                {% if prompt.state == 'current' %}
+                <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle"
+                      title="{% for v in prompt.versions %}{{ v.label }} v{{ v.version }}{{ '\n' if not loop.last }}{% endfor %}">vigente</span>
+                {% elif prompt.state == 'changed' %}
+                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                      title="Rodou com prompt diferente do vigente — os resultados podem divergir">outro</span>
+                {% for v in prompt.changed %}
+                <div class="text-muted text-nowrap mt-1">{{ v.label }} v{{ v.version or '—' }}
+                  <span class="opacity-75">(hoje v{{ v.current_version or '—' }})</span></div>
+                {% endfor %}
+                {% else %}
+                <span class="text-muted text-nowrap"
+                      title="Lote anterior ao registro da versão de prompt">não registrado</span>
                 {% endif %}
               </td>
               <td class="small text-nowrap training-user">{{ row.execution.user.name if row.execution.user else '—' }}</td>

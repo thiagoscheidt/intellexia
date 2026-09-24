@@ -2853,6 +2853,8 @@ def training_compare():
                 execution_type='training',
                 status='processing',
                 model_name=_get_fap_setting(law_firm_id).training_model,
+                used_versions_json=json.dumps(_svc.collect_active_versions(
+                    law_firm_id, _svc.training_prompt_types('training')), ensure_ascii=False),
                 main_document_path=str(original_path),
                 main_document_filename=original_file.filename,
                 comparative_analysis=True,
@@ -2918,8 +2920,14 @@ def training():
     ).paginate(page=page, per_page=TRAINING_HISTORY_PER_PAGE, error_out=False)
 
     rows = []
+    current_versions = _svc.collect_active_versions(
+        law_firm_id, _svc.training_prompt_types('training'))
     for execution in history.items:
         payload = _load_training_payload(execution)
+        try:
+            used_versions = json.loads(execution.used_versions_json or '{}')
+        except (TypeError, json.JSONDecodeError):
+            used_versions = {}
         # RPI-03: a coerência entre lotes não precisa de mecanismo novo — o
         # versionamento com ativação já existe. Precisa ficar visível: com que
         # modelo cada lote rodou, e se é o mesmo que está valendo hoje.
@@ -2927,6 +2935,9 @@ def training():
             'model_label': _svc.describe_model_name(execution.model_name),
             'model_is_current': bool(
                 execution.model_name and execution.model_name == setting.training_model),
+            'prompt': _svc.compare_prompt_versions(
+                used_versions, current_versions,
+                _svc.training_prompt_types(execution.execution_type)),
         }
         if execution.execution_type == _svc.TRAINING_CHAT_TYPE:
             first = FapReviewTrainingMessage.query.filter_by(
@@ -3038,6 +3049,8 @@ def training_chat_start():
         execution_type=_svc.TRAINING_CHAT_TYPE,
         status='pending',
         model_name=_get_fap_setting(law_firm_id).training_model,
+        used_versions_json=json.dumps(_svc.collect_active_versions(
+            law_firm_id, _svc.training_prompt_types(_svc.TRAINING_CHAT_TYPE)), ensure_ascii=False),
         main_document_filename='Treinamento interativo',
         result_json=json.dumps({'stage': 'chat', 'accepted': [], 'refused': [], 'saved': []}),
     )

@@ -167,14 +167,15 @@ REVIEWER_PROMPT_TYPES = ('revisor_identity', 'revisor_rules', 'revisor_output_fo
 REVIEWER_REFERENCE_TYPES = ('manual_fap', 'casos_referencia', 'project_instructions')
 
 
-def collect_active_versions(law_firm_id: int) -> dict:
+def collect_active_versions(law_firm_id: int, prompt_types: tuple = REVIEWER_PROMPT_TYPES) -> dict:
     """Snapshot das versões ativas de prompt/referência do revisor.
 
     Gravado em ``FapReviewExecution.used_versions_json`` para responder, depois,
-    "com qual prompt esta revisão rodou?" — tela e MCP usam o mesmo helper.
+    "com qual prompt esta revisão rodou?" — tela e MCP usam o mesmo helper. O
+    treinamento passa os prompts que ele usa (``training_prompt_types``).
     """
     versions: dict[str, dict] = {}
-    for prompt_type in REVIEWER_PROMPT_TYPES:
+    for prompt_type in prompt_types:
         version = FapReviewPromptVersion.query.filter_by(
             law_firm_id=law_firm_id, prompt_type=prompt_type, is_active=True,
         ).first()
@@ -1249,6 +1250,53 @@ def build_edit_preview(content: str, edit: dict, context_lines: int = 3) -> dict
 
 TRAINING_CHAT_TYPE = 'training_chat'
 TRAINING_EXECUTION_TYPES = ('training', TRAINING_CHAT_TYPE)
+
+# RPI-02: os prompts que cada modo de treinamento lê — a conversa não usa o
+# TRAINING_PROMPT. Só esses entram na comparação com o vigente: a referência
+# (manual, casos) também fica no snapshot, mas é o próprio treinamento que a
+# muda, então todo lote que gravou algo apareceria como "outro".
+_TRAINING_PROMPT_TYPES = {
+    'training': ('revisor_identity', 'revisor_rules', 'training_identity',
+                 'training_rules', 'training_prompt'),
+    TRAINING_CHAT_TYPE: ('revisor_identity', 'revisor_rules', 'training_identity',
+                         'training_rules'),
+}
+
+PROMPT_VERSION_LABELS = {
+    'revisor_identity': 'Revisor · identidade',
+    'revisor_rules': 'Revisor · regras',
+    'training_identity': 'Treino · identidade',
+    'training_rules': 'Treino · regras',
+    'training_prompt': 'Treino · instrução',
+}
+
+
+def training_prompt_types(execution_type: str) -> tuple:
+    return _TRAINING_PROMPT_TYPES.get(execution_type, _TRAINING_PROMPT_TYPES['training'])
+
+
+def compare_prompt_versions(used: dict | None, current: dict, prompt_types: tuple) -> dict:
+    """Versões de prompt com que o lote rodou, lado a lado com as vigentes.
+
+    ``state``: 'unrecorded' (lote anterior ao registro — não se adivinha),
+    'current' (mesmos prompts de hoje, comparável com um lote novo) ou 'changed'.
+    A igualdade é pelo id da versão, não pelo número exibido.
+    """
+    if not used:
+        return {'state': 'unrecorded', 'versions': [], 'changed': []}
+    versions, changed = [], []
+    for prompt_type in prompt_types:
+        run = used.get(prompt_type) or {}
+        now = current.get(prompt_type) or {}
+        item = {
+            'label': PROMPT_VERSION_LABELS.get(prompt_type, prompt_type),
+            'version': run.get('version'),
+            'current_version': now.get('version'),
+        }
+        versions.append(item)
+        if run.get('id') != now.get('id'):
+            changed.append(item)
+    return {'state': 'changed' if changed else 'current', 'versions': versions, 'changed': changed}
 
 CHAT_DECISIONS = ('accept', 'refuse', 'undo')
 
