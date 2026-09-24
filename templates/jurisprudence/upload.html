@@ -32,6 +32,55 @@
   </label>
 </form>
 
+{% set c = cobertura %}
+<div class="card border-0 shadow-sm mb-3"><div class="card-body">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+    <h6 class="fw-bold mb-0"><i class="bi bi-file-text me-1"></i>Inteiro teor e índice de busca</h6>
+    <span class="small text-body-secondary">coleção própria da jurisprudência, separada da base de conhecimento</span>
+  </div>
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3"><div class="kpi"><div class="v">{{ c.com_texto }}<span class="fs-6 text-body-secondary"> / {{ c.total }}</span></div><div class="l">com inteiro teor</div></div></div>
+    <div class="col-6 col-md-3"><div class="kpi"><div class="v" style="color: var(--jur-fav)">{{ c.indexadas }}</div><div class="l">no índice de busca</div></div></div>
+    <div class="col-6 col-md-3"><div class="kpi"><div class="v" style="color: var(--jur-par)">{{ c.sem_pdf }}</div><div class="l">sem PDF (só a ficha)</div></div></div>
+    <div class="col-6 col-md-3"><div class="kpi"><div class="v" style="color: var(--jur-des)">{{ c.erro_indice }}</div><div class="l">com erro no índice</div></div></div>
+  </div>
+  {% if c.sem_pdf %}
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <form method="post" enctype="multipart/form-data" action="{{ url_for('jurisprudence.anexar_lote') }}">
+        <div class="small fw-semibold mb-1">Anexar os PDFs das decisões importadas</div>
+        <p class="small text-body-secondary mb-2">Baixe a pasta de decisões processadas do Drive e envie os PDFs aqui (até 300 por vez).
+          Cada arquivo é casado com a decisão pelo <strong>nome do arquivo</strong> que a planilha registrou; o texto é extraído
+          sem IA e entra no índice. Arquivo sem decisão correspondente é avisado, nunca anexado a outra.</p>
+        <div class="d-flex flex-wrap gap-2">
+          <input type="file" name="arquivos" accept="application/pdf,.pdf" multiple required class="form-control form-control-sm" style="max-width: 360px">
+          <button class="btn btn-sm btn-outline-primary"><i class="bi bi-paperclip me-1"></i>Anexar</button>
+        </div>
+      </form>
+    </div>
+    {% if c.sem_pdf_com_link %}
+    <div class="col-lg-5">
+      <div class="small fw-semibold mb-1">Ou buscar direto no Drive</div>
+      <p class="small text-body-secondary mb-2">{{ c.sem_pdf_com_link }} decisão(ões) sem PDF têm link do Drive. Só funciona com a pasta
+        compartilhada como <em>qualquer pessoa com o link</em>.</p>
+      {% if c.drive_em_andamento %}
+      <div class="small"><span class="spinner-border spinner-border-sm me-1"></span>Buscando no Drive… recarregue para ver o avanço.</div>
+      {% else %}
+      <form method="post" action="{{ url_for('jurisprudence.buscar_no_drive') }}">
+        <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-google me-1"></i>Buscar PDFs no Drive</button>
+      </form>
+      {% endif %}
+      {% if c.drive_erros %}
+      <div class="alert alert-warning py-2 px-3 small mt-2 mb-0">
+        <i class="bi bi-exclamation-triangle me-1"></i>{{ c.drive_erros }} falha(s) na última busca{% if c.ultimo_erro_drive %}: {{ c.ultimo_erro_drive }}{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div></div>
+
 <div class="card border-0 shadow-sm"><div class="card-body">
   <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <h6 class="fw-bold mb-0">Fila de leitura</h6>

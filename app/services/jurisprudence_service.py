@@ -342,3 +342,71 @@ def totais(law_firm_id: int) -> dict:
                     .filter_by(law_firm_id=law_firm_id)
                     .filter(JurisprudenceDecision.processo_digits.is_(None)).count())
     return {'decisoes': decisoes, 'processos': processos + sem_processo}
+
+
+# ── Reset da base ─────────────────────────────────────────────────────
+
+def o_que_o_reset_apaga(law_firm_id: int) -> dict:
+    from app.models import JurisprudenceUpload
+    return {
+        'decisoes': JurisprudenceDecision.query.filter_by(law_firm_id=law_firm_id).count(),
+        'pdfs': JurisprudenceDecision.query.filter_by(law_firm_id=law_firm_id)
+                .filter(JurisprudenceDecision.pdf_path.isnot(None)).count(),
+        'teses': JurisprudenceThesis.query.filter_by(law_firm_id=law_firm_id).count(),
+        'envios': JurisprudenceUpload.query.filter_by(law_firm_id=law_firm_id).count(),
+    }
+
+
+def resetar_base(law_firm_id: int) -> dict:
+    """Apaga a Base de Jurisprudência inteira do escritório — decisões, teses e
+    correspondência com o catálogo, fila de PDFs, arquivos e índice.
+
+    Irreversível. Ordem igual à do reset das peças-modelo: índices primeiro
+    (se falharem, o banco ainda reflete a realidade e dá para repetir),
+    depois arquivos, depois banco. O catálogo do painel não é tocado.
+    Recusa com leitura ou busca no Drive em andamento — a thread gravaria
+    decisão no meio da limpeza.
+    """
+    import os
+    import shutil
+    from app.models import JurisprudenceUpload
+    from app.services import jurisprudence_index_service as indice
+    from app.services import jurisprudence_upload_service as envios
+
+    lendo = [u for u in JurisprudenceUpload.query.filter(
+        JurisprudenceUpload.law_firm_id == law_firm_id,
+        JurisprudenceUpload.status.in_([JurisprudenceUpload.STATUS_QUEUED, JurisprudenceUpload.STATUS_PROCESSING])).all()
+        if not envios.travada(u)]
+    if lendo or envios.drive_em_andamento(law_firm_id):
+        raise ValueError('Há leitura de PDF ou busca no Drive em andamento. Espere terminar para resetar a base.')
+
+    apagado = o_que_o_reset_apaga(law_firm_id)
+    avisos = indice.remover_escritorio(law_firm_id)
+
+    pasta = os.path.join(envios.UPLOAD_BASE_DIR, str(law_firm_id))
+    if os.path.isdir(pasta):
+        try:
+            shutil.rmtree(pasta)
+        except Exception as erro:
+            print(f'[jurisprudence.reset] arquivos em {pasta}: {erro}')
+            avisos.append('arquivos enviados')
+
+    decisoes = db.session.query(JurisprudenceDecision.id).filter(JurisprudenceDecision.law_firm_id == law_firm_id)
+    teses = db.session.query(JurisprudenceThesis.id).filter(JurisprudenceThesis.law_firm_id == law_firm_id)
+    try:
+        JurisprudenceUpload.query.filter_by(law_firm_id=law_firm_id).delete(synchronize_session=False)
+        db.session.execute(jurisprudence_decision_theses.delete().where(
+            jurisprudence_decision_theses.c.decision_id.in_(decisoes.scalar_subquery())))
+        db.session.execute(jurisprudence_thesis_catalog_links.delete().where(
+            jurisprudence_thesis_catalog_links.c.thesis_id.in_(teses.scalar_subquery())))
+        JurisprudenceDecision.query.filter_by(law_firm_id=law_firm_id).delete(synchronize_session=False)
+        # merged_into_id aponta para a própria tabela: soltar antes de apagar,
+        # senão o MySQL recusa o DELETE pela chave estrangeira.
+        JurisprudenceThesis.query.filter_by(law_firm_id=law_firm_id).update(
+            {'merged_into_id': None}, synchronize_session=False)
+        JurisprudenceThesis.query.filter_by(law_firm_id=law_firm_id).delete(synchronize_session=False)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        raise
+    return {**apagado, 'avisos': sorted(set(avisos))}

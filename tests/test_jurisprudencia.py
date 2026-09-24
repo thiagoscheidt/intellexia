@@ -43,6 +43,50 @@ PASTA_TMP = tempfile.mkdtemp(prefix='jurisprudencia_teste_')
 _imp.UPLOAD_BASE_DIR = PASTA_TMP
 _up.UPLOAD_BASE_DIR = PASTA_TMP
 
+# Índice de teste: Qdrant em memória, embedding falso (sem rede) e o índice
+# "jurisprudence_test" do Meilisearch local — nunca a coleção/índice de produção.
+import hashlib  # noqa: E402
+import math  # noqa: E402
+import re as _re  # noqa: E402
+from qdrant_client import QdrantClient  # noqa: E402
+from app.services import jurisprudence_index_service as _indice  # noqa: E402
+
+
+def _embedding_falso(textos):
+    """Saco de palavras em 64 dimensões: textos com palavras em comum ficam próximos."""
+    vetores = []
+    for texto in textos:
+        v = [0.0] * 64
+        for palavra in _re.findall(r'\w{4,}', norm.texto_de_busca(texto)):
+            v[int(hashlib.md5(palavra.encode()).hexdigest(), 16) % 64] += 1.0
+        tamanho = math.sqrt(sum(x * x for x in v)) or 1.0
+        vetores.append([x / tamanho for x in v])
+    return vetores
+
+
+def _meili_no_ar():
+    try:
+        from meilisearch_python_sdk import Client
+        Client(_indice.MEILISEARCH_HOST, _indice.MEILISEARCH_API_KEY).health()
+        return True
+    except Exception:
+        return False
+
+
+MEILI_NO_AR = _meili_no_ar()
+INDICE_TESTE = _indice.Indice(qdrant=QdrantClient(':memory:'), embedder=_embedding_falso,
+                              colecao='jurisprudence_test', indice_meili='jurisprudence_test',
+                              esperar_meili=True)
+if MEILI_NO_AR:
+    INDICE_TESTE.meili.delete_index_if_exists('jurisprudence_test')
+else:
+    class _MeiliFora:
+        def __getattr__(self, nome):
+            raise RuntimeError('Meilisearch fora do ar no teste')
+    INDICE_TESTE._meili = _MeiliFora()
+_indice.configurar(INDICE_TESTE)
+_indice.SINCRONO = True
+
 FALHAS = []
 PLANILHA_REAL = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'BANCO_MESTRE_FAP.xlsx')
 
@@ -61,7 +105,7 @@ CABECALHO = ['documento_id', 'nome_arquivo', 'link_drive', 'processo', 'tribunal
 
 def linha(processo, tribunal, orgao, data_j, tipo, resultado, teses, motivo='', vigencia='2019 a 2021',
           parte='METALURGICA VALE LTDA', ementa='', precedentes=''):
-    return ['DOC1', f'{tipo}.pdf', 'https://drive.google.com/x', processo, tribunal, orgao, 'DESEMBARGADORA FEDERAL ANA',
+    return ['DOC1', f'{tipo} - {processo}.pdf', 'https://drive.google.com/file/d/ID_' + processo[:7] + '/view', processo, tribunal, orgao, 'DESEMBARGADORA FEDERAL ANA',
             data_j, tipo, resultado, motivo, teses, ementa, 'Fundamento A; Fundamento B', precedentes,
             f'Resumo do caso {processo}', 'FAP', None, parte, vigencia, 'Apelação Cível']
 
@@ -400,6 +444,101 @@ def test_fila():
     check('fila é por escritório', up.painel(2)['linhas'] == [])
 
 
+def _pdf_com_texto(paginas):
+    import fitz
+    doc = fitz.open()
+    for texto in paginas:
+        pagina = doc.new_page()
+        pagina.insert_textbox(fitz.Rect(50, 50, 550, 800), texto, fontsize=11)
+    dados = doc.tobytes()
+    doc.close()
+    return dados
+
+
+def test_indice():
+    print('\n7b. Índice próprio da jurisprudência (inteiro teor, parecidas)')
+    from werkzeug.datastructures import FileStorage
+    from app.models import JurisprudenceDecision as D
+    from app.services import jurisprudence_upload_service as up
+    from app.services import jurisprudence_thesis_service as ts
+    from qdrant_client.http import models as rest
+
+    ids = [d.id for d in D.query.filter_by(law_firm_id=1).all()]
+    _indice.agendar(1, ids)
+    indexadas = D.query.filter_by(law_firm_id=1, index_status='indexada').count()
+    esperado = len(ids) if MEILI_NO_AR else 0
+    check('toda decisão entra no índice pela ficha, mesmo sem PDF', indexadas == esperado,
+          f'{indexadas}/{len(ids)} (Meilisearch {"no ar" if MEILI_NO_AR else "fora"})')
+    pontos = INDICE_TESTE.qdrant.count('jurisprudence_test', exact=True).count
+    check('o Qdrant recebe um ponto de ficha por decisão', pontos == len(ids), pontos)
+
+    sentenca = D.query.filter_by(law_firm_id=1, processo_digits='50033211020234047207').first()
+    pdf = _pdf_com_texto(['Vistos. A empresa pede a exclusao do beneficio acidentario.',
+                          'O laudo pericial afastou a concausalidade do evento ocupacional. Julgo procedente.'])
+    with app.test_request_context():
+        r = up.anexar_em_lote(1, [
+            FileStorage(stream=io.BytesIO(pdf), filename='SENTENCA - 5003321-10.2023.4.04.7207.pdf'),
+            FileStorage(stream=io.BytesIO(pdf), filename='nao-existe.pdf'),
+        ])
+    sentenca = db.session.get(D, sentenca.id)
+    check('lote casa o PDF com a decisão pelo nome do arquivo', r['anexadas'] == 1 and r['sem_par'] == ['nao-existe.pdf'], r)
+    check('o inteiro teor é extraído, página a página, sem IA',
+          sentenca.texto_paginas == 2 and 'concausalidade' in (sentenca.texto_integral or ''), sentenca.texto_paginas)
+    check('a decisão com PDF ganha um ponto por página', sentenca.index_chunks == 3, sentenca.index_chunks)
+
+    if MEILI_NO_AR:
+        achados = _indice.buscar_inteiro_teor(1, 'concausalidade', indice=INDICE_TESTE)
+        check('busca no inteiro teor acha o termo que só está no PDF',
+              achados and achados[0]['decision_id'] == sentenca.id and achados[0]['page'] == 2, achados)
+        check('o trecho vem grifado e escapado', achados and '<mark>concausalidade</mark>' in achados[0]['trecho'])
+        check('uma linha por decisão (distinct)', len({a['decision_id'] for a in achados}) == len(achados))
+        check('outro escritório não enxerga', _indice.buscar_inteiro_teor(2, 'concausalidade', indice=INDICE_TESTE) == [])
+        por_numero = _indice.buscar_inteiro_teor(1, '5003321-10.2023.4.04.7207', indice=INDICE_TESTE)
+        check('número de processo vira filtro exato', [a['decision_id'] for a in por_numero] == [sentenca.id], por_numero)
+        filtrado = _indice.buscar_inteiro_teor(1, 'concausalidade', resultados=['desfavoravel'], indice=INDICE_TESTE)
+        check('filtro de resultado vale no inteiro teor', filtrado == [], filtrado)
+    else:
+        check('Meilisearch fora — busca devolve "indisponível" em vez de quebrar',
+              _indice.buscar_inteiro_teor(1, 'x', indice=INDICE_TESTE) is None)
+
+    if MEILI_NO_AR:
+        acordao = D.query.filter_by(law_firm_id=1, tipo_documento='acordao', processo_digits='50123456720214047205').first()
+        vizinhas = _indice.parecidas(acordao, indice=INDICE_TESTE) or []
+        check('parecidas nunca devolve a própria decisão', vizinhas and acordao.id not in [v['decision_id'] for v in vizinhas],
+              vizinhas)
+        from app.models import JurisprudenceThesis as T
+        bis = T.query.filter_by(law_firm_id=1, key='BIS IN IDEM').first()
+        embargos = D.query.filter_by(law_firm_id=1, tipo_documento='embargos').first()
+        with app.test_request_context():
+            ts.ligar(1, bis.id, [3])
+        payload = INDICE_TESTE.qdrant.retrieve('jurisprudence_test', ids=[_indice.id_do_ponto(embargos.id, 0)])[0].payload
+        check('ligar tese atualiza o catálogo no payload, sem reindexar', 3 in payload['catalogo_ids'], payload['catalogo_ids'])
+
+    def contar(decision_id):
+        return INDICE_TESTE.qdrant.count('jurisprudence_test', count_filter=rest.Filter(must=[
+            rest.FieldCondition(key='decision_id', match=rest.MatchValue(value=decision_id))]), exact=True).count
+    antes = contar(sentenca.id)
+    _indice.remover(1, sentenca.id, indice=INDICE_TESTE)
+    check('remover apaga os pontos da decisão', antes == 3 and contar(sentenca.id) == 0, (antes, contar(sentenca.id)))
+    _indice.agendar(1, [sentenca.id])
+    check('e reindexar a partir do banco não relê o PDF', contar(sentenca.id) == 3)
+
+    class _BaixarFalso:
+        def __init__(self):
+            self.chamadas = 0
+
+        def __call__(self, drive_id, pasta):
+            from app.services.impugnacao_import_service import DriveAccessError
+            self.chamadas += 1
+            raise DriveAccessError('Arquivo sem compartilhamento público no Drive — libere o acesso.')
+    baixar = _BaixarFalso()
+    sem_pdf = [d.id for d in D.query.filter_by(law_firm_id=1).filter(D.pdf_path.is_(None), D.drive_link.isnot(None)).all()]
+    r = up.baixar_do_drive(1, sem_pdf, baixar=baixar, pausa=0)
+    check('Drive sem compartilhamento: para depois de 3 bloqueios seguidos',
+          r['parou_por_bloqueio'] and baixar.chamadas == 3, (r, baixar.chamadas))
+    check('o motivo fica na decisão para a tela', up.cobertura(1)['drive_erros'] == 3, up.cobertura(1))
+
+
 def test_geracao():
     print('\n8. Geração da impugnação')
     from app.services import jurisprudence_generation_service as g
@@ -421,6 +560,22 @@ def test_geracao():
     bloco = g.bloco_do_prompt(1, pares)
     check('bloco traz a tese e a citação pronta', '[Tese: TRAJETO - B91]' in bloco and '(TRF4' in bloco, bloco[:300])
     check('decisão desfavorável vai rotulada CONTRÁRIA', 'CONTRÁRIA' in bloco)
+    check('o bloco diz que a escolha do advogado prevalece sobre o catálogo da Seção 6',
+          'prevalecem sobre a jurisprudência do catálogo da Seção 6' in bloco and 'DEVE ser citada inline' in bloco)
+
+    from app.models import JurisprudenceDecision as D
+    a_favor, contraria = db.session.get(D, pares[0]['decision_id']), db.session.get(D, pares[1]['decision_id'])
+    texto_com_as_duas = (f'... conforme o TRF4 ({a_favor.processo}) ... e, embora o processo '
+                         f'{contraria.processo_digits[:7]}.{contraria.processo_digits[7:9]}.{contraria.processo_digits[9:13]}.'
+                         f'{contraria.processo_digits[13]}.{contraria.processo_digits[14:16]}.{contraria.processo_digits[16:]} '
+                         'tenha decidido em sentido contrário...')
+    check('citada com qualquer pontuação conta como citada', g.nao_citadas(1, pares, texto_com_as_duas) == [])
+    avisos = g.avisos_de_citacao(1, pares, 'peça sem nenhum número de processo')
+    check('as duas ausentes viram dois itens de checklist', len(avisos) == 2 and all(a.startswith('- [ ]') for a in avisos),
+          avisos)
+    check('a contrária ausente é cobrada como "não enfrentada"',
+          any('contrária' in a and 'não foi enfrentada' in a for a in avisos), avisos)
+    check('outro escritório não confere nada', g.avisos_de_citacao(2, pares, '') == [])
     check('bloco de outro escritório vem vazio', g.bloco_do_prompt(2, pares) == '')
     check('pares_confirmados lê o JSON da versão', g.pares_confirmados({'jurisprudence': pares}) == pares)
 
@@ -554,10 +709,100 @@ def test_geracao_no_painel():
     check('o worker entrega o bloco ao agente, com a citação da decisão escolhida',
           '[Tese: TRAJETO - B91]' in bloco and (decisao.processo or '')[:15] in bloco,
           f'{versao.generation_status} {versao.error_message} {bloco[:200]}')
+    check('a peça que não citou a decisão marcada ganha item de checklist nas notas internas',
+          'Jurisprudência marcada não foi citada na tese "TRAJETO - B91"' in (versao.internal_notes or ''),
+          versao.internal_notes)
+
+    # Agora o gerador cita: nenhum aviso.
+    _AgenteFalso.dispatch = lambda self, *a, **k: ({}, f'Nesse sentido: (TRF4, {decisao.processo}).')
+    pp.AgentGeneratedDocument = _AgenteFalso
+    pp._resolve_latest_contestation_pdf_path = lambda processo: None
+    pp._resolve_latest_contestation_summary_payload = lambda processo, firma: None
+    try:
+        versao.generation_status = 'processing'
+        db.session.commit()
+        pp._run_generated_document_generation(app, 1, processo_id, doc_id, versao_id, None, 'fake')
+    finally:
+        (pp.AgentGeneratedDocument, pp._resolve_latest_contestation_pdf_path,
+         pp._resolve_latest_contestation_summary_payload) = originais
+    versao = db.session.get(V, versao_id)
+    check('a peça que citou não ganha aviso', 'Jurisprudência marcada' not in (versao.internal_notes or ''),
+          versao.internal_notes)
 
     resp = cliente.get(f'{base}/{doc_id}')
     check('detalhe lista a jurisprudência citada',
           resp.status_code == 200 and 'Jurisprudência citada' in resp.get_data(as_text=True), resp.status_code)
+
+
+def test_reset():
+    print('\n10b. Resetar a base')
+    from app.models import (User, JurisprudenceDecision as D, JurisprudenceThesis as T, JurisprudenceUpload as U,
+                            JudicialLegalThesis, JudicialProcessGeneratedDocument, jurisprudence_decision_theses,
+                            jurisprudence_thesis_catalog_links)
+    from app.services import jurisprudence_service as svc
+    from qdrant_client.http import models as rest
+
+    # O outro escritório tem base própria, que tem de sobreviver.
+    outra = svc.criar_decisao(2, {'processo': '5000001-11.2024.4.04.7200', 'tipo_documento': 'SENTENCA',
+                                  'resultado': 'FAVORAVEL', 'teses': ['ACIDENTE DE TRAJETO']},
+                              source='planilha', resolvedor=svc.ResolvedorDeTeses(2))
+    db.session.commit()
+    _indice.agendar(2, [outra.id])
+    db.session.add(User(id=3, law_firm_id=1, name='Advogado', email='adv@b.c', password_hash='x', role='lawyer'))
+    db.session.commit()
+
+    def pontos(firma):
+        return INDICE_TESTE.qdrant.count('jurisprudence_test', count_filter=rest.Filter(must=[
+            rest.FieldCondition(key='law_firm_id', match=rest.MatchValue(value=firma))]), exact=True).count
+
+    antes = D.query.filter_by(law_firm_id=1).count()
+    comum = app.test_client()
+    with comum.session_transaction() as sessao:
+        sessao.update(user_id=3, law_firm_id=1, user_role='lawyer')
+    comum.post('/process-panel/jurisprudencia/resetar', data={'confirmacao': 'RESETAR'})
+    check('quem não é admin não reseta', D.query.filter_by(law_firm_id=1).count() == antes)
+
+    admin = app.test_client()
+    with admin.session_transaction() as sessao:
+        sessao.update(user_id=1, law_firm_id=1, user_role='admin')
+    check('a zona de perigo aparece para admin',
+          'Resetar a base' in admin.get('/process-panel/jurisprudencia/').get_data(as_text=True))
+    check('e não aparece para quem não é admin',
+          'Resetar a base' not in comum.get('/process-panel/jurisprudencia/').get_data(as_text=True))
+    admin.post('/process-panel/jurisprudencia/resetar', data={'confirmacao': 'apagar'})
+    check('confirmação errada não apaga nada', D.query.filter_by(law_firm_id=1).count() == antes)
+
+    fila = U(law_firm_id=1, original_filename='lendo.pdf', file_path='/x.pdf', status=U.STATUS_QUEUED)
+    db.session.add(fila)
+    db.session.commit()
+    admin.post('/process-panel/jurisprudencia/resetar', data={'confirmacao': 'RESETAR'})
+    check('com leitura em andamento, o reset é recusado', D.query.filter_by(law_firm_id=1).count() == antes)
+    db.session.delete(fila)
+    db.session.commit()
+
+    import glob
+    check('há o que apagar antes do reset', antes > 0 and pontos(1) > 0 and glob.glob(os.path.join(PASTA_TMP, '1', '*')),
+          (antes, pontos(1)))
+    resp = admin.post('/process-panel/jurisprudencia/resetar', data={'confirmacao': 'resetar'})
+    check('reset aceita a palavra sem diferenciar maiúscula', resp.status_code == 302)
+    db.session.expire_all()
+    check('decisões, teses e fila do escritório apagadas',
+          (D.query.filter_by(law_firm_id=1).count(), T.query.filter_by(law_firm_id=1).count(),
+           U.query.filter_by(law_firm_id=1).count()) == (0, 0, 0))
+    ligacoes = db.session.query(jurisprudence_decision_theses).count()
+    catalogo = db.session.query(jurisprudence_thesis_catalog_links).join(
+        T, T.id == jurisprudence_thesis_catalog_links.c.thesis_id).filter(T.law_firm_id == 1).count()
+    check('nenhuma ligação órfã fica para trás', ligacoes == 1 and catalogo == 0, (ligacoes, catalogo))
+    check('arquivos do escritório apagados', not os.path.exists(os.path.join(PASTA_TMP, '1')))
+    check('pontos do escritório saem do Qdrant', pontos(1) == 0)
+    if MEILI_NO_AR:
+        check('e do Meilisearch', _indice.buscar_inteiro_teor(1, 'trajeto', indice=INDICE_TESTE) == [])
+    check('o catálogo do painel não é tocado', JudicialLegalThesis.query.filter_by(law_firm_id=1).count() == 4)
+    check('o outro escritório continua intacto',
+          D.query.filter_by(law_firm_id=2).count() == 1 and pontos(2) == 1)
+    doc = JudicialProcessGeneratedDocument.query.filter_by(law_firm_id=1).first()
+    check('a peça gerada que citou decisões continua abrindo',
+          admin.get(f'/process-panel/{doc.process_id}/documentos-gerados/{doc.id}').status_code == 200)
 
 
 def test_planilha_real():
@@ -596,10 +841,12 @@ def main():
         test_correcao_manual()
         test_agente()
         test_fila()
+        test_indice()
         test_geracao()
     test_rotas_ctx()
     with app.app_context():
         test_geracao_no_painel()
+        test_reset()
         test_planilha_real()
     print('\n' + '=' * 60)
     if FALHAS:
@@ -623,3 +870,5 @@ if __name__ == '__main__':
             if os.path.exists(sobra):
                 os.remove(sobra)
         shutil.rmtree(PASTA_TMP, ignore_errors=True)
+        if MEILI_NO_AR:
+            INDICE_TESTE.meili.delete_index_if_exists('jurisprudence_test')

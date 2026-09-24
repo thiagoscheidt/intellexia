@@ -227,6 +227,7 @@ def importar(law_firm_id: int, caminho: str, *, user_id: Optional[int] = None,
     existentes = _existentes(law_firm_id)
     resolvedor = svc.ResolvedorDeTeses(law_firm_id)
     criadas = puladas = 0
+    novas = []
 
     for i, bruto in enumerate(planilha['linhas'], start=1):
         campos = svc.normalizar_registro(bruto)
@@ -234,14 +235,15 @@ def importar(law_firm_id: int, caminho: str, *, user_id: Optional[int] = None,
         if chave and chave in existentes:
             puladas += 1
             continue
-        svc.criar_decisao(
+        novas.append(svc.criar_decisao(
             law_firm_id, bruto,
             source=JurisprudenceDecision.SOURCE_PLANILHA,
             resolvedor=resolvedor,
             user_id=user_id,
             drive_link=norm.texto_limpo(bruto.get('link_drive'), 500),
             original_filename=norm.texto_limpo(bruto.get('nome_arquivo'), 255) or nome_arquivo,
-        )
+            index_status=JurisprudenceDecision.INDEX_PENDENTE,
+        ))
         if chave:
             existentes.add(chave)
         criadas += 1
@@ -254,4 +256,6 @@ def importar(law_firm_id: int, caminho: str, *, user_id: Optional[int] = None,
         'puladas': puladas,
         'teses_criadas': resolvedor.criadas,
         'teses_ligadas_sozinhas': resolvedor.ligadas_sozinhas,
+        # Quem chama manda indexar (a ficha; o inteiro teor vem com o PDF).
+        'ids': [d.id for d in novas],
     }

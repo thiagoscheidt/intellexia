@@ -82,8 +82,20 @@
           <input type="search" name="q" value="{{ filtros.q }}" class="form-control" autofocus
                  placeholder="Termo, nº do processo (com ou sem pontuação), empresa, relator ou precedente">
         </div>
+        <div class="d-flex flex-wrap align-items-center gap-3 mt-2 small">
+          <span class="text-body-secondary">Procurar</span>
+          <div class="form-check form-check-inline m-0">
+            <input class="form-check-input" type="radio" name="modo" id="modo-campos" value="" {{ 'checked' if not modo_inteiro }}>
+            <label class="form-check-label" for="modo-campos">nos campos da decisão</label>
+          </div>
+          <div class="form-check form-check-inline m-0">
+            <input class="form-check-input" type="radio" name="modo" id="modo-inteiro" value="inteiro" {{ 'checked' if modo_inteiro }}>
+            <label class="form-check-label" for="modo-inteiro">no inteiro teor</label>
+          </div>
+        </div>
         <div class="form-text">
           <i class="bi bi-lightbulb me-1"></i>Todos os termos precisam aparecer. Sinônimos valem: <em>trajeto</em> também acha <em>percurso</em> e <em>in itinere</em>. Use aspas para uma expressão exata.
+          "No inteiro teor" procura no texto completo das decisões e mostra o trecho onde o termo aparece.
         </div>
       </div>
       <div class="col-lg-3 d-grid align-self-start">
@@ -139,7 +151,7 @@
       </div>
 
       <form method="get" id="form-filtros-extras">
-        {% for chave in ['q', 'tese', 'tese_livre', 'resultado', 'tribunal', 'tipo', 'ordem', 'agrupar', 'livres'] %}
+        {% for chave in ['q', 'tese', 'tese_livre', 'resultado', 'tribunal', 'tipo', 'ordem', 'agrupar', 'livres', 'modo'] %}
           {% for v in request.args.getlist(chave) %}<input type="hidden" name="{{ chave }}" value="{{ v }}">{% endfor %}
         {% endfor %}
         <div class="facet">
@@ -176,6 +188,45 @@
   </aside>
 
   <div class="col-lg-9">
+    {% if modo_inteiro %}
+    {% set i = inteiro %}
+    {% if i.indisponivel %}
+    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>A busca no inteiro teor está indisponível agora (o índice não respondeu).
+      A <a href="{{ com(modo=None) }}">busca nos campos</a> continua funcionando.</div>
+    {% else %}
+    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2">
+        <div><strong class="fs-5">{{ i.linhas | length }}</strong> {{ 'decisão cita' if i.linhas | length == 1 else 'decisões citam' }}
+          <em>{{ filtros.q }}</em>{% if i.linhas | length >= 40 %} <span class="text-body-secondary small">(as 40 mais relevantes)</span>{% endif %}</div>
+        <a class="small" href="{{ com(modo=None) }}">voltar à busca nos campos</a>
+      </div>
+      <div class="small text-body-secondary mt-1">
+        <i class="bi bi-info-circle me-1"></i>{{ i.cobertura.com_texto }} de {{ i.cobertura.total }} decisões têm o inteiro teor no índice; as demais entram pelos campos (ficha).
+        Aqui valem os filtros de tribunal, resultado e instância.
+      </div>
+    </div></div>
+    {% for l in i.linhas %}
+    {% set d = l.decisao %}
+    <div class="card border-0 shadow-sm proc-card mb-2"><div class="card-body py-3">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+        <a class="fw-semibold text-decoration-none" href="{{ url_for('jurisprudence.decisao', decision_id=d.id) }}{{ '#t-pdf' if l.page }}">
+          {{ d.tipo_documento | jur_tipo }} · {{ ' · '.join([d.tribunal, d.orgao_julgador] | select | list) }}
+          · {{ d.data_julgamento.strftime('%d/%m/%Y') if d.data_julgamento else 'sem data' }}</a>
+        {{ res_pill(d.resultado) }}
+      </div>
+      <div class="small text-body-secondary mb-2"><span class="proc-num">{{ d.processo or '' }}</span>{% if d.parte_autora %} · {{ d.parte_autora }}{% endif %}</div>
+      <p class="snippet mb-0"><span class="badge text-bg-light border me-1">{{ 'pág. ' ~ l.page if l.page else 'ficha' }}</span>{{ l.trecho | safe }}</p>
+    </div></div>
+    {% else %}
+    <div class="card border-0 shadow-sm"><div class="card-body text-center py-5">
+      <i class="bi bi-file-text display-5 text-body-secondary"></i>
+      <h5 class="mt-3">Nenhuma decisão tem esse termo no texto</h5>
+      <p class="text-body-secondary mb-0">Só {{ i.cobertura.com_texto }} das {{ i.cobertura.total }} decisões têm o inteiro teor indexado.
+        <a href="{{ url_for('jurisprudence.enviar') }}">Anexe os PDFs</a> para ampliar a busca.</p>
+    </div></div>
+    {% endfor %}
+    {% endif %}
+    {% else %}
     <div class="card border-0 shadow-sm mb-3"><div class="card-body">
       <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
         <div>
@@ -280,6 +331,50 @@
       <p class="text-body-secondary mb-0">Tire um filtro ou troque um termo. Todos os termos da busca precisam aparecer na decisão.</p>
     </div></div>
     {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if reset and (reset.decisoes or reset.teses or reset.envios) %}
+<!-- Zona de perigo: reset completo da base (admin) -->
+<div class="card border-0 shadow-sm mt-4">
+  <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3 py-3">
+    <div>
+      <div class="fw-medium text-danger"><i class="bi bi-exclamation-octagon me-1"></i>Resetar a base</div>
+      <div class="small text-body-secondary">Apaga todas as decisões, as teses e a correspondência com o catálogo, a fila de PDFs,
+        os arquivos e o índice de busca deste escritório. Use para recomeçar do zero.</div>
+    </div>
+    <button type="button" class="btn btn-outline-danger btn-sm flex-shrink-0" data-bs-toggle="modal" data-bs-target="#modalResetBase">
+      <i class="bi bi-trash3 me-1"></i>Resetar base</button>
+  </div>
+</div>
+
+<div class="modal fade" id="modalResetBase" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form method="POST" action="{{ url_for('jurisprudence.resetar') }}" class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-octagon me-2"></i>Resetar a Base de Jurisprudência</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small mb-2">Esta ação é <strong>irreversível</strong> e vai remover:</p>
+        <ul class="small text-body-secondary mb-3">
+          <li><strong>{{ reset.decisoes }}</strong> decisão(ões), com as correções feitas à mão</li>
+          <li><strong>{{ reset.teses }}</strong> tese(s) e toda a correspondência com o catálogo (ligações, mesclas, "sem equivalente")</li>
+          <li><strong>{{ reset.pdfs }}</strong> PDF(s) e a fila de leitura ({{ reset.envios }} envio(s))</li>
+          <li>os pontos no Qdrant e no índice de busca</li>
+        </ul>
+        <p class="small text-body-secondary mb-3">O catálogo de teses do painel e as peças já geradas não são tocados.</p>
+        <label class="form-label small fw-semibold mb-1" for="confirmacao-reset">Para confirmar, digite <code>{{ palavra_reset }}</code>:</label>
+        <input type="text" name="confirmacao" id="confirmacao-reset" class="form-control form-control-sm"
+               placeholder="{{ palavra_reset }}" autocomplete="off" required>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-trash3 me-1"></i>Resetar permanentemente</button>
+      </div>
+    </form>
   </div>
 </div>
 {% endif %}

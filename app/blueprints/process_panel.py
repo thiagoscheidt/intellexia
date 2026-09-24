@@ -3558,6 +3558,12 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
                 'revisar fundamentação e citações.'
                 for c in missing
             ]
+            # Jurisprudência marcada pelo advogado que não chegou ao texto final
+            # (conferida pelo número do processo, depois do enriquecimento).
+            if jurisprudence_block:
+                from app.services import jurisprudence_generation_service
+                warning_lines.extend(jurisprudence_generation_service.avisos_de_citacao(
+                    law_firm_id, jurisprudence_generation_service.pares_confirmados(confirmed), full_text))
             if warning_lines:
                 warning_block = '\n'.join(warning_lines)
                 internal_notes = f'{warning_block}\n\n{internal_notes}' if internal_notes else warning_block

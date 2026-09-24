@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import threading
 from datetime import datetime, timedelta
 from typing import Optional
@@ -28,6 +29,7 @@ from app.models import (
     JurisprudenceUpload,
     jurisprudence_decision_theses,
 )
+from app.services import jurisprudence_index_service as indice
 from app.services import jurisprudence_normalizer as norm
 from app.services import jurisprudence_service as svc
 
@@ -35,6 +37,7 @@ UPLOAD_BASE_DIR = os.path.join('uploads', 'jurisprudence')
 TRAVADA_MINUTOS = 20
 MAX_BYTES = 60 * 1024 * 1024
 MAX_ARQUIVOS = 50
+MAX_ARQUIVOS_LOTE = 300
 
 
 class ArquivoRecusado(ValueError):
@@ -212,6 +215,10 @@ def _concluiu(upload: JurisprudenceUpload, decisao: JurisprudenceDecision) -> Ju
     upload.error_message = None
     upload.finished_at = datetime.now()
     db.session.commit()
+    # Já na thread da leitura: extrai o inteiro teor e indexa. Falha aqui fica
+    # no status do índice da decisão — a leitura já está concluída e gravada.
+    indice.preparar_e_indexar(decisao)
+    db.session.commit()
     return upload
 
 
@@ -265,11 +272,13 @@ def resolver_duplicata(law_firm_id: int, upload_id: int, acao: str, user_id: Opt
     if acao == 'manter':
         if existente is not None and not existente.pdf_path:
             existente.pdf_path = upload.file_path          # a da base ganha o PDF
+            existente.texto_integral = None
             existente.original_filename = existente.original_filename or upload.original_filename
         decisao = existente
     elif acao == 'substituir':
         if existente is None or not upload.extracted_json:
             raise ValueError('Não há leitura para substituir — tente ler de novo.')
+        existente.texto_integral = None                    # PDF novo, texto novo
         svc.atualizar_da_ia(existente, upload.extracted_json, resolvedor,
                             pdf_path=upload.file_path, original_filename=upload.original_filename,
                             extraction_model=upload.model_used,
@@ -293,6 +302,8 @@ def resolver_duplicata(law_firm_id: int, upload_id: int, acao: str, user_id: Opt
     upload.status = JurisprudenceUpload.STATUS_DONE
     upload.finished_at = datetime.now()
     db.session.commit()
+    if decisao is not None:
+        indice.agendar(law_firm_id, [decisao.id])
     return upload.decision_id
 
 
@@ -335,9 +346,158 @@ def reprocessar_decisao(law_firm_id: int, decisao: JurisprudenceDecision, user_i
 
 def anexar_pdf(law_firm_id: int, decisao: JurisprudenceDecision, arquivo) -> None:
     caminho, nome, _ = salvar_pdf(law_firm_id, arquivo)
+    _anexar(decisao, caminho, nome)
+    db.session.commit()
+    indice.agendar(law_firm_id, [decisao.id])
+
+
+def _anexar(decisao: JurisprudenceDecision, caminho: str, nome: str) -> None:
     decisao.pdf_path = caminho
     decisao.original_filename = decisao.original_filename or nome
+    decisao.pdf_error = None
+    decisao.texto_integral = None      # PDF novo: o inteiro teor é extraído de novo
+    decisao.texto_paginas = None
+    decisao.index_status = decisao.INDEX_PENDENTE
+
+
+def _chave_do_arquivo(nome: str) -> str:
+    return norm.chave(os.path.splitext(os.path.basename(nome or ''))[0])
+
+
+def anexar_em_lote(law_firm_id: int, arquivos) -> dict:
+    """Casa cada PDF com a decisão importada da planilha pelo nome do arquivo.
+
+    A planilha guarda o nome do PDF de cada decisão (`nome_arquivo`); quem tem a
+    pasta "processados" do Drive envia tudo de uma vez e cada arquivo cai na sua
+    decisão. Casa só com decisão ainda sem PDF — nunca troca PDF em silêncio.
+    """
+    sem_pdf: dict[str, list[JurisprudenceDecision]] = {}
+    for decisao in (JurisprudenceDecision.query
+                    .filter(JurisprudenceDecision.law_firm_id == law_firm_id,
+                            JurisprudenceDecision.pdf_path.is_(None),
+                            JurisprudenceDecision.original_filename.isnot(None)).all()):
+        sem_pdf.setdefault(_chave_do_arquivo(decisao.original_filename), []).append(decisao)
+
+    anexadas, sem_par, recusas, ids = 0, [], [], []
+    for arquivo in list(arquivos)[:MAX_ARQUIVOS_LOTE]:
+        if not arquivo or not arquivo.filename:
+            continue
+        alvo = sem_pdf.pop(_chave_do_arquivo(arquivo.filename), None)
+        if not alvo:
+            sem_par.append(arquivo.filename)
+            continue
+        try:
+            caminho, nome, _ = salvar_pdf(law_firm_id, arquivo)
+        except ArquivoRecusado as erro:
+            recusas.append(str(erro))
+            continue
+        for decisao in alvo:           # mesma decisão repetida na planilha: as duas ganham o PDF
+            _anexar(decisao, caminho, nome)
+            ids.append(decisao.id)
+        anexadas += len(alvo)
     db.session.commit()
+    indice.agendar(law_firm_id, ids)
+    return {'anexadas': anexadas, 'sem_par': sem_par, 'recusas': recusas}
+
+
+# ── PDFs no Drive (decisões importadas da planilha) ───────────────────
+
+_DRIVE_ID = re.compile(r'/d/([A-Za-z0-9_-]{10,})|[?&]id=([A-Za-z0-9_-]{10,})')
+DRIVE_PAUSA_SEGUNDOS = 1.5      # a mesma pausa da importação de peças-modelo
+DRIVE_BLOQUEIOS_PARA_PARAR = 3  # pasta sem compartilhamento: todos vão falhar igual
+_drive_em_andamento: set[int] = set()
+
+
+def id_do_drive(link: Optional[str]) -> Optional[str]:
+    m = _DRIVE_ID.search(link or '')
+    return (m.group(1) or m.group(2)) if m else None
+
+
+def drive_em_andamento(law_firm_id: int) -> bool:
+    return law_firm_id in _drive_em_andamento
+
+
+def buscar_no_drive(law_firm_id: int) -> int:
+    """Dispara o download dos PDFs das decisões importadas. Devolve quantas estão na fila."""
+    pendentes = [d.id for d in JurisprudenceDecision.query.filter(
+        JurisprudenceDecision.law_firm_id == law_firm_id,
+        JurisprudenceDecision.pdf_path.is_(None),
+        JurisprudenceDecision.drive_link.isnot(None)).all() if id_do_drive(d.drive_link)]
+    if not pendentes or law_firm_id in _drive_em_andamento:
+        return 0
+    _drive_em_andamento.add(law_firm_id)
+    threading.Thread(target=_rodar_drive,
+                     args=(current_app._get_current_object(), law_firm_id, pendentes),
+                     daemon=True, name=f'jurisprudence-drive-{law_firm_id}').start()
+    return len(pendentes)
+
+
+def baixar_do_drive(law_firm_id: int, decision_ids: list[int], *, baixar=None, pausa: float = DRIVE_PAUSA_SEGUNDOS) -> dict:
+    """Síncrono (a thread e os testes chamam isto). `baixar` é injetável."""
+    import time
+    from app.services.impugnacao_import_service import DriveAccessError, download_drive_file
+    baixar = baixar or download_drive_file
+    baixadas, falhas, bloqueios_seguidos, parou = 0, 0, 0, False
+    for decision_id in decision_ids:
+        decisao = JurisprudenceDecision.query.filter_by(id=decision_id, law_firm_id=law_firm_id).first()
+        if decisao is None or decisao.pdf_path:
+            continue
+        try:
+            caminho, nome, _ = baixar(id_do_drive(decisao.drive_link), _pasta(law_firm_id))
+            with open(caminho, 'rb') as f:
+                if not f.read(4).startswith(b'%PDF'):
+                    os.remove(caminho)
+                    raise DriveAccessError('O arquivo do Drive não é um PDF.')
+            _anexar(decisao, caminho, nome)
+            db.session.commit()
+            indice.preparar_e_indexar(decisao)
+            db.session.commit()
+            baixadas += 1
+            bloqueios_seguidos = 0
+        except DriveAccessError as erro:
+            db.session.rollback()
+            decisao = db.session.get(JurisprudenceDecision, decision_id)
+            decisao.pdf_error = str(erro)[:2000]
+            db.session.commit()
+            falhas += 1
+            bloqueios_seguidos = bloqueios_seguidos + 1 if 'compartilhamento' in str(erro) else 0
+            if bloqueios_seguidos >= DRIVE_BLOQUEIOS_PARA_PARAR:
+                parou = True
+                break
+        if pausa:
+            time.sleep(pausa)
+    return {'baixadas': baixadas, 'falhas': falhas, 'parou_por_bloqueio': parou}
+
+
+def _rodar_drive(app_obj, law_firm_id: int, decision_ids: list[int]) -> None:
+    with app_obj.app_context():
+        try:
+            baixar_do_drive(law_firm_id, decision_ids)
+        except Exception as erro:
+            app_obj.logger.error(f'[JurisprudenceDrive] {law_firm_id}: {erro}')
+        finally:
+            _drive_em_andamento.discard(law_firm_id)
+            db.session.remove()
+
+
+def cobertura(law_firm_id: int) -> dict:
+    """Quanto da base tem inteiro teor e está no índice — o painel da tela de envio."""
+    D = JurisprudenceDecision
+    base = D.query.filter(D.law_firm_id == law_firm_id)
+    total = base.count()
+    return {
+        'total': total,
+        'com_pdf': base.filter(D.pdf_path.isnot(None)).count(),
+        'com_texto': base.filter(D.texto_paginas.isnot(None)).count(),
+        'indexadas': base.filter(D.index_status == D.INDEX_INDEXADA).count(),
+        'erro_indice': base.filter(D.index_status == D.INDEX_ERRO).count(),
+        'sem_pdf_com_link': base.filter(D.pdf_path.is_(None), D.drive_link.isnot(None)).count(),
+        'sem_pdf': base.filter(D.pdf_path.is_(None)).count(),
+        'drive_erros': base.filter(D.pdf_path.is_(None), D.pdf_error.isnot(None)).count(),
+        'ultimo_erro_drive': (base.filter(D.pdf_error.isnot(None)).order_by(D.updated_at.desc())
+                              .with_entities(D.pdf_error).first() or [None])[0],
+        'drive_em_andamento': drive_em_andamento(law_firm_id),
+    }
 
 
 def painel(law_firm_id: int, limite: int = 100) -> dict:

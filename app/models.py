@@ -4628,6 +4628,22 @@ class JurisprudenceDecision(db.Model):
     extraction_model = db.Column(db.String(120))
     manual_fields_json = db.Column(db.JSON)
 
+    # Inteiro teor extraído do PDF (sem IA), páginas separadas por \f. MEDIUMTEXT:
+    # acórdão passa de 64 KB. É dele que o índice se reconstrói sem reler o PDF.
+    texto_integral = db.Column(db.Text(16777215))
+    texto_paginas = db.Column(db.Integer)
+    # Falha ao buscar o PDF no Drive (pasta sem compartilhamento, link quebrado).
+    pdf_error = db.Column(db.Text)
+
+    # Índice de busca (coleção Qdrant + índice Meilisearch próprios da jurisprudência).
+    INDEX_PENDENTE = 'pendente'
+    INDEX_INDEXADA = 'indexada'
+    INDEX_ERRO = 'erro'
+    index_status = db.Column(db.String(20), index=True)
+    index_error = db.Column(db.Text)
+    index_chunks = db.Column(db.Integer)
+    indexed_at = db.Column(db.DateTime)
+
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)

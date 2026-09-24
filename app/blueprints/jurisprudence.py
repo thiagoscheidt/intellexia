@@ -32,6 +32,7 @@ from flask import (
 
 from app.models import db, JudicialLegalThesis, JurisprudenceDecision, User
 from app.services import jurisprudence_import_service as importacao
+from app.services import jurisprudence_index_service as indice
 from app.services import jurisprudence_normalizer as norm
 from app.services import jurisprudence_search_service as busca
 from app.services import jurisprudence_service as svc
@@ -115,10 +116,13 @@ def index():
     law_firm_id = get_current_law_firm_id()
     filtros = busca.Filtros.do_request(request.args)
     resultado = busca.buscar(law_firm_id, filtros)
+    modo_inteiro = request.args.get('modo') == 'inteiro' and bool(filtros.q)
     return render_template(
         'jurisprudence/index.html',
         filtros=filtros,
         r=resultado,
+        modo_inteiro=modo_inteiro,
+        inteiro=_busca_no_inteiro_teor(law_firm_id, filtros) if modo_inteiro else None,
         totais=svc.totais(law_firm_id),
         pendentes=svc.contar_teses_pendentes(law_firm_id),
         ordens=busca.ORDENS,
@@ -128,7 +132,52 @@ def index():
         alternar=_alternar,
         com=_com,
         mostrar_livres=request.args.get('livres') == '1',
+        reset=svc.o_que_o_reset_apaga(law_firm_id) if session.get('user_role') == 'admin' else None,
+        palavra_reset=PALAVRA_RESET,
     )
+
+
+PALAVRA_RESET = 'RESETAR'
+
+
+@jurisprudence_bp.route('/resetar', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def resetar():
+    """Apaga a Base de Jurisprudência inteira do escritório (admin, com confirmação digitada)."""
+    if (request.form.get('confirmacao') or '').strip().upper() != PALAVRA_RESET:
+        flash(f'Confirmação incorreta — digite "{PALAVRA_RESET}" para apagar a base.', 'warning')
+        return redirect(url_for('jurisprudence.index'))
+    try:
+        r = svc.resetar_base(get_current_law_firm_id())
+    except ValueError as erro:
+        flash(str(erro), 'warning')
+        return redirect(url_for('jurisprudence.index'))
+    except Exception as erro:
+        flash(f'Falha ao apagar a base: {erro}', 'danger')
+        return redirect(url_for('jurisprudence.index'))
+    resumo = f"{r['decisoes']} decisão(ões), {r['teses']} tese(s) e {r['pdfs']} PDF(s)"
+    if r['avisos']:
+        flash(f"Base apagada ({resumo}), mas houve falha ao limpar: {', '.join(r['avisos'])}. "
+              'Rode o reset de novo para tentar outra vez.', 'warning')
+    else:
+        flash(f'Base de Jurisprudência apagada por completo — {resumo}. Pode importar do zero.', 'success')
+    return redirect(url_for('jurisprudence.index'))
+
+
+def _busca_no_inteiro_teor(law_firm_id: int, filtros) -> dict:
+    """Resultado do modo "inteiro teor": uma linha por decisão, com o trecho da
+    página onde o termo aparece. `indisponivel` quando o índice não responde."""
+    achados = indice.buscar_inteiro_teor(law_firm_id, filtros.q, tribunais=filtros.tribunais,
+                                         resultados=filtros.resultados, tipos=filtros.tipos)
+    if achados is None:
+        return {'indisponivel': True, 'linhas': []}
+    decisoes = {d.id: d for d in JurisprudenceDecision.query.filter(
+        JurisprudenceDecision.law_firm_id == law_firm_id,
+        JurisprudenceDecision.id.in_({a['decision_id'] for a in achados})).all()} if achados else {}
+    linhas = [{**a, 'decisao': decisoes[a['decision_id']]} for a in achados if a['decision_id'] in decisoes]
+    cobertura = envios.cobertura(law_firm_id)
+    return {'indisponivel': False, 'linhas': linhas, 'cobertura': cobertura}
 
 
 @jurisprudence_bp.route('/api/buscar')
@@ -158,6 +207,24 @@ def decisao(decision_id):
         pdf_disponivel=bool(d.pdf_path and os.path.exists(d.pdf_path)),
         em_leitura=em_leitura,
     )
+
+
+@jurisprudence_bp.route('/decisao/<int:decision_id>/parecidas')
+@require_law_firm
+def parecidas(decision_id):
+    """Decisões semanticamente próximas — carregado pela página da decisão."""
+    d = _decisao(decision_id)
+    achados = indice.parecidas(d)
+    if achados is None:
+        return jsonify({'disponivel': False, 'decisoes': []})
+    decisoes = {x.id: x for x in JurisprudenceDecision.query.filter(
+        JurisprudenceDecision.law_firm_id == d.law_firm_id,
+        JurisprudenceDecision.id.in_([a['decision_id'] for a in achados])).all()} if achados else {}
+    return jsonify({'disponivel': True, 'decisoes': [
+        {**busca.resumo_para_geracao(decisoes[a['decision_id']]),
+         'url': url_for('jurisprudence.decisao', decision_id=a['decision_id'])}
+        for a in achados if a['decision_id'] in decisoes
+    ]})
 
 
 @jurisprudence_bp.route('/decisao/<int:decision_id>/pdf')
@@ -206,6 +273,8 @@ def editar(decision_id):
     }
     mudaram = svc.corrigir_manualmente(d, bruto, svc.ResolvedorDeTeses(d.law_firm_id))
     db.session.commit()
+    if mudaram:
+        indice.agendar(d.law_firm_id, [d.id])
     flash(f'{len(mudaram)} campo(s) corrigido(s). O reprocessamento pela IA não sobrescreve o que foi corrigido à mão.'
           if mudaram else 'Nada mudou.', 'success' if mudaram else 'info')
     return redirect(url_for('jurisprudence.decisao', decision_id=d.id))
@@ -244,6 +313,7 @@ def reprocessar(decision_id):
 @require_admin_user
 def excluir(decision_id):
     d = _decisao(decision_id)
+    indice.remover(d.law_firm_id, d.id)
     svc.excluir_decisao(d)
     db.session.commit()
     flash('Decisão excluída da base.', 'success')
@@ -296,6 +366,7 @@ def confirmar_importacao(token):
         if not os.path.exists(caminho):
             raise importacao.PlanilhaInvalida('Importação não encontrada. Envie a planilha de novo.')
         resultado = importacao.importar(law_firm_id, caminho, user_id=session.get('user_id'), nome_arquivo=nome)
+        indice.agendar(law_firm_id, resultado['ids'])
     except importacao.PlanilhaInvalida as erro:
         flash(str(erro), 'warning')
         return redirect(url_for('jurisprudence.importar'))
@@ -323,7 +394,34 @@ def enviar():
         return redirect(url_for('jurisprudence.enviar'))
     from app.services import ai_model_settings_service
     return render_template('jurisprudence/upload.html', p=envios.painel(law_firm_id),
+                           cobertura=envios.cobertura(law_firm_id),
                            modelo=ai_model_settings_service.get_model(law_firm_id, 'jurisprudence_extractor'))
+
+
+@jurisprudence_bp.route('/enviar/anexar-lote', methods=['POST'])
+@require_law_firm
+def anexar_lote():
+    """PDFs das decisões importadas da planilha, casados pelo nome do arquivo."""
+    r = envios.anexar_em_lote(get_current_law_firm_id(), request.files.getlist('arquivos'))
+    for recusa in r['recusas']:
+        flash(recusa, 'warning')
+    if r['anexadas']:
+        flash(f"{r['anexadas']} PDF(s) anexado(s) às decisões. O inteiro teor é extraído e indexado em segundo plano.",
+              'success')
+    if r['sem_par']:
+        amostra = ', '.join(r['sem_par'][:5]) + ('…' if len(r['sem_par']) > 5 else '')
+        flash(f"{len(r['sem_par'])} arquivo(s) sem decisão correspondente pelo nome ({amostra}). "
+              'Se forem decisões novas, envie-os na área de cima para a IA ler.', 'warning')
+    return redirect(url_for('jurisprudence.enviar'))
+
+
+@jurisprudence_bp.route('/enviar/drive', methods=['POST'])
+@require_law_firm
+def buscar_no_drive():
+    n = envios.buscar_no_drive(get_current_law_firm_id())
+    flash(f'Buscando {n} PDF(s) no Drive em segundo plano.' if n
+          else 'Nada a buscar agora (já em andamento, ou todas as decisões com link já têm PDF).', 'info')
+    return redirect(url_for('jurisprudence.enviar'))
 
 
 @jurisprudence_bp.route('/enviar/status')

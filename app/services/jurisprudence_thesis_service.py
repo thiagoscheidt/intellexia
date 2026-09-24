@@ -26,6 +26,7 @@ from app.models import (
     JurisprudenceThesis,
     jurisprudence_decision_theses,
 )
+from app.services import jurisprudence_index_service as indice
 from app.services import jurisprudence_normalizer as norm
 from app.services import jurisprudence_service as svc
 
@@ -121,6 +122,14 @@ def _tese(law_firm_id: int, thesis_id: int) -> JurisprudenceThesis:
     return tese
 
 
+def _reindexar_metadados(law_firm_id: int, *thesis_ids: int) -> None:
+    """A tese ligada/mesclada muda o payload das decisões no índice (teses e
+    catálogo) — sem gerar embedding de novo."""
+    ids = [r[0] for r in db.session.query(jurisprudence_decision_theses.c.decision_id)
+           .filter(jurisprudence_decision_theses.c.thesis_id.in_([t for t in thesis_ids if t])).all()]
+    indice.agendar(law_firm_id, ids, somente_metadados=True)
+
+
 def _catalogo(law_firm_id: int, ids) -> list[JudicialLegalThesis]:
     ids = {int(i) for i in ids or [] if str(i).isdigit()}
     if not ids:
@@ -135,6 +144,7 @@ def ligar(law_firm_id: int, thesis_id: int, catalog_ids) -> JurisprudenceThesis:
     tese.status = tese.STATUS_LIGADA if tese.catalog_theses else tese.STATUS_PENDENTE
     tese.suggestion_json = None
     db.session.commit()
+    _reindexar_metadados(law_firm_id, tese.id)
     return tese
 
 
@@ -144,6 +154,7 @@ def marcar_sem_equivalente(law_firm_id: int, thesis_id: int) -> JurisprudenceThe
     tese.status = tese.STATUS_SEM_EQUIVALENTE
     tese.suggestion_json = None
     db.session.commit()
+    _reindexar_metadados(law_firm_id, tese.id)
     return tese
 
 
@@ -153,6 +164,7 @@ def reabrir(law_firm_id: int, thesis_id: int) -> JurisprudenceThesis:
     tese.catalog_theses = []
     tese.status = tese.STATUS_PENDENTE
     db.session.commit()
+    _reindexar_metadados(law_firm_id, tese.id)
     return tese
 
 
@@ -196,6 +208,7 @@ def mesclar(law_firm_id: int, variante_id: int, canonica_id: int) -> Jurispruden
     for decisao in decisoes:
         decisao.search_text = svc.montar_texto_de_busca(decisao)
     db.session.commit()
+    _reindexar_metadados(law_firm_id, canonica.id)
     return canonica
 
 
@@ -229,6 +242,7 @@ def desfazer_mescla(law_firm_id: int, variante_id: int) -> JurisprudenceThesis:
         decisao.theses = teses
         decisao.search_text = svc.montar_texto_de_busca(decisao)
     db.session.commit()
+    _reindexar_metadados(law_firm_id, variante.id, canonica.id)
     return variante
 
 
@@ -267,6 +281,7 @@ def criar_no_catalogo(law_firm_id: int, thesis_id: int) -> JudicialLegalThesis:
     tese.status = tese.STATUS_LIGADA
     tese.suggestion_json = None
     db.session.commit()
+    _reindexar_metadados(law_firm_id, tese.id)
     return nova
 
 

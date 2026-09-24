@@ -15,6 +15,7 @@ pares {decision_id, thesis_id} — sem coluna nova.
 """
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Iterable, Optional
 
@@ -195,12 +196,21 @@ def bloco_do_prompt(law_firm_id: int, pares: Optional[list[dict]]) -> str:
         grupos.setdefault(tese or 'Geral', [])
         if decisao not in grupos[tese or 'Geral']:
             grupos[tese or 'Geral'].append(decisao)
+    # A prioridade tem de estar escrita aqui: o prompt do sistema manda usar
+    # "prioritariamente" a jurisprudência do catálogo da Seção 6, e sem esta
+    # regra o modelo podia preferir o precedente do catálogo e deixar de fora a
+    # decisão que o advogado escolheu. O prompt .md do escritório não é tocado.
     linhas = [
         '=== JURISPRUDÊNCIA SELECIONADA PELO ADVOGADO (base de decisões do escritório) ===',
-        'Use estas decisões como precedentes na tese indicada. Cite pela referência exatamente como '
-        'está entre parênteses: não altere número, órgão, relator ou data, e não invente precedente que '
-        'não esteja aqui ou no catálogo. Ementa marcada como RESUMO não pode ser transcrita entre aspas. '
-        'Decisão marcada CONTRÁRIA serve para antecipar o entendimento desfavorável e rebatê-lo.',
+        'PRIORIDADE: para a tese indicada em cada grupo, estas decisões prevalecem sobre a jurisprudência '
+        'do catálogo da Seção 6 do guia. Cada decisão A FAVOR listada aqui DEVE ser citada inline no '
+        'argumento da tese correspondente, com a referência completa; a jurisprudência do catálogo pode '
+        'entrar como reforço, nunca no lugar dela.',
+        'Cite pela referência exatamente como está entre parênteses: não altere número, órgão, relator ou '
+        'data, e não invente precedente que não esteja aqui ou no catálogo. Ementa marcada como RESUMO '
+        'não pode ser transcrita entre aspas.',
+        'Decisão marcada CONTRÁRIA DEVE ser enfrentada no argumento da tese: antecipe o entendimento '
+        'desfavorável (mencionando o processo) e rebata-o. Nunca a cite a favor.',
     ]
     for tese, decisoes in grupos.items():
         linhas.append('')
@@ -208,3 +218,43 @@ def bloco_do_prompt(law_firm_id: int, pares: Optional[list[dict]]) -> str:
         for n, d in enumerate(decisoes, start=1):
             linhas.extend(_linhas_da_decisao(n, d))
     return '\n'.join(linhas)
+
+
+# ── Conferência depois da geração ─────────────────────────────────────
+
+_NUMERO = re.compile(r'\d[\d.\-/ ]{12,}\d')
+
+
+def _numeros_no_texto(texto: str) -> set[str]:
+    return {norm.digitos(m) for m in _NUMERO.findall(texto or '')}
+
+
+def nao_citadas(law_firm_id: int, pares: Optional[list[dict]], texto: str) -> list[tuple]:
+    """Decisões marcadas que não aparecem no texto final (pelo número do processo).
+
+    Devolve [(decisão, tese)]. O número é comparado só pelos dígitos, então
+    "5083928-14.2021.4.04.7100" e "5083928.14.2021..." contam igual.
+    """
+    numeros = _numeros_no_texto(texto)
+    faltando = []
+    for decisao, tese in carregar(law_firm_id, pares or []):
+        digitos = decisao.processo_digits or ''
+        if len(digitos) < 15:
+            continue      # sem número confiável não dá para conferir
+        if not any(digitos in n for n in numeros):
+            faltando.append((decisao, tese))
+    return faltando
+
+
+def avisos_de_citacao(law_firm_id: int, pares: Optional[list[dict]], texto: str) -> list[str]:
+    """Itens de checklist para as notas internas da peça gerada."""
+    linhas = []
+    for decisao, tese in nao_citadas(law_firm_id, pares, texto):
+        onde = f' na tese "{tese}"' if tese else ''
+        if decisao.resultado == norm.RESULTADO_DESFAVORAVEL:
+            linhas.append(f'- [ ] Decisão contrária marcada não foi enfrentada{onde}: {norm.citacao(decisao)} — '
+                          'incluir o rebate ou desmarcar.')
+        else:
+            linhas.append(f'- [ ] Jurisprudência marcada não foi citada{onde}: {norm.citacao(decisao)} — '
+                          'incluir a citação no argumento.')
+    return linhas

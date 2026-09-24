@@ -564,6 +564,30 @@ e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
 - **Fila persistida**, lida em thread; `processing` parado há mais de 20 min é
   travado. `scripts/process_jurisprudence_uploads.py` retoma a fila depois de
   restart (seguro para cron).
+- **Índice próprio, fora da base de conhecimento** (`jurisprudence_index_service`):
+  coleção Qdrant e índice Meilisearch `jurisprudence` (env
+  `JURISPRUDENCE_COLLECTION` / `JURISPRUDENCE_MEILI_INDEX`; teste sempre
+  `jurisprudence_test`). Separado de propósito: não disputa as respostas do chat
+  da base de conhecimento, e nasce com `law_firm_id` em todo ponto — a coleção
+  `knowledge_base` **não guarda o escritório no payload e a busca dela não filtra
+  por tenant** (pendência conhecida, fora deste módulo). Cada decisão = um ponto
+  **ficha** (campos estruturados; existe sem PDF) + um ponto por **página** do
+  inteiro teor. O texto é extraído sem IA (pdfplumber → Docling) e guardado em
+  `texto_integral` (MEDIUMTEXT, páginas separadas por `\f`): o índice se
+  reconstrói do banco (`scripts/reindex_jurisprudence.py`) sem reler PDF. Ids dos
+  pontos são determinísticos (decisão + posição), então ligar/mesclar tese só
+  troca payload, sem embedding. Indexar nunca derruba leitura/importação/correção
+  (falha vira `index_status='erro'`); PDF sem texto extraível entra pela ficha.
+  Número de processo na busca do inteiro teor vira filtro exato em
+  `processo_digits`, nunca texto (a lição do DOU). Colunas criadas por
+  `database/alter_jurisprudence_decisions_add_index_columns.py`.
+- **PDF das decisões da planilha**: a pasta do Drive do escritório **não é
+  pública** (medido em 24/09/2026: os links respondem "sem compartilhamento"),
+  então o caminho principal é **anexar em lote** — cada PDF casa com a decisão
+  pelo `nome_arquivo` da planilha (511 nomes distintos, nenhum repetido entre
+  decisões). "Buscar PDFs no Drive" usa o baixador anônimo das peças-modelo e
+  **para depois de 3 bloqueios seguidos**, para não martelar 500 links que vão
+  falhar igual.
 - **Na geração da impugnação** o passo "Documentos" ganha "Jurisprudência a
   citar" por tese do catálogo (favoráveis, mesmo TRF, instância mais alta e mais
   recentes primeiro; desfavoráveis aparecem desmarcadas). A escolha vai em
@@ -571,6 +595,17 @@ e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
   nova) e `jurisprudence_generation_service.bloco_do_prompt` entra no prompt
   **antes** das peças-modelo (o `_shrink_user_prompt` corta pelo fim). Decisão
   desfavorável marcada vai rotulada CONTRÁRIA: para rebater, nunca citar a favor.
+  **O bloco declara prioridade sobre o catálogo da Seção 6** do
+  `system_prompt_impugnacao_v2.md`: o prompt do sistema manda usar
+  "prioritariamente" a jurisprudência do catálogo, e sem a regra no bloco o
+  modelo podia trocar a decisão escolhida pelo precedente do catálogo. A regra
+  mora no código do bloco, não no `.md`. Depois da geração (e do
+  enriquecimento), `avisos_de_citacao` confere pelo **número do processo** —
+  só dígitos, qualquer pontuação — se cada decisão marcada chegou ao texto; a
+  que faltou vira item `- [ ]` nas notas internas ("não foi citada", ou "não
+  foi enfrentada" para a contrária). O `ImpugnacaoEnrichmentAgent` **não**
+  recebe a Base: a fonte dele continua sendo a jurisprudência garimpada das
+  peças-modelo (`impugnacao_models`).
 
 ### Sessão do portal FAP e automação de navegador (Playwright)
 
