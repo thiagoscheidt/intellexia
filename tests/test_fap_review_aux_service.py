@@ -93,6 +93,64 @@ def test_build_agent_documents_renders_content_summary():
     assert docs[1] == {'name': 'quebrado.pdf'}
 
 
+# ── FB-03: conferência dos números extraídos contra o próprio documento ──
+
+CAT = ('19 - Data do Acidente: 27/07/2018  22 - Tipo: TRAJETO\n'
+       'NB 624.736.470-2   CNPJ 06.057.223/0001-71   Emissão 03.08.18')
+
+
+def test_confere_data_e_numero_presentes_no_documento():
+    assert svc.conferir_fato('27/07/2018', CAT, None)['status'] == 'confirmado'
+    # Mesmo NB com e sem máscara.
+    assert svc.conferir_fato('6247364702', CAT, None)['status'] == 'confirmado'
+    # Mesma data em outro formato: 03.08.18 no documento.
+    assert svc.conferir_fato('03/08/2018', CAT, None)['status'] == 'confirmado'
+
+
+def test_digito_trocado_nao_confirma():
+    check = svc.conferir_fato('6247364720', CAT, None)
+    assert check['status'] == 'nao_confirmado', check
+    assert check['base'] == 'documento' and check['faltando'] == ['6247364720'], check
+    assert svc.conferir_fato('27/07/2017', CAT, None)['status'] == 'nao_confirmado'
+
+
+def test_data_impossivel():
+    for valor in ('27/13/2018', '32/07/2018', '27/07/2081'):
+        check = svc.conferir_fato(valor, CAT, None)
+        assert check['status'] == 'data_invalida', (valor, check)
+
+
+def test_valor_sem_numero_nao_e_conferido():
+    assert svc.conferir_fato('TRAJETO', CAT, None) is None
+    assert svc.conferir_fato('VIA PUBLICA', CAT, None) is None
+
+
+def test_sem_texto_confere_contra_o_trecho():
+    # PDF escaneado: não há texto do documento, só o trecho que o modelo citou.
+    check = svc.conferir_fato('27/07/2018', '', 'Data do Acidente: 27/07/2018')
+    assert check['status'] == 'confirmado' and check['base'] == 'trecho', check
+    check = svc.conferir_fato('27/07/2018', '', 'Data do Acidente: 72/07/2018')
+    assert check['status'] == 'nao_confirmado' and check['base'] == 'trecho', check
+    assert svc.conferir_fato('27/07/2018', '', None) is None
+
+
+def test_conferencia_chega_na_tela_e_no_revisor():
+    extraction = {'document_type': 'CAT', 'related_benefits': [{
+        'benefit_number': '6247364702', 'match_reason': 'NB citado',
+        'facts': [{'label': 'NB', 'value': '6247364720', 'source_excerpt': 'NB 624.736.470-2'},
+                  {'label': 'Tipo', 'value': 'TRAJETO', 'source_excerpt': 'Tipo: TRAJETO'}]}]}
+    conferida = svc.conferir_extracao(extraction, CAT)
+    assert 'check' not in extraction['related_benefits'][0]['facts'][0], 'não pode mutar o original (cache)'
+    results = [{'file_name': 'CAT.pdf', 'extraction': conferida, 'error': None}]
+    payload = svc.build_review_payload(results, [], 'none', [])
+    facts = payload['documents'][0]['related_benefits'][0]['facts']
+    assert facts[0]['check']['status'] == 'nao_confirmado', facts
+    assert facts[1].get('check') is None, facts
+    summary = svc.build_agent_documents(results)[0]['content_summary']
+    assert 'NÃO CONFIRMADO' in summary.split('NB: 6247364720')[1].splitlines()[0], summary
+    assert 'NÃO CONFIRMADO' not in summary.split('Tipo: TRAJETO')[1].splitlines()[0], summary
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith('test_')]
     failed = 0

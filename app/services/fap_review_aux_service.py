@@ -10,10 +10,12 @@ cache compartilham a sessão SQLAlchemy da thread, e commits intercalados entre
 corrotinas corromperiam a transação.
 """
 
+import copy
 import hashlib
 import json
 import os
 import re
+from datetime import date, datetime
 from pathlib import Path
 
 from flask import current_app
@@ -194,7 +196,12 @@ async def run_auxiliary_extractions(*, law_firm_id: int,
             sha = compute_file_sha256(path)
             cached = get_cached_extraction(law_firm_id, sha, agent.model_name, fingerprint)
             if cached is not None:
-                results.append({'file_name': name, 'from_cache': True, 'extraction': cached, 'error': None})
+                results.append({
+                    'file_name': name,
+                    'from_cache': True,
+                    'extraction': conferir_extracao(cached, texto_de_referencia(path, extract_text_fn)),
+                    'error': None,
+                })
                 continue
 
             extension = Path(path).suffix.lower()
@@ -231,7 +238,7 @@ async def run_auxiliary_extractions(*, law_firm_id: int,
             results.append({
                 'file_name': name,
                 'from_cache': False,
-                'extraction': extraction_dict,
+                'extraction': conferir_extracao(extraction_dict, texto_de_referencia(path, extract_text_fn)),
                 'error': None,
                 'truncated': truncated,
             })
@@ -245,6 +252,134 @@ async def run_auxiliary_extractions(*, law_firm_id: int,
     payload['cost_usd'] = float(agent.total_cost_usd)
     agent_documents = build_agent_documents(results)
     return payload, agent_documents
+
+
+# ── FB-03: conferência dos números extraídos contra o próprio documento ──
+#
+# O extrator às vezes devolve dígitos trocados ou data impossível. Não há como
+# o modelo se corrigir sozinho, mas dá para conferir: todo número do valor
+# extraído tem de estar escrito no documento. O que não está vira "não
+# confirmado" na tela e chega assim ao revisor, que não o trata como fato.
+#
+# A referência do PDF é a camada de texto lida pelo PyMuPDF, não o markdown do
+# Docling que o modelo recebeu: o Docling remonta formulário e tabela, e
+# conferir contra ele deixaria passar justamente o número que ele embaralhou.
+# Sem texto (PDF escaneado, imagem) sobra o trecho que o próprio modelo citou —
+# mais fraco, mas ainda pega valor que não bate com a própria citação.
+
+_NUMERO = re.compile(r'\d+(?:[./\-]\d+)*')
+_DATA = re.compile(r'^(\d{1,2})[./\-](\d{1,2})[./\-](\d{2}|\d{4})$')
+# "B91", "22 - Tipo": número de um dígito aparece em qualquer documento e não
+# prova nada; a partir de dois já separa valor certo de valor trocado.
+_MINIMO_DIGITOS = 2
+
+
+def _data_do_token(token: str):
+    """(ano, mês, dia) se o token tem forma de data — válida ou não —, senão None."""
+    m = _DATA.match(token)
+    if not m:
+        return None
+    dia, mes, ano = int(m.group(1)), int(m.group(2)), m.group(3)
+    if len(ano) == 2:
+        limite = datetime.now().year % 100 + 1
+        ano = (2000 if int(ano) <= limite else 1900) + int(ano)
+    return int(ano), mes, dia
+
+
+def _data_valida(partes) -> bool:
+    ano, mes, dia = partes
+    if not 1900 <= ano <= datetime.now().year + 1:
+        return False
+    try:
+        date(ano, mes, dia)
+    except ValueError:
+        return False
+    return True
+
+
+def _formas_do_texto(texto: str) -> set:
+    """Todos os números do texto: só dígitos e, quando for data, a data em si."""
+    formas = set()
+    for token in _NUMERO.findall(texto or ''):
+        formas.add(('n', re.sub(r'\D', '', token)))
+        partes = _data_do_token(token)
+        if partes and _data_valida(partes):
+            formas.add(('d', partes))
+    return formas
+
+
+def conferir_fato(valor: str, referencia: str, trecho: str | None) -> dict | None:
+    """Confere os números de um valor extraído. None quando não há o que conferir."""
+    tokens = [t for t in _NUMERO.findall(str(valor or ''))
+              if len(re.sub(r'\D', '', t)) >= _MINIMO_DIGITOS]
+    if not tokens:
+        return None
+
+    datas_invalidas = [t for t in tokens if (p := _data_do_token(t)) and not _data_valida(p)]
+    if datas_invalidas:
+        return {'status': 'data_invalida', 'base': None, 'faltando': datas_invalidas}
+
+    if referencia and referencia.strip():
+        base, formas = 'documento', _formas_do_texto(referencia)
+    elif trecho and trecho.strip():
+        base, formas = 'trecho', _formas_do_texto(trecho)
+    else:
+        return None
+
+    faltando = []
+    for token in tokens:
+        partes = _data_do_token(token)
+        if ('n', re.sub(r'\D', '', token)) in formas or (partes and ('d', partes) in formas):
+            continue
+        faltando.append(token)
+    return {'status': 'nao_confirmado' if faltando else 'confirmado', 'base': base, 'faltando': faltando}
+
+
+def conferir_extracao(extraction: dict, referencia: str) -> dict:
+    """Cópia da extração com ``check`` em cada fato numérico. O original fica
+    intacto porque é ele que vai para o cache."""
+    conferida = copy.deepcopy(extraction or {})
+    for benefit in conferida.get('related_benefits') or []:
+        if not isinstance(benefit, dict):
+            continue
+        for fact in benefit.get('facts') or []:
+            if not isinstance(fact, dict):
+                continue
+            check = conferir_fato(fact.get('value'), referencia, fact.get('source_excerpt'))
+            if check:
+                fact['check'] = check
+    return conferida
+
+
+def texto_de_referencia(path: str, extract_text_fn) -> str:
+    """Texto contra o qual os números são conferidos. Vazio quando não há."""
+    extension = Path(path).suffix.lower()
+    try:
+        if extension == '.pdf':
+            import fitz  # PyMuPDF
+
+            with fitz.open(path) as documento:
+                return '\n'.join(pagina.get_text() for pagina in documento)
+        if extension in _SPREADSHEET_EXTENSIONS:
+            return _spreadsheet_to_text(path)
+        if extension in _TEXT_EXTENSIONS:
+            return extract_text_fn(path) or ''
+    except Exception as exc:
+        current_app.logger.warning('FAP aux: texto de conferência indisponível (%s): %s', path, exc)
+    return ''
+
+
+def _aviso_de_conferencia(check: dict | None) -> str:
+    """Marca que acompanha o fato no bloco do revisor."""
+    if not check:
+        return ''
+    faltando = ', '.join(check.get('faltando') or [])
+    if check['status'] == 'data_invalida':
+        return f' [NÃO CONFIRMADO: data impossível ({faltando}) — leitura do documento provavelmente errada]'
+    if check['status'] == 'nao_confirmado':
+        onde = 'no documento' if check.get('base') == 'documento' else 'no trecho citado'
+        return f' [NÃO CONFIRMADO: {faltando} não aparece {onde} — tratar como incerto]'
+    return ''
 
 
 def build_review_payload(results: list[dict], anchors: list[dict],
@@ -272,6 +407,7 @@ def build_review_payload(results: list[dict], anchors: list[dict],
                         'label': str(fact.get('label') or ''),
                         'value': str(fact.get('value') or ''),
                         'source_excerpt': str(fact.get('source_excerpt') or '') or None,
+                        'check': fact.get('check'),
                     }
                     for fact in (benefit.get('facts') or []) if isinstance(fact, dict)
                 ],
@@ -330,7 +466,8 @@ def build_agent_documents(results: list[dict]) -> list[dict]:
                     continue
                 excerpt = fact.get('source_excerpt')
                 suffix = f' (trecho: "{excerpt}")' if excerpt else ''
-                lines.append(f"  - {fact.get('label')}: {fact.get('value')}{suffix}")
+                lines.append(f"  - {fact.get('label')}: {fact.get('value')}{suffix}"
+                             f"{_aviso_de_conferencia(fact.get('check'))}")
         for divergence in extraction.get('potential_divergences') or []:
             lines.append(f"Possível divergência: {divergence}")
 

@@ -1413,6 +1413,14 @@
                                             {% for fact in benefit.facts %}
                                             <div class="small">
                                                 <span class="fw-semibold">{{ fact.label }}:</span> {{ fact.value }}
+                                                {# FB-03: número extraído que não está escrito no anexo. #}
+                                                {% set check = fact.check %}
+                                                {% if check and check.status in ('nao_confirmado', 'data_invalida') %}
+                                                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1"
+                                                    title="{% if check.status == 'data_invalida' %}Data impossível ({{ check.faltando|join(', ') }}): a leitura do anexo provavelmente errou.{% else %}{{ check.faltando|join(', ') }} não aparece {{ 'no anexo' if check.base == 'documento' else 'no trecho citado' }}: a leitura pode ter trocado dígitos.{% endif %} Confira no documento.">
+                                                    <i class="bi bi-exclamation-triangle me-1"></i>não confirmado
+                                                </span>
+                                                {% endif %}
                                                 {# RPI-25: de onde o dado saiu, no próprio anexo — mesmo modal do
                                                    "ver no documento" da petição. #}
                                                 {% if fact.source_excerpt and aux_link %}
