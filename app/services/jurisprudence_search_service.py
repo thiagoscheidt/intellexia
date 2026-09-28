@@ -18,6 +18,7 @@ from __future__ import annotations
 import html
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Optional
@@ -38,7 +39,8 @@ POR_PAGINA = 20
 class Filtros:
     q: str = ''
     catalogo: list[int] = field(default_factory=list)   # JudicialLegalThesis.id
-    teses: list[int] = field(default_factory=list)      # JurisprudenceThesis.id
+    teses: list[int] = field(default_factory=list)      # JurisprudenceThesis.id (tela de Teses)
+    originais: list[str] = field(default_factory=list)  # chave da tese original
     resultados: list[str] = field(default_factory=list)
     tribunais: list[str] = field(default_factory=list)
     tipos: list[str] = field(default_factory=list)
@@ -87,6 +89,7 @@ class Filtros:
             q=(args.get('q') or '').strip()[:300],
             catalogo=inteiros('tese'),
             teses=inteiros('tese_livre'),
+            originais=[norm.chave(o) for o in args.getlist('original') if norm.chave(o)][:30],
             resultados=[r for r in args.getlist('resultado') if r in norm.RESULTADO_LABELS],
             tribunais=[t for t in args.getlist('tribunal') if t][:20],
             tipos=[t for t in args.getlist('tipo') if t in norm.TIPO_LABELS],
@@ -101,7 +104,7 @@ class Filtros:
 
     @property
     def ativos(self) -> bool:
-        return bool(self.q or self.catalogo or self.teses or self.resultados or self.tribunais
+        return bool(self.q or self.catalogo or self.teses or self.originais or self.resultados or self.tribunais
                     or self.tipos or self.uf or self.vigencia or self.de or self.ate)
 
 
@@ -119,30 +122,51 @@ class _Linha:
     texto: str
     teses: set
     catalogo: set
+    originais: set
 
     @property
     def grupo(self) -> str:
         return self.processo_digits or f'id:{self.id}'
 
 
-def _carregar(law_firm_id: int) -> list[_Linha]:
+def _carregar(law_firm_id: int) -> tuple[list[_Linha], dict[str, str]]:
+    """Linhas leves da busca + rótulo de cada tese original.
+
+    **Tese original** é o texto exato que veio da decisão (`teses_brutas_json`),
+    agrupado só por acento e maiúsculas (`norm.chave`) — a ferramenta anterior
+    gravava ora "PRORROGAÇÃO", ora "PRORROGACAO", e separadas o filtro devolveria
+    metade das decisões sem avisar. Nunca por sentido: "DUPLICIDADE DE
+    BENEFÍCIO" e "BENEFÍCIOS EM DUPLICIDADE" continuam separadas — juntar ideias
+    é da correspondência com o catálogo. O rótulo é a grafia mais frequente.
+    """
     teses_da_decisao = svc.teses_por_decisao(law_firm_id)
     catalogo_da_tese = svc.catalogo_por_tese(law_firm_id)
+    grafias: dict[str, Counter] = {}
     linhas = []
-    for (d_id, digits, tribunal, uf, tipo, resultado, data_j, vi, vf, texto) in db.session.query(
+    for (d_id, digits, tribunal, uf, tipo, resultado, data_j, vi, vf, texto, brutas) in db.session.query(
             JurisprudenceDecision.id, JurisprudenceDecision.processo_digits,
             JurisprudenceDecision.tribunal, JurisprudenceDecision.uf,
             JurisprudenceDecision.tipo_documento, JurisprudenceDecision.resultado,
             JurisprudenceDecision.data_julgamento, JurisprudenceDecision.vigencia_inicio,
             JurisprudenceDecision.vigencia_fim, JurisprudenceDecision.search_text,
+            JurisprudenceDecision.teses_brutas_json,
     ).filter(JurisprudenceDecision.law_firm_id == law_firm_id).all():
         teses = set(teses_da_decisao.get(d_id, []))
         catalogo = set()
         for tese_id in teses:
             catalogo.update(catalogo_da_tese.get(tese_id, []))
+        originais = set()
+        for original in brutas or []:
+            k = norm.chave(original)
+            if k:
+                originais.add(k)
+                grafias.setdefault(k, Counter())[str(original).strip()] += 1
         linhas.append(_Linha(d_id, digits, tribunal, uf, tipo, resultado, data_j, vi, vf,
-                             texto or '', teses, catalogo))
-    return linhas
+                             texto or '', teses, catalogo, originais))
+    # Empate na frequência fica com a grafia acentuada: é a forma correta.
+    rotulos = {k: max(c.items(), key=lambda kv: (kv[1], kv[0] != norm.sem_acento(kv[0]), kv[0]))[0]
+               for k, c in grafias.items()}
+    return linhas, rotulos
 
 
 def _casa_texto(linha: _Linha, consulta: str, termos: list[list[str]]) -> bool:
@@ -163,6 +187,8 @@ def _passa(linha: _Linha, f: Filtros, exceto: Optional[str] = None) -> bool:
     if exceto != 'catalogo' and f.catalogo and not (linha.catalogo & set(f.catalogo)):
         return False
     if exceto != 'teses' and f.teses and not (linha.teses & set(f.teses)):
+        return False
+    if exceto != 'originais' and f.originais and not (linha.originais & set(f.originais)):
         return False
     if exceto != 'resultado' and f.resultados and linha.resultado not in f.resultados:
         return False
@@ -264,16 +290,59 @@ def trecho_da_decisao(decisao: JurisprudenceDecision, termos: list[list[str]]) -
 
 # ── Busca ──────────────────────────────────────────────────────────────
 
-def buscar(law_firm_id: int, f: Filtros, por_pagina: int = POR_PAGINA) -> dict:
-    todas = _carregar(law_firm_id)
+def _filtrar(law_firm_id: int, f: Filtros):
+    """(todas, rótulos das originais, termos, candidatas pelo texto, finais)."""
+    todas, rotulos = _carregar(law_firm_id)
     termos = [] if norm.parece_numero_de_processo(f.q) else norm.termos_da_consulta(f.q)
     candidatas = [l for l in todas if _casa_texto(l, f.q, termos)]
     finais = [l for l in candidatas if _passa(l, f)]
+    return todas, rotulos, termos, candidatas, finais
+
+
+def _exito(finais: list) -> list[dict]:
+    resultados = _contar(finais, lambda l: l.resultado)
+    total = len(finais)
+    return [
+        {'resultado': r, 'rotulo': norm.RESULTADO_LABELS_CURTOS[r], 'n': resultados.get(r, 0),
+         'pct': (100.0 * resultados.get(r, 0) / total) if total else 0}
+        for r in (norm.RESULTADO_FAVORAVEL, norm.RESULTADO_PARCIAL, norm.RESULTADO_DESFAVORAVEL)
+    ]
+
+
+def _ids_em_ordem(finais: list, ordem: str) -> list[int]:
+    """Uma decisão por posição, na ordem da tela (processos pela ordem pedida,
+    dentro do processo a mais recente primeiro; empate desfeito pelo id)."""
+    linhas_por_id = {l.id: l for l in finais}
+    grupos: dict[str, list[int]] = {}
+    for linha in finais:
+        grupos.setdefault(linha.grupo, []).append(linha.id)
+    return [i for g in _ordenar_grupos(grupos, linhas_por_id, ordem)
+            for i in sorted(grupos[g], key=lambda i: (linhas_por_id[i].data or date.min, i), reverse=True)]
+
+
+def decisoes_filtradas(law_firm_id: int, f: Filtros) -> dict:
+    """Os mesmos filtros e sinônimos da tela, sem paginação nem cartões — para
+    quem pagina por conta própria (MCP) ou precisa do conjunto inteiro
+    (exportação, panorama). `ids` na ordem da tela."""
+    _todas, rotulos, termos, _cand, finais = _filtrar(law_firm_id, f)
+    return {
+        'ids': _ids_em_ordem(finais, f.ordem),
+        'total': len(finais),
+        'processos': len({l.grupo for l in finais}),
+        'exito': _exito(finais),
+        'termos': termos,
+        'rotulos_originais': rotulos,
+    }
+
+
+def buscar(law_firm_id: int, f: Filtros, por_pagina: int = POR_PAGINA) -> dict:
+    todas, rotulos, termos, candidatas, finais = _filtrar(law_firm_id, f)
 
     nomes_catalogo, nomes_teses = _nomes(law_firm_id)
     facetas = {
         'catalogo': _contar([l for l in candidatas if _passa(l, f, 'catalogo')], lambda l: l.catalogo),
         'teses': _contar([l for l in candidatas if _passa(l, f, 'teses')], lambda l: l.teses),
+        'originais': _contar([l for l in candidatas if _passa(l, f, 'originais')], lambda l: l.originais),
         'resultado': _contar([l for l in candidatas if _passa(l, f, 'resultado')], lambda l: l.resultado),
         'tribunal': _contar([l for l in candidatas if _passa(l, f, 'tribunal')], lambda l: l.tribunal),
         'tipo': _contar([l for l in candidatas if _passa(l, f, 'tipo')], lambda l: l.tipo),
@@ -282,13 +351,8 @@ def buscar(law_firm_id: int, f: Filtros, por_pagina: int = POR_PAGINA) -> dict:
     anos_vigencia = sorted({a for l in todas if l.vig_ini and l.vig_fim
                             for a in range(l.vig_ini, l.vig_fim + 1)}, reverse=True)
 
-    resultados = _contar(finais, lambda l: l.resultado)
     total = len(finais)
-    exito = [
-        {'resultado': r, 'rotulo': norm.RESULTADO_LABELS_CURTOS[r], 'n': resultados.get(r, 0),
-         'pct': (100.0 * resultados.get(r, 0) / total) if total else 0}
-        for r in (norm.RESULTADO_FAVORAVEL, norm.RESULTADO_PARCIAL, norm.RESULTADO_DESFAVORAVEL)
-    ]
+    exito = _exito(finais)
 
     linhas_por_id = {l.id: l for l in finais}
     grupos: dict[str, list[int]] = {}
@@ -318,12 +382,36 @@ def buscar(law_firm_id: int, f: Filtros, por_pagina: int = POR_PAGINA) -> dict:
         'facetas': facetas,
         'nomes_catalogo': nomes_catalogo,
         'nomes_teses': nomes_teses,
+        'nomes_originais': rotulos,
         'anos_vigencia': anos_vigencia,
         'cartoes': cartoes,
         'pagina': pagina,
         'paginas': paginas,
         'termos': termos,
     }
+
+
+def _destaque_por_original(law_firm_id: int, f: Filtros):
+    """chave da tese original → está entre o que foi filtrado?
+
+    Vale para os três filtros de tese: a própria original, a tese da
+    correspondência (inclusive grafia mesclada nela) e a tese do catálogo.
+    """
+    alvo_original = set(f.originais)
+    if not (f.teses or f.catalogo):
+        return lambda k: k in alvo_original
+    teses = JurisprudenceThesis.query.filter_by(law_firm_id=law_firm_id).all()
+    por_id = {t.id: t for t in teses}
+    catalogo_da_tese = svc.catalogo_por_tese(law_firm_id) if f.catalogo else {}
+    alvo_teses, alvo_catalogo = set(f.teses), set(f.catalogo)
+    marcadas = set()
+    for t in teses:
+        canonica, passos = t, 0
+        while canonica.merged_into_id and canonica.merged_into_id in por_id and passos < 5:
+            canonica, passos = por_id[canonica.merged_into_id], passos + 1
+        if canonica.id in alvo_teses or set(catalogo_da_tese.get(canonica.id, [])) & alvo_catalogo:
+            marcadas.add(t.key)
+    return lambda k: k in alvo_original or k in marcadas
 
 
 def virou_no_acordao(trilha: list) -> bool:
@@ -355,7 +443,7 @@ def _montar_cartoes(law_firm_id: int, grupos: list[list[int]], f: Filtros,
                     JurisprudenceDecision.processo_digits.in_(processos)).all():
                 irmas.setdefault(d.processo_digits, []).append(d)
 
-    catalogo_da_tese = svc.catalogo_por_tese(law_firm_id) if f.catalogo else {}
+    destacar = _destaque_por_original(law_firm_id, f)
     cartoes = []
     for grupo in grupos:
         principais = [achadas[i] for i in grupo if i in achadas]
@@ -366,15 +454,16 @@ def _montar_cartoes(law_firm_id: int, grupos: list[list[int]], f: Filtros,
         trilha = svc.ordenar_trilha(trilha or principais)
         ids_achados = {d.id for d in principais}
 
+        # Chips = teses originais, como vieram da decisão (sem repetir a mesma
+        # tese entre sentença e acórdão do processo).
         teses, vistas = [], set()
         for d in sorted(principais, key=lambda d: -norm.TIPO_ORDEM.get(d.tipo_documento, 0)):
-            for tese in d.theses:
-                if tese.id in vistas:
+            for original in d.teses_brutas_json or []:
+                k = norm.chave(original)
+                if not k or k in vistas:
                     continue
-                vistas.add(tese.id)
-                destaque = (tese.id in f.teses
-                            or bool(set(catalogo_da_tese.get(tese.id, [])) & set(f.catalogo)))
-                teses.append({'id': tese.id, 'nome': tese.name, 'destaque': destaque})
+                vistas.add(k)
+                teses.append({'chave': k, 'nome': str(original).strip(), 'destaque': destacar(k)})
         teses.sort(key=lambda t: not t['destaque'])
 
         destaque = max(principais, key=lambda d: (norm.TIPO_ORDEM.get(d.tipo_documento, 0), d.data_julgamento or date.min))
@@ -397,7 +486,7 @@ def _montar_cartoes(law_firm_id: int, grupos: list[list[int]], f: Filtros,
 
 def buscar_para_geracao(law_firm_id: int, consulta: str, limite: int = 15) -> list[dict]:
     """Busca avulsa ("buscar outra na base…") do passo de geração."""
-    todas = _carregar(law_firm_id)
+    todas, _ = _carregar(law_firm_id)
     termos = [] if norm.parece_numero_de_processo(consulta) else norm.termos_da_consulta(consulta)
     ids = [l.id for l in sorted((l for l in todas if _casa_texto(l, consulta, termos)),
                                 key=lambda l: l.data or date.min, reverse=True)][:limite]

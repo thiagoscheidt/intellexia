@@ -288,7 +288,7 @@
 
 <!--begin::Claude MCP Modal-->
 <div class="modal fade" id="claudeMcpModal" tabindex="-1" aria-labelledby="claudeMcpModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title d-flex align-items-center gap-2" id="claudeMcpModalLabel">
@@ -311,7 +311,8 @@
 
         <h6 class="fw-semibold"><i class="bi bi-plug me-1"></i>Como conectar no Claude Desktop / claude.ai</h6>
         <ol class="mb-3">
-          <li>Abra <strong>Settings</strong> → <strong>Connectors</strong> → <strong>Add custom connector</strong>;</li>
+          <li>Abra <strong>Personalizar</strong> → <strong>Conectores</strong> → <strong>Adicionar conector personalizado</strong>
+            <span class="text-muted small">(Customize → Connectors → Add custom connector)</span>;</li>
           <li>Cole a URL do conector (abaixo) e confirme;</li>
           <li>O navegador abre no IntellexIA — clique em <strong>Autorizar</strong> e pronto.</li>
         </ol>
@@ -329,6 +330,62 @@
           <i class="bi bi-terminal me-1"></i>No <strong>Claude Code</strong> (terminal):
           <code>claude mcp add --transport http intellexia {{ mcp_public_url }}</code>
         </p>
+
+        {# Catálogo lido do docs/MANUAL_MCP.md (mcp_catalog_service) — documentar
+           uma ferramenta no manual já a traz para cá. #}
+        {% set mcp_cat = mcp_catalogo() %}
+        {% if mcp_cat.grupos %}
+        <hr class="my-3">
+        <h6 class="fw-semibold mb-1"><i class="bi bi-tools me-1"></i>O que a IA consegue fazer</h6>
+        <p class="text-muted small mb-2">
+          {{ mcp_cat.total_ferramentas }} ferramentas e {{ mcp_cat.comandos|length }} comandos prontos.
+          Você não precisa chamá-las pelo nome — basta pedir em português, e a IA escolhe a ferramenta.
+          Cada uma respeita as suas permissões de módulo.
+        </p>
+        <div class="accordion accordion-flush border rounded" id="mcpCatalogo">
+          {% for grupo in mcp_cat.grupos %}
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse"
+                data-bs-target="#mcpGrupo{{ loop.index }}" aria-expanded="false" aria-controls="mcpGrupo{{ loop.index }}">
+                <span class="me-2"><i class="bi {{ grupo.icone }} me-2 text-primary"></i>{{ grupo.titulo }}</span>
+                <span class="badge text-bg-secondary rounded-pill">{{ grupo.itens|length }}</span>
+              </button>
+            </h2>
+            <div id="mcpGrupo{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#mcpCatalogo">
+              <ul class="list-unstyled small mb-0 px-3 py-2">
+                {% for item in grupo.itens %}
+                <li class="mb-2"><code>{{ item.nome }}</code><br><span class="text-muted">{{ item.descricao }}</span></li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+          {% endfor %}
+          {% if mcp_cat.comandos %}
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse"
+                data-bs-target="#mcpComandos" aria-expanded="false" aria-controls="mcpComandos">
+                <span class="me-2"><i class="bi bi-lightning-charge me-2 text-primary"></i>Comandos prontos</span>
+                <span class="badge text-bg-primary rounded-pill">{{ mcp_cat.comandos|length }}</span>
+              </button>
+            </h2>
+            <div id="mcpComandos" class="accordion-collapse collapse" data-bs-parent="#mcpCatalogo">
+              <p class="small text-muted px-3 pt-2 mb-2">
+                Roteiros completos em um clique. No <strong>Claude Code</strong>, digite <code>/</code> e procure por
+                <code>intellexia</code>; no <strong>Claude Desktop / claude.ai</strong>, use o botão <strong>+</strong>
+                da conversa, no item do conector IntellexIA.
+              </p>
+              <ul class="list-unstyled small mb-0 px-3 pb-2">
+                {% for item in mcp_cat.comandos %}
+                <li class="mb-2"><code>{{ item.nome }}</code><br><span class="text-muted">{{ item.descricao }}</span></li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
       </div>
       <div class="modal-footer">
         <a href="{{ url_for('docs.manuais') }}#conectar-ia" class="btn btn-primary">

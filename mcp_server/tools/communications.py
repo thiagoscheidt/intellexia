@@ -27,6 +27,18 @@ def _fonte_label(source):
     return ProcessCommunication.SOURCE_LABELS.get(source, source)
 
 
+def _validar_numero(numero):
+    """ToolError se o número tiver menos dígitos que o mínimo da busca."""
+    from fastmcp.exceptions import ToolError
+    from app.utils.cnj import MIN_DIGITOS_BUSCA, cnj_digits
+
+    if len(cnj_digits(numero)) < MIN_DIGITOS_BUSCA:
+        raise ToolError(
+            f"Informe ao menos {MIN_DIGITOS_BUSCA} dígitos do número do processo "
+            "(com ou sem pontuação)."
+        )
+
+
 def _parse_iso_date(value, field):
     from datetime import date
     from fastmcp.exceptions import ToolError
@@ -57,6 +69,10 @@ def list_communications_handler(
 
     limit = clamp_limit(limit, 50)
     offset = clamp_offset(offset)
+    if numero_processo:
+        # A tela aceita poucos dígitos (busca livre); aqui a IA recebe a regra
+        # clara em vez de uma lista que casa metade da base.
+        _validar_numero(numero_processo)
 
     query = monitor.communications_query(
         law_firm_id,
@@ -168,19 +184,19 @@ def process_communications_handler(
     from app.models import JudicialProcess, ProcessCommunication
     from app.services.comunica_pje_client import ComunicaPjeClient, ComunicaPjeError, only_digits
 
+    from app.utils.cnj import filtro_numero_processo
+
     numero = (numero_processo or '').strip()
     digits = only_digits(numero)
-    if not digits:
-        raise ToolError("Informe o número do processo (CNJ, com ou sem máscara).")
+    _validar_numero(numero)
 
     limit = clamp_limit(limit, 50)
     offset = clamp_offset(offset)
 
-    from sqlalchemy import or_
     query = (ProcessCommunication.query
              .filter_by(law_firm_id=law_firm_id)
-             .filter(or_(ProcessCommunication.numero_processo == digits,
-                         ProcessCommunication.numero_processo_mascara.ilike(f'%{numero}%')))
+             .filter(filtro_numero_processo(
+                 numero, coluna_digitos=ProcessCommunication.numero_processo))
              .order_by(ProcessCommunication.data_disponibilizacao.asc(),
                        ProcessCommunication.id.asc()))
 
@@ -208,8 +224,9 @@ def process_communications_handler(
 
     process = (JudicialProcess.query
                .filter_by(law_firm_id=law_firm_id)
-               .filter(or_(JudicialProcess.process_number == digits,
-                           JudicialProcess.process_number.ilike(f'%{numero}%')))
+               .filter(filtro_numero_processo(
+                   numero, coluna_mascara=JudicialProcess.process_number))
+               .order_by(JudicialProcess.id.asc())
                .first())
     envelope["processo_painel"] = {
         "id": process.id,

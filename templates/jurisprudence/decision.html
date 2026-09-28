@@ -161,7 +161,8 @@
         <dt>Vigência FAP</dt><dd>{{ d.vigencia_texto or '—' }}</dd>
         <dt>Teses</dt>
         <dd>
-          {% for t in d.theses %}<a class="tese-chip text-decoration-none" href="{{ url_for('jurisprudence.index', tese_livre=t.id, livres='1') }}">{{ t.name }}</a>{% else %}—{% endfor %}
+          {# Teses originais, exatamente como vieram da decisão. #}
+          {% for original in d.teses_brutas_json or [] %}<a class="tese-chip text-decoration-none" href="{{ url_for('jurisprudence.index', original=original) }}" title="ver as decisões com esta tese">{{ original }}</a>{% else %}—{% endfor %}
           {% if catalogo %}
           <div class="small text-body-secondary mt-1">no catálogo:
             {% for c in catalogo %}<span class="cat-chip">{{ c.name }}</span>{% endfor %}</div>

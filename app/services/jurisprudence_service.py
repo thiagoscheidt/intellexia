@@ -12,6 +12,7 @@ argumentos_rejeitados, resumo_executivo, palavras_chave (+ uf, opcional).
 """
 from __future__ import annotations
 
+import re
 from datetime import date
 from typing import Iterable, Optional
 
@@ -73,7 +74,9 @@ def normalizar_registro(bruto: dict) -> dict:
         'vigencia_fim': vig_fim,
         'ementa': norm.texto_limpo(bruto.get('ementa')),
         'resumo_executivo': norm.texto_limpo(bruto.get('resumo_executivo')),
-        'teses_brutas_json': [t.upper() for t in norm.para_lista(bruto.get('teses'))],
+        # Tese original: exatamente como veio (sem mudar caixa nem acento). O
+        # agrupamento por grafia é feito na leitura, nunca na gravação.
+        'teses_brutas_json': norm.para_lista(bruto.get('teses')),
     }
     for origem, destino in _LISTAS.items():
         campos[destino] = norm.para_lista(bruto.get(origem))
@@ -163,7 +166,10 @@ class ResolvedorDeTeses:
             return None
         tese = self._por_chave.get(k)
         if tese is None:
-            tese = JurisprudenceThesis(law_firm_id=self.law_firm_id, key=k, name=k,
+            # O nome exibido é a grafia original (com acento); a chave sem
+            # acento só decide se duas grafias são a mesma tese.
+            tese = JurisprudenceThesis(law_firm_id=self.law_firm_id, key=k,
+                                       name=re.sub(r'\s+', ' ', str(nome)).strip()[:255] or k,
                                        status=JurisprudenceThesis.STATUS_PENDENTE)
             do_catalogo = self._catalogo.get(k)
             if do_catalogo is not None:
@@ -281,9 +287,9 @@ def precedentes_com_link(decisao: JurisprudenceDecision) -> list[dict]:
     precedentes = decisao.precedentes_json or []
     numeros = {}
     for texto in precedentes:
-        d = norm.digitos(texto)
-        if len(d) >= 15:
-            numeros[texto] = d[:20]
+        numero = norm.numero_cnj(texto)
+        if numero:
+            numeros[texto] = numero
     na_base = {}
     if numeros:
         for d_id, digits in (db.session.query(JurisprudenceDecision.id, JurisprudenceDecision.processo_digits)

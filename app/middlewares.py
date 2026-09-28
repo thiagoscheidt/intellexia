@@ -99,9 +99,13 @@ def init_app_middlewares(app):
     @app.context_processor
     def inject_public_urls():
         """URLs públicas para os templates (modal do conector MCP, manual)."""
+        from app.services.mcp_catalog_service import catalogo
         return {
             'app_public_url': app_public_url(),
             'mcp_public_url': mcp_public_url(),
+            # Função, não valor: só o modal chama, e o catálogo fica em cache
+            # até o manual mudar.
+            'mcp_catalogo': catalogo,
         }
 
     @app.context_processor

@@ -131,7 +131,6 @@ def index():
         envios_ativos=envios.painel(law_firm_id, limite=50)['ativos'],
         alternar=_alternar,
         com=_com,
-        mostrar_livres=request.args.get('livres') == '1',
         reset=svc.o_que_o_reset_apaga(law_firm_id) if session.get('user_role') == 'admin' else None,
         palavra_reset=PALAVRA_RESET,
     )

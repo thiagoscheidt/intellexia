@@ -80,7 +80,7 @@
           </div>
           {% endif %}
         </td>
-        <td class="text-end"><a href="{{ url_for('jurisprudence.index', tese_livre=t.id, livres='1') }}">{{ linha.decisoes }}</a></td>
+        <td class="text-end"><a href="{{ url_for('jurisprudence.index', tese_livre=t.id) }}">{{ linha.decisoes }}</a></td>
         <td>
           {% if s %}
             <div class="mb-1">

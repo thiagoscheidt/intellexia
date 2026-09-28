@@ -40,6 +40,7 @@
 .jur-page a.facet-item.on { background: var(--jur-acc-soft); font-weight: 600; }
 .jur-page .facet-item .n { font-size: .75rem; color: var(--bs-secondary-color); font-variant-numeric: tabular-nums; }
 .jur-page .facet-item .rotulo { min-width: 0; overflow-wrap: anywhere; }
+.jur-page .facet-rolavel { max-height: 260px; overflow-y: auto; margin-right: -.35rem; padding-right: .35rem; }
 
 /* cartão de processo */
 .jur-page .proc-card { border-radius: 14px; }

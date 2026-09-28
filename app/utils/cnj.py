@@ -21,6 +21,43 @@ def cnj_digits(value):
     return re.sub(r'\D', '', value or '')
 
 
+# Menos que isso casa metade da base ("2023" está em todo número do ano). Com 7
+# dígitos o sequencial do CNJ já identifica o processo.
+MIN_DIGITOS_BUSCA = 7
+
+
+def filtro_numero_processo(texto, coluna_digitos=None, coluna_mascara=None):
+    """Condição SQL para achar processo pelo número, digitado de qualquer jeito.
+
+    Compara só dígitos — com ou sem pontuação, completo ou parcial. Comparar
+    como texto falhava conforme o formato: `listar_processos` fazia LIKE no
+    número mascarado, e quem colava os 20 dígitos não achava nada.
+
+    Passe `coluna_digitos` quando a tabela guarda só dígitos; senão, a
+    `coluna_mascara` tem a pontuação removida no próprio SQL (REPLACE vale igual
+    no SQLite e no MySQL).
+
+    Levanta ValueError com menos de MIN_DIGITOS_BUSCA dígitos.
+    """
+    from sqlalchemy import func
+
+    digits = cnj_digits(texto)
+    if len(digits) < MIN_DIGITOS_BUSCA:
+        raise ValueError(
+            f'Informe ao menos {MIN_DIGITOS_BUSCA} dígitos do número do processo '
+            '(com ou sem pontuação).'
+        )
+    if coluna_digitos is not None:
+        expr = coluna_digitos
+    else:
+        expr = coluna_mascara
+        for sep in ('.', '-', '/', ' '):
+            expr = func.replace(expr, sep, '')
+    if len(digits) == 20:
+        return expr == digits
+    return expr.like(f'%{digits}%')
+
+
 def tribunal_sigla_from_cnj(process_number):
     """Sigla do tribunal (TRF4, TJSC, TRT12...) derivada do número CNJ.
 

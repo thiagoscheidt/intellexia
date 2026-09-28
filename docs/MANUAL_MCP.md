@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **33 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações e mais — com **44 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -20,6 +20,9 @@ O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de 
 - "Me traga todos os benefícios B91 de 2023 **em planilha**" — gera o Excel oficial do sistema com link de download;
 - "O que mudou nas contestações esta semana?";
 - "Quem é o CNPJ 59.104.422/0103-84?" — consulta pública da Receita;
+- "Quais intimações chegaram esta semana e ainda não foram lidas?";
+- "O que saiu no processo 5001181-56.2023.4.03.6100?" — a linha do tempo das publicações do processo;
+- "Explica essa intimação: tem prazo?" — a IA diz o prazo, a providência e a urgência;
 - "**Revise esta petição**" (colando o texto) — o agente revisor oficial aponta achados e documentos faltantes;
 - "**Revise esta petição, identificador FAP-2024-013**" — a revisão entra no painel do Revisor, com histórico e custo;
 - "O que a revisão da FAP-2024-013 apontou?" — lê os achados sem gastar outra rodada de IA;
@@ -57,7 +60,7 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 
 ## :claude: Conectar no Claude Desktop / claude.ai
 
-1. Abra **Settings → Connectors → Add custom connector**.
+1. Abra **Personalizar → Conectores → Adicionar conector personalizado** (em inglês: *Customize → Connectors → Add custom connector*).
 2. Informe a URL `:url_mcp:`.
 3. Conclua a autorização no navegador (mesmo fluxo: login do IntellexIA + botão **Autorizar**).
 
@@ -130,6 +133,61 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `listar_processos` | Processos com fase atual, partes e valor da causa | Sistema |
 | `detalhar_processo` | Processo completo: histórico de fases, benefícios vinculados, teses e decisões | Sistema |
 
+### 📖 Base de Jurisprudência
+
+As decisões FAP do escritório (sentenças, acórdãos e embargos) — as mesmas da **Base de Conhecimento** do Painel de Processos.
+
+| Ferramenta | O que faz | Origem |
+|---|---|---|
+| `pesquisar_jurisprudencia` | Pesquisa por palavras (com sinônimos), expressão entre aspas ou **número do processo**, com filtros de tese, tribunal, resultado e instância; traz a **citação pronta** e o trecho encontrado. Também busca no **inteiro teor** | Sistema |
+| `detalhar_decisao` | Tudo de uma decisão: motivo, ementa, fundamentos, argumentos acolhidos e rejeitados, precedentes e as outras peças do mesmo processo | Sistema |
+| `panorama_jurisprudencia` | "Qual a chance da tese X no TRF4?": resultados por tribunal e instância, processos que **viraram no acórdão** e as favoráveis mais recentes | Cálculo |
+| `decisoes_parecidas` | Decisões que discutem o mesmo ponto com outras palavras, por semelhança de conteúdo | IA |
+| `valores_de_filtro_jurisprudencia` | Teses, tribunais, instâncias e resultados que existem na base, com contagem — a IA consulta antes de filtrar | Sistema |
+| `exportar_jurisprudencia_excel` | Planilha com as decisões filtradas (teses, resultado, fundamentos, ementa, citação e link), até 50 mil linhas | Relatório |
+
+> [!ALERTA] Quando a ementa foi **resumida** pela IA na leitura do PDF, a decisão avisa: resumo não pode ser citado entre aspas como se fosse transcrição.
+
+> [!INFO] **Duas teses por decisão, dois filtros.** A **tese original** é a que veio escrita na decisão — grafias que só diferem em acento ou maiúsculas contam juntas. A **tese do catálogo** é a padronizada do escritório, a mesma usada na geração da peça. Pode pedir pelas duas: "decisões com a tese original *acidente de trajeto*" ou "decisões da tese do catálogo *Trajeto - B91*".
+
+> [!IA] **Sem termo, é a listagem completa**, paginada, com os filtros que você pedir ("todas as decisões do TRF4 de 2025"). Para a base inteira de uma vez, peça a **planilha**. A busca no **inteiro teor** só alcança as decisões com PDF no sistema — a resposta diz quantas são — e nela valem só os filtros de tribunal, resultado e instância.
+
+Exemplos:
+
+- "Qual a chance da tese de trajeto no TRF4?" — o panorama, com as viradas no acórdão;
+- "Me traz as decisões favoráveis de 2025 sobre rotatividade, com a citação pronta";
+- "O que diz o acórdão do processo 5083928-14.2021.4.04.7100?";
+- "Tem decisão parecida com essa?";
+- "Exporta todas as sentenças do TRF3 em planilha".
+
+### 📡 Monitoramento de Processos
+
+As publicações (intimações, citações, editais) que o radar captura no Diário de Justiça Eletrônico pelas OABs do escritório — as mesmas da tela **Monitoramento de Processos**.
+
+| Ferramenta | O que faz | Origem |
+|---|---|---|
+| `listar_comunicacoes` | Publicações com os filtros da tela: tribunal, tipo, advogado, **número do processo**, período e **só as não lidas** | Sistema |
+| `detalhar_comunicacao` | O **inteiro teor** de uma publicação, com processo, órgão, destinatários, advogados intimados e link do documento original | Sistema |
+| `explicar_comunicacao` | Explica a publicação em linguagem clara: **prazo**, providência exigida e **urgência** | IA |
+| `comunicacoes_do_processo` | **Linha do tempo** das publicações de um processo e se ele está no Painel de Processos; opcionalmente consulta o Diário de Justiça **ao vivo**, para processo fora do radar | Sistema |
+| `resumo_monitoramento` | Visão geral do período: total, não lidas, distribuição por tribunal e tipo, advogados monitorados e os que estão **fora do radar** | Cálculo |
+
+> [!IA] A explicação é gerada **uma vez** por publicação e fica guardada: pedir de novo é instantâneo e não gasta IA. É apoio à triagem — confira sempre prazo e teor no processo oficial.
+
+> [!INFO] A consulta **ao vivo** mostra o que o Diário de Justiça tem sobre o processo, mas **não grava** nada no sistema: o radar só guarda o que pertence às OABs monitoradas. Ela exige o número completo (20 dígitos).
+
+### 🔢 Como informar o número do processo
+
+Em todas as ferramentas que buscam por processo (`listar_processos`, `listar_comunicacoes`, `comunicacoes_do_processo`), o número pode ser digitado **de qualquer jeito**:
+
+| Você digita | Encontra |
+|---|---|
+| `5001181-56.2023.4.03.6100` | o processo |
+| `50011815620234036100` | o mesmo processo |
+| `5001181` | os processos com esse trecho — basta o número sequencial |
+
+> [!ALERTA] São necessários **pelo menos 7 dígitos**. Um pedaço menor, como o ano `2023`, casaria com boa parte da base — a IA recebe o aviso e pede o número completo.
+
 ### 🧰 Utilidades
 
 | Ferramenta | O que faz | Origem |
@@ -162,8 +220,10 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 
 ## Comandos prontos
 
-Além das ferramentas, o IntellexIA publica **comandos prontos** (prompts MCP) que aparecem
-no menu do assistente — no Claude Code, digite `/` e procure por `intellexia`:
+Além das ferramentas, o IntellexIA publica **comandos prontos** (prompts MCP): roteiros
+completos que você dispara em um clique, sem precisar escrever o pedido. No Claude Code,
+digite `/` e procure por `intellexia`; no Claude Desktop / claude.ai, eles ficam no botão
+**+** da conversa, no item do conector IntellexIA:
 
 | Comando | O que faz |
 |---|---|
@@ -193,7 +253,8 @@ O acesso da IA **espelha as suas permissões** no IntellexIA:
 | Base de Conhecimento (consulta e pesquisa) | Base de Conhecimento |
 | Painel FAP (consultas, análises e relatórios Excel) | Painel FAP |
 | CATs, folha de pagamento, vínculos e rotatividade | Painel de Contestações |
-| Processos judiciais | Painel de Processos |
+| Processos judiciais e Base de Jurisprudência | Painel de Processos |
+| Publicações do Diário de Justiça (monitoramento) | Monitoramento de Processos |
 | Revisor de petições | Revisor de Petições |
 | Consulta de CNPJ | Qualquer usuário logado (dados públicos) |
 

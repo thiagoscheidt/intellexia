@@ -145,6 +145,19 @@ def digitos(texto) -> str:
     return re.sub(r'\D', '', str(texto or ''))
 
 
+_CNJ = re.compile(r'(?<!\d)(\d{7})\D?(\d{2})\D?(\d{4})\D?(\d)\D?(\d{2})\D?(\d{4})(?!\d)')
+
+
+def numero_cnj(texto) -> Optional[str]:
+    """O número CNJ (20 dígitos) citado no meio de um texto, com ou sem pontuação.
+
+    Juntar todos os dígitos do texto não serve: em "TRF4 AC 5003321-10.2023…" o
+    "4" do tribunal entraria na frente e o número nunca casaria com a base.
+    """
+    m = _CNJ.search(str(texto or ''))
+    return ''.join(m.groups()) if m else None
+
+
 def parece_numero_de_processo(consulta: str) -> bool:
     """Consulta que é só um número de processo (com ou sem pontuação)."""
     consulta = (consulta or '').strip()

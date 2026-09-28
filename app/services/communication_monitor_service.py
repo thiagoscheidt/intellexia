@@ -35,6 +35,7 @@ from app.models import (
 )
 from app.services.comunica_pje_client import ComunicaPjeClient, ComunicaPjeError, only_digits
 from app.services import datajud_snapshot_service
+from app.utils.cnj import filtro_numero_processo
 
 logger = logging.getLogger(__name__)
 
@@ -542,11 +543,13 @@ def communications_query(law_firm_id, sigla_tribunal=None, tipo_comunicacao=None
     if lawyer_id:
         query = query.filter(ProcessCommunication.matched_lawyer_id == lawyer_id)
     if numero_processo:
-        digits = only_digits(numero_processo)
-        query = query.filter(or_(
-            ProcessCommunication.numero_processo == digits,
-            ProcessCommunication.numero_processo_mascara.ilike(f'%{numero_processo}%'),
-        ))
+        try:
+            query = query.filter(filtro_numero_processo(
+                numero_processo, coluna_digitos=ProcessCommunication.numero_processo))
+        except ValueError:
+            # Poucos dígitos: a tela mantém a busca livre no número mascarado.
+            query = query.filter(
+                ProcessCommunication.numero_processo_mascara.ilike(f'%{numero_processo}%'))
     if only_unread:
         query = query.filter(ProcessCommunication.read_at.is_(None))
     if date_from:

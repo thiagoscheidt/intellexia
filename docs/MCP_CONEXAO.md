@@ -88,6 +88,12 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `exportar_contestacoes_excel` | Planilha XLSX das contestações filtradas (link assinado, 1 h de validade) |
 | `listar_processos` | Processos judiciais com fase atual |
 | `detalhar_processo` | Processo completo: fases, benefícios, teses e decisões |
+| `pesquisar_jurisprudencia` | Base de Jurisprudência: busca com sinônimos (modo `campos`) ou no inteiro teor (`inteiro_teor`), filtros por tese original/do catálogo, resultado, tribunal, instância, UF, vigência e período; sem termo é a listagem completa (paginada) |
+| `detalhar_decisao` | Decisão completa: motivo, ementa (transcrição ou resumo), fundamentos, argumentos, precedentes (com id quando estão na base), teses e trilha do processo |
+| `panorama_jurisprudencia` | Resultados por tribunal e instância, viradas no acórdão e favoráveis recentes de um recorte |
+| `valores_de_filtro_jurisprudencia` | Teses do catálogo e originais, tribunais, instâncias, resultados, UFs e vigências existentes, com contagem |
+| `decisoes_parecidas` | Decisões semanticamente próximas de uma decisão (índice próprio da jurisprudência) |
+| `exportar_jurisprudencia_excel` | Planilha XLSX das decisões filtradas (link assinado, 1 h de validade) |
 | `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (OpenCNPJ/Receita) — qualquer usuário logado |
 | `revisar_peticao_inicial` | Revisão real com o FapPetitionReviewerAgent (prompts/referências do escritório). Com `identificador_documento`, registra a revisão no módulo (petição, histórico, custo, status) |
 | `listar_peticoes_revisao` | Petições do Revisor com workflow_status, nº de revisões e última revisão (paginada) |
@@ -138,7 +144,7 @@ Exemplos de uso no Claude:
 | `consultar_base_conhecimento`, `pesquisar_base_conhecimento` | Base de Conhecimento |
 | `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel` | Painel FAP |
 | `listar_cats_fap`, `listar_massas_salariais_fap`, `listar_vinculos_fap`, `listar_rotatividade_fap` | Painel de Contestações |
-| `listar_processos`, `detalhar_processo` | Painel de Processos |
+| `listar_processos`, `detalhar_processo`, `pesquisar_jurisprudencia`, `detalhar_decisao`, `panorama_jurisprudencia`, `valores_de_filtro_jurisprudencia`, `decisoes_parecidas`, `exportar_jurisprudencia_excel` | Painel de Processos |
 | `revisar_peticao_inicial`, `listar_peticoes_revisao`, `detalhar_revisao`, `historico_revisoes_peticao`, `comparar_versoes_peticao`, `ler_manual_revisor`, `versoes_manual_revisor`, `auditoria_revisor` | Revisor de Petições |
 | `estatisticas_revisor` | Revisor de Petições **+ papel de administrador** (espelha o `require_admin_user` da tela) |
 

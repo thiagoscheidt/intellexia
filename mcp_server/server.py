@@ -7,6 +7,7 @@ Expõe ferramentas de:
   - Base de conhecimento (RAG)          [módulo knowledge_base]
   - Painel FAP e contestações           [módulo fap_panel]
   - Painel de processos judiciais       [módulo process_panel]
+  - Base de Jurisprudência              [módulo process_panel]
   - Monitoramento de Processos (DJEN)   [módulo communications]
   - Revisor de petições iniciais (stub) [módulo fap_review]
 
@@ -99,6 +100,14 @@ from mcp_server.tools.petition_review_read import (
     review_audit_log_handler,
 )
 from mcp_server.tools.utilities import consultar_cnpj_handler
+from mcp_server.tools.jurisprudence import (
+    decision_detail_handler,
+    export_jurisprudence_excel_handler,
+    jurisprudence_filter_values_handler,
+    jurisprudence_overview_handler,
+    search_jurisprudence_handler,
+    similar_decisions_handler,
+)
 from mcp_server.tools.insights import (
     prazos_e_alertas_handler,
     comparar_vigencias_handler,
@@ -829,7 +838,8 @@ def listar_processos(
 
     Args:
         status: ativo, suspenso, encerrado ou aguardando (opcional).
-        numero_processo: Número CNJ (busca parcial, opcional).
+        numero_processo: Número CNJ com ou sem pontuação, completo ou parcial
+            (mínimo 7 dígitos) — opcional.
         limite: Número máximo de registros (padrão 50).
         deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
             'proximo_deslocamento' que veio na resposta anterior.
@@ -861,6 +871,186 @@ def detalhar_processo(processo_id: int) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# BASE DE JURISPRUDÊNCIA (decisões FAP do escritório)
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# Cada decisão tem N teses em dois campos: a ORIGINAL (como veio escrita) e a do
+# CATÁLOGO (padronizada pelo escritório). Resultado é sempre na visão da empresa.
+
+
+@mcp.tool()
+def pesquisar_jurisprudencia(
+    termo: str | None = None,
+    modo: str = "campos",
+    teses_catalogo: list[str] | None = None,
+    teses_originais: list[str] | None = None,
+    resultados: list[str] | None = None,
+    tribunais: list[str] | None = None,
+    instancias: list[str] | None = None,
+    uf: str | None = None,
+    vigencia: int | None = None,
+    julgada_de: str | None = None,
+    julgada_ate: str | None = None,
+    ordem: str = "recentes",
+    limite: int = 20,
+    deslocamento: int = 0,
+) -> dict:
+    """Pesquisa a base de jurisprudência do escritório (sentenças, acórdãos e embargos FAP).
+
+    Sem termo, lista a base inteira (paginada) com os filtros dados. Com termo:
+    todas as palavras precisam aparecer, com sinônimos (trajeto acha percurso e
+    in itinere); aspas juntam uma expressão; número de processo vale com ou sem
+    pontuação. Cada item traz a citação pronta para a peça, o trecho onde o termo
+    aparece («assim») e o link da decisão.
+
+    Args:
+        termo: Palavras, expressão entre aspas ou número de processo (opcional).
+        modo: "campos" (padrão: resumo, motivo, ementa, teses, fundamentos) ou
+            "inteiro_teor" (texto completo das decisões com PDF indexado; aí só
+            valem os filtros de tribunal, resultado e instância).
+        teses_catalogo: Teses padronizadas do escritório (nomes de valores_de_filtro_jurisprudencia).
+        teses_originais: Teses como vieram escritas na decisão (acento/caixa não importam).
+        resultados: favoravel, parcial e/ou desfavoravel — sempre para a EMPRESA.
+        tribunais: Siglas, ex.: ["TRF4", "TRF3", "STJ"].
+        instancias: sentenca, acordao, embargos e/ou outra.
+        uf: UF de origem (ex.: "SC").
+        vigencia: Ano de vigência FAP coberto pela decisão (ex.: 2019 casa "2017 a 2021").
+        julgada_de: Data mínima de julgamento, YYYY-MM-DD.
+        julgada_ate: Data máxima de julgamento, YYYY-MM-DD.
+        ordem: recentes (padrão), instancia (acórdão/tribunal superior primeiro) ou favoraveis.
+        limite: Itens por página (padrão 20, máximo 200).
+        deslocamento: Paginação — repita o 'proximo_deslocamento' da resposta anterior.
+
+    Returns:
+        Envelope paginado com 'itens', 'total_encontrado', 'processos_distintos' e
+        'como_tem_decidido' (favorável/parcial/desfavorável do recorte todo).
+    """
+    claims = require_module("process_panel")
+    with app.app_context():
+        return search_jurisprudence_handler(
+            claims["law_firm_id"], APP_PUBLIC_URL, modo=modo, limite=limite, deslocamento=deslocamento,
+            termo=termo, teses_catalogo=teses_catalogo, teses_originais=teses_originais,
+            resultados=resultados, tribunais=tribunais, instancias=instancias, uf=uf,
+            vigencia=vigencia, julgada_de=julgada_de, julgada_ate=julgada_ate, ordem=ordem,
+        )
+
+
+@mcp.tool()
+def detalhar_decisao(decisao_id: int) -> dict:
+    """Tudo de uma decisão da base de jurisprudência.
+
+    Motivo do resultado, resumo do caso, ementa (e se é transcrição ou resumo —
+    resumo não pode ser citado entre aspas), fundamentos do julgador, argumentos
+    da empresa acolhidos e rejeitados, precedentes citados (marcando os que também
+    estão na base), teses originais e do catálogo, citação pronta e as outras
+    decisões do mesmo processo (sentença → acórdão → embargos).
+
+    Args:
+        decisao_id: ID da decisão (vem de pesquisar_jurisprudencia).
+    """
+    claims = require_module("process_panel")
+    with app.app_context():
+        return decision_detail_handler(decisao_id, claims["law_firm_id"], APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def panorama_jurisprudencia(
+    termo: str | None = None,
+    teses_catalogo: list[str] | None = None,
+    teses_originais: list[str] | None = None,
+    tribunais: list[str] | None = None,
+    instancias: list[str] | None = None,
+    uf: str | None = None,
+    vigencia: int | None = None,
+    julgada_de: str | None = None,
+    julgada_ate: str | None = None,
+) -> dict:
+    """Como os tribunais têm decidido num recorte da base — uma chamada, sem paginar.
+
+    Use para perguntas do tipo "qual a chance da tese X no TRF4?": devolve a
+    distribuição de resultados (visão da empresa), a mesma distribuição por
+    tribunal e por instância, os processos que VIRARAM no acórdão (sentença
+    perdida, acórdão melhor — os precedentes mais fortes) e as decisões
+    favoráveis mais recentes com citação pronta.
+
+    Args: os mesmos filtros de pesquisar_jurisprudencia (sem resultado, que é o que se mede).
+    """
+    claims = require_module("process_panel")
+    with app.app_context():
+        return jurisprudence_overview_handler(
+            claims["law_firm_id"], APP_PUBLIC_URL,
+            termo=termo, teses_catalogo=teses_catalogo, teses_originais=teses_originais,
+            tribunais=tribunais, instancias=instancias, uf=uf, vigencia=vigencia,
+            julgada_de=julgada_de, julgada_ate=julgada_ate,
+        )
+
+
+@mcp.tool()
+def valores_de_filtro_jurisprudencia() -> dict:
+    """Valores que existem na base de jurisprudência, com contagem de decisões.
+
+    Consulte antes de filtrar para usar os nomes exatos: teses do catálogo, teses
+    originais (como vieram nas decisões), tribunais, instâncias, resultados, UFs,
+    anos de vigência FAP e o período de julgamento coberto pela base.
+    """
+    claims = require_module("process_panel")
+    with app.app_context():
+        return jurisprudence_filter_values_handler(claims["law_firm_id"])
+
+
+@mcp.tool()
+def decisoes_parecidas(decisao_id: int, limite: int = 6) -> dict:
+    """Decisões da base com conteúdo mais parecido com o de uma decisão.
+
+    Compara por semelhança de conteúdo (índice próprio da base de jurisprudência),
+    não por palavra nem por tese — acha a decisão que discute o mesmo ponto com
+    outras palavras ou outra tese registrada.
+
+    Args:
+        decisao_id: ID da decisão de referência.
+        limite: Quantas devolver (padrão 6, máximo 20).
+    """
+    claims = require_module("process_panel")
+    with app.app_context():
+        return similar_decisions_handler(decisao_id, claims["law_firm_id"], APP_PUBLIC_URL, limite)
+
+
+@mcp.tool()
+def exportar_jurisprudencia_excel(
+    termo: str | None = None,
+    teses_catalogo: list[str] | None = None,
+    teses_originais: list[str] | None = None,
+    resultados: list[str] | None = None,
+    tribunais: list[str] | None = None,
+    instancias: list[str] | None = None,
+    uf: str | None = None,
+    vigencia: int | None = None,
+    julgada_de: str | None = None,
+    julgada_ate: str | None = None,
+    ordem: str = "recentes",
+) -> dict:
+    """Exporta decisões da base de jurisprudência para Excel (XLSX) e retorna o link de download.
+
+    Use quando o usuário pedir a lista inteira ou uma planilha, em vez de paginar
+    no chat. Mesmos filtros de pesquisar_jurisprudencia (modo "campos"); uma linha
+    por decisão com teses, resultado, fundamentos, argumentos, precedentes,
+    ementa, citação e link. Até 50.000 linhas; o link expira em 1 hora.
+
+    Returns:
+        'arquivo', 'total_linhas', 'url_download' e 'validade_minutos'.
+        Apresente o url_download ao usuário como link clicável.
+    """
+    claims = require_module("process_panel")
+    with app.app_context():
+        return export_jurisprudence_excel_handler(
+            claims["law_firm_id"], MCP_PUBLIC_URL, APP_PUBLIC_URL,
+            termo=termo, teses_catalogo=teses_catalogo, teses_originais=teses_originais,
+            resultados=resultados, tribunais=tribunais, instancias=instancias, uf=uf,
+            vigencia=vigencia, julgada_de=julgada_de, julgada_ate=julgada_ate, ordem=ordem,
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # MONITORAMENTO DE PROCESSOS (comunicações do DJEN)
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -888,7 +1078,8 @@ def listar_comunicacoes(
         tipo: Tipo de comunicação (ex.: Intimação) — opcional.
         fonte: Fonte da informação (hoje: comunica_pje) — opcional.
         advogado_id: Restringe às comunicações capturadas pela OAB desse advogado.
-        numero_processo: Número CNJ (aceita máscara ou só dígitos) — opcional.
+        numero_processo: Número CNJ com ou sem pontuação, completo ou parcial
+            (mínimo 7 dígitos) — opcional.
         somente_nao_lidas: True para ver apenas o que aguarda leitura.
         data_de: Data inicial de disponibilização (YYYY-MM-DD) — opcional.
         data_ate: Data final de disponibilização (YYYY-MM-DD) — opcional.
@@ -959,8 +1150,8 @@ def comunicacoes_do_processo(
     não são gravados na base.
 
     Args:
-        numero_processo: Número CNJ, com ou sem máscara (busca local aceita
-            parcial; a busca ao vivo exige os 20 dígitos completos).
+        numero_processo: Número CNJ com ou sem pontuação (busca local aceita
+            parcial, mínimo 7 dígitos; a busca ao vivo exige os 20 dígitos).
         buscar_na_fonte: True para consultar também o DJEN ao vivo (mais lento;
             sujeito ao rate limit da API pública).
         limite: Número máximo de registros da base local (padrão 50).

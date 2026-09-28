@@ -9,13 +9,29 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='css/process_knowledge.css') }}">
 {% endblock %}
 
-{% macro faceta(titulo, chave, contagem, nomes, selecionados, limite=8) %}
+{% macro faceta(titulo, chave, contagem, nomes, selecionados, limite=8, buscavel=False, ajuda='') %}
 {% set itens = contagem.items() | list %}
 {% for sel in selecionados if sel not in contagem %}{% set _ = itens.append((sel, 0)) %}{% endfor %}
 {% set itens = itens | sort(attribute='1', reverse=True) %}
 {% if itens %}
 <div class="facet">
-  <h6>{{ titulo }}</h6>
+  <h6>{{ titulo }}{% if ajuda %} <i class="bi bi-info-circle" title="{{ ajuda }}"></i>{% endif %}</h6>
+  {% if buscavel and itens | length > limite %}
+  {# Lista longa (as teses originais passam de 200): tudo numa área rolável,
+     com o que está marcado no topo e um campo que filtra enquanto digita. #}
+  <input type="search" class="form-control form-control-sm mb-1 js-filtra-faceta" data-alvo="lista-{{ chave }}"
+         placeholder="Filtrar {{ itens | length }} itens…" aria-label="Filtrar {{ titulo }}">
+  <div class="facet-rolavel" id="lista-{{ chave }}">
+    {% for valor, n in (itens | selectattr('0', 'in', selecionados) | list) + (itens | rejectattr('0', 'in', selecionados) | list) %}
+    {% set ligado = valor in selecionados %}
+    <a class="facet-item {{ 'on' if ligado }}" href="{{ alternar(chave, valor) }}" data-busca="{{ (nomes.get(valor, valor) if nomes else valor) | lower }}">
+      <span class="rotulo"><i class="bi {{ 'bi-check2-square' if ligado else 'bi-square' }} me-1"></i>{{ nomes.get(valor, valor) if nomes else valor }}</span>
+      <span class="n">{{ n }}</span>
+    </a>
+    {% endfor %}
+    <div class="small text-body-secondary px-1 d-none js-sem-itens">nada com esse texto</div>
+  </div>
+  {% else %}
   {% for valor, n in itens %}
   {% set ligado = valor in selecionados %}
   {% if loop.index == limite + 1 %}<div class="collapse" id="mais-{{ chave }}">{% endif %}
@@ -27,6 +43,7 @@
   <a class="small" data-bs-toggle="collapse" href="#mais-{{ chave }}" role="button">+ {{ loop.length - limite }} {{ 'itens' }}</a>
   {% endif %}
   {% endfor %}
+  {% endif %}
 </div>
 {% endif %}
 {% endmacro %}
@@ -96,7 +113,7 @@
         <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>Buscar</button>
       </div>
     </div>
-    {% for chave in ['tese', 'tese_livre', 'resultado', 'tribunal', 'tipo', 'uf', 'vigencia', 'de', 'ate', 'ordem', 'agrupar', 'livres'] %}
+    {% for chave in ['tese', 'tese_livre', 'resultado', 'tribunal', 'tipo', 'uf', 'vigencia', 'de', 'ate', 'ordem', 'agrupar', 'original'] %}
       {% for v in request.args.getlist(chave) %}<input type="hidden" name="{{ chave }}" value="{{ v }}">{% endfor %}
     {% endfor %}
   </div>
@@ -110,16 +127,18 @@
         {% if filtros.ativos %}<a href="{{ url_for('jurisprudence.index', q=filtros.q or None) }}" class="small">limpar</a>{% endif %}
       </div>
 
-      {% if mostrar_livres %}
-        {{ faceta('Tese (como veio na decisão)', 'tese_livre', r.facetas.teses, r.nomes_teses, filtros.teses) }}
-      {% else %}
-        {{ faceta('Tese (catálogo)', 'tese', r.facetas.catalogo, r.nomes_catalogo, filtros.catalogo) }}
-      {% endif %}
-      <div class="form-check form-switch small mt-1 mb-2">
-        <input class="form-check-input" type="checkbox" id="sw-livres" {{ 'checked' if mostrar_livres }}
-               onchange="window.location='{{ com(livres=None if mostrar_livres else '1', tese=None, tese_livre=None) }}'">
-        <label class="form-check-label" for="sw-livres">ver teses como vieram na decisão</label>
+      {% if filtros.teses %}
+      {# Vem do link de contagem da tela de Correspondência de teses: é a tese
+         agrupada (com as grafias mescladas nela), não um filtro da lateral. #}
+      <div class="alert alert-light border small py-1 px-2 mb-2">
+        {% for t_id in filtros.teses %}Tese da correspondência: <strong>{{ r.nomes_teses.get(t_id, t_id) }}</strong>{{ '; ' if not loop.last }}{% endfor %}
+        <a href="{{ com(tese_livre=None) }}" class="ms-1">remover</a>
       </div>
+      {% endif %}
+      {{ faceta('Tese do catálogo', 'tese', r.facetas.catalogo, r.nomes_catalogo, filtros.catalogo,
+                ajuda='Tese padronizada do escritório, pela correspondência de teses. É a usada na geração da peça.') }}
+      {{ faceta('Tese original', 'original', r.facetas.originais, r.nomes_originais, filtros.originais, 8, True,
+                'Como veio escrita na decisão. Grafias que só diferem em acento ou maiúsculas contam juntas.') }}
 
       <div class="facet">
         <h6>Resultado</h6>
@@ -145,7 +164,7 @@
       </div>
 
       <form method="get" id="form-filtros-extras">
-        {% for chave in ['q', 'tese', 'tese_livre', 'resultado', 'tribunal', 'tipo', 'ordem', 'agrupar', 'livres', 'modo'] %}
+        {% for chave in ['q', 'tese', 'tese_livre', 'resultado', 'tribunal', 'tipo', 'ordem', 'agrupar', 'original', 'modo'] %}
           {% for v in request.args.getlist(chave) %}<input type="hidden" name="{{ chave }}" value="{{ v }}">{% endfor %}
         {% endfor %}
         <div class="facet">
@@ -294,7 +313,7 @@
 
       {% if c.teses %}
       <div class="mb-2">
-        {% for t in c.teses[:6] %}<a class="tese-chip {{ 'destaque' if t.destaque }} text-decoration-none" href="{{ com(tese_livre=t.id, livres='1', tese=None) }}" title="filtrar por esta tese">{{ t.nome }}</a>{% endfor %}
+        {% for t in c.teses[:6] %}<a class="tese-chip {{ 'destaque' if t.destaque }} text-decoration-none" href="{{ alternar('original', t.chave) }}" title="filtrar por esta tese original">{{ t.nome }}</a>{% endfor %}
         {% if c.teses | length > 6 %}<span class="tese-chip">+{{ c.teses | length - 6 }}</span>{% endif %}
       </div>
       {% endif %}
@@ -374,4 +393,26 @@
 {% endif %}
 </div>
 {{ script_copiar() }}
+<script>
+  // Filtro por digitação nas facetas longas (tese original): sem acento e sem caixa.
+  (function () {
+    const simples = t => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    document.querySelectorAll('.js-filtra-faceta').forEach(function (campo) {
+      const lista = document.getElementById(campo.dataset.alvo);
+      if (!lista) return;
+      const itens = Array.from(lista.querySelectorAll('.facet-item'));
+      const vazio = lista.querySelector('.js-sem-itens');
+      campo.addEventListener('input', function () {
+        const alvo = simples(campo.value.trim());
+        let visiveis = 0;
+        itens.forEach(function (item) {
+          const mostra = !alvo || simples(item.dataset.busca).includes(alvo);
+          item.classList.toggle('d-none', !mostra);
+          visiveis += mostra ? 1 : 0;
+        });
+        if (vazio) vazio.classList.toggle('d-none', visiveis > 0);
+      });
+    });
+  })();
+</script>
 {% endblock %}

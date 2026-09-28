@@ -156,8 +156,9 @@ intellexia/
 
 ### Documentação do usuário (Manual + Assistente "pergunte ao manual")
 
-O manual de uso dos painéis tem **fonte única em Markdown**: `docs/MANUAL_DASHBOARD.md`, `docs/MANUAL_PAINEL_FAP.md`, `docs/MANUAL_PAINEL_CONTESTACOES.md`, `docs/MANUAL_REVISOR_PETICOES.md`. **Edite apenas esses `.md`** (novo manual = novo `.md` + registrar em `_MANUALS` no `manual_renderer.py` e em `_MANUAL_FILES` no `manual_assistant_service.py`) — a página `/docs/manuais` é renderizada em runtime a partir deles (cache por mtime). Não há HTML a gerar/manter manualmente; não existe mais `docs/manual_paineis.html`.
+O manual de uso dos painéis tem **fonte única em Markdown**: `docs/MANUAL_DASHBOARD.md`, `docs/MANUAL_PAINEL_FAP.md`, `docs/MANUAL_PAINEL_CONTESTACOES.md`, `docs/MANUAL_REVISOR_PETICOES.md`, `docs/MANUAL_BASE_CONHECIMENTO.md` (Base de Conhecimento do Painel de Processos: jurisprudência e peças-modelo). **Edite apenas esses `.md`** (novo manual = novo `.md` + registrar em `_MANUALS` no `manual_renderer.py` e em `_MANUAL_FILES` no `manual_assistant_service.py`) — a página `/docs/manuais` é renderizada em runtime a partir deles (cache por mtime). Não há HTML a gerar/manter manualmente; não existe mais `docs/manual_paineis.html`.
 
+- **Catálogo do MCP**: o modal "Conectar sua IA" (header) lista ferramentas e comandos lidos das tabelas do `docs/MANUAL_MCP.md` (`mcp_catalog_service`) — não há lista no template. Ferramenta ou prompt novo no `mcp_server/server.py` = linha na tabela do manual + ajuste do "**N ferramentas**"; `uv run python tests/test_mcp_catalogo.py` compara o servidor (por AST) com o manual e falha no que faltar.
 - **Pipeline de render**: `app/services/manual_renderer.py` (markdown-it-py + BeautifulSoup) → template `templates/docs/manuais.html`. Rota em `app/blueprints/docs.py`.
 - **Convenções de realce no markdown** (interpretadas pelo renderer):
   - Avisos coloridos: citação (`>`) com marcador na 1ª linha — `> [!DOU]` (dourado/Diário Oficial), `> [!ALERTA]` (âmbar), `> [!INFO]` (azul), `> [!IA]` (roxo); `>` sem marcador = callout neutro.
@@ -550,6 +551,16 @@ e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
   `tese_id` têm nomes diferentes de propósito**: com os dois chamados `id`, o
   modelo trocava um pelo outro ("id 6" era ERRO NA BASE ESTATISTICA na base e
   "60 DIAS" no catálogo) e sugeria ligação absurda com motivo coerente.
+- **Dois campos de tese, dois filtros.** *Tese original* é o texto exato que
+  veio da decisão (`teses_brutas_json`, N por decisão, gravado sem mudar caixa
+  nem acento). O filtro agrupa só por acento e maiúsculas (`norm.chave`) — a
+  ferramenta anterior gravava ora "PRORROGAÇÃO", ora "PRORROGACAO", e separadas
+  o filtro devolveria parte das decisões sem avisar — com o rótulo na grafia
+  **mais frequente** (empate fica com a acentuada). Nunca por sentido, e nunca
+  pela mescla da correspondência. *Tese do catálogo* é a padronizada, usada na
+  geração e na cobertura. O antigo interruptor "ver teses como vieram" filtrava
+  a tese agrupada/mesclada e foi removido; `?tese_livre=` continua só para o
+  link de contagem da tela de Teses.
 - **Busca em SQL + Python, sem Meilisearch**: escala de centenas a poucos
   milhares de decisões por escritório; nada de índice para reconstruir. Todos
   os termos (E), cada um expandido pelos sinônimos da ferramenta antiga; número
@@ -589,6 +600,23 @@ e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
   decisões). "Buscar PDFs no Drive" usa o baixador anônimo das peças-modelo e
   **para depois de 3 bloqueios seguidos**, para não martelar 500 links que vão
   falhar igual.
+- **MCP** (`mcp_server/tools/jurisprudence.py`, permissão `process_panel`, só
+  leitura e só esta base): `pesquisar_jurisprudencia` (modo `campos` ou
+  `inteiro_teor`; sem termo é a listagem completa paginada),
+  `detalhar_decisao`, `panorama_jurisprudencia` (resultado por tribunal e
+  instância, viradas no acórdão, favoráveis recentes),
+  `valores_de_filtro_jurisprudencia`, `decisoes_parecidas` e
+  `exportar_jurisprudencia_excel`. Todas passam por
+  `jurisprudence_search_service.decisoes_filtradas` — os mesmos filtros e
+  sinônimos da tela, com a ordem da tela e desempate pelo id. Filtro recebe
+  texto livre (tese pelo nome sem acento, "favorável", "sentença") e valor
+  inexistente vira `ToolError` apontando para `valores_de_filtro_jurisprudencia`.
+  No inteiro teor o índice não dá total exato (`total_e_minimo`) e só filtra
+  tribunal, resultado e instância — os demais filtros voltam em `filtros_ignorados`.
+- **Número de processo citado em texto sai por `norm.numero_cnj`**, nunca por
+  "todos os dígitos": em "TRF4 AC 5003321-10.2023…" o "4" do tribunal entrava na
+  frente e o precedente nunca casava com a base (medido: 0 de 1.710 precedentes
+  ligados; com o padrão CNJ, 199).
 - **Na geração da impugnação** o passo "Documentos" ganha "Jurisprudência a
   citar" por tese do catálogo (favoráveis, mesmo TRF, instância mais alta e mais
   recentes primeiro; desfavoráveis aparecem desmarcadas). A escolha vai em

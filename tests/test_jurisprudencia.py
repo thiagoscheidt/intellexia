@@ -311,6 +311,60 @@ def test_busca():
     check('trecho escapa HTML do texto', '&lt;b&gt;' in s.trecho('x <b> trajeto', [['trajeto']]))
 
 
+def test_tese_original():
+    """Dois campos de tese: a original (como veio) e a do catálogo.
+
+    A original é agrupada só por acento e maiúsculas — nunca por sentido, e
+    nunca pela mescla da correspondência, que serve para ligar ao catálogo.
+    """
+    print('\n4b. Tese original')
+    from werkzeug.datastructures import MultiDict
+    from app.models import JurisprudenceThesis as T
+    from app.services import jurisprudence_search_service as s
+    from app.services import jurisprudence_service as svc
+    from app.services import jurisprudence_thesis_service as ts
+
+    def buscar(*pares):
+        return s.buscar(1, s.Filtros.do_request(MultiDict(list(pares))))
+
+    r = buscar()
+    k = 'PRORROGACAO DE BENEFICIO'
+    check('PRORROGAÇÃO e PRORROGACAO contam juntas no filtro', r['facetas']['originais'].get(k) == 2,
+          r['facetas']['originais'].get(k))
+    check('no empate, o rótulo fica com a grafia acentuada',
+          r['nomes_originais'].get(k) == 'PRORROGAÇÃO DE BENEFÍCIO', r['nomes_originais'].get(k))
+    check('filtro aceita o texto como veio (com acento) na URL',
+          buscar(('original', 'Prorrogação de benefício'))['total'] == 2)
+    tres = buscar(('original', 'ACIDENTE DE TRAJETO'), ('original', 'TAXA DE ROTATIVIDADE'))
+    check('duas teses marcadas = decisões com qualquer uma', tres['total'] == 3, tres['total'])
+    sentenca = buscar(('q', '5003321-10.2023.4.04.7207'))['cartoes'][0]
+    check('decisão com 3 teses mostra as 3 originais no cartão',
+          [t['nome'] for t in sentenca['teses']] == ['ACIDENTE DE TRAJETO', 'PRORROGACAO DE BENEFICIO', 'TAXA DE ROTATIVIDADE'],
+          [t['nome'] for t in sentenca['teses']])
+    for tese in ('ACIDENTE DE TRAJETO', 'PRORROGACAO DE BENEFICIO', 'TAXA DE ROTATIVIDADE'):
+        check(f'e aparece no filtro de {tese}',
+              any(c['processo'].startswith('5003321') for c in buscar(('original', tese))['cartoes']))
+    marcado = buscar(('original', 'TAXA DE ROTATIVIDADE'))['cartoes'][0]['teses']
+    check('chip da tese filtrada vem destacado e primeiro', marcado[0]['destaque'] and marcado[0]['chave'] == 'TAXA DE ROTATIVIDADE')
+
+    antes = buscar()['facetas']['originais']
+    trajeto = T.query.filter_by(law_firm_id=1, key='ACIDENTE DE TRAJETO').first()
+    rot = T.query.filter_by(law_firm_id=1, key='TAXA DE ROTATIVIDADE').first()
+    ts.mesclar(1, rot.id, trajeto.id)
+    depois = buscar()['facetas']['originais']
+    check('mesclar na correspondência não muda o filtro de tese original', antes == depois)
+    ts.desfazer_mescla(1, rot.id)
+
+    d = svc.criar_decisao(1, {'processo': '5000000-00.2026.4.04.7200', 'tipo_documento': 'SENTENCA',
+                              'resultado': 'FAVORAVEL', 'teses': ['Tese Escrita em Minúsculas']},
+                          source='pdf', resolvedor=svc.ResolvedorDeTeses(1))
+    db.session.flush()
+    check('a tese original é gravada exatamente como veio', d.teses_brutas_json == ['Tese Escrita em Minúsculas'])
+    check('tese nova ganha o nome com a grafia original', d.theses[0].name == 'Tese Escrita em Minúsculas')
+    db.session.delete(d)
+    db.session.commit()
+
+
 def test_correcao_manual():
     print('\n5. Correção manual sobrevive ao reprocessamento')
     from app.models import JurisprudenceDecision as D
@@ -591,7 +645,7 @@ def test_rotas():
         return cliente.get(url, follow_redirects=False)
 
     for url in ('/process-panel/jurisprudencia/', '/process-panel/jurisprudencia/?q=trajeto&tribunal=TRF4',
-                '/process-panel/jurisprudencia/?agrupar=decisao&livres=1', '/process-panel/jurisprudencia/teses',
+                '/process-panel/jurisprudencia/?agrupar=decisao&original=ACIDENTE+DE+TRAJETO', '/process-panel/jurisprudencia/teses',
                 '/process-panel/jurisprudencia/teses?filtro=todas', '/process-panel/jurisprudencia/enviar',
                 '/process-panel/jurisprudencia/importar'):
         resp = get(url)
@@ -863,6 +917,7 @@ def main():
         test_importacao()
         test_teses()
         test_busca()
+        test_tese_original()
         test_correcao_manual()
         test_agente()
         test_fila()

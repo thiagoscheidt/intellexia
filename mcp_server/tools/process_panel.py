@@ -37,7 +37,10 @@ def list_processes_handler(
     offset: int = 0,
 ) -> dict:
     """Lista processos judiciais do escritório, com fase atual."""
+    from fastmcp.exceptions import ToolError
+
     from app.models import JudicialProcess
+    from app.utils.cnj import filtro_numero_processo
 
     limit = clamp_limit(limit, 50)
     offset = clamp_offset(offset)
@@ -46,7 +49,11 @@ def list_processes_handler(
     if status:
         query = query.filter(JudicialProcess.status == status)
     if numero_processo:
-        query = query.filter(JudicialProcess.process_number.like(f"%{numero_processo}%"))
+        try:
+            query = query.filter(filtro_numero_processo(
+                numero_processo, coluna_mascara=JudicialProcess.process_number))
+        except ValueError as exc:
+            raise ToolError(str(exc))
 
     total = query.count()
     processes = fetch_page(

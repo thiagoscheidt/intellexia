@@ -46,6 +46,7 @@ _MANUALS = (
     ("painel-fap", "Painel FAP", "MANUAL_PAINEL_FAP.md"),
     ("contestacoes", "Painel de Contestações", "MANUAL_PAINEL_CONTESTACOES.md"),
     ("revisor-peticoes", "Revisor de Petições", "MANUAL_REVISOR_PETICOES.md"),
+    ("base-conhecimento", "Base de Conhecimento (Processos)", "MANUAL_BASE_CONHECIMENTO.md"),
     ("diario-oficial", "Diário Oficial", "MANUAL_DIARIO_OFICIAL.md"),
     ("notificacoes", "Notificações por E-mail", "MANUAL_NOTIFICACOES.md"),
     ("conectar-ia", "Conectar sua IA (MCP)", "MANUAL_MCP.md"),
@@ -89,6 +90,7 @@ _CLAUDE_SVG = (
 _BUTTON_STYLES = {
     "success", "primary", "danger", "secondary", "warning",
     "outline-success", "outline-primary", "outline-danger", "outline-secondary",
+    "outline-warning",
 }
 
 _BUTTON_RE = re.compile(r":btn-([a-z-]+)\[([^\]]+)\]")
