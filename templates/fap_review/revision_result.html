@@ -1053,19 +1053,11 @@
                            zerados, riscos e prioridade sairiam como pendência que não existe —
                            o modelo costuma escrevê-los mesmo assim, até sobre a rodada anterior. #}
                         {% if not result_data.findings %}
-                        {% set missing_count = (result_data.missing_documents or [])|length %}
                         <div class="d-flex align-items-start gap-3 p-3 rounded bg-success-subtle border border-success-subtle">
                             <i class="bi bi-check-circle-fill text-success fs-3 lh-1"></i>
                             <div>
                                 <div class="fw-semibold text-success-emphasis">Nenhum ponto de atenção nesta revisão</div>
                                 <div class="small text-body-secondary">A petição passou pela revisão sem apontamentos.</div>
-                                {% if missing_count %}
-                                <div class="small mt-2 text-warning-emphasis">
-                                    <i class="bi bi-folder2-open me-1"></i>Mas falta{{ 'm' if missing_count > 1 }}
-                                    {{ missing_count }} documento{{ 's' if missing_count > 1 }} obrigatório{{ 's' if missing_count > 1 }} —
-                                    <a href="#missingDocumentsCard" class="link-warning">ver quais</a>.
-                                </div>
-                                {% endif %}
                             </div>
                         </div>
                         {% else %}
@@ -1766,11 +1758,11 @@
                     {% endif %}
 
             {% if result_data.missing_documents %}
-            <div class="col-12" id="missingDocumentsCard">
+            <div class="col-12">
                 <div class="card info-card">
                     <div class="card-header d-flex align-items-center gap-2">
                         <i class="bi bi-folder2-open text-danger"></i>
-                        Documentos Obrigatórios em Falta
+                        Documentos Obrigatórios
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive">

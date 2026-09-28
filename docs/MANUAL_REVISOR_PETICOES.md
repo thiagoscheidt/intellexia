@@ -143,7 +143,7 @@ Quando **todos** os pontos estiverem triados (revisados + não pertinentes), sur
 
 O sistema **confere no servidor** que a triagem está completa antes de aceitar a conclusão — se faltar algum ponto, ele avisa quantos faltam. Uma revisão **sem pontos de atenção** já nasce com a triagem completa.
 
-### Documentos Obrigatórios em Falta
+### Documentos Obrigatórios
 
 Lista os documentos que, segundo o manual, deveriam acompanhar as teses da petição e não foram localizados — com a tese relacionada e a referência do manual.
 
