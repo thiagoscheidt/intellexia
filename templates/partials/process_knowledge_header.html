@@ -1,0 +1,37 @@
+{# Cabeçalho da Base de Conhecimento do Painel de Processos: page_hero + abas.
+   Usado pela Visão geral, pela pesquisa de jurisprudência e pela lista de
+   peças-modelo. `aba` = 'geral' | 'jurisprudencia' | 'pecas'; `trilha` =
+   itens extras do breadcrumb depois de "Base de Conhecimento" ([(rótulo, url)]).
+   A tela precisa carregar static/css/process_knowledge.css. #}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% macro cabecalho(aba, trilha=[]) %}
+{% set contagem = base_conhecimento_contagens() %}
+{% call page_hero(title='Base de Conhecimento',
+                  subtitle='O que a IA usa para montar as peças: decisões judiciais e peças-modelo do escritório',
+                  icon='bi bi-book-half') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}">Painel de Processos</a></li>
+    {% if trilha %}
+    <li class="breadcrumb-item"><a href="{{ url_for('process_knowledge.index') }}">Base de Conhecimento</a></li>
+    {% for rotulo, url in trilha %}
+    <li class="breadcrumb-item {{ 'active' if loop.last }}" {{ 'aria-current="page"' | safe if loop.last }}>
+      {% if url and not loop.last %}<a href="{{ url }}">{{ rotulo }}</a>{% else %}{{ rotulo }}{% endif %}
+    </li>
+    {% endfor %}
+    {% else %}
+    <li class="breadcrumb-item active" aria-current="page">Base de Conhecimento</li>
+    {% endif %}
+  </ol>
+</nav>
+{% endcall %}
+<ul class="nav kb-abas mb-3" role="tablist">
+  <li class="nav-item"><a class="nav-link {{ 'active' if aba == 'geral' }}" href="{{ url_for('process_knowledge.index') }}">
+    <i class="bi bi-grid-1x2 me-1"></i>Visão geral</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if aba == 'jurisprudencia' }}" href="{{ url_for('jurisprudence.index') }}">
+    <i class="bi bi-journal-bookmark me-1"></i>Jurisprudência <span class="badge text-bg-light border">{{ contagem.decisoes }}</span></a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if aba == 'pecas' }}" href="{{ url_for('impugnacao_references.list_references') }}">
+    <i class="bi bi-bookmark-star me-1"></i>Peças-modelo <span class="badge text-bg-light border">{{ contagem.pecas }}</span></a></li>
+</ul>
+{% endmacro %}

@@ -1,7 +1,7 @@
 {% extends "layout/base.html" %}
 {% from "partials/page_hero.html" import page_hero %}
 
-{% block title %}Correspondência de teses - Base de Jurisprudência{% endblock %}
+{% block title %}Correspondência de teses · Base de Conhecimento - IntellexIA{% endblock %}
 
 {% block extra_css %}
 {# O base.html traz só o select2.min.css; o tema bootstrap-5 é folha à parte. #}
@@ -20,7 +20,8 @@
   </form>
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
-      <li class="breadcrumb-item"><a href="{{ url_for('jurisprudence.index') }}">Base de Jurisprudência</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('process_knowledge.index') }}">Base de Conhecimento</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('jurisprudence.index') }}">Jurisprudência</a></li>
       <li class="breadcrumb-item active" aria-current="page">Teses</li>
     </ol>
   </nav>

@@ -122,7 +122,7 @@ intellexia/
 
 ### Blueprints Registrados
 
-`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `access_audit`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`, `docs`, `communications`, `dou`, `jurisprudence`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
+`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `access_audit`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`, `docs`, `communications`, `dou`, `jurisprudence`, `process_knowledge`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
 
 **Função de cada blueprint:**
 
@@ -152,6 +152,7 @@ intellexia/
 | `dou` | `/dou` | **Diário Oficial**: acervo do DOU capturado do INLABS (Imprensa Nacional). Captura diária dos ZIPs de XML das seções `DO1 DO2 DO3 DO1E DO2E DO3E` mais os PDFs assinados, quebrando cada edição matéria a matéria. Acervo em três níveis — edições por data (espelha a listagem do INLABS, com o PDF assinado) → edição do dia (aba por seção, salto para o dia vizinho **do acervo**, busca em título/ementa, filtro por órgão-raiz e tipo, atalho por linha para a **folha** daquela página) → matéria (o inteiro teor, em texto) — mais o **leitor** e a tela de captura (cobertura, falhas, reprocesso). O **leitor** (`/dou/edicao/<data>/pagina/<n>?secao=DO1`) é a folha assinada em tela cheia, no modelo do visualizador da Imprensa Nacional: aba por caderno, `‹ ›`, "ir para a página" e **Sumário da edição** (`_sumario_da_edicao`: órgão-raiz → primeira página, conferido linha a linha contra o `<select>` do portal oficial). **O texto do ato não entra no leitor** — a folha é A3 e qualquer coisa dividindo espaço com ela fica ilegível; a ponte de volta é a lista de matérias da página, no rodapé. O "ir para" é GET sem JavaScript e **redireciona para o endereço canônico** `/pagina/<n>`, para o que fica na barra do navegador ser copiável. A folha do leitor vem de `/dou/edicao/<id>/pagina/<n>.pdf`, **uma página por vez** (`_entregar_recorte(..., vizinhas=False)`) — no leitor o `›` já leva à seguinte, e mandar três fazia a folha escolhida dividir a tela com duas que ninguém pediu; a tela da matéria continua com as vizinhas (`/dou/materia/<id>/pagina.pdf`), porque um edital começa numa página e termina na outra. `_total_paginas` lê o `page_count` do PDF a cada requisição (1–4 ms mesmo nos 44 MB da Seção 3 — não vale coluna no banco). Órgão é sempre recortado na **raiz** da hierarquia (`dou_search_service.orgao_raiz`), no filtro, no agrupamento e no sumário: a hierarquia completa tem ~104 valores por seção contra ~27 raízes, e agrupar por ela dava 36 grupos para 50 linhas. **Alertas** (`/dou/alertas`) têm duas origens no mesmo registro: os CNPJs da carteira cruzados com cada matéria capturada (seção "Alertas de cliente no DOU") e as **regras de palavra-chave** configuradas em `/dou/regras` (seção "Alertas por palavra-chave no DOU"). A matéria que casa as duas é **um** alerta com dois motivos |
 | `communications` | `/comunicacoes` | **Monitoramento de Processos**: comunicações processuais por fonte de informação (`ProcessCommunication.source` — hoje só `comunica_pje`; novas fontes = nova constante `SOURCE_*` + rótulo em `SOURCE_LABELS`). Radar por OAB, inteiro teor, controle de lidas, descoberta automática de processos. O nome de exibição é "Monitoramento de Processos"; endpoint/URL/módulo permanecem `communications` |
 | `jurisprudence` | `/process-panel/jurisprudencia` | **Base de Jurisprudência** (submódulo do Painel de Processos, permissão `process_panel`): decisões FAP (sentença, acórdão, embargos) classificadas por tese e resultado — importadas da planilha do escritório (formato Banco Mestre FAP) ou lidas de PDF pela IA — com pesquisa por processo, correspondência de teses com o catálogo e uso na geração da impugnação. Ver a seção "Base de Jurisprudência" |
+| `process_knowledge` | `/process-panel/base-conhecimento` | **Base de Conhecimento do Painel de Processos** (permissão `process_panel`): item único do menu que junta a Jurisprudência e as Peças-modelo em abas, com Visão geral (pendências das duas bases e cobertura por tese) e busca nas duas. Ver a seção "Base de Conhecimento do Painel de Processos" |
 
 ### Documentação do usuário (Manual + Assistente "pergunte ao manual")
 
@@ -606,6 +607,40 @@ e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
   foi enfrentada" para a contrária). O `ImpugnacaoEnrichmentAgent` **não**
   recebe a Base: a fonte dele continua sendo a jurisprudência garimpada das
   peças-modelo (`impugnacao_models`).
+- **A seleção do wizard acompanha as versões da peça.** O card "Documentos
+  Utilizados" do detalhe mostra o que foi **selecionado** (lido do
+  `confirmed_documents_json` da versão atual), não o que o modelo usou; na
+  jurisprudência, a que não aparece no texto da versão ganha o selo "não
+  citada". Salvar edição manual e "Regerar" copiam a seleção da versão atual
+  (`_selecao_da_versao_atual`): antes, a versão nova nascia sem ela — o card
+  sumia depois de editar, e o regerar voltava ao modo automático (peças-modelo
+  escolhidas pelo sistema, nenhuma jurisprudência da Base).
+
+### Base de Conhecimento do Painel de Processos (`process_knowledge`)
+
+Um item só no menu do Painel de Processos para as duas bases que a IA usa na
+impugnação: **Jurisprudência** (precedente citado) e **Peças-modelo**
+(estrutura e estilo). Antes as peças-modelo nem tinham item de menu — só um
+botão dentro de Configurações de IA. As telas de cada base **continuam nos
+endereços de sempre** (`/process-panel/jurisprudencia`, `/referencias-impugnacao`);
+o hub só acrescenta a Visão geral e a busca nas duas, e as abas comuns vêm de
+`templates/partials/process_knowledge_header.html` (macro `cabecalho(aba, trilha)`,
+importado **`with context`** — sem isso o macro não enxerga o context processor
+das contagens e a tela dá 500).
+
+- `process_knowledge_service` só lê e cruza; cada base continua dona dos dados e
+  do motor de busca. A busca nas peças usa o Meilisearch da própria base e, fora
+  do ar, o mesmo `LIKE` nos trechos que a lista de peças já usa, com aviso.
+- **Cobertura por tese** (o que só existe com as duas juntas): por tese ativa do
+  catálogo, peças-modelo (`thesis_catalog_ids`, que guarda as **chaves**) e
+  decisões (pela correspondência de teses). Situações: coberta, sem peça-modelo,
+  sem decisão, descoberta, e **maioria contra** (≥ 3 decisões e mais da metade
+  desfavorável). Decisão só conta pela tese **ligada** ao catálogo — enquanto a
+  correspondência estiver pendente, "sem decisão" pode ser só ligação faltando,
+  e a tela avisa.
+- O nome **"Base de Conhecimento" também é o do grupo do módulo `knowledge_base`**
+  no menu principal (chat e documentos). Foi escolha do produto; se confundir,
+  trocar é mudar o rótulo no `sidebar.html` e no macro do cabeçalho.
 
 ### Sessão do portal FAP e automação de navegador (Playwright)
 
@@ -813,6 +848,7 @@ FapReview.revision [POST]
 | `jurisprudence_thesis_service`         | Correspondência de teses: ligar, mesclar/desfazer, sem equivalente, sugestões da IA em segundo plano |
 | `jurisprudence_upload_service`         | Fila dos PDFs lidos pela IA: envio, leitura, duplicata para revisar, tentar de novo, reprocessar decisão |
 | `jurisprudence_generation_service`     | Jurisprudência na impugnação: sugestões por tese para o wizard e o bloco do prompt |
+| `process_knowledge_service`            | Base de Conhecimento do Painel de Processos: contagens das abas, pendências das duas bases, cobertura por tese e busca nas duas — fonte única do hub |
 | `process_radar_service`                | Radar da Mesa de Trabalho (providências IA + publicações não lidas + movimentação DataJud) — fonte única do widget do Painel de Processos (`build_radar`) e do e-mail Resumo do Radar (`build_radar_digest`) |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |

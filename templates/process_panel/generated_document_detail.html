@@ -664,7 +664,7 @@ breadcrumbs=[
           {% if used_documents.jurisprudence is not none %}
           <div class="text-muted mb-1 mt-3"
             style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
-            Jurisprudência citada
+            Jurisprudência selecionada
             <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1"
               style="font-size:.65rem">{{ used_documents.jurisprudence | length }}</span>
           </div>
@@ -677,7 +677,11 @@ breadcrumbs=[
               <a href="{{ url_for('jurisprudence.decisao', decision_id=d.id) }}" target="_blank"
                 class="text-decoration-none text-truncate"
                 title="{{ item.tese or '' }}">{{ d.tipo_documento | jur_tipo }} · {{ d.tribunal or '' }} · {{ d.processo or '' }}</a>
-              {% if d.resultado == 'desfavoravel' %}<span class="badge text-bg-danger ms-auto flex-shrink-0" style="font-size:.6rem">contrária</span>{% endif %}
+              <span class="ms-auto d-flex gap-1 flex-shrink-0">
+                {% if d.resultado == 'desfavoravel' %}<span class="badge text-bg-danger" style="font-size:.6rem">contrária</span>{% endif %}
+                {% if not item.citada %}<span class="badge text-bg-warning" style="font-size:.6rem"
+                  title="O número deste processo não aparece no texto desta versão">não citada</span>{% endif %}
+              </span>
             </li>
             {% endfor %}
           </ul>

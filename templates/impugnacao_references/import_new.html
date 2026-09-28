@@ -30,7 +30,8 @@
 {% call page_hero(title='Importar de Planilha', subtitle='Popule a base de peças-modelo em lote a partir da planilha de controle do escritório.', icon='bi bi-file-earmark-spreadsheet') %}
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+        <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}">Painel de Processos</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('process_knowledge.index') }}">Base de Conhecimento</a>
         </li>
         <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a>
         </li>

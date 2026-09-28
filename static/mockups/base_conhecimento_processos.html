@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="pt-BR" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mockup · Base de Conhecimento (Painel de Processos)</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="../css/adminlte.css">
+  <link rel="stylesheet" href="../css/intellexia-dark.css">
+  <link rel="stylesheet" href="../css/intellexia-ui.css">
+  <link rel="stylesheet" href="../css/jurisprudence.css">
+  <style>
+    body { background: var(--bs-tertiary-bg); }
+    .page-hero { background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%); }
+    .page-hero-icon { width: 56px; height: 56px; background: #fff; box-shadow: 0 6px 14px rgba(102,126,234,.18); }
+    .page-hero-icon__glyph { font-size: 1.6rem; color: #667eea; }
+    [data-bs-theme="dark"] .page-hero { background: linear-gradient(135deg, #1b1f2a 0%, #23283a 100%); }
+    [data-bs-theme="dark"] .page-hero-icon { background: #111827; }
+    [data-bs-theme="dark"] .page-hero-icon__glyph { color: #9aa7ff; }
+
+    /* faixa do mockup */
+    .mk-bar { background: #1f2937; color: #e5e7eb; }
+    .mk-bar .nav-link { color: #cbd5e1; font-size: .85rem; padding: .35rem .7rem; border-radius: 999px; }
+    .mk-bar .nav-link.active { background: #6366f1; color: #fff; }
+    .mk-tag { background: #f59e0b; color: #111; font-weight: 700; font-size: .7rem; letter-spacing: .06em; }
+    .mk-note { border-left: 3px solid #f59e0b; background: rgba(245,158,11,.08); font-size: .82rem; }
+    .mk-note b { color: #b45309; }
+    [data-bs-theme="dark"] .mk-note b { color: #fbbf24; }
+    .mk-screen { display: none; } .mk-screen.active { display: block; }
+
+    .fake-header { background: var(--bs-body-bg); }
+
+    /* sidebar reproduzida (menu escuro do app) */
+    .fake-sidebar { width: 250px; background: #343a40; color: #c2c7d0; min-height: calc(100vh - 90px); font-size: .9rem; flex-shrink: 0; }
+    .fake-sidebar .grp { padding: .55rem 1rem; color: #fff; display: flex; align-items: center; gap: .6rem; }
+    .fake-sidebar .grp small { display: block; font-size: .72em; opacity: .65; line-height: 1; }
+    .fake-sidebar .it { padding: .38rem 1rem .38rem 2.2rem; display: flex; align-items: center; gap: .55rem; font-size: .86rem; color: #c2c7d0; }
+    .fake-sidebar .it.on { background: rgba(255,255,255,.1); color: #fff; border-radius: 6px; margin: 0 .4rem; padding-left: 1.8rem; }
+    .fake-sidebar .it.novo::after { content: "novo"; margin-left: auto; font-size: .62rem; background: #6366f1; color: #fff; border-radius: 999px; padding: 0 .4rem; }
+    .fake-sidebar .it.some { text-decoration: line-through; opacity: .45; }
+    .fake-sidebar .sep { border-top: 1px solid rgba(255,255,255,.08); margin: .4rem 0; }
+    .fake-sidebar .dim { opacity: .5; }
+
+    /* abas do hub */
+    .hub-tabs { border-bottom: 1px solid var(--bs-border-color); gap: .25rem; }
+    .hub-tabs .nav-link { border: 0; border-bottom: 3px solid transparent; color: var(--bs-secondary-color); font-weight: 600;
+      padding: .6rem 1rem; border-radius: 0; }
+    .hub-tabs .nav-link.active { color: var(--jur-acc); border-bottom-color: var(--jur-acc); background: transparent; }
+    .hub-tabs .nav-link .badge { font-weight: 600; }
+
+    .base-card { border-radius: 16px; transition: box-shadow .15s, transform .15s; }
+    .base-card:hover { box-shadow: 0 10px 24px rgba(0,0,0,.08) !important; transform: translateY(-1px); }
+    .base-card .ico { width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+    .ico-jur { background: rgba(79,70,229,.12); color: #4f46e5; }
+    .ico-pec { background: rgba(13,148,136,.12); color: #0f766e; }
+    [data-bs-theme="dark"] .ico-jur { color: #a5b4fc; } [data-bs-theme="dark"] .ico-pec { color: #5eead4; }
+    .mini-stat .v { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .mini-stat .l { font-size: .75rem; color: var(--bs-secondary-color); }
+
+    .pend-item { display: flex; align-items: center; gap: .75rem; padding: .6rem .2rem; border-bottom: 1px solid var(--bs-border-color-translucent); }
+    .pend-item:last-child { border-bottom: 0; }
+    .pend-item .n { font-weight: 700; font-variant-numeric: tabular-nums; min-width: 2.5rem; text-align: right; }
+
+    .cov td { vertical-align: middle; font-size: .88rem; }
+    .cov .bar { height: 8px; border-radius: 999px; background: var(--jur-soft); overflow: hidden; display: flex; min-width: 90px; }
+    .cov .bar span { display: block; height: 100%; }
+    .gap { font-size: .72rem; font-weight: 700; padding: .12rem .5rem; border-radius: 999px; white-space: nowrap; }
+    .gap-ok { color: var(--jur-fav); background: rgba(25,135,84,.1); }
+    .gap-pec { color: var(--jur-par); background: rgba(217,119,6,.12); }
+    .gap-jur { color: #6d28d9; background: rgba(124,58,237,.12); }
+    .gap-nada { color: var(--jur-des); background: rgba(220,53,69,.1); }
+    [data-bs-theme="dark"] .gap-jur { color: #c4b5fd; }
+
+    .busca-hub .input-group-text, .busca-hub .form-control { border-radius: 12px; }
+    .escopo .btn { font-size: .8rem; }
+    .res-grupo h6 { font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-secondary-color); }
+    .trecho-pec { font-family: Georgia, serif; font-size: .9rem; background: var(--jur-soft); border-radius: 10px; padding: .6rem .8rem; }
+    .star { color: #d97706; }
+
+    @media (max-width: 991.98px) { .fake-sidebar { display: none; } }
+  </style>
+</head>
+<body>
+
+<div class="mk-bar px-3 py-2 d-flex flex-wrap align-items-center gap-2">
+  <span class="badge mk-tag">MOCKUP</span>
+  <span class="small me-2 opacity-75">dados fictícios · contagens do banco de dev e da planilha</span>
+  <ul class="nav gap-1 flex-wrap" id="mk-nav">
+    <li><a class="nav-link active" href="#" data-screen="geral"><i class="bi bi-grid-1x2 me-1"></i>1 · Visão geral</a></li>
+    <li><a class="nav-link" href="#" data-screen="busca"><i class="bi bi-search me-1"></i>2 · Busca nas duas bases</a></li>
+    <li><a class="nav-link" href="#" data-screen="jur"><i class="bi bi-journal-bookmark me-1"></i>3 · Aba Jurisprudência</a></li>
+    <li><a class="nav-link" href="#" data-screen="pec"><i class="bi bi-bookmark-star me-1"></i>4 · Aba Peças-modelo</a></li>
+    <li><a class="nav-link" href="#" data-screen="menu"><i class="bi bi-list-nested me-1"></i>5 · Menu antes × depois</a></li>
+  </ul>
+  <button class="btn btn-sm btn-outline-light ms-auto" id="mk-theme"><i class="bi bi-moon-stars"></i></button>
+  <button class="btn btn-sm btn-outline-light" id="mk-notes"><i class="bi bi-chat-square-text"></i> notas</button>
+</div>
+
+<nav class="fake-header navbar shadow-sm px-3 py-1">
+  <div class="d-flex align-items-center gap-3 small">
+    <i class="bi bi-list fs-5"></i><span class="fw-semibold"><i class="bi bi-building me-2"></i>Escritório Exemplo Advocacia</span>
+  </div>
+  <div class="small text-body-secondary"><i class="bi bi-person-circle me-1"></i>Advogada Exemplo</div>
+</nav>
+
+<div class="d-flex">
+  <!-- menu lateral: estado "depois" -->
+  <aside class="fake-sidebar py-2" id="sidebar-app">
+    <div class="grp dim"><i class="bi bi-speedometer2"></i> Dashboard</div>
+    <div class="grp dim"><i class="bi bi-bar-chart"></i> Painel FAP</div>
+    <div class="grp"><i class="bi bi-diagram-3-fill"></i><div>Painel de Processos<small>(Cumprimento de Prazos)</small></div><i class="bi bi-chevron-down ms-auto small"></i></div>
+    <div class="it"><i class="bi bi-list"></i> Meus Processos</div>
+    <div class="it"><i class="bi bi-plus-square"></i> Novo Processo</div>
+    <div class="it"><i class="bi bi-broadcast"></i> Monitoramento</div>
+    <div class="it"><i class="bi bi-card-list"></i> Benefícios dos Processos</div>
+    <div class="it on novo"><i class="bi bi-book-half"></i> Base de Conhecimento</div>
+    <div class="it"><i class="bi bi-cpu"></i> Configurações de IA</div>
+    <div class="sep"></div>
+    <div class="grp dim"><i class="bi bi-newspaper"></i> Diário Oficial</div>
+    <div class="grp dim"><i class="bi bi-journal-text"></i> Base de Conhecimento <span class="badge text-bg-warning ms-auto" style="font-size:.6rem" title="mesmo nome do item novo">mesmo nome</span></div>
+  </aside>
+
+<main class="flex-grow-1 p-3 p-lg-4 jur-page" style="min-width:0">
+
+  <!-- ================= cabeçalho comum do hub ================= -->
+  <div id="hub-cabecalho">
+    <div class="card border-0 shadow-sm mb-3" style="border-radius:16px;overflow:hidden"><div class="card-body page-hero">
+      <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon"><i class="bi bi-book-half page-hero-icon__glyph"></i></div>
+          <div>
+            <h1 class="h4 mb-1" style="font-weight:700">Base de Conhecimento</h1>
+            <small class="text-muted">O que a IA usa para montar as peças: decisões judiciais e peças-modelo do escritório</small>
+          </div>
+        </div>
+        <nav><ol class="breadcrumb mb-0 bg-transparent small">
+          <li class="breadcrumb-item"><a href="#">Painel de Processos</a></li>
+          <li class="breadcrumb-item active" id="bc-atual">Base de Conhecimento</li>
+        </ol></nav>
+      </div>
+    </div></div>
+
+    <ul class="nav hub-tabs mb-3" id="hub-tabs">
+      <li><a class="nav-link active" href="#" data-go="geral"><i class="bi bi-grid-1x2 me-1"></i>Visão geral</a></li>
+      <li><a class="nav-link" href="#" data-go="jur"><i class="bi bi-journal-bookmark me-1"></i>Jurisprudência <span class="badge text-bg-light border">509</span></a></li>
+      <li><a class="nav-link" href="#" data-go="pec"><i class="bi bi-bookmark-star me-1"></i>Peças-modelo <span class="badge text-bg-light border">16</span></a></li>
+    </ul>
+  </div>
+
+  <!-- ================= 1 · VISÃO GERAL ================= -->
+  <section class="mk-screen active" id="geral">
+
+    <form class="card border-0 shadow-sm mb-3 busca-hub" onsubmit="go('busca'); return false"><div class="card-body">
+      <div class="input-group input-group-lg">
+        <span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
+        <input class="form-control" placeholder="Buscar nas duas bases: tese, termo, nº do processo, vara ou empresa">
+        <button class="btn btn-primary px-4">Buscar</button>
+      </div>
+    </div></form>
+
+    <div class="row g-3 mb-3">
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm base-card h-100"><div class="card-body">
+          <div class="d-flex align-items-start gap-3 mb-3">
+            <div class="ico ico-jur"><i class="bi bi-journal-bookmark"></i></div>
+            <div class="flex-grow-1">
+              <h5 class="mb-0">Jurisprudência</h5>
+              <div class="small text-body-secondary">Sentenças, acórdãos e embargos classificados por tese e resultado. Entram na peça como <strong>precedente citado</strong>.</div>
+            </div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-4 mini-stat"><div class="v">509</div><div class="l">decisões</div></div>
+            <div class="col-4 mini-stat"><div class="v">289</div><div class="l">processos</div></div>
+            <div class="col-4 mini-stat"><div class="v" style="color:var(--jur-fav)">81%</div><div class="l">favoráveis ou parciais</div></div>
+          </div>
+          <div class="exito mb-3"><a class="favoravel" style="width:39%"></a><a class="parcial" style="width:42%"></a><a class="desfavoravel" style="width:19%"></a></div>
+          <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-sm btn-outline-primary" href="#" data-go="jur"><i class="bi bi-search me-1"></i>Pesquisar</a>
+            <a class="btn btn-sm btn-outline-secondary" href="#"><i class="bi bi-cloud-arrow-up me-1"></i>Enviar decisões</a>
+            <a class="btn btn-sm btn-outline-secondary" href="#"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Importar planilha</a>
+          </div>
+        </div></div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card border-0 shadow-sm base-card h-100"><div class="card-body">
+          <div class="d-flex align-items-start gap-3 mb-3">
+            <div class="ico ico-pec"><i class="bi bi-bookmark-star"></i></div>
+            <div class="flex-grow-1">
+              <h5 class="mb-0">Peças-modelo de impugnação</h5>
+              <div class="small text-body-secondary">Impugnações do escritório que servem de molde. Entram na peça como <strong>estrutura e estilo</strong>.</div>
+            </div>
+          </div>
+          <div class="row g-2 mb-3">
+            <div class="col-4 mini-stat"><div class="v">16</div><div class="l">peças ativas</div></div>
+            <div class="col-4 mini-stat"><div class="v">356</div><div class="l">trechos indexados</div></div>
+            <div class="col-4 mini-stat"><div class="v">3</div><div class="l">TRFs cobertos</div></div>
+          </div>
+          <div class="d-flex flex-wrap gap-1 mb-3 small">
+            <span class="badge text-bg-light border">TRF4 · 7</span><span class="badge text-bg-light border">TRF3 · 7</span><span class="badge text-bg-light border">TRF2 · 2</span>
+            <span class="badge border bg-transparent text-body-secondary">TRF1, TRF5, TRF6 · nenhuma</span>
+          </div>
+          <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-sm btn-outline-primary" href="#" data-go="pec"><i class="bi bi-collection me-1"></i>Ver peças</a>
+            <a class="btn btn-sm btn-outline-secondary" href="#"><i class="bi bi-plus-lg me-1"></i>Nova peça</a>
+            <a class="btn btn-sm btn-outline-secondary" href="#"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Importar do Drive</a>
+          </div>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="mk-note p-2 px-3 mb-3 rounded">
+      <b>Nota:</b> a frase sob cada título explica <b>o que a base faz na peça</b>: uma dá o precedente citado, a outra a estrutura e o estilo. Hoje essa diferença não está escrita em lugar nenhum, e é ela que decide onde o advogado sobe cada arquivo.
+    </div>
+
+    <div class="row g-3">
+      <div class="col-xl-4">
+        <div class="card border-0 shadow-sm h-100"><div class="card-body">
+          <h6 class="fw-bold mb-2"><i class="bi bi-flag me-1 text-warning"></i>Precisa de atenção</h6>
+          <div class="pend-item"><span class="n" style="color:var(--jur-par)">210</span><div class="flex-grow-1 small">teses das decisões sem ligação com o catálogo</div><a href="#" class="small text-nowrap">revisar</a></div>
+          <div class="pend-item"><span class="n" style="color:var(--jur-par)">9</span><div class="flex-grow-1 small">teses do catálogo <strong>sem peça-modelo</strong></div><a href="#cobertura" class="small text-nowrap">ver quais</a></div>
+          <div class="pend-item"><span class="n">1</span><div class="flex-grow-1 small">peça-modelo ainda indexando</div><a href="#" class="small text-nowrap" data-go="pec">abrir</a></div>
+          <div class="pend-item"><span class="n" style="color:var(--jur-des)">2</span><div class="flex-grow-1 small">PDFs de decisão com falha na leitura</div><a href="#" class="small text-nowrap">tentar de novo</a></div>
+          <div class="pend-item"><span class="n">1</span><div class="flex-grow-1 small">decisão em "revisar" (duplicata)</div><a href="#" class="small text-nowrap">decidir</a></div>
+          <div class="small text-body-secondary mt-2"><i class="bi bi-info-circle me-1"></i>A lista some quando zera: é pendência, não volume.</div>
+        </div></div>
+      </div>
+
+      <div class="col-xl-8">
+        <div class="card border-0 shadow-sm h-100" id="cobertura"><div class="card-body">
+          <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-1">
+            <h6 class="fw-bold mb-0"><i class="bi bi-bar-chart-steps me-1"></i>Cobertura por tese</h6>
+            <div class="btn-group btn-group-sm">
+              <button class="btn btn-outline-secondary active">Com lacuna</button><button class="btn btn-outline-secondary">Todas</button>
+            </div>
+          </div>
+          <p class="small text-body-secondary mb-2">Para cada tese do catálogo: há peça-modelo para dar a estrutura? Há decisão favorável para citar? É o mesmo aviso "sem peça-modelo" da geração, visto <strong>antes</strong> de gerar.</p>
+          <div class="table-responsive">
+          <table class="table table-sm cov mb-0">
+            <thead><tr><th>Tese do catálogo</th><th class="text-end">Peças</th><th class="text-end">Decisões</th><th>Resultado</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>Trajeto - B91</td><td class="text-end">5</td><td class="text-end">200</td>
+                <td><div class="bar"><span style="width:41%;background:var(--jur-fav)"></span><span style="width:51%;background:var(--jur-par)"></span><span style="width:8%;background:var(--jur-des)"></span></div></td>
+                <td><span class="gap gap-ok">coberta</span></td></tr>
+              <tr><td>Nexo afastado</td><td class="text-end">4</td><td class="text-end">117</td>
+                <td><div class="bar"><span style="width:35%;background:var(--jur-fav)"></span><span style="width:45%;background:var(--jur-par)"></span><span style="width:20%;background:var(--jur-des)"></span></div></td>
+                <td><span class="gap gap-ok">coberta</span></td></tr>
+              <tr><td>Rotatividade</td><td class="text-end text-danger fw-bold">0</td><td class="text-end">55</td>
+                <td><div class="bar"><span style="width:31%;background:var(--jur-fav)"></span><span style="width:64%;background:var(--jur-par)"></span><span style="width:5%;background:var(--jur-des)"></span></div></td>
+                <td><span class="gap gap-pec">sem peça-modelo</span></td></tr>
+              <tr><td>Correção do CNAE preponderante</td><td class="text-end">2</td><td class="text-end text-danger fw-bold">0</td>
+                <td class="small text-body-secondary">—</td>
+                <td><span class="gap gap-jur">sem decisão</span></td></tr>
+              <tr><td>Individualização do FAP por estabelecimento</td><td class="text-end text-danger fw-bold">0</td><td class="text-end text-danger fw-bold">0</td>
+                <td class="small text-body-secondary">—</td>
+                <td><span class="gap gap-nada">descoberta</span></td></tr>
+              <tr><td>Revogação da tutela / liminar</td><td class="text-end">1</td><td class="text-end">6</td>
+                <td><div class="bar"><span style="width:0%"></span><span style="width:17%;background:var(--jur-par)"></span><span style="width:83%;background:var(--jur-des)"></span></div></td>
+                <td><span class="gap gap-nada" title="5 de 6 decisões desfavoráveis">maioria contra</span></td></tr>
+            </tbody>
+          </table>
+          </div>
+          <a href="#" class="small d-inline-block mt-2">ver as 51 teses do catálogo</a>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="mk-note p-2 px-3 mt-3 rounded">
+      <b>Nota:</b> a <b>cobertura por tese</b> só existe porque as duas bases passam a morar juntas: cruza as peças-modelo (que já são classificadas pelo catálogo) com as decisões (ligadas ao catálogo pela correspondência de teses). "Maioria contra" avisa antes de o advogado apostar numa tese que o tribunal tem negado.
+    </div>
+  </section>
+
+  <!-- ================= 2 · BUSCA NAS DUAS BASES ================= -->
+  <section class="mk-screen" id="busca">
+    <form class="card border-0 shadow-sm mb-3 busca-hub" onsubmit="return false"><div class="card-body">
+      <div class="input-group">
+        <span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
+        <input class="form-control" value="rotatividade">
+        <button class="btn btn-primary">Buscar</button>
+      </div>
+      <div class="d-flex flex-wrap align-items-center gap-2 mt-2 escopo">
+        <span class="small text-body-secondary">Procurar em:</span>
+        <div class="btn-group btn-group-sm">
+          <button class="btn btn-outline-secondary active">Tudo</button>
+          <button class="btn btn-outline-secondary">Jurisprudência <span class="badge text-bg-light border">58</span></button>
+          <button class="btn btn-outline-secondary">Peças-modelo <span class="badge text-bg-light border">7</span></button>
+        </div>
+      </div>
+    </div></form>
+
+    <div class="row g-3">
+      <div class="col-lg-7 res-grupo">
+        <div class="d-flex justify-content-between align-items-baseline">
+          <h6><i class="bi bi-journal-bookmark me-1"></i>Jurisprudência · 58 decisões em 35 processos</h6>
+          <a href="#" class="small" data-go="jur">ver todas na aba</a>
+        </div>
+        <div class="exito mb-2"><a class="favoravel" style="width:31%"></a><a class="parcial" style="width:64%"></a><a class="desfavoravel" style="width:5%"></a></div>
+        <div class="card border-0 shadow-sm proc-card mb-2"><div class="card-body py-2">
+          <div class="d-flex flex-wrap justify-content-between gap-2">
+            <div><span class="proc-num">5013273-42.2025.4.04.7208</span> · <strong>Supermercados Serra Azul Ltda.</strong></div>
+            <span class="res-pill res-favoravel">Favorável</span>
+          </div>
+          <div class="small text-body-secondary">Embargos · 1ª Vara Federal de Itajaí · 04/2026</div>
+          <p class="snippet mb-0">…afastar o bloqueio por <mark>taxa de rotatividade</mark>, uma vez que a empresa comprovou…</p>
+        </div></div>
+        <div class="card border-0 shadow-sm proc-card mb-2"><div class="card-body py-2">
+          <div class="d-flex flex-wrap justify-content-between gap-2">
+            <div><span class="proc-num">5003321-10.2023.4.04.7207</span> · <strong>Frigorífico Campos Gerais S.A.</strong></div>
+            <span class="res-pill res-parcial">Parcialmente</span>
+          </div>
+          <div class="small text-body-secondary">Acórdão · TRF4 · 2ª Turma · 11/2025</div>
+          <p class="snippet mb-0">…mantido o índice de <mark>rotatividade</mark> apurado, por ausência de prova da…</p>
+        </div></div>
+        <a href="#" class="small" data-go="jur">+ 56 decisões</a>
+      </div>
+
+      <div class="col-lg-5 res-grupo">
+        <div class="d-flex justify-content-between align-items-baseline">
+          <h6><i class="bi bi-bookmark-star me-1"></i>Peças-modelo · 7 trechos em 3 peças</h6>
+          <a href="#" class="small" data-go="pec">ver peças</a>
+        </div>
+        <div class="card border-0 shadow-sm mb-2"><div class="card-body py-2">
+          <div class="d-flex justify-content-between gap-2"><strong class="small">Metalúrgica Vale — Impugnação (2019–2022)</strong><span class="badge text-bg-light border">TRF4</span></div>
+          <div class="small text-body-secondary mb-1">Mérito · tese: Rotatividade · 2ª VF Joinville</div>
+          <div class="trecho-pec">…a taxa média de <mark>rotatividade</mark> da empresa foi inferior a 75%, de modo que o bloqueio da bonificação…</div>
+        </div></div>
+        <div class="card border-0 shadow-sm mb-2"><div class="card-body py-2">
+          <div class="d-flex justify-content-between gap-2"><strong class="small">Têxtil Serra Azul — Impugnação (2021)</strong><span class="badge text-bg-light border">TRF3</span></div>
+          <div class="small text-body-secondary mb-1">Preliminar · 19ª VF São Paulo</div>
+          <div class="trecho-pec">…não se pode confundir a <mark>rotatividade</mark> com o número médio de vínculos…</div>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="mk-note p-2 px-3 mt-3 rounded">
+      <b>Nota:</b> uma busca, duas colunas. A pergunta que o advogado faz ("o que temos sobre rotatividade?") não depende de onde o material está guardado. Cada coluna mantém o motor que já tem: a jurisprudência com sinônimos e filtros, as peças com a busca por trecho que o módulo de peças-modelo já faz.
+    </div>
+  </section>
+
+  <!-- ================= 3 · ABA JURISPRUDÊNCIA ================= -->
+  <section class="mk-screen" id="jur">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <div class="small text-body-secondary">509 decisões em 289 processos</div>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="#" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left-right me-1"></i>Teses <span class="badge rounded-pill text-bg-warning ms-1">210</span></a>
+        <a href="#" class="btn btn-outline-primary btn-sm"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Importar planilha</a>
+        <a href="#" class="btn btn-primary btn-sm"><i class="bi bi-cloud-arrow-up me-1"></i>Enviar decisões</a>
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+      <div class="input-group"><span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
+        <input class="form-control" value="trajeto"><button class="btn btn-primary">Buscar</button></div>
+    </div></div>
+    <div class="row g-3">
+      <aside class="col-lg-3"><div class="card border-0 shadow-sm"><div class="card-body small">
+        <div class="facet"><h6>Tese (catálogo)</h6>
+          <a class="facet-item on"><span><i class="bi bi-check2-square me-1"></i>Trajeto - B91</span><span class="n">200</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>Nexo afastado</span><span class="n">31</span></a></div>
+        <div class="facet"><h6>Tribunal</h6>
+          <a class="facet-item on"><span><i class="bi bi-check2-square me-1"></i>TRF4</span><span class="n">198</span></a>
+          <a class="facet-item"><span><i class="bi bi-square me-1"></i>TRF3</span><span class="n">54</span></a></div>
+        <div class="text-body-secondary">…os demais filtros de hoje</div>
+      </div></div></aside>
+      <div class="col-lg-9">
+        <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+          <div class="mb-2"><strong class="fs-5">198</strong> decisões em <strong>134</strong> processos</div>
+          <div class="exito mb-2"><a class="favoravel" style="width:41%"></a><a class="parcial" style="width:51%"></a><a class="desfavoravel" style="width:8%"></a></div>
+        </div></div>
+        <div class="card border-0 shadow-sm proc-card"><div class="card-body">
+          <div class="mb-2"><span class="proc-num">5012345-67.2021.4.04.7205</span> · <strong>Metalúrgica Vale do Itajaí S.A.</strong> <span class="virada ms-2"><i class="bi bi-arrow-up-right-circle-fill me-1"></i>virou no acórdão</span></div>
+          <div class="trilha">
+            <a class="trilha-step"><div class="t-tipo">Sentença</div><div class="t-org">2ª Vara Federal de Blumenau</div><div class="d-flex justify-content-between mt-1"><span class="t-data">14/03/2024</span><span class="res-pill res-desfavoravel">Desfavorável</span></div></a>
+            <a class="trilha-step achada"><div class="t-tipo">Acórdão</div><div class="t-org">TRF4 · 2ª Turma</div><div class="d-flex justify-content-between mt-1"><span class="t-data">12/05/2026</span><span class="res-pill res-parcial">Parcialmente</span></div></a>
+            <div class="trilha-step vazio"><div class="t-tipo">Embargos</div><div class="t-org">não consta na base</div></div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <div class="mk-note p-2 px-3 mt-3 rounded">
+      <b>Nota:</b> é a tela de pesquisa que já existe, sem mudança de conteúdo. Muda só a moldura: o título e as abas passam a ser os da Base de Conhecimento, e os botões de ação descem para a linha da aba. Endereços, filtros e decisão individual continuam os mesmos, então nenhum link quebra.
+    </div>
+  </section>
+
+  <!-- ================= 4 · ABA PEÇAS-MODELO ================= -->
+  <section class="mk-screen" id="pec">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <ul class="nav nav-pills small">
+        <li><a class="nav-link active py-1 px-3" href="#">Ativas <span class="badge text-bg-light">16</span></a></li>
+        <li><a class="nav-link py-1 px-3" href="#">Arquivadas <span class="badge text-bg-light border">0</span></a></li>
+      </ul>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="#" class="btn btn-outline-primary btn-sm"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Importar do Drive</a>
+        <a href="#" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1"></i>Nova peça</a>
+      </div>
+    </div>
+    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+      <div class="row g-2">
+        <div class="col-md-5"><input class="form-control form-control-sm" placeholder="Buscar nos trechos das peças"></div>
+        <div class="col-md-2"><select class="form-select form-select-sm"><option>Todos os TRFs</option><option>TRF4</option><option>TRF3</option></select></div>
+        <div class="col-md-3"><select class="form-select form-select-sm"><option>Todas as teses</option><option>Trajeto - B91</option></select></div>
+        <div class="col-md-2 d-grid"><button class="btn btn-sm btn-outline-primary">Filtrar</button></div>
+      </div>
+    </div></div>
+
+    <div class="card border-0 shadow-sm"><div class="card-body p-0">
+      <div class="table-responsive">
+      <table class="table align-middle mb-0">
+        <thead><tr><th class="ps-3">Peça</th><th>Origem</th><th>Teses</th><th class="text-end">Trechos</th><th>Nota</th><th class="pe-3"></th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="ps-3"><strong class="small">Metalúrgica Vale — Impugnação (2019–2022)</strong><div class="small text-body-secondary">A · Mérito</div></td>
+            <td class="small"><span class="badge text-bg-light border">TRF3</span> 24ª VF São Paulo</td>
+            <td><span class="tese-chip">Trajeto - B91</span><span class="tese-chip">Nexo afastado</span><span class="tese-chip">+8</span></td>
+            <td class="text-end">59</td><td><span class="star"><i class="bi bi-star-fill"></i></span> 3,0</td>
+            <td class="pe-3 text-end text-nowrap"><button class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></button> <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-text"></i></button></td>
+          </tr>
+          <tr>
+            <td class="ps-3"><strong class="small">Indústria Rio Tubarão — Impugnação (2015–2020)</strong><div class="small text-body-secondary">A · Mérito</div></td>
+            <td class="small"><span class="badge text-bg-light border">TRF4</span> 2ª VF Joinville</td>
+            <td><span class="tese-chip">Trajeto - B91</span><span class="tese-chip">Rotatividade</span><span class="tese-chip">+8</span></td>
+            <td class="text-end">38</td><td><span class="star"><i class="bi bi-star-fill"></i></span> 3,0</td>
+            <td class="pe-3 text-end text-nowrap"><button class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></button> <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-text"></i></button></td>
+          </tr>
+          <tr>
+            <td class="ps-3"><strong class="small">Supermercados Serra Azul — Impugnação (2021–2025)</strong><div class="small text-body-secondary">A · Mérito</div></td>
+            <td class="small"><span class="badge text-bg-light border">TRF4</span> 1ª VF Criciúma</td>
+            <td><span class="tese-chip">Concessão duplicada</span><span class="tese-chip">+9</span></td>
+            <td class="text-end">33</td><td><span class="star"><i class="bi bi-star-fill"></i></span> 3,0</td>
+            <td class="pe-3 text-end text-nowrap"><button class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></button> <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-earmark-text"></i></button></td>
+          </tr>
+          <tr>
+            <td class="ps-3"><strong class="small">Cerâmica Sul — Impugnação (2022)</strong><div class="small text-body-secondary">—</div></td>
+            <td class="small text-body-secondary">lendo o arquivo…</td>
+            <td></td><td class="text-end text-body-secondary">—</td><td></td>
+            <td class="pe-3 text-end"><span class="badge bg-info-subtle text-info border border-info-subtle"><span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem"></span>indexando</span></td>
+          </tr>
+        </tbody>
+      </table>
+      </div>
+    </div></div>
+
+    <div class="mk-note p-2 px-3 mt-3 rounded">
+      <b>Nota:</b> também é a tela que já existe (<code>/referencias-impugnacao</code>), só com a moldura nova. A diferença que importa: hoje ela <b>não tem item no menu</b> e só se chega por um botão dentro de Configurações de IA.
+    </div>
+  </section>
+
+  <!-- ================= 5 · MENU ANTES × DEPOIS ================= -->
+  <section class="mk-screen" id="menu">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="card border-0 shadow-sm"><div class="card-body">
+          <h6 class="fw-bold mb-3">Hoje</h6>
+          <div class="fake-sidebar rounded py-2" style="min-height:0;width:auto">
+            <div class="grp"><i class="bi bi-diagram-3-fill"></i><div>Painel de Processos<small>(Cumprimento de Prazos)</small></div></div>
+            <div class="it"><i class="bi bi-list"></i> Meus Processos</div>
+            <div class="it"><i class="bi bi-plus-square"></i> Novo Processo</div>
+            <div class="it"><i class="bi bi-broadcast"></i> Monitoramento</div>
+            <div class="it"><i class="bi bi-card-list"></i> Benefícios dos Processos</div>
+            <div class="it"><i class="bi bi-journal-bookmark"></i> Base de Jurisprudência</div>
+            <div class="it"><i class="bi bi-cpu"></i> Configurações de IA</div>
+            <div class="it dim ps-5 small"><i class="bi bi-arrow-return-right"></i> botão "Peças-modelo" escondido aqui dentro</div>
+          </div>
+          <ul class="small text-body-secondary mt-3 mb-0 ps-3">
+            <li>Jurisprudência e peças-modelo em lugares diferentes</li>
+            <li>Peças-modelo sem item de menu</li>
+          </ul>
+        </div></div>
+      </div>
+      <div class="col-md-6">
+        <div class="card border-0 shadow-sm"><div class="card-body">
+          <h6 class="fw-bold mb-3">Proposta</h6>
+          <div class="fake-sidebar rounded py-2" style="min-height:0;width:auto">
+            <div class="grp"><i class="bi bi-diagram-3-fill"></i><div>Painel de Processos<small>(Cumprimento de Prazos)</small></div></div>
+            <div class="it"><i class="bi bi-list"></i> Meus Processos</div>
+            <div class="it"><i class="bi bi-plus-square"></i> Novo Processo</div>
+            <div class="it"><i class="bi bi-broadcast"></i> Monitoramento</div>
+            <div class="it"><i class="bi bi-card-list"></i> Benefícios dos Processos</div>
+            <div class="it on novo"><i class="bi bi-book-half"></i> Base de Conhecimento</div>
+            <div class="it"><i class="bi bi-cpu"></i> Configurações de IA</div>
+          </div>
+          <ul class="small text-body-secondary mt-3 mb-0 ps-3">
+            <li>Um item só; jurisprudência e peças viram abas</li>
+            <li>Os endereços antigos continuam funcionando</li>
+          </ul>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="alert alert-warning mt-3 mb-0 small">
+      <i class="bi bi-exclamation-triangle me-1"></i><strong>Conflito de nome:</strong> o menu principal já tem um grupo
+      <strong>"Base de Conhecimento"</strong> (chat, pastas e envio de documentos, módulo <code>knowledge_base</code>). Com o item
+      novo, o menu teria dois "Base de Conhecimento" com conteúdos diferentes. Alternativas para o item do Painel:
+      <strong>"Acervo Jurídico"</strong>, <strong>"Referências da Peça"</strong> ou <strong>"Biblioteca de Peças e Decisões"</strong>.
+    </div>
+  </section>
+
+</main>
+</div>
+
+<script>
+  const bc = { geral: 'Base de Conhecimento', busca: 'Busca', jur: 'Jurisprudência', pec: 'Peças-modelo', menu: 'Menu' };
+  function go(tela) {
+    document.querySelectorAll('.mk-screen').forEach(s => s.classList.toggle('active', s.id === tela));
+    document.querySelectorAll('#mk-nav .nav-link').forEach(a => a.classList.toggle('active', a.dataset.screen === tela));
+    const aba = tela === 'busca' ? 'geral' : tela;
+    document.querySelectorAll('#hub-tabs .nav-link').forEach(a => a.classList.toggle('active', a.dataset.go === aba));
+    document.getElementById('hub-cabecalho').classList.toggle('d-none', tela === 'menu');
+    document.getElementById('bc-atual').textContent = bc[tela];
+    window.scrollTo({ top: 0 });
+    history.replaceState(null, '', '#' + tela);
+  }
+  document.querySelectorAll('[data-screen]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.screen); }));
+  document.querySelectorAll('[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.go); }));
+  if (location.hash && document.getElementById(location.hash.slice(1))) go(location.hash.slice(1));
+  document.getElementById('mk-theme').addEventListener('click', () => {
+    const h = document.documentElement; h.dataset.bsTheme = h.dataset.bsTheme === 'dark' ? 'light' : 'dark';
+  });
+  document.getElementById('mk-notes').addEventListener('click', () =>
+    document.querySelectorAll('.mk-note').forEach(n => n.classList.toggle('d-none')));
+</script>
+</body>
+</html>

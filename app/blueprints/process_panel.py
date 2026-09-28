@@ -3749,12 +3749,17 @@ def generated_document_detail(process_id, doc_id):
         } if att_ids else {}
         from app.services import jurisprudence_generation_service
         pares = jurisprudence_generation_service.pares_confirmados(confirmed)
+        nao_citadas = set()
+        if pares and version.generation_status == 'completed':
+            nao_citadas = {d.id for d, _ in jurisprudence_generation_service.nao_citadas(
+                law_firm_id, pares, version.content or '')}
         used_documents = {
             'references': [{'id': rid, 'ref': refs_by_id.get(rid)} for rid in ref_ids],
             'attachments': [{'id': aid, 'att': atts_by_id.get(aid)} for aid in att_ids],
             # None = versão de antes da Base de Jurisprudência (seção oculta).
+            # O que foi selecionado, com a marca de quem não aparece no texto da versão.
             'jurisprudence': None if pares is None else [
-                {'decisao': decisao, 'tese': tese}
+                {'decisao': decisao, 'tese': tese, 'citada': decisao.id not in nao_citadas}
                 for decisao, tese in jurisprudence_generation_service.carregar(law_firm_id, pares)
             ],
         }
@@ -3820,6 +3825,14 @@ def generated_document_preview(process_id):
     return jsonify(preview)
 
 
+def _selecao_da_versao_atual(generated_doc):
+    """Cópia do que foi confirmado no wizard para a versão atual (ou None)."""
+    import copy
+    atual = generated_doc.current_version
+    confirmado = atual.confirmed_documents_json if atual else None
+    return copy.deepcopy(confirmado) if isinstance(confirmado, dict) else None
+
+
 @process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/salvar', methods=['POST'])
 @require_law_firm
 def generated_document_save(process_id, doc_id):
@@ -3857,6 +3870,9 @@ def generated_document_save(process_id, doc_id):
         internal_notes=(generated_doc.current_version.internal_notes if generated_doc.current_version else None),
         source='manually_edited',
         generation_status='completed',
+        # A edição parte da versão atual: herda o que foi selecionado para ela,
+        # senão o card "Documentos Utilizados" some depois de salvar.
+        confirmed_documents_json=_selecao_da_versao_atual(generated_doc),
     )
     db.session.add(version)
     db.session.flush()
@@ -3903,6 +3919,10 @@ def generated_document_regenerate(process_id, doc_id):
         source='ai_generated',
         generation_status='processing',
         model_used=model_name,
+        # Sem isto a regeração voltava ao modo automático (peças-modelo
+        # escolhidas pelo sistema, nenhuma jurisprudência da Base) e a escolha
+        # do advogado se perdia em silêncio.
+        confirmed_documents_json=_selecao_da_versao_atual(generated_doc),
     )
     db.session.add(version)
     db.session.flush()

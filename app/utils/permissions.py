@@ -45,6 +45,7 @@ ENDPOINT_MODULE_MAP = {
     'process_panel.': 'process_panel',
     'impugnacao_references.': 'process_panel',
     'jurisprudence.': 'process_panel',
+    'process_knowledge.': 'process_panel',
     'communications.': 'communications',
     'dou.': 'dou',
     'cases.': 'cases',

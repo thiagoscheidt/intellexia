@@ -1,0 +1,171 @@
+{% extends "layout/base.html" %}
+{% from "partials/process_knowledge_header.html" import cabecalho with context %}
+
+{% block title %}Base de Conhecimento - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jurisprudence.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/process_knowledge.css') }}">
+{% endblock %}
+
+{% block content %}
+{% set cor_resultado = {'favoravel': 'var(--jur-fav)', 'parcial': 'var(--jur-par)', 'desfavoravel': 'var(--jur-des)'} %}
+<div class="jur-page kb-hub">
+{{ cabecalho('geral') }}
+
+<form method="get" action="{{ url_for('process_knowledge.buscar') }}" class="card border-0 shadow-sm mb-3">
+  <div class="card-body">
+    <div class="input-group input-group-lg">
+      <span class="input-group-text bg-body d-none d-sm-flex"><i class="bi bi-search"></i></span>
+      <input type="search" name="q" class="form-control" required
+             placeholder="Buscar nas duas bases: tese, termo, nº do processo, vara ou empresa">
+      <button class="btn btn-primary px-3 px-sm-4" aria-label="Buscar"><i class="bi bi-search d-sm-none"></i><span class="d-none d-sm-inline">Buscar</span></button>
+    </div>
+  </div>
+</form>
+
+{% set j = v.jurisprudencia %}{% set p = v.pecas %}
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm base-card h-100"><div class="card-body d-flex flex-column">
+      <div class="d-flex align-items-start gap-3 mb-3">
+        <div class="ico ico-jur"><i class="bi bi-journal-bookmark"></i></div>
+        <div>
+          <h5 class="mb-0">Jurisprudência</h5>
+          <div class="small text-body-secondary">Sentenças, acórdãos e embargos classificados por tese e resultado. Entram na peça como <strong>precedente citado</strong>.</div>
+        </div>
+      </div>
+      <div class="row g-2 mb-3">
+        <div class="col-4 mini-stat"><div class="v">{{ j.decisoes }}</div><div class="l">{{ 'decisão' if j.decisoes == 1 else 'decisões' }}</div></div>
+        <div class="col-4 mini-stat"><div class="v">{{ j.processos }}</div><div class="l">processos</div></div>
+        <div class="col-4 mini-stat">
+          <div class="v" style="color: var(--jur-fav)">{{ (j.pct_a_favor ~ '%') if j.pct_a_favor is not none else '—' }}</div>
+          <div class="l">favoráveis ou parciais</div></div>
+      </div>
+      {% if j.decisoes %}
+      <div class="exito mb-3" role="img" aria-label="Distribuição dos resultados">
+        {% for e in j.exito if e.n %}<a href="{{ url_for('jurisprudence.index', resultado=e.resultado) }}" class="{{ e.resultado }}"
+           style="width: {{ '%.2f' | format(e.pct) }}%" title="{{ e.rotulo }} · {{ e.n }}"></a>{% endfor %}
+      </div>
+      {% endif %}
+      <div class="d-flex flex-wrap gap-2 mt-auto">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('jurisprudence.index') }}"><i class="bi bi-search me-1"></i>Pesquisar</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('jurisprudence.enviar') }}"><i class="bi bi-cloud-arrow-up me-1"></i>Enviar decisões</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('jurisprudence.importar') }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Importar planilha</a>
+      </div>
+    </div></div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card border-0 shadow-sm base-card h-100"><div class="card-body d-flex flex-column">
+      <div class="d-flex align-items-start gap-3 mb-3">
+        <div class="ico ico-pec"><i class="bi bi-bookmark-star"></i></div>
+        <div>
+          <h5 class="mb-0">Peças-modelo de impugnação</h5>
+          <div class="small text-body-secondary">Impugnações do escritório que servem de molde. Entram na peça como <strong>estrutura e estilo</strong>.</div>
+        </div>
+      </div>
+      <div class="row g-2 mb-3">
+        <div class="col-4 mini-stat"><div class="v">{{ p.pecas }}</div><div class="l">{{ 'peça ativa' if p.pecas == 1 else 'peças ativas' }}</div></div>
+        <div class="col-4 mini-stat"><div class="v">{{ p.trechos }}</div><div class="l">trechos indexados</div></div>
+        <div class="col-4 mini-stat"><div class="v">{{ p.por_trf | length }}</div><div class="l">{{ 'TRF coberto' if p.por_trf | length == 1 else 'TRFs cobertos' }}</div></div>
+      </div>
+      {% if p.pecas %}
+      <div class="d-flex flex-wrap gap-1 mb-3 small">
+        {% for trf, n in p.por_trf %}<a class="badge text-bg-light border text-decoration-none" href="{{ url_for('impugnacao_references.list_references', trf=trf) }}">{{ trf }} · {{ n }}</a>{% endfor %}
+        {% if p.trfs_sem_peca %}<span class="badge border bg-transparent text-body-secondary">{{ p.trfs_sem_peca | join(', ') }} · nenhuma</span>{% endif %}
+      </div>
+      {% endif %}
+      <div class="d-flex flex-wrap gap-2 mt-auto">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('impugnacao_references.list_references') }}"><i class="bi bi-collection me-1"></i>Ver peças</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('impugnacao_references.new_reference') }}"><i class="bi bi-plus-lg me-1"></i>Nova peça</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('impugnacao_references.import_new') }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Importar de planilha</a>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-xl-4">
+    <div class="card border-0 shadow-sm h-100"><div class="card-body">
+      <h6 class="fw-bold mb-2"><i class="bi bi-flag me-1 text-warning"></i>Precisa de atenção</h6>
+      {% set destinos = {
+        'teses': url_for('jurisprudence.teses'),
+        'sem_peca': '#cobertura',
+        'pecas_falha': url_for('impugnacao_references.list_references'),
+        'pecas_processando': url_for('impugnacao_references.list_references'),
+        'pdf_falha': url_for('jurisprudence.enviar'),
+        'pdf_revisar': url_for('jurisprudence.enviar'),
+      } %}
+      {% for item in v.pendencias %}
+      <div class="pend-item">
+        <span class="n text-{{ item.cor if item.cor != 'secondary' else 'body' }}">{{ item.n }}</span>
+        <div class="flex-grow-1 small">{{ item.texto }}</div>
+        <a href="{{ destinos[item.chave] }}" class="small text-nowrap">{{ item.acao }}</a>
+      </div>
+      {% else %}
+      <div class="text-center text-body-secondary py-4">
+        <i class="bi bi-check2-circle fs-2" style="color: var(--jur-fav)"></i>
+        <p class="small mb-0 mt-1">Nada pendente nas duas bases.</p>
+      </div>
+      {% endfor %}
+    </div></div>
+  </div>
+
+  <div class="col-xl-8">
+    <div class="card border-0 shadow-sm h-100" id="cobertura"><div class="card-body">
+      {% set com_lacuna = v.cobertura | rejectattr('situacao', 'equalto', 'coberta') | list %}
+      {% set linhas = v.cobertura if filtro == 'todas' else com_lacuna %}
+      <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-1">
+        <h6 class="fw-bold mb-0"><i class="bi bi-bar-chart-steps me-1"></i>Cobertura por tese</h6>
+        {% if v.cobertura %}
+        <div class="btn-group btn-group-sm">
+          <a class="btn btn-outline-secondary {{ 'active' if filtro != 'todas' }}" href="{{ url_for('process_knowledge.index') }}#cobertura">Com lacuna <span class="badge text-bg-light border">{{ com_lacuna | length }}</span></a>
+          <a class="btn btn-outline-secondary {{ 'active' if filtro == 'todas' }}" href="{{ url_for('process_knowledge.index', cobertura='todas') }}#cobertura">Todas <span class="badge text-bg-light border">{{ v.cobertura | length }}</span></a>
+        </div>
+        {% endif %}
+      </div>
+      <p class="small text-body-secondary mb-2">Para cada tese do catálogo: há peça-modelo para dar a estrutura? Há decisão favorável para citar? É o mesmo aviso "sem peça-modelo" da geração, visto <strong>antes</strong> de gerar.</p>
+      {% set teses_sem_ligacao = (v.pendencias | selectattr('chave', 'equalto', 'teses') | map(attribute='n') | list | first) or 0 %}
+      {% if teses_sem_ligacao %}
+      <div class="alert alert-warning py-2 px-3 small mb-2">
+        <i class="bi bi-info-circle me-1"></i>A coluna <strong>Decisões</strong> só conta as teses já ligadas ao catálogo, e
+        {{ teses_sem_ligacao }} {{ 'tese das decisões ainda não está ligada' if teses_sem_ligacao == 1 else 'teses das decisões ainda não estão ligadas' }}.
+        "Sem decisão" aqui pode ser só ligação pendente —
+        <a href="{{ url_for('jurisprudence.teses') }}">fazer a correspondência</a>.
+      </div>
+      {% endif %}
+      {% if not v.cobertura %}
+      <p class="text-body-secondary small mb-0">O catálogo de teses do painel está vazio.</p>
+      {% elif not linhas %}
+      <p class="small mb-0" style="color: var(--jur-fav)"><i class="bi bi-check2-circle me-1"></i>Todas as teses do catálogo têm peça-modelo e decisão favorável.</p>
+      {% else %}
+      <div class="table-responsive">
+        <table class="table table-sm cov mb-0">
+          <thead><tr><th>Tese do catálogo</th><th class="text-end">Peças</th><th class="text-end">Decisões</th><th>Resultado</th><th></th></tr></thead>
+          <tbody>
+          {% for l in linhas %}
+            <tr>
+              <td>{{ l.tese.name }}</td>
+              <td class="text-end {{ 'text-danger fw-bold' if not l.pecas }}">
+                {% if l.pecas %}<a href="{{ url_for('impugnacao_references.list_references', tese=l.tese.key) }}">{{ l.pecas }}</a>{% else %}0{% endif %}</td>
+              <td class="text-end {{ 'text-danger fw-bold' if not l.decisoes }}">
+                {% if l.decisoes %}<a href="{{ url_for('jurisprudence.index', tese=l.tese.id) }}">{{ l.decisoes }}</a>{% else %}0{% endif %}</td>
+              <td>
+                {% if l.decisoes %}
+                <div class="bar" title="{% for r, n in l.resultados.items() %}{{ r | jur_resultado }}: {{ n }}{{ ' · ' if not loop.last }}{% endfor %}">
+                  {% for r, n in l.resultados.items() if n %}<span style="width: {{ '%.2f' | format(100.0 * n / l.decisoes) }}%; background: {{ cor_resultado[r] }}"></span>{% endfor %}
+                </div>
+                {% else %}<span class="small text-body-secondary">—</span>{% endif %}
+              </td>
+              <td><span class="situacao situacao-{{ l.situacao }}">{{ l.rotulo }}</span></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+    </div></div>
+  </div>
+</div>
+</div>
+{% endblock %}

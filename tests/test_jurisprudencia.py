@@ -709,6 +709,8 @@ def test_geracao_no_painel():
     check('o worker entrega o bloco ao agente, com a citação da decisão escolhida',
           '[Tese: TRAJETO - B91]' in bloco and (decisao.processo or '')[:15] in bloco,
           f'{versao.generation_status} {versao.error_message} {bloco[:200]}')
+    html_detalhe = cliente.get(f'{base}/{doc_id}').get_data(as_text=True)
+    check('detalhe marca a decisão selecionada que não foi citada', 'não citada' in html_detalhe)
     check('a peça que não citou a decisão marcada ganha item de checklist nas notas internas',
           'Jurisprudência marcada não foi citada na tese "TRAJETO - B91"' in (versao.internal_notes or ''),
           versao.internal_notes)
@@ -730,8 +732,31 @@ def test_geracao_no_painel():
           versao.internal_notes)
 
     resp = cliente.get(f'{base}/{doc_id}')
-    check('detalhe lista a jurisprudência citada',
-          resp.status_code == 200 and 'Jurisprudência citada' in resp.get_data(as_text=True), resp.status_code)
+    html_detalhe = resp.get_data(as_text=True)
+    check('detalhe lista a jurisprudência selecionada',
+          resp.status_code == 200 and 'Jurisprudência selecionada' in html_detalhe, resp.status_code)
+    check('a que foi citada não leva o selo "não citada"', 'não citada' not in html_detalhe)
+
+    selecao = db.session.get(V, versao_id).confirmed_documents_json
+    cliente.post(f'{base}/{doc_id}/salvar', data={'content': 'Texto editado à mão.'})
+    doc = db.session.get(JudicialProcessGeneratedDocument, doc_id)
+    check('a versão editada à mão herda a seleção', doc.current_version.confirmed_documents_json == selecao,
+          doc.current_version.confirmed_documents_json)
+    check('e o card continua na tela depois de editar',
+          'Documentos Utilizados' in cliente.get(f'{base}/{doc_id}').get_data(as_text=True))
+
+    disparos = []
+    original = pp._spawn_generated_document_generation
+    pp._spawn_generated_document_generation = lambda *a, **k: disparos.append(a)
+    try:
+        cliente.post(f'{base}/{doc_id}/regerar', data={})
+    finally:
+        pp._spawn_generated_document_generation = original
+    doc = db.session.get(JudicialProcessGeneratedDocument, doc_id)
+    check('regerar reaproveita a seleção do advogado (não volta ao automático)',
+          disparos and doc.current_version.confirmed_documents_json == selecao, doc.current_version.confirmed_documents_json)
+    check('a cópia é independente da versão de origem',
+          doc.current_version.confirmed_documents_json is not db.session.get(V, versao_id).confirmed_documents_json)
 
 
 def test_reset():

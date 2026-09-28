@@ -1049,6 +1049,26 @@
                         Resumo Executivo
                     </div>
                     <div class="card-body">
+                        {# RPI-20: sem ponto de atenção, a revisão é um resultado limpo. Contadores
+                           zerados, riscos e prioridade sairiam como pendência que não existe —
+                           o modelo costuma escrevê-los mesmo assim, até sobre a rodada anterior. #}
+                        {% if not result_data.findings %}
+                        {% set missing_count = (result_data.missing_documents or [])|length %}
+                        <div class="d-flex align-items-start gap-3 p-3 rounded bg-success-subtle border border-success-subtle">
+                            <i class="bi bi-check-circle-fill text-success fs-3 lh-1"></i>
+                            <div>
+                                <div class="fw-semibold text-success-emphasis">Nenhum ponto de atenção nesta revisão</div>
+                                <div class="small text-body-secondary">A petição passou pela revisão sem apontamentos.</div>
+                                {% if missing_count %}
+                                <div class="small mt-2 text-warning-emphasis">
+                                    <i class="bi bi-folder2-open me-1"></i>Mas falta{{ 'm' if missing_count > 1 }}
+                                    {{ missing_count }} documento{{ 's' if missing_count > 1 }} obrigatório{{ 's' if missing_count > 1 }} —
+                                    <a href="#missingDocumentsCard" class="link-warning">ver quais</a>.
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% else %}
                         <div class="row g-3 mb-4">
                             <div class="col-sm-6 col-lg-3">
                                 <div class="summary-stat" style="border-left: 4px solid #6c757d;">
@@ -1092,10 +1112,7 @@
                             </div>
                         </div>
 
-                        {# RPI-20: o agente já zera os riscos sem achado nem documento em falta;
-                           a condição aqui cobre as revisões gravadas antes disso. #}
-                        {% if result_data.executive_summary.main_legal_risks
-                              and (result_data.findings or result_data.missing_documents) %}
+                        {% if result_data.executive_summary.main_legal_risks %}
                         <div class="mb-3 p-3 rounded"
                             style="background: rgba(220, 53, 69, 0.05); border-left: 4px solid #dc3545;">
                             <div class="d-flex align-items-center gap-2 mb-2">
@@ -1127,6 +1144,7 @@
                             <p class="priority-detail">{{ priority.detail }}</p>
                             {% endif %}
                         </div>
+                        {% endif %}
                         {% endif %}
                     </div>
                 </div>
@@ -1748,7 +1766,7 @@
                     {% endif %}
 
             {% if result_data.missing_documents %}
-            <div class="col-12">
+            <div class="col-12" id="missingDocumentsCard">
                 <div class="card info-card">
                     <div class="card-header d-flex align-items-center gap-2">
                         <i class="bi bi-folder2-open text-danger"></i>

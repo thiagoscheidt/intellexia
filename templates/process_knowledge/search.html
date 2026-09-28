@@ -1,0 +1,109 @@
+{% extends "layout/base.html" %}
+{% from "partials/process_knowledge_header.html" import cabecalho with context %}
+{% from "jurisprudence/_macros.html" import res_pill %}
+
+{% block title %}Buscar na Base de Conhecimento - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jurisprudence.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/process_knowledge.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="jur-page kb-hub">
+{{ cabecalho('geral', [('Busca', None)]) }}
+
+{% set jr = r.jurisprudencia %}{% set pr = r.pecas %}
+<form method="get" class="card border-0 shadow-sm mb-3"><div class="card-body">
+  <div class="input-group">
+    <span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
+    <input type="search" name="q" value="{{ r.consulta }}" class="form-control" autofocus required
+           placeholder="Tese, termo, nº do processo, vara ou empresa">
+    <input type="hidden" name="em" value="{{ r.escopo }}">
+    <button class="btn btn-primary">Buscar</button>
+  </div>
+  {% if r.consulta %}
+  <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+    <span class="small text-body-secondary">Procurar em:</span>
+    <div class="btn-group btn-group-sm" role="group">
+      <a class="btn btn-outline-secondary {{ 'active' if r.escopo == 'tudo' }}" href="{{ url_for('process_knowledge.buscar', q=r.consulta) }}">Tudo</a>
+      <a class="btn btn-outline-secondary {{ 'active' if r.escopo == 'jurisprudencia' }}" href="{{ url_for('process_knowledge.buscar', q=r.consulta, em='jurisprudencia') }}">Jurisprudência</a>
+      <a class="btn btn-outline-secondary {{ 'active' if r.escopo == 'pecas' }}" href="{{ url_for('process_knowledge.buscar', q=r.consulta, em='pecas') }}">Peças-modelo</a>
+    </div>
+  </div>
+  {% endif %}
+</div></form>
+
+{% if not r.consulta %}
+<div class="card border-0 shadow-sm"><div class="card-body text-center py-5 text-body-secondary">
+  <i class="bi bi-search display-5"></i>
+  <p class="mt-3 mb-0">Digite o que procura. A busca olha as decisões da jurisprudência e os trechos das peças-modelo.</p>
+</div></div>
+{% else %}
+<div class="row g-3">
+  {% if jr is not none %}
+  <div class="{{ 'col-lg-7' if pr is not none else 'col-12' }} res-grupo">
+    <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-1">
+      <h6 class="mb-0"><i class="bi bi-journal-bookmark me-1"></i>Jurisprudência · {{ jr.total }} {{ 'decisão' if jr.total == 1 else 'decisões' }} em {{ jr.processos }} {{ 'processo' if jr.processos == 1 else 'processos' }}</h6>
+      {% if jr.total %}<a class="small" href="{{ url_for('jurisprudence.index', q=r.consulta) }}">abrir na pesquisa de jurisprudência</a>{% endif %}
+    </div>
+    {% if jr.total %}
+    <div class="exito my-2" role="img" aria-label="Distribuição dos resultados">
+      {% for e in jr.exito if e.n %}<a href="{{ url_for('jurisprudence.index', q=r.consulta, resultado=e.resultado) }}" class="{{ e.resultado }}"
+         style="width: {{ '%.2f' | format(e.pct) }}%" title="{{ e.rotulo }} · {{ e.n }}"></a>{% endfor %}
+    </div>
+    {% for c in jr.cartoes %}
+    {% set d = c.destaque %}
+    <div class="card border-0 shadow-sm proc-card mb-2"><div class="card-body py-2">
+      <div class="d-flex flex-wrap justify-content-between gap-2">
+        <div><a class="proc-num text-decoration-none" href="{{ url_for('jurisprudence.decisao', decision_id=d.id) }}">{{ c.processo or 'sem número' }}</a>
+          {% if c.parte_autora %}· <strong>{{ c.parte_autora }}</strong>{% endif %}</div>
+        {{ res_pill(d.resultado) }}
+      </div>
+      <div class="small text-body-secondary">{{ d.tipo_documento | jur_tipo }} · {{ ' · '.join([d.tribunal, d.orgao_julgador] | select | list) }}{% if d.data_julgamento %} · {{ d.data_julgamento.strftime('%m/%Y') }}{% endif %}
+        {% if c.trilha | length > 1 %}· {{ c.trilha | length }} decisões no processo{% endif %}
+        {% if c.virada %}<span class="virada ms-1"><i class="bi bi-arrow-up-right-circle-fill me-1"></i>virou no acórdão</span>{% endif %}</div>
+      {% if c.trecho %}<p class="snippet mb-0 mt-1">{{ c.trecho | safe }}</p>{% endif %}
+    </div></div>
+    {% endfor %}
+    {% if r.escopo == 'tudo' and jr.processos > jr.cartoes | length %}
+    <a class="small" href="{{ url_for('process_knowledge.buscar', q=r.consulta, em='jurisprudencia') }}">+ {{ jr.processos - jr.cartoes | length }} processos</a>
+    {% endif %}
+    {% else %}
+    <p class="small text-body-secondary">Nenhuma decisão com todos os termos.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if pr is not none %}
+  <div class="{{ 'col-lg-5' if jr is not none else 'col-12' }} res-grupo">
+    <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-1">
+      <h6 class="mb-0"><i class="bi bi-bookmark-star me-1"></i>Peças-modelo · {{ pr.total_trechos }} {{ 'trecho' if pr.total_trechos == 1 else 'trechos' }} em {{ pr.total_pecas }} {{ 'peça' if pr.total_pecas == 1 else 'peças' }}</h6>
+      {% if pr.total_pecas %}<a class="small" href="{{ url_for('impugnacao_references.list_references', q=r.consulta) }}">abrir nas peças-modelo</a>{% endif %}
+    </div>
+    {% if pr.indisponivel %}
+    <div class="alert alert-light border small py-2 my-2"><i class="bi bi-info-circle me-1"></i>A busca por trechos está fora do ar; resultado pela busca simples, sem ordem de relevância.</div>
+    {% endif %}
+    {% for g in pr.grupos %}
+    <div class="card border-0 shadow-sm mb-2"><div class="card-body py-2">
+      <div class="d-flex justify-content-between gap-2">
+        <a class="small fw-bold text-decoration-none" href="{{ url_for('impugnacao_references.reference_detail', ref_id=g.peca.id) }}">{{ g.peca.title }}</a>
+        {% if g.peca.trf_region %}<span class="badge text-bg-light border align-self-start">{{ g.peca.trf_region }}</span>{% endif %}
+      </div>
+      <div class="small text-body-secondary mb-1">{{ g.peca.orgao_julgador or '' }}{% if g.n > g.trechos | length %} · {{ g.n }} trechos{% endif %}</div>
+      {% for t in g.trechos %}
+      <div class="trecho-pec {{ 'mt-1' if not loop.first }}">{% if t.secao %}<span class="badge text-bg-light border me-1">{{ t.secao[:60] }}</span>{% endif %}{{ t.html | safe }}</div>
+      {% endfor %}
+    </div></div>
+    {% else %}
+    <p class="small text-body-secondary">Nenhum trecho de peça-modelo com esse termo.</p>
+    {% endfor %}
+    {% if r.escopo == 'tudo' and pr.total_pecas > pr.grupos | length %}
+    <a class="small" href="{{ url_for('process_knowledge.buscar', q=r.consulta, em='pecas') }}">+ {{ pr.total_pecas - pr.grupos | length }} peças</a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+</div>
+{% endblock %}

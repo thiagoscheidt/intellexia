@@ -1,17 +1,16 @@
 {% extends "layout/base.html" %}
-{% from "partials/page_hero.html" import page_hero %}
+{% from "partials/process_knowledge_header.html" import cabecalho with context %}
 
-{% block title %}Peças-Modelo de Impugnação - IntellexIA{% endblock %}
+{% block title %}Peças-modelo · Base de Conhecimento - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/jurisprudence.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/process_knowledge.css') }}">
+{% endblock %}
 
 {% block content %}
-{% call page_hero(title='Peças-Modelo de Impugnação', subtitle='Base de referências de estilo do escritório usada pelo agente gerador de impugnação à contestação.', icon='bi bi-collection') %}
-<nav aria-label="breadcrumb">
-    <ol class="breadcrumb mb-0 bg-transparent small">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Peças-Modelo</li>
-    </ol>
-</nav>
-{% endcall %}
+{# Aba "Peças-modelo" da Base de Conhecimento do Painel de Processos. #}
+<div class="jur-page">{{ cabecalho('pecas') }}</div>
 
 <div class="app-content">
     <div class="container-fluid">

@@ -692,7 +692,7 @@ breadcrumbs=[
                     <i class="bi bi-journal-bookmark me-1"></i>Jurisprudência a Citar
                   </div>
                   <p class="text-muted small mb-2">
-                    Decisões da <a href="{{ url_for('jurisprudence.index') }}" target="_blank">Base de Jurisprudência</a>
+                    Decisões da <a href="{{ url_for('jurisprudence.index') }}" target="_blank">jurisprudência da Base de Conhecimento</a>
                     ligadas às teses selecionadas: primeiro as favoráveis, do mesmo TRF, de instância mais alta e mais
                     recentes. As marcadas vão ao prompt com a citação pronta; a <strong>contrária</strong> marcada serve
                     para a peça antecipar e rebater o entendimento, nunca para citar a favor.
@@ -1070,7 +1070,7 @@ breadcrumbs=[
       const grupos = data.jurisprudencia || [];
       if (data.jurisprudencia_erro) {
         status.className = 'alert alert-warning py-2 px-3 small mb-2';
-        status.textContent = 'Base de Jurisprudência indisponível agora — o documento será gerado sem ela.';
+        status.textContent = 'Jurisprudência da Base de Conhecimento indisponível agora — o documento será gerado sem ela.';
         return;
       }
       if (!grupos.length) {
@@ -1086,7 +1086,7 @@ breadcrumbs=[
         if (!g.decisoes.length) {
           const vazio = document.createElement('div');
           vazio.className = 'text-muted small fst-italic ps-1';
-          vazio.textContent = 'Nenhuma decisão ligada a esta tese. Ligue as teses em Base de Jurisprudência › Teses.';
+          vazio.textContent = 'Nenhuma decisão ligada a esta tese. Ligue as teses em Base de Conhecimento › Jurisprudência › Teses.';
           container.appendChild(vazio);
           return;
         }
