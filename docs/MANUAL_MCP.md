@@ -15,6 +15,7 @@ O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de 
 - "Quantos benefícios temos do BISTEK?" — respondido em segundos pelo resumo estatístico;
 - "**Me mostra o painel do FAP do BISTEK**" — abre um painel visual, com cartões e gráficos, dentro da própria conversa;
 - "Liste as contestações FAP da vigência 2023 que estão indeferidas";
+- "Qual foi o resultado da contestação de protocolo 10128.053144/2025-42?" — e, na sequência, "quais benefícios dela foram deferidos?";
 - "O que temos na base de conhecimento sobre acidente de trajeto?";
 - "Pesquise o NB 6320957810 nos documentos" — retorna os trechos com link para abrir o PDF;
 - "Me traga todos os benefícios B91 de 2023 **em planilha**" — gera o Excel oficial do sistema com link de download;
@@ -82,9 +83,9 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | Ferramenta | O que faz | Origem |
 |---|---|---|
 | `listar_empresas_fap` | Empresas sincronizadas — busca por **parte do nome**, CNPJ ou tipo de procuração | FAP Web |
-| `listar_contestacoes_fap` | Contestações com filtros (CNPJ, raiz, vigência, situação, instância), nome da empresa e status do PDF | FAP Web |
+| `listar_contestacoes_fap` | Contestações com filtros (**protocolo**, CNPJ, raiz, vigência, situação, instância), com resultado do deferimento, nome da empresa e status do PDF | FAP Web |
 | `detalhar_contestacao` | Contestação completa + **benefícios vinculados** + alterações recentes + **link do PDF** | FAP Web |
-| `listar_beneficios_fap` | Benefícios com filtros ricos (**empresa por nome**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) | FAP Web |
+| `listar_beneficios_fap` | Benefícios com filtros ricos (**empresa por nome**, **protocolo da contestação**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) e o status em cada instância | FAP Web |
 | `detalhar_beneficio` | Todos os campos de um benefício, incluindo justificativas, pareceres e decisões de julgamento | Sistema |
 | `listar_procuracoes_fap` | Procurações eletrônicas com situação e vigência | FAP Web |
 | `valores_de_filtro_fap` | Códigos e valores válidos para filtros (situações, instâncias, tópicos, motivos) — a IA consulta antes de filtrar | Sistema |
@@ -105,6 +106,8 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 > [!IA] **O painel funciona em qualquer assistente.** Onde o aplicativo sabe desenhar painéis, você vê os cartões e gráficos; onde não sabe, a mesma resposta chega em texto, com os totais e as principais dimensões. Você nunca fica sem o número por causa do aplicativo que está usando.
 
 > [!ALERTA] **O painel diz o que está deixando de fora.** Em dimensões com muitos valores — tópicos de contestação e empresas — ele mostra os **8 maiores** e agrupa o restante numa faixa `outros (N)` visível. E no cartão de tópicos aparece a cobertura real da classificação (por exemplo, "206 de 2899 benefícios têm tópico classificado"), para que a leitura não sugira que todos os benefícios foram classificados.
+
+> [!INFO] **Pelo protocolo:** o número pode ir com ou sem pontuação (`10128.053144/2025-42` ou `10128053144202542`), completo ou só um trecho. As contestações de 1ª e de 2ª instância têm o mesmo protocolo, então as duas voltam juntas. Os benefícios de um protocolo são os da mesma empresa (CNPJ) e vigência da contestação — o **mesmo critério** do filtro "Protocolo administrativo" da tela de Benefícios, então a IA e a tela dão o mesmo número.
 
 > [!IA] **Listas grandes:** as consultas trazem uma página por vez (e dizem quantos registros existem no total). Havendo mais, a IA busca as páginas seguintes sozinha quando fizer sentido — mas para *todos* os registros o caminho certo é pedir a **planilha em Excel**, e para números agregados, o resumo.
 

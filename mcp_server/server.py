@@ -323,12 +323,19 @@ def listar_contestacoes_fap(
     ano_vigencia: int | None = None,
     situacao_codigo: str | None = None,
     instancia_codigo: str | None = None,
+    protocolo: str | None = None,
     limite: int = 100,
     deslocamento: int = 0,
 ) -> dict:
     """Lista contestações FAP sincronizadas do portal Dataprev, com total encontrado.
 
+    Para "qual o resultado do protocolo X?", filtre por protocolo: uma chamada
+    traz a contestação de cada instância com situação e resultado — não pagine
+    a lista procurando o número.
+
     Args:
+        protocolo: Protocolo administrativo (NUP), com ou sem pontuação
+            (10128.053144/2025-42 ou 10128053144202542), completo ou um trecho.
         cnpj: CNPJ do estabelecimento (14 dígitos, apenas números).
         cnpj_raiz: Raiz do CNPJ (8 dígitos) para pegar todos os estabelecimentos.
         ano_vigencia: Ano de vigência FAP (ex: 2023).
@@ -340,14 +347,15 @@ def listar_contestacoes_fap(
 
     Returns:
         Dicionário com 'total_encontrado', 'retornados' e 'itens' (cada item com
-        identificação, instância, situação, data D.O.U. e se o PDF já foi baixado).
+        identificação, instância, situação, resultado do deferimento, data D.O.U.
+        e se o PDF já foi baixado).
     """
     claims = require_module("fap_panel")
     with app.app_context():
         return list_fap_contestacoes_handler(
             claims["law_firm_id"], cnpj, cnpj_raiz, ano_vigencia,
             situacao_codigo, instancia_codigo, limite, deslocamento,
-            app_public_url=APP_PUBLIC_URL,
+            app_public_url=APP_PUBLIC_URL, protocolo=protocolo,
         )
 
 
@@ -364,6 +372,7 @@ def listar_beneficios_fap(
     numero_beneficio: str | None = None,
     ano_vigencia: str | None = None,
     empresa: str | None = None,
+    protocolo: str | None = None,
     limite: int = 50,
     deslocamento: int = 0,
 ) -> dict:
@@ -385,6 +394,10 @@ def listar_beneficios_fap(
         cpf: CPF do segurado (busca exata, apenas números).
         numero_beneficio: Número do benefício (busca exata).
         ano_vigencia: Ano de vigência FAP em que o benefício aparece (ex: "2023").
+        protocolo: Protocolo administrativo da contestação (com ou sem pontuação,
+            completo ou trecho) — traz os benefícios daquela contestação (CNPJ +
+            vigência), com o status de cada um na 1ª e na 2ª instância. É o
+            mesmo critério do filtro de protocolo da tela de Benefícios.
         limite: Número máximo de registros retornados (padrão 50).
         deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
             'proximo_deslocamento' que veio na resposta anterior.
@@ -398,7 +411,7 @@ def listar_beneficios_fap(
         return list_fap_benefits_handler(
             claims["law_firm_id"], cnpj, status, tipo_pedido, tipo_beneficio,
             topico_contestacao, segurado, nit, cpf, numero_beneficio, ano_vigencia,
-            empresa, limite, deslocamento,
+            empresa, limite, deslocamento, protocolo=protocolo,
         )
 
 

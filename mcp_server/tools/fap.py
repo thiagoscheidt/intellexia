@@ -157,14 +157,20 @@ def list_fap_contestacoes_handler(
     limit: int = 100,
     offset: int = 0,
     app_public_url: str | None = None,
+    protocolo: str | None = None,
 ) -> dict:
     """Retorna contestações FAP filtradas, com total encontrado."""
     from app.models import FapWebContestacao
+    from app.services import fap_protocolo_service
 
     limit = clamp_limit(limit, 100)
     offset = clamp_offset(offset)
 
-    query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
+    query = None
+    if protocolo:
+        query = fap_protocolo_service.contestacoes_query(law_firm_id, protocolo)
+    if query is None:
+        query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
 
     if cnpj:
         query = query.filter(FapWebContestacao.cnpj == cnpj)
@@ -198,6 +204,7 @@ def list_fap_contestacoes_handler(
             "instancia_descricao": c.instancia_descricao,
             "situacao_codigo": c.situacao_codigo,
             "situacao_descricao": c.situacao_descricao,
+            "resultado_deferimento": c.deferimento_descricao,
             "protocolo": c.protocolo,
             "data_transmissao": _iso(c.data_transmissao),
             "data_dou": _iso(c.data_dou_date),
@@ -270,6 +277,9 @@ def get_contestacao_detail_handler(contestacao_id: int, law_firm_id: int,
         "ultima_sincronizacao": _iso(c.last_synced_at),
         "beneficios_vinculados": {
             "total": ben_q.count(),
+            # Aqui vêm até 50; a lista inteira, com o resultado por instância,
+            # sai de listar_beneficios_fap pelo protocolo.
+            "ver_todos": f"listar_beneficios_fap(protocolo='{c.protocolo}')" if c.protocolo else None,
             "por_status_primeira_instancia": por_status_1a,
             "itens": [
                 {
@@ -314,14 +324,23 @@ def list_fap_benefits_handler(
     empresa: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    protocolo: str | None = None,
 ) -> dict:
     """Retorna benefícios FAP filtrados, com total encontrado."""
     from app.models import Benefit, db
+    from app.services import fap_protocolo_service
 
     limit = clamp_limit(limit, 50)
     offset = clamp_offset(offset)
 
     query = Benefit.query.filter_by(law_firm_id=law_firm_id)
+
+    if protocolo:
+        # Mesmo critério do filtro da tela de Benefícios: a vigência (CNPJ + ano)
+        # das contestações com esse protocolo.
+        ids = fap_protocolo_service.vigencia_ids(law_firm_id, protocolo)
+        if ids is not None:
+            query = query.filter(Benefit.fap_vigencia_cnpj_id.in_(ids or [-1]))
 
     if cnpj:
         query = _filter_benefit_cnpj(query, cnpj)

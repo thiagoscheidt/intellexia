@@ -43,6 +43,11 @@ contestacao_id=c.contestacao_id) -%}
         aria-label="Detalhes da contestação {{ c.contestacao_id }}">
         <i class="bi bi-info-circle"></i>
       </button>
+      {% if c.protocolo and can_view_module('disputes_center') %}
+      <a href="{{ url_for('disputes_center.list_disputes_center', protocolo=c.protocolo) }}"
+        class="btn-cell btn-cell-icon btn-cell-details" title="Ver os benefícios desta contestação"
+        aria-label="Benefícios da contestação {{ c.protocolo }}"><i class="bi bi-card-list"></i></a>
+      {% endif %}
     </div>
 
     {% if aguardando_reprocesso %}

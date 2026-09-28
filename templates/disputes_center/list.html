@@ -919,6 +919,12 @@
     const filters = [];
     const urlParams = new URLSearchParams(window.location.search);
     const initialVigenciaId = (urlParams.get('vigencia_id') || '').trim();
+    // Chegando do Painel FAP (atalho "ver os benefícios desta contestação"),
+    // o protocolo vem na URL e já entra no filtro antes da primeira carga.
+    const initialProtocolo = (urlParams.get('protocolo') || '').trim();
+    if (initialProtocolo) {
+      $('#quickProtocoloFilter').val(initialProtocolo);
+    }
     const cnpjByRoot = {{ cnpj_by_root | tojson
   }};
 

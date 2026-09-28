@@ -13,6 +13,7 @@ from app.services.fap_web_service import (
 from app.services.fap_contestation_judgment_report_service import FapContestationJudgmentReportService
 from app.services import fap_group_service
 from app.services import fap_vigencia_service
+from app.services import fap_protocolo_service
 from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 
 from app.utils.timezone import now_sp
@@ -658,56 +659,10 @@ def _vigencia_no_grupo(vigencia, grupo_raizes, selected_grupo):
 def _vigencia_ids_by_protocolo(law_firm_id, protocolo_text):
     """Ids de vigência cujas contestações no FAP Web batem com o protocolo.
 
-    Aceita o número com ou sem máscara: "10128.053144/2025-42",
-    "10128053144202542" e um trecho como "053144" chegam ao mesmo registro,
-    porque tanto a busca quanto a coluna são reduzidas a dígitos antes da
-    comparação. Casamento parcial (LIKE) — digitar só o miolo do NUP funciona.
-
-    Devolve None quando não há termo de busca (não filtrar) e [] quando o termo
-    não casa com nada (filtrar para vazio, em vez de ignorar o filtro).
+    Regra em ``fap_protocolo_service`` — a mesma do MCP, para tela e IA darem
+    o mesmo número. None = sem termo (não filtrar); [] = nada casou.
     """
-    digits = ''.join(ch for ch in (protocolo_text or '') if ch.isdigit())
-    if not digits:
-        return None
-
-    protocolo_normalizado = func.replace(
-        func.replace(
-            func.replace(
-                func.replace(cast(FapWebContestacao.protocolo, String), '.', ''),
-                '/',
-                '',
-            ),
-            '-',
-            '',
-        ),
-        ' ',
-        '',
-    )
-
-    pares = {
-        (_vigencia_cnpj_key(cnpj), str(ano or '').strip())
-        for cnpj, ano in db.session.query(
-            FapWebContestacao.cnpj, FapWebContestacao.ano_vigencia
-        ).filter(
-            FapWebContestacao.law_firm_id == law_firm_id,
-            protocolo_normalizado.like(f'%{digits}%'),
-        )
-    }
-    if not pares:
-        return []
-
-    # O par (CNPJ, ano) é resolvido em Python: `ano_vigencia` é inteiro e
-    # `vigencia_year` é texto, e o CNPJ precisa da mesma normalização usada na
-    # sincronização — comparar direto no SQL dependeria de cast frágil.
-    return [
-        vigencia_id
-        for vigencia_id, cnpj, ano in db.session.query(
-            FapVigenciaCnpj.id,
-            FapVigenciaCnpj.employer_cnpj,
-            FapVigenciaCnpj.vigencia_year,
-        ).filter(FapVigenciaCnpj.law_firm_id == law_firm_id)
-        if (_vigencia_cnpj_key(cnpj), str(ano or '').strip()) in pares
-    ]
+    return fap_protocolo_service.vigencia_ids(law_firm_id, protocolo_text)
 
 
 def _apply_protocolo_filter(query, law_firm_id, quick_protocolo, vigencia_fk_column):
