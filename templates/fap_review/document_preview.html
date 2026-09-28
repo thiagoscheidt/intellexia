@@ -87,7 +87,9 @@
 </head>
 
 <body>
-    {% if content_html %}
+    {% if missing_message %}
+    <div class="preview-error">{{ missing_message }}</div>
+    {% elif content_html %}
     <div class="docx-preview">{{ content_html | safe }}</div>
     {% else %}
     <div class="preview-error">

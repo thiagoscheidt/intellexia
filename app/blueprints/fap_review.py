@@ -2400,8 +2400,7 @@ def revision_main_document_preview(execution_id: int):
     file_path = str(execution.main_document_path or '').strip()
     path = Path(file_path)
     if not file_path or not path.exists() or not path.is_file():
-        flash('Documento principal não disponível para esta execução.', 'warning')
-        return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
+        return _preview_sem_arquivo(execution_id, file_path, execution.main_document_filename)
 
     if path.suffix.lower() != '.docx':
         return redirect(_url_na_pagina(
@@ -2421,6 +2420,27 @@ def revision_main_document_preview(execution_id: int):
         highlight_excerpt=(request.args.get('trecho') or '').strip(),
         download_url=url_for('fap_review.revision_main_document', execution_id=execution_id),
     )
+
+
+def _preview_sem_arquivo(execution_id: int, file_path: str, filename: str | None):
+    """RPI-14: o preview abre dentro do iframe do modal. Redirecionar para o
+    resultado, como faz o link de download, carregava a tela inteira do sistema
+    dentro da janela — parecia uma réplica do dashboard. Aqui a falta é dita no
+    próprio modal, e o caminho procurado vai para o log, que é onde dá para
+    descobrir por que o arquivo não está no servidor."""
+    current_app.logger.warning(
+        'Preview sem arquivo: execução %s, caminho %r (cwd %s)',
+        execution_id, file_path, os.getcwd())
+    return render_template(
+        'fap_review/document_preview.html',
+        content_html=None,
+        missing_message=('O arquivo desta revisão não foi encontrado no servidor. '
+                         'Envie a petição de novo em uma nova revisão para ver o trecho.'),
+        document_filename=filename or '',
+        highlight_text='',
+        highlight_excerpt='',
+        download_url='',
+    ), 404
 
 
 # "página 3", "pagina 3", "page 3", "p. 3" — como o modelo às vezes escreve na
@@ -2513,8 +2533,7 @@ def revision_auxiliary_document_preview(execution_id: int, doc_index: int):
     doc = aux_docs[doc_index] if 0 <= doc_index < len(aux_docs) and isinstance(aux_docs[doc_index], dict) else {}
     path = Path(str(doc.get('path') or ''))
     if not doc.get('path') or not path.is_file():
-        flash('Documento auxiliar não encontrado nesta execução.', 'warning')
-        return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
+        return _preview_sem_arquivo(execution_id, str(doc.get('path') or ''), doc.get('name'))
 
     file_url = url_for('fap_review.revision_auxiliary_document', execution_id=execution_id, doc_index=doc_index)
     if path.suffix.lower() != '.docx':
