@@ -85,6 +85,94 @@ def _filter_benefit_empresa(query, empresa: str, law_firm_id: int):
     return query.filter(db.or_(*conds))
 
 
+def resolver_grupo(law_firm_id: int, grupo: str) -> dict:
+    """Nome de grupo empresarial digitado → grupo do cadastro da tela.
+
+    Aceita o nome sem acento e sem caixa ("vale" → "VALE"). Nome exato vence;
+    senão, um único grupo que contenha o termo. Mais de um candidato ou nenhum
+    vira ToolError com as opções — escolher sozinho um dos grupos parecidos
+    daria um número de outra empresa sem avisar.
+    """
+    from fastmcp.exceptions import ToolError
+
+    from app.services import fap_group_service
+
+    chave = fap_group_service.normalize_group_key(grupo)
+    opcoes = fap_group_service.group_options(law_firm_id)
+    exatos = [o for o in opcoes if o["chave"] == chave]
+    candidatos = exatos or [o for o in opcoes if chave and chave in o["chave"]]
+    if len(candidatos) == 1:
+        return candidatos[0]
+    if candidatos:
+        nomes = ", ".join(o["nome"] for o in candidatos[:15])
+        raise ToolError(f"Mais de um grupo empresarial casa com '{grupo}': {nomes}. Informe o nome exato.")
+    raise ToolError(
+        f"Grupo empresarial '{grupo}' não cadastrado. Os grupos existentes estão em "
+        "valores_de_filtro_fap (campo grupos_empresariais); sem grupo, use o filtro empresa."
+    )
+
+
+def _filter_benefit_grupo(query, law_firm_id: int, grupo_chave: str):
+    from app.models import Benefit
+    from app.services import fap_group_service
+
+    return fap_group_service.apply_group_filter(query, law_firm_id, grupo_chave, Benefit.employer_cnpj)
+
+
+def _cnpj_formatado(d: str) -> str:
+    if len(d) != 14:
+        return d
+    return f"{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}"
+
+
+def _beneficios_por_estabelecimento(ben_q, names: dict[str, str], limite: int = 20) -> dict:
+    """Ranking de estabelecimentos (CNPJ completo) por número de benefícios.
+
+    Agrupa pelo CNPJ só em dígitos: benefícios guardam o CNPJ formatado, e a
+    mesma filial escrita de dois jeitos viraria duas linhas do ranking.
+    """
+    from app.models import Benefit, db
+
+    expr = _cnpj_digits_col(Benefit.employer_cnpj)
+    rows = (
+        ben_q.with_entities(expr, db.func.max(Benefit.employer_name), db.func.count(Benefit.id))
+        .group_by(expr)
+        .order_by(db.func.count(Benefit.id).desc(), expr)
+        .all()
+    )
+    itens = []
+    for cnpj, nome, qtd in rows[:limite]:
+        d = "".join(ch for ch in (cnpj or "") if ch.isdigit())
+        itens.append({
+            "cnpj": _cnpj_formatado(d) if d else None,
+            "nome": nome or _empresa_por_cnpj(d, names),
+            "tipo": ("Matriz" if d[8:12] == "0001" else "Filial") if len(d) == 14 else None,
+            "beneficios": qtd,
+        })
+    return {"total_estabelecimentos": len(rows), "ranking": itens}
+
+
+def _empresas_na_conta(ben_q, names: dict[str, str]) -> list[dict]:
+    """Empresas (raiz de CNPJ) que o filtro por nome/grupo trouxe, com a contagem.
+
+    Filtro por pedaço de nome pega o que não se pediu ("vale" casa Cooperativa
+    Vale do Itajaí); devolver a lista deixa a IA avisar em vez de somar calada.
+    """
+    from app.models import Benefit, db
+
+    raiz = db.func.substr(_cnpj_digits_col(Benefit.employer_cnpj), 1, 8)
+    rows = (
+        ben_q.with_entities(raiz, db.func.max(Benefit.employer_name), db.func.count(Benefit.id))
+        .group_by(raiz)
+        .order_by(db.func.count(Benefit.id).desc(), raiz)
+        .all()
+    )
+    return [
+        {"cnpj_raiz": r, "nome": _empresa_por_cnpj(r, names) or nome, "beneficios": qtd}
+        for r, nome, qtd in rows
+    ]
+
+
 # ── Empresas ──────────────────────────────────────────────────────────────────
 
 
@@ -325,6 +413,7 @@ def list_fap_benefits_handler(
     limit: int = 50,
     offset: int = 0,
     protocolo: str | None = None,
+    grupo: str | None = None,
 ) -> dict:
     """Retorna benefícios FAP filtrados, com total encontrado."""
     from app.models import Benefit, db
@@ -334,6 +423,9 @@ def list_fap_benefits_handler(
     offset = clamp_offset(offset)
 
     query = Benefit.query.filter_by(law_firm_id=law_firm_id)
+
+    if grupo:
+        query = _filter_benefit_grupo(query, law_firm_id, resolver_grupo(law_firm_id, grupo)["chave"])
 
     if protocolo:
         # Mesmo critério do filtro da tela de Benefícios: a vigência (CNPJ + ano)
@@ -493,9 +585,13 @@ def fap_summary_handler(
     ano_vigencia: int | None = None,
     cnpj: str | None = None,
     empresa: str | None = None,
+    grupo: str | None = None,
 ) -> dict:
     """Resumo estatístico do FAP: contestações e benefícios agregados."""
     from app.models import Benefit, FapCompany, FapWebContestacao, db
+    from app.services import fap_group_service
+
+    grupo_info = resolver_grupo(law_firm_id, grupo) if grupo else None
 
     empresa_raizes: list[str] = []
     if empresa:
@@ -516,6 +612,9 @@ def fap_summary_handler(
             cont_q = cont_q.filter(FapWebContestacao.cnpj == digits)
     if empresa:
         cont_q = cont_q.filter(FapWebContestacao.cnpj_raiz.in_(empresa_raizes or ["__nenhuma__"]))
+    if grupo_info:
+        cont_q = fap_group_service.apply_group_filter(
+            cont_q, law_firm_id, grupo_info["chave"], FapWebContestacao.cnpj_raiz, coluna_e_raiz=True)
 
     def _count_by(query, column):
         rows = (
@@ -546,6 +645,8 @@ def fap_summary_handler(
         ben_q = _filter_benefit_cnpj(ben_q, cnpj)
     if empresa:
         ben_q = _filter_benefit_empresa(ben_q, empresa, law_firm_id)
+    if grupo_info:
+        ben_q = _filter_benefit_grupo(ben_q, law_firm_id, grupo_info["chave"])
     if ano_vigencia:
         ben_q = ben_q.filter(Benefit.fap_vigencia_years.like(f"%{ano_vigencia}%"))
 
@@ -585,13 +686,28 @@ def fap_summary_handler(
         },
         "com_cat": com_cat,
         "sem_cat": total_beneficios - com_cat,
+        # Ranking de filiais: "quais estabelecimentos têm mais benefícios?"
+        # sem listar benefício por benefício.
+        "por_estabelecimento": _beneficios_por_estabelecimento(ben_q, names),
     }
 
-    return {
+    resultado = {
         "filtros": {"ano_vigencia": ano_vigencia, "cnpj": cnpj},
         "contestacoes": contestacoes,
         "beneficios": beneficios,
     }
+    if grupo_info:
+        resultado["filtros"]["grupo"] = grupo_info["nome"]
+    if empresa or grupo_info:
+        empresas = _empresas_na_conta(ben_q, names)
+        resultado["empresas_na_conta"] = empresas
+        if empresa and len(empresas) > 1:
+            resultado["aviso_empresas"] = (
+                f"O filtro por nome '{empresa}' trouxe {len(empresas)} empresas (CNPJs raiz) "
+                "diferentes — confira em empresas_na_conta se todas são a empresa pedida. "
+                "Para um grupo econômico, use o filtro grupo."
+            )
+    return resultado
 
 
 # ── Sincronização: alterações recentes ────────────────────────────────────────
@@ -747,7 +863,12 @@ def fap_filter_values_handler(law_firm_id: int) -> dict:
         .all()
     ]
 
+    from app.services import fap_group_service
+
     return {
+        # Só os nomes: são centenas de grupos, e o filtro `grupo` aceita o nome
+        # sem acento nem caixa.
+        "grupos_empresariais": [g["nome"] for g in fap_group_service.group_options(law_firm_id)],
         "contestacoes": {
             "situacoes": _distinct_pairs(FapWebContestacao, FapWebContestacao.situacao_codigo, FapWebContestacao.situacao_descricao),
             "instancias": _distinct_pairs(FapWebContestacao, FapWebContestacao.instancia_codigo, FapWebContestacao.instancia_descricao),

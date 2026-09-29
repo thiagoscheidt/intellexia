@@ -15,6 +15,7 @@ O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de 
 - "Quantos benefícios temos do BISTEK?" — respondido em segundos pelo resumo estatístico;
 - "**Me mostra o painel do FAP do BISTEK**" — abre um painel visual, com cartões e gráficos, dentro da própria conversa;
 - "Liste as contestações FAP da vigência 2023 que estão indeferidas";
+- "Quais as 10 filiais do grupo Vale com mais benefícios na vigência 2026?" — o ranking de estabelecimentos em uma chamada;
 - "Qual foi o resultado da contestação de protocolo 10128.053144/2025-42?" — e, na sequência, "quais benefícios dela foram deferidos?";
 - "O que temos na base de conhecimento sobre acidente de trajeto?";
 - "Pesquise o NB 6320957810 nos documentos" — retorna os trechos com link para abrir o PDF;
@@ -85,21 +86,23 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `listar_empresas_fap` | Empresas sincronizadas — busca por **parte do nome**, CNPJ ou tipo de procuração | FAP Web |
 | `listar_contestacoes_fap` | Contestações com filtros (**protocolo**, CNPJ, raiz, vigência, situação, instância), com resultado do deferimento, nome da empresa e status do PDF | FAP Web |
 | `detalhar_contestacao` | Contestação completa + **benefícios vinculados** + alterações recentes + **link do PDF** | FAP Web |
-| `listar_beneficios_fap` | Benefícios com filtros ricos (**empresa por nome**, **protocolo da contestação**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) e o status em cada instância | FAP Web |
+| `listar_beneficios_fap` | Benefícios com filtros ricos (**empresa por nome**, **grupo empresarial**, **protocolo da contestação**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) e o status em cada instância | FAP Web |
 | `detalhar_beneficio` | Todos os campos de um benefício, incluindo justificativas, pareceres e decisões de julgamento | Sistema |
 | `listar_procuracoes_fap` | Procurações eletrônicas com situação e vigência | FAP Web |
-| `valores_de_filtro_fap` | Códigos e valores válidos para filtros (situações, instâncias, tópicos, motivos) — a IA consulta antes de filtrar | Sistema |
+| `valores_de_filtro_fap` | Códigos e valores válidos para filtros (**grupos empresariais**, situações, instâncias, tópicos, motivos) — a IA consulta antes de filtrar | Sistema |
 
 ### 📊 Painel FAP — análises e acompanhamento
 
 | Ferramenta | O que faz | Origem |
 |---|---|---|
-| `resumo_fap` | Contagens agregadas em uma chamada: contestações por vigência/situação/instância/**empresa**; benefícios por tipo/status/tópico + **financeiro** (total pago) | Cálculo |
+| `resumo_fap` | Contagens agregadas em uma chamada: contestações por vigência/situação/instância/**empresa**; benefícios por tipo/status/tópico, **ranking de filiais** (os estabelecimentos com mais benefícios) + **financeiro** (total pago). Filtra por empresa, CNPJ, vigência ou **grupo empresarial** | Cálculo |
 | `painel_fap` | Os **mesmos números** do `resumo_fap`, só que como **painel visual** na conversa: cartões de totais e gráficos de barras por situação, vigência, empresa, tópico e instância | Cálculo |
 | `alteracoes_recentes_fap` | O que mudou nas sincronizações com o portal ("o que mudou essa semana?") | FAP Web |
 | `prazos_e_alertas` | O que pede atenção: contestações aguardando resultado, decisões recentes (janela de recurso) e processos por fase | Cálculo |
 | `comparar_vigencias` | Compara resultados entre vigências (ex: 2023 vs 2024): deferidos/indeferidos, tópicos e financeiro | Cálculo |
 | `buscar_por_segurado` | Visão 360º de uma pessoa: benefícios + CATs + processos (por NIT, CPF ou nome) | Sistema |
+
+> [!INFO] **Empresa ou grupo?** O filtro por **empresa** procura pelo nome, e um pedaço de nome pode pegar mais de uma empresa — "vale" também encontra a "Cooperativa Vale do Itajaí". Quando isso acontece, a resposta lista as empresas que entraram na conta e a IA avisa antes de dar o número. Para um grupo econômico inteiro, e só ele, peça pelo **grupo** ("do grupo Vale"): é o mesmo cadastro de grupos das telas do Painel FAP.
 
 > [!INFO] Para perguntas de **quantidade** ("quantos benefícios da empresa X?"), a IA usa o `resumo_fap` — resposta em segundos, sem listar registro por registro. Quando você pede para **ver** o panorama ("me mostra o painel", "faz um gráfico disso"), ela usa o `painel_fap`, que traz os mesmos números em forma visual.
 

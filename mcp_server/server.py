@@ -372,6 +372,7 @@ def listar_beneficios_fap(
     numero_beneficio: str | None = None,
     ano_vigencia: str | None = None,
     empresa: str | None = None,
+    grupo: str | None = None,
     protocolo: str | None = None,
     limite: int = 50,
     deslocamento: int = 0,
@@ -394,6 +395,8 @@ def listar_beneficios_fap(
         cpf: CPF do segurado (busca exata, apenas números).
         numero_beneficio: Número do benefício (busca exata).
         ano_vigencia: Ano de vigência FAP em que o benefício aparece (ex: "2023").
+        grupo: Grupo empresarial cadastrado (ex: "Vale") — todas as empresas do
+            grupo e só elas; nomes em valores_de_filtro_fap.
         protocolo: Protocolo administrativo da contestação (com ou sem pontuação,
             completo ou trecho) — traz os benefícios daquela contestação (CNPJ +
             vigência), com o status de cada um na 1ª e na 2ª instância. É o
@@ -411,7 +414,7 @@ def listar_beneficios_fap(
         return list_fap_benefits_handler(
             claims["law_firm_id"], cnpj, status, tipo_pedido, tipo_beneficio,
             topico_contestacao, segurado, nit, cpf, numero_beneficio, ano_vigencia,
-            empresa, limite, deslocamento, protocolo=protocolo,
+            empresa, limite, deslocamento, protocolo=protocolo, grupo=grupo,
         )
 
 
@@ -498,6 +501,7 @@ def resumo_fap(
     ano_vigencia: int | None = None,
     cnpj: str | None = None,
     empresa: str | None = None,
+    grupo: str | None = None,
 ) -> dict:
     """Resumo estatístico do FAP do escritório: contagens agregadas em uma chamada.
 
@@ -505,17 +509,28 @@ def resumo_fap(
     benefícios da empresa X?", "quantas contestações deferidas em 2023?") —
     é muito mais rápido do que listar registros. Retorna contestações por ano
     de vigência, situação, instância e empresa; benefícios por tipo, tipo de
-    pedido, status de 1ª/2ª instância, tópico e financeiro (total pago).
+    pedido, status de 1ª/2ª instância, tópico, financeiro (total pago) e o
+    ranking de estabelecimentos (beneficios.por_estabelecimento: os 20 CNPJs
+    com mais benefícios, com nome e matriz/filial) — é a resposta para "quais
+    filiais têm mais benefícios?", sem listar benefício por benefício.
+
+    Com filtro por empresa ou grupo, 'empresas_na_conta' diz quais empresas
+    (CNPJ raiz) entraram no número. Se vier 'aviso_empresas', o nome casou com
+    mais de uma empresa: mostre isso ao usuário antes de apresentar o total.
 
     Args:
         ano_vigencia: Restringe a um ano de vigência FAP (opcional).
         cnpj: Restringe a um estabelecimento — aceita formatado, só dígitos ou
             raiz de 8 dígitos (opcional).
         empresa: Nome (ou parte do nome) da empresa (opcional) — ex: "bistek".
+            Casa por pedaço de nome: "vale" também pega "Cooperativa Vale do
+            Itajaí". Para um grupo econômico, prefira `grupo`.
+        grupo: Grupo empresarial cadastrado no sistema (ex: "Vale") — todas as
+            empresas do grupo e só elas. Nomes em valores_de_filtro_fap.
     """
     claims = require_module("fap_panel")
     with app.app_context():
-        return fap_summary_handler(claims["law_firm_id"], ano_vigencia, cnpj, empresa)
+        return fap_summary_handler(claims["law_firm_id"], ano_vigencia, cnpj, empresa, grupo=grupo)
 
 
 try:
@@ -642,9 +657,10 @@ def detalhar_contestacao(contestacao_id: int) -> dict:
 def valores_de_filtro_fap() -> dict:
     """Valores válidos (em uso no escritório) para os filtros das tools FAP.
 
-    Retorna situações e instâncias de contestação (código → descrição), anos de
-    vigência, tipos de benefício/pedido, status e tópicos de contestação em uso,
-    além do catálogo de motivos FAP. Consulte antes de filtrar para usar códigos
+    Retorna os grupos empresariais cadastrados (filtro `grupo`), situações e
+    instâncias de contestação (código → descrição), anos de vigência, tipos de
+    benefício/pedido, status e tópicos de contestação em uso, além do catálogo
+    de motivos FAP. Consulte antes de filtrar para usar códigos
     exatos em vez de adivinhar.
     """
     claims = require_module("fap_panel")
