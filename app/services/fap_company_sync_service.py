@@ -26,6 +26,35 @@ from __future__ import annotations
 from datetime import datetime
 
 
+def ultima_sincronizacao(law_firm_id: int):
+    """``synced_at`` da sincronização mais recente — todas as empresas de uma
+    execução recebem o mesmo instante."""
+    from app.models import db, FapCompany
+    from sqlalchemy import func
+
+    return (
+        db.session.query(func.max(FapCompany.synced_at))
+        .filter(FapCompany.law_firm_id == law_firm_id)
+        .scalar()
+    )
+
+
+def por_vinculo(company, ultima_sync) -> bool:
+    """Empresa que está na lista só pelo vínculo gov.br — para exibição.
+
+    Sem coluna de origem, a regra é: sem tipo de procuração **e** presente na
+    última sincronização. A empresa que perde a procuração e fica só por ter
+    contestação não é mais tocada, então mantém o tipo antigo e o ``synced_at``
+    velho — não cai aqui. Se a última execução pegou a sessão parcial, as
+    vinculadas não foram tocadas e o rótulo some até a próxima execução completa.
+    """
+    return (
+        not (company.tipo_procuracao_descricao or company.tipo_procuracao_codigo)
+        and ultima_sync is not None
+        and company.synced_at == ultima_sync
+    )
+
+
 def unir_empresas(procuracoes: list, vinculadas: list) -> list[dict]:
     """Une as duas origens por CNPJ raiz — função pura.
 

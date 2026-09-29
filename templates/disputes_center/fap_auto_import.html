@@ -167,7 +167,7 @@
                   <tr>
                     <td class="text-nowrap"><code>{{ c.cnpj }}</code></td>
                     <td><small>{{ c.nome or '-' }}</small></td>
-                    <td><small>{{ c.tipo_procuracao_descricao or '-' }}</small></td>
+                    <td><small>{% if c.tipo_procuracao_descricao %}{{ c.tipo_procuracao_descricao }}{% elif c.id in vinculo_ids %}<span class="badge text-bg-info" title="Sem procuração eletrônica no FAP: a empresa está vinculada ao CPF do login no gov.br">Vínculo gov.br</span>{% else %}-{% endif %}</small></td>
                   </tr>
                   {% endfor %}
                 </tbody>

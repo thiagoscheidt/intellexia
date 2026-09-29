@@ -3925,11 +3925,16 @@ def fap_auto_import():
         .order_by(FapCompany.nome.asc())
         .all()
     )
+    from app.services.fap_company_sync_service import por_vinculo, ultima_sincronizacao
+
+    ultima_sync = ultima_sincronizacao(law_firm_id)
+    vinculo_ids = {c.id for c in companies if por_vinculo(c, ultima_sync)}
     saved_auth = session.get('fap_auto_import_auth', '')
     return render_template(
         'disputes_center/fap_auto_import.html',
         years=years,
         companies=companies,
+        vinculo_ids=vinculo_ids,
         saved_auth=saved_auth,
     )
 

@@ -177,6 +177,9 @@ def empresas_page():
         )
     }
 
+    from app.services.fap_company_sync_service import por_vinculo, ultima_sincronizacao
+
+    ultima_sync = ultima_sincronizacao(law_firm_id)
     items = []
     for company in companies:
         digits = _only_digits(company.cnpj)
@@ -189,6 +192,7 @@ def empresas_page():
                 'cnpj_fmt': _format_cnpj(company.cnpj),
                 'cnpj_root': cnpj_root,
                 'tipo_procuracao': (company.tipo_procuracao_descricao or '').strip(),
+                'por_vinculo': por_vinculo(company, ultima_sync),
                 'synced_at': company.synced_at,
                 'contestacoes_count': contestacoes_by_root.get(cnpj_root, 0),
                 'grupo': (grupos_por_raiz.get(cnpj_root) or {}).get('nome', ''),

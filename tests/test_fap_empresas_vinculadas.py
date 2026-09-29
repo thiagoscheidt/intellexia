@@ -15,7 +15,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.services.fap_company_sync_service import unir_empresas
+from datetime import datetime
+from types import SimpleNamespace
+
+from app.services.fap_company_sync_service import por_vinculo, unir_empresas
 from app.services.fap_web_service import parse_empresas_vinculadas
 
 
@@ -53,6 +56,19 @@ def test_unir_procuracao_tem_prioridade():
     assert set(unidas) == {'07196033', '33592510'}
     assert unidas['07196033']['tipoProcuracao'] == {'codigo': 'X'}
     assert unidas['33592510'] == {'cnpj': '33592510', 'nome': 'VALE S.A.', 'tipoProcuracao': None}
+
+
+def test_por_vinculo():
+    agora, antes = datetime(2026, 9, 29, 6), datetime(2026, 9, 1, 6)
+
+    def empresa(codigo, descricao, synced_at):
+        return SimpleNamespace(tipo_procuracao_codigo=codigo, tipo_procuracao_descricao=descricao, synced_at=synced_at)
+
+    assert por_vinculo(empresa(None, None, agora), agora)                   # veio só pelo gov.br hoje
+    assert not por_vinculo(empresa('GERAL', 'Geral', agora), agora)          # tem procuração
+    assert not por_vinculo(empresa(None, None, antes), agora)               # não veio na última sync
+    assert not por_vinculo(empresa('GERAL', 'Geral', antes), agora)          # perdeu procuração, ficou pelo histórico
+    assert not por_vinculo(empresa(None, None, None), None)                 # nunca sincronizado
 
 
 if __name__ == '__main__':
