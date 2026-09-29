@@ -281,6 +281,34 @@ class FapWebService:
 
         return FapWebResult(ok=True, data=companies)
 
+    # ── Empresas vinculadas ao CPF no gov.br ───────────────────────────────
+
+    def fetch_empresas_vinculadas(self) -> FapWebResult:
+        """Empresas vinculadas ao CPF do login no gov.br (campo do /oauth2/token).
+
+        É a outra metade do seletor "CNPJ Raiz" da tela de contestações: o
+        portal junta estas com as de ``/procuracoes/empresas``. Empresa só
+        vinculada (sem procuração no FAP) não aparece na outra rota — foi assim
+        que o grupo Vale ficou fora da sincronização.
+
+        Returns:
+            FapWebResult com data=list[{'cnpj': raiz8, 'nome': razão social}].
+            ``ok=False`` quando a sessão perdeu as vinculadas
+            (``ACCESSTOKEN_MUSTBENOTEXPIRED``) — lista parcial, não vazia.
+        """
+        url = f'{_BASE_URL}/gateway/oauth2/token'
+        try:
+            body, _ = self._get(url, timeout=15)
+            token = json.loads(body.decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            return FapWebResult(
+                ok=False, status_code=e.code, expired=e.code in (401, 403),
+                message=f'Erro HTTP {e.code} ao ler o token do FAP.',
+            )
+        except Exception as e:
+            return FapWebResult(ok=False, message=f'Falha ao ler o token do FAP: {e}')
+        return parse_empresas_vinculadas(token.get('empresasVinculadas'))
+
     # ── Listar procurações eletrônicas ─────────────────────────────────────
 
     def fetch_procuracoes(self) -> FapWebResult:
@@ -471,6 +499,36 @@ class FapWebService:
         return first_result if first_result is not None else FapWebResult(
             ok=False, message='Falha no download da contestação.'
         )
+
+
+def parse_empresas_vinculadas(bruto) -> FapWebResult:
+    """Lê o campo ``empresasVinculadas`` do token — função pura.
+
+    Chega como texto JSON: ``[{cnpj (14), razaoSocial, dataCriacao}]`` na
+    sessão completa, ou ``{"errors": [...]}`` quando a sessão perdeu as
+    vinculadas. O portal reduz à raiz de 8 dígitos, uma entrada por raiz — aqui
+    também.
+    """
+    try:
+        dado = json.loads(bruto) if isinstance(bruto, str) else bruto
+    except ValueError:
+        return FapWebResult(ok=False, message='empresasVinculadas em formato inesperado.')
+    if isinstance(dado, dict) and dado.get('errors'):
+        codigos = ','.join(str(e.get('code', '?')) for e in dado['errors'])
+        return FapWebResult(ok=False, message=f'sessão sem empresas vinculadas ({codigos})')
+    if not isinstance(dado, list):
+        return FapWebResult(ok=False, message='empresasVinculadas ausente no token.')
+
+    empresas: dict[str, dict] = {}
+    for item in dado:
+        if not isinstance(item, dict):
+            continue
+        digitos = ''.join(ch for ch in str(item.get('cnpj') or '') if ch.isdigit())
+        if len(digitos) < 8:
+            continue
+        raiz = digitos.zfill(14)[:8] if len(digitos) > 8 else digitos
+        empresas.setdefault(raiz, {'cnpj': raiz, 'nome': (item.get('razaoSocial') or '').strip()})
+    return FapWebResult(ok=True, data=list(empresas.values()))
 
 
 # ---------------------------------------------------------------------------

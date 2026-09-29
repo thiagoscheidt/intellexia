@@ -4266,57 +4266,31 @@ def fap_auto_import_fetch_companies():
     if not any(v for v in cookies_dict.values()):
         return jsonify({'ok': False, 'message': 'O objeto "cookies" está vazio.'}), 400
 
+    from app.services.fap_company_sync_service import sync_companies
+
     auth = FapWebAuthPayload.from_dict(data)
-    result = FapWebService(auth).fetch_companies()
-    if not result.ok:
+    try:
+        stats = sync_companies(FapWebService(auth), law_firm_id)
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception('Erro ao salvar empresas FAP no banco')
+        return jsonify({'ok': False, 'message': f'Empresas recebidas mas falha ao salvar no banco: {str(e)}'}), 500
+
+    if not stats['ok']:
+        result = stats['result']
         detail = (result.data or {}).get('detail', '') if result.data else ''
         payload = {'ok': False, 'message': result.message}
         if detail:
             payload['detail'] = detail
         return jsonify(payload), 502
 
-    companies = result.data
-
-    # Upsert companies into DB
-    try:
-        now = datetime.now()  # horário local (synced_at é exibido cru)
-        seen_cnpjs = set()
-        for item in (companies if isinstance(companies, list) else []):
-            cnpj = str(item.get('cnpj') or '').strip()
-            if not cnpj:
-                continue
-            seen_cnpjs.add(cnpj)
-            tipo = item.get('tipoProcuracao') or {}
-            nome = (item.get('nome') or '').strip()
-            rec = FapCompany.query.filter_by(law_firm_id=law_firm_id, cnpj=cnpj).first()
-            if rec:
-                rec.nome = nome
-                rec.tipo_procuracao_codigo = tipo.get('codigo')
-                rec.tipo_procuracao_descricao = tipo.get('descricao')
-                rec.synced_at = now
-            else:
-                rec = FapCompany(
-                    law_firm_id=law_firm_id,
-                    cnpj=cnpj,
-                    nome=nome,
-                    tipo_procuracao_codigo=tipo.get('codigo'),
-                    tipo_procuracao_descricao=tipo.get('descricao'),
-                    synced_at=now,
-                )
-                db.session.add(rec)
-        # Remove companies no longer returned by the API
-        if seen_cnpjs:
-            FapCompany.query.filter(
-                FapCompany.law_firm_id == law_firm_id,
-                FapCompany.cnpj.notin_(seen_cnpjs),
-            ).delete(synchronize_session='fetch')
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.exception('Erro ao salvar empresas FAP no banco')
-        return jsonify({'ok': False, 'message': f'Empresas recebidas mas falha ao salvar no banco: {str(e)}'}), 500
-
-    return jsonify({'ok': True, 'companies': companies, 'saved_count': len(seen_cnpjs)})
+    return jsonify({
+        'ok': True,
+        'companies': stats['companies'],
+        'saved_count': stats['total'],
+        'so_vinculo': stats['so_vinculo'],
+        'vinculadas_ok': stats['vinculadas_ok'],
+    })
 
 
 @disputes_center_bp.route('/new', methods=['GET', 'POST'])

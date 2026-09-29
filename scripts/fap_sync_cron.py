@@ -4,7 +4,7 @@ Sincronização automática do Painel FAP — script para rodar via cron.
 
 Sequência de execução:
   1. Verifica sessão FAP (aborta se expirada)
-  2. Sincroniza empresas (upsert FapCompany)
+  2. Sincroniza empresas (upsert FapCompany: procurações + vinculadas do gov.br)
   3. Sincroniza procurações (delega a fap_procuracoes_service) + alerta por e-mail
   4. Contestações — Fase 1: busca em paralelo (várias empresas ao mesmo tempo)
                    Fase 2: grava no banco sequencialmente (upsert FapWebContestacao)
@@ -122,64 +122,27 @@ def _get_law_firm_id(db, LawFirm) -> int:
 # Sync de empresas
 # ---------------------------------------------------------------------------
 
-def sync_companies(svc, db, FapCompany, law_firm_id: int) -> int:
-    _log("  → Buscando empresas no portal FAP...")
-    result = svc.fetch_companies()
-    if not result.ok:
-        _log(f"  ✗ Falha ao buscar empresas: {result.message}")
+def sync_companies(svc, law_firm_id: int) -> int:
+    """Delega a ``fap_company_sync_service`` (procurações + vinculadas do gov.br)."""
+    from app.services.fap_company_sync_service import sync_companies as _sync
+
+    _log("  → Buscando empresas no portal FAP (procurações + vinculadas do gov.br)...")
+    stats = _sync(svc, law_firm_id)
+    if not stats['ok']:
+        _log(f"  ✗ Falha ao buscar empresas: {stats['message']}")
         return 0
 
-    companies = result.data if isinstance(result.data, list) else []
-    now = datetime.now()
-    seen_cnpjs: set[str] = set()
-
-    for item in companies:
-        cnpj = str(item.get('cnpj') or '').strip()
-        if not cnpj:
-            continue
-        seen_cnpjs.add(cnpj)
-        tipo = item.get('tipoProcuracao') or {}
-        nome = (item.get('nome') or '').strip()
-        rec = FapCompany.query.filter_by(law_firm_id=law_firm_id, cnpj=cnpj).first()
-        if rec:
-            rec.nome = nome
-            rec.tipo_procuracao_codigo = tipo.get('codigo')
-            rec.tipo_procuracao_descricao = tipo.get('descricao')
-            rec.synced_at = now
-        else:
-            db.session.add(FapCompany(
-                law_firm_id=law_firm_id,
-                cnpj=cnpj,
-                nome=nome,
-                tipo_procuracao_codigo=tipo.get('codigo'),
-                tipo_procuracao_descricao=tipo.get('descricao'),
-                synced_at=now,
-            ))
-
-    # Poda empresas que não vieram mais na procuração — MAS preserva as que
-    # têm contestações vinculadas (FK em fap_web_contestacoes.fap_company_id),
-    # senão o DELETE falha por constraint e perderíamos histórico.
-    removed = 0
-    if seen_cnpjs:
-        from app.models import FapWebContestacao
-        stale = FapCompany.query.filter(
-            FapCompany.law_firm_id == law_firm_id,
-            FapCompany.cnpj.notin_(seen_cnpjs),
-        ).all()
-        for comp in stale:
-            tem_contestacao = db.session.query(
-                FapWebContestacao.id
-            ).filter_by(
-                law_firm_id=law_firm_id, fap_company_id=comp.id
-            ).first()
-            if tem_contestacao:
-                continue  # mantém: empresa com histórico de contestações
-            db.session.delete(comp)
-            removed += 1
-
-    db.session.commit()
-    _log(f"  ✓ Empresas sincronizadas: {len(seen_cnpjs)} (removidas {removed} sem contestações)")
-    return len(seen_cnpjs)
+    _log(
+        f"  ✓ Empresas sincronizadas: {stats['total']} "
+        f"({stats['procuracoes']} por procuração, {stats['so_vinculo']} só por vínculo gov.br; "
+        f"removidas {stats['removed']} sem contestações)"
+    )
+    if not stats['vinculadas_ok']:
+        _log(
+            f"  ! Vinculadas do gov.br indisponíveis ({stats['vinculadas_msg']}) — "
+            "poda suspensa; as empresas só por vínculo seguem da última lista completa"
+        )
+    return stats['total']
 
 
 # ---------------------------------------------------------------------------
@@ -676,7 +639,7 @@ def main() -> None:
         # 4. Sincroniza empresas
         _log("\n[1/3] Sincronizando empresas...")
         try:
-            sync_companies(svc, db, FapCompany, law_firm_id)
+            sync_companies(svc, law_firm_id)
         except Exception as e:
             _log(f"  ✗ Erro ao sincronizar empresas: {e}")
             db.session.rollback()
