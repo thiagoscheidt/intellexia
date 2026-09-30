@@ -1,0 +1,62 @@
+# Meilisearch e Qdrant próprios da homologação, no mesmo servidor da produção.
+#
+# Os índices têm nome fixo (dou_articles, jurisprudence, cases_knowledge_base...)
+# e guardam ids do MySQL: com os serviços compartilhados, o que a homologação
+# indexa sobrescreve o índice da produção. O MySQL continua o mesmo servidor,
+# com um database por ambiente.
+#
+# Subir, de dentro de /sites/intellexia_hml:
+#   docker compose --env-file .env -f docker/docker-compose.hml.yml up -d
+#
+# A master key do Meilisearch é o MEILISEARCH_API_KEY do .env da homologação —
+# a mesma chave que o app usa, sem cópia para dessincronizar. No .env:
+#   MEILISEARCH_HOST=http://localhost:7701
+#   QDRANT_PORT=6343
+#
+# O `name` separa containers, volumes e rede dos da produção: sem ele o projeto
+# se chamaria "docker" (nome da pasta), o mesmo da produção.
+
+name: intellexia-hml
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: intellexia-hml-qdrant
+    ports:
+      # Só HTTP: o app usa QdrantClient(host, port) sem gRPC.
+      - "127.0.0.1:6343:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+      - ./qdrant_config.yaml:/qdrant/config/production.yaml
+    # Sem healthcheck: a imagem do Qdrant não traz curl, e o da produção fica
+    # "unhealthy" para sempre por isso.
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: intellexia-hml-meilisearch
+    ports:
+      - "127.0.0.1:7701:7700"
+    volumes:
+      - meili_data:/meili_data
+    environment:
+      MEILI_MASTER_KEY: ${MEILISEARCH_API_KEY:?rode com --env-file .env (MEILISEARCH_API_KEY da homologação)}
+      # O padrão do Meilisearch é usar até 2/3 da RAM e metade dos núcleos para
+      # indexar; num reindex da homologação isso disputaria memória com o MySQL
+      # e o Meilisearch da produção, na mesma máquina.
+      MEILI_MAX_INDEXING_MEMORY: 1Gb
+      MEILI_MAX_INDEXING_THREADS: 2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      timeout: 5s
+      retries: 5
+      interval: 10s
+    restart: unless-stopped
+
+# Nome fixo, sem depender do nome do projeto: um COMPOSE_PROJECT_NAME no .env
+# venceria o `name:` lá de cima e poderia apontar para o volume da produção.
+volumes:
+  qdrant_data:
+    name: intellexia-hml_qdrant_data
+  meili_data:
+    name: intellexia-hml_meili_data

@@ -108,6 +108,18 @@ from mcp_server.tools.jurisprudence import (
     search_jurisprudence_handler,
     similar_decisions_handler,
 )
+from mcp_server.tools.dou import (
+    alert_detail_handler as dou_alert_detail_handler,
+    dou_filter_values_handler,
+    edition_summary_handler as dou_edition_summary_handler,
+    firm_digest_handler as dou_firm_digest_handler,
+    get_dou_article_handler,
+    latest_editions_handler as dou_latest_editions_handler,
+    list_alerts_handler as dou_list_alerts_handler,
+    rules_handler as dou_rules_handler,
+    search_dou_handler,
+    test_term_handler as dou_test_term_handler,
+)
 from mcp_server.tools.insights import (
     prazos_e_alertas_handler,
     comparar_vigencias_handler,
@@ -1212,6 +1224,263 @@ def resumo_monitoramento(dias: int = 7) -> dict:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# DIÁRIO OFICIAL DA UNIÃO (acervo do INLABS + alertas do escritório)
+# ──────────────────────────────────────────────────────────────────────────────
+#
+# O acervo é público (sem law_firm_id); alertas e regras são do escritório.
+# Permissão: módulo "dou", a mesma da tela.
+
+
+@mcp.tool()
+def pesquisar_dou(
+    termo: str | None = None,
+    secao: str | None = None,
+    orgao: str | None = None,
+    tipo: str | None = None,
+    data_de: str | None = None,
+    data_ate: str | None = None,
+    ordem: str | None = None,
+    limite: int = 20,
+    deslocamento: int = 0,
+) -> dict:
+    """Pesquisa no Diário Oficial da União capturado pelo sistema (busca de texto).
+
+    O termo pode ser texto livre, um CNPJ ou um número de processo — CNPJ e
+    processo são reconhecidos sozinhos, com ou sem pontuação, e buscados como
+    número exato. Sem termo, lista o recorte dos filtros, do mais recente para o
+    mais antigo.
+
+    ASPAS: para expressão ou sigla, passe o termo entre aspas duplas
+    ('"fator acidentário de prevenção"', '"FAP"'). Sem aspas o índice procura
+    as palavras soltas e com tolerância a erro de digitação: a mesma expressão
+    dá 748 matérias sem aspas e 7 com aspas, e "FAP" sem aspas traz FAPESP,
+    FAPEMIG etc.
+
+    A resposta traz, além das matérias, o total real e a distribuição por
+    seção, órgão e tipo de ato (por_secao/por_orgao/por_tipo): para perguntas
+    de quantidade use esses totais, não conte as páginas. Cada matéria vem com
+    trecho («» marca o achado), url (no sistema), url_pagina_pdf (folha do PDF
+    assinado) e url_oficial (portal da Imprensa Nacional).
+
+    Se o resultado for vazio, confira em ultimas_edicoes_dou se o período já foi
+    capturado antes de afirmar que nada foi publicado.
+
+    Args:
+        termo: Texto livre, CNPJ ou número de processo (opcional se houver filtro).
+        secao: 1, 2 ou 3; "seção 1 extra" para a edição extra. Várias com ";".
+        orgao: Órgão (raiz da hierarquia), ex.: "Ministério da Previdência Social".
+            Aceita sem acento; nomes em valores_de_filtro_dou. Vários com ";".
+        tipo: Tipo de ato, ex.: "Portaria", "Despacho", "Edital". Vários com ";".
+        data_de: Publicado a partir de (YYYY-MM-DD).
+        data_ate: Publicado até (YYYY-MM-DD).
+        ordem: "relevancia" (padrão com termo) ou "data" (mais recentes primeiro).
+        limite: Matérias por página (padrão 20).
+        deslocamento: Paginação — repasse o 'proximo_deslocamento'. A busca
+            alcança os primeiros 1.000 resultados.
+    """
+    require_module("dou")
+    with app.app_context():
+        return search_dou_handler(termo, secao, orgao, tipo, data_de, data_ate, ordem,
+                                  limite, deslocamento, app_public_url=APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def ler_materia_dou(materia_id: int, max_caracteres: int = 20000) -> dict:
+    """Inteiro teor de uma matéria do Diário Oficial.
+
+    Traz identificação, órgão, seção, página, ementa, o texto completo (cortado
+    em max_caracteres, com aviso), os CNPJs e números de processo citados e os
+    links: no sistema, na folha do PDF assinado (url_pagina_pdf — o documento
+    oficial para citar) e no portal da Imprensa Nacional. Se a matéria gerou
+    alerta para o escritório, 'alerta_do_escritorio' diz quais clientes ela
+    cita e o resultado FAP de cada um.
+
+    Args:
+        materia_id: ID da matéria (vem de pesquisar_dou, sumario_edicao_dou ou dos alertas).
+        max_caracteres: Tamanho máximo do texto devolvido (padrão 20.000, até 60.000).
+    """
+    claims = require_module("dou")
+    with app.app_context():
+        return get_dou_article_handler(materia_id, claims["law_firm_id"], APP_PUBLIC_URL,
+                                       max_caracteres)
+
+
+@mcp.tool()
+def valores_de_filtro_dou() -> dict:
+    """Seções, órgãos e tipos de ato que existem no acervo do Diário Oficial.
+
+    Consulte antes de filtrar por órgão ou tipo, para usar o nome certo. Traz
+    também o período coberto pelo acervo e o total de matérias.
+    """
+    require_module("dou")
+    with app.app_context():
+        return dou_filter_values_handler()
+
+
+@mcp.tool()
+def ultimas_edicoes_dou(quantas: int = 5) -> dict:
+    """As últimas edições do Diário Oficial capturadas e a situação da captura.
+
+    Responde "até que dia o DOU está no sistema?", "saiu edição extra?". Por
+    data: matérias de cada seção (e das extras), se o PDF assinado está
+    disponível, seções não publicadas e as que falharam na captura. Se vier
+    'aviso', a captura está parada ou com falha — o acervo pode estar
+    incompleto, e isso tem de ser dito ao usuário.
+
+    Args:
+        quantas: Quantas datas trazer (padrão 5, até 30).
+    """
+    require_module("dou")
+    with app.app_context():
+        return dou_latest_editions_handler(quantas, APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def sumario_edicao_dou(
+    data: str | None = None,
+    secao: str | None = None,
+    orgao: str | None = None,
+    limite: int = 50,
+    deslocamento: int = 0,
+) -> dict:
+    """Sumário da edição do Diário Oficial de um dia, como o do portal da Imprensa Nacional.
+
+    Sem órgão: por seção, os órgãos na ordem das páginas (primeira página e
+    quantas matérias cada um publicou) e os tipos de ato mais frequentes.
+    Com órgão: as matérias daquele órgão no dia (identificação, tipo, página,
+    ementa), paginadas.
+
+    Args:
+        data: Dia (YYYY-MM-DD); sem data, a edição mais recente do acervo.
+        secao: 1, 2 ou 3 ("seção 1 extra" para a extra); sem seção, todas.
+        orgao: Órgão (raiz), ex.: "Ministério da Previdência Social".
+        limite: Matérias por página quando há órgão (padrão 50).
+        deslocamento: Paginação — repasse o 'proximo_deslocamento'.
+    """
+    require_module("dou")
+    with app.app_context():
+        return dou_edition_summary_handler(data, secao, orgao, limite, deslocamento,
+                                           APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def resumo_dou_escritorio(edicoes: int = 3) -> dict:
+    """O que o Diário Oficial trouxe para o escritório nas últimas edições.
+
+    É o conteúdo do e-mail diário do DOU: clientes da carteira citados
+    (agrupados por empresa, com quantos estabelecimentos), os resultados de
+    recurso FAP (quantos clientes tiveram recurso julgado, quantos com
+    deferimento) e as matérias que casaram com as regras de "O que vigiar".
+    Deferimento é ganho de causa; indeferimento abre prazo para recorrer.
+
+    Args:
+        edicoes: Quantas edições publicadas considerar (padrão 3, até 10).
+    """
+    claims = require_module("dou")
+    with app.app_context():
+        return dou_firm_digest_handler(claims["law_firm_id"], edicoes, APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def alertas_dou(
+    status: str | None = None,
+    cliente: str | None = None,
+    resultado_fap: str | None = None,
+    origem: str | None = None,
+    secao: str | None = None,
+    regra: str | None = None,
+    data_de: str | None = None,
+    data_ate: str | None = None,
+    limite: int = 30,
+    deslocamento: int = 0,
+) -> dict:
+    """Alertas do Diário Oficial do escritório: clientes citados e palavras-chave.
+
+    A mesma lista da tela Alertas do Diário Oficial. Cada alerta é uma matéria,
+    com os clientes citados, o resultado de recurso FAP de cada um (quando é
+    edital de julgamento) e as regras de "O que vigiar" que casaram. Dentro de
+    cada dia, quem traz decisão vem primeiro. Para as linhas do edital (processo,
+    CNPJ, instância, resultado), use detalhar_alerta_dou.
+
+    Args:
+        status: "nao_lidos", "lidos" ou "todos" (padrão: todos).
+        cliente: Nome (ou parte) ou CNPJ/raiz do cliente.
+        resultado_fap: "com" (houve decisão), "deferimento" (onde ganhamos),
+            "indeferimento" (prazo correndo) ou a decisão exata.
+        origem: "cliente" (CNPJ da carteira) ou "regra" (palavra-chave).
+        secao: 1, 2 ou 3 (uma por vez).
+        regra: Nome da regra de "O que vigiar".
+        data_de: Publicado a partir de (YYYY-MM-DD).
+        data_ate: Publicado até (YYYY-MM-DD).
+        limite: Alertas por página (padrão 30).
+        deslocamento: Paginação — repasse o 'proximo_deslocamento'.
+    """
+    claims = require_module("dou")
+    with app.app_context():
+        return dou_list_alerts_handler(
+            claims["law_firm_id"], status, cliente, resultado_fap, origem, secao, regra,
+            data_de, data_ate, limite, deslocamento, APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def detalhar_alerta_dou(alerta_id: int, max_linhas: int = 200) -> dict:
+    """Um alerta do Diário Oficial por inteiro: estabelecimentos e linhas do edital.
+
+    Traz cada estabelecimento do cliente citado (CNPJ, se é o cadastrado ou
+    outro do grupo, resultado FAP) e as linhas do edital que o citam, em texto
+    ("processo | ano | CNPJ | instância | resultado"), com o cabeçalho da
+    tabela quando existe. É o "ver trecho" da tela.
+
+    Args:
+        alerta_id: ID do alerta (vem de alertas_dou ou de ler_materia_dou).
+        max_linhas: Máximo de linhas e estabelecimentos (padrão 200, até 400).
+    """
+    claims = require_module("dou")
+    with app.app_context():
+        return dou_alert_detail_handler(claims["law_firm_id"], alerta_id, APP_PUBLIC_URL,
+                                        max_linhas)
+
+
+@mcp.tool()
+def regras_dou() -> dict:
+    """As regras de "O que vigiar" do escritório no Diário Oficial.
+
+    Por regra: termo, modo (frase exata ou todas as palavras), seções, órgão,
+    se está ativa, quem criou, quantos alertas gerou e quando casou pela última
+    vez — "essa regra não pega nada há 40 dias" aparece aqui.
+    """
+    claims = require_module("dou")
+    with app.app_context():
+        return dou_rules_handler(claims["law_firm_id"], APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def testar_termo_dou(
+    termo: str | None = None,
+    modo: str | None = None,
+    secao: str | None = None,
+    orgao: str | None = None,
+) -> dict:
+    """Quantos alertas um termo geraria no Diário Oficial — antes de criar a regra.
+
+    Roda o mesmo teste da tela "O que vigiar" nas últimas edições: alertas no
+    período, média por edição, avaliação do volume (ok, alto, ruidoso) e
+    exemplos com o trecho. Não cria regra: para isso, a tela (link em
+    'como_criar'). Termo comum ("licitação") gera centenas por dia — o teste
+    existe para mostrar isso antes.
+
+    Args:
+        termo: Palavra ou expressão a vigiar (opcional se houver órgão).
+        modo: "frase" (a sequência exata, padrão) ou "palavras" (todas, em qualquer ordem).
+        secao: 1, 2 ou 3 para restringir (vários com ";").
+        orgao: Órgão (raiz) para restringir.
+    """
+    require_module("dou")
+    with app.app_context():
+        return dou_test_term_handler(termo, modo, secao, orgao, APP_PUBLIC_URL)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # UTILIDADES
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -1676,6 +1945,51 @@ def socios_empresa(cnpj: str) -> str:
         "cadastrais públicos, apresentados como estão."
     )
 
+
+@mcp.prompt(name="dou_do_dia", description="O Diário Oficial de hoje para o escritório: clientes citados, recursos FAP julgados e o que casou com as regras")
+def dou_do_dia() -> str:
+    return (
+        "Monte o resumo do Diário Oficial da União para o escritório, em português:\n"
+        "1. Chame ultimas_edicoes_dou (quantas=1). Se vier 'aviso', comece dizendo que a "
+        "captura está atrasada ou com falha e até que data o acervo vai.\n"
+        "2. Chame resumo_dou_escritorio (edicoes=1).\n"
+        "3. **Recursos FAP julgados**: por cliente, quantos estabelecimentos tiveram "
+        "deferimento (ganho de causa) e quantos indeferimento (prazo para recorrer). "
+        "Para cada cliente com indeferimento, chame detalhar_alerta_dou no alerta "
+        "correspondente (alertas_dou com cliente e resultado_fap='indeferimento') e "
+        "liste processo e CNPJ.\n"
+        "4. **Clientes citados** sem decisão de recurso: o que é cada matéria, com link.\n"
+        "5. **O que vigiar**: as matérias que casaram com as regras, uma linha cada.\n"
+        "6. **Seção 1 de interesse**: chame sumario_edicao_dou (secao=1) e destaque os "
+        "atos de órgãos ligados a previdência e trabalho (ex.: Ministério da Previdência "
+        "Social, Ministério do Trabalho e Emprego), se houver.\n"
+        "Cite sempre o link da folha do PDF assinado (url_pagina_pdf) ou url_oficial. "
+        "Seja direto: primeiro o que exige ação."
+    )
+
+
+@mcp.prompt(name="radar_regulatorio_fap", description="O que mudou nas regras do FAP, NTEP e RAT no Diário Oficial no período")
+def radar_regulatorio_fap(dias: str = "30") -> str:
+    return (
+        f"Monte o radar regulatório de FAP dos últimos {dias} dias no Diário Oficial da União, "
+        "em português:\n"
+        "1. Chame ultimas_edicoes_dou para saber até que data o acervo vai; o período é "
+        f"os {dias} dias anteriores a essa data.\n"
+        "2. Chame pesquisar_dou (ordem='data', data_de no início do período) para cada termo, "
+        "SEMPRE com o termo entre aspas duplas dentro do valor (frase exata — sem aspas as "
+        "palavras vêm soltas e FAP casa FAPESP): '\"Fator Acidentário de Prevenção\"', "
+        "'\"FAP\"', '\"Nexo Técnico Epidemiológico\"', '\"NTEP\"', "
+        "'\"Riscos Ambientais do Trabalho\"', '\"Conselho de Recursos da Previdência Social\"' "
+        "e '\"acidente de trabalho\"'. Use por_orgao e por_tipo para ver o volume.\n"
+        "3. Descarte o que não é regra nem pauta (editais de licitação, extratos de contrato, "
+        "fundações de amparo à pesquisa como FAPESP ou FAPEMIG).\n"
+        "4. Para os atos relevantes (portarias, resoluções, instruções normativas, pautas de "
+        "julgamento do CRPS), chame ler_materia_dou e resuma o que muda e para quem.\n"
+        "5. Entregue: **Normas** (o que mudou, vigência, impacto para as empresas clientes), "
+        "**Pautas e julgamentos** (datas e órgão) e **Para acompanhar**. Cada item com a data, "
+        "a identificação do ato e o link da folha do PDF assinado (url_pagina_pdf) ou url_oficial.\n"
+        "Se não houver nada relevante, diga isso claramente — é uma resposta útil."
+    )
 
 if __name__ == "__main__":
     host = os.environ.get("MCP_HOST", "127.0.0.1")

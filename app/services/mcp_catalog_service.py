@@ -22,9 +22,11 @@ _SECAO_COMANDOS = "## Comandos prontos"
 # O nome começa por letra: exemplos como `5001181` em tabelas de apoio não contam.
 _LINHA_ITEM = re.compile(r"^\|\s*`([a-z][a-z0-9_]*)`\s*\|\s*(.*?)\s*\|")
 
-# Ordem dos grupos no modal: Jurisprudência e tudo do FAP primeiro (decisão do
-# produto). Grupo fora da lista mantém a ordem do manual, depois destes.
+# Ordem dos grupos no modal: o Diário Oficial (novidade, em evidência), depois
+# Jurisprudência e tudo do FAP (decisão do produto). Grupo fora da lista mantém
+# a ordem do manual, depois destes.
 _ORDEM_MODAL = (
+    "Diário Oficial da União",
     "Base de Jurisprudência",
     "Painel FAP — consultas",
     "Painel FAP — análises e acompanhamento",
@@ -35,6 +37,7 @@ _ORDEM_MODAL = (
 # Ícone (Bootstrap Icons) de cada grupo no modal — os mesmos do menu lateral
 # quando o módulo tem um. Grupo sem ícone aqui usa ICONE_PADRAO.
 _ICONES = {
+    "Diário Oficial da União": "bi-newspaper",
     "Base de Jurisprudência": "bi-bank",
     "Painel FAP — consultas": "bi-shield-check",
     "Painel FAP — análises e acompanhamento": "bi-graph-up",
@@ -47,6 +50,10 @@ _ICONES = {
     "Revisão de Petições": "bi-file-earmark-check",
 }
 ICONE_PADRAO = "bi-grid"
+
+# Selo "Novo" no modal. Tirar daqui quando deixar de ser novidade — é só isso.
+NOVOS_GRUPOS = {"Diário Oficial da União"}
+NOVOS_COMANDOS = {"dou_do_dia", "radar_regulatorio_fap"}
 
 _cache = {"mtime": None, "catalogo": None}
 
@@ -81,7 +88,8 @@ def _parse(texto):
             # Sem o emoji do manual: no modal ele disputa com os ícones do app e,
             # sem fonte de emoji no sistema, vira um quadrado vazio.
             titulo = re.sub(r"^[^\wÀ-ÿ]+", "", linha[4:]).strip()
-            atual = {"titulo": titulo, "icone": _ICONES.get(titulo, ICONE_PADRAO), "itens": []}
+            atual = {"titulo": titulo, "icone": _ICONES.get(titulo, ICONE_PADRAO),
+                     "novo": titulo in NOVOS_GRUPOS, "itens": []}
             grupos.append(atual)
             continue
         m = _LINHA_ITEM.match(linha)
@@ -95,12 +103,14 @@ def _parse(texto):
     for linha in _secao(linhas, _SECAO_COMANDOS):
         m = _LINHA_ITEM.match(linha)
         if m:
-            comandos.append({"nome": m.group(1), "descricao": _texto_simples(m.group(2))})
+            comandos.append({"nome": m.group(1), "descricao": _texto_simples(m.group(2)),
+                             "novo": m.group(1) in NOVOS_COMANDOS})
 
     anunciado = re.search(r"\*\*(\d+) ferramentas\*\*", texto)
     return {
         "grupos": grupos,
         "comandos": comandos,
+        "tem_novidade": any(g["novo"] for g in grupos) or any(c["novo"] for c in comandos),
         "total_ferramentas": sum(len(g["itens"]) for g in grupos),
         "total_anunciado": int(anunciado.group(1)) if anunciado else None,
     }
@@ -111,7 +121,8 @@ def catalogo():
     try:
         mtime = os.path.getmtime(MANUAL_PATH)
     except OSError:
-        return {"grupos": [], "comandos": [], "total_ferramentas": 0, "total_anunciado": None}
+        return {"grupos": [], "comandos": [], "tem_novidade": False,
+                "total_ferramentas": 0, "total_anunciado": None}
     if _cache["mtime"] != mtime:
         with open(MANUAL_PATH, encoding="utf-8") as f:
             _cache["catalogo"] = _parse(f.read())

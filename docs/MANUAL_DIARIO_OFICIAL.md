@@ -123,6 +123,41 @@ Se um dia aparecer incompleto ou com falha, informe a data e clique em
 > nunca duplicada. Se a Imprensa Nacional republicou a edição com correções,
 > reprocessar é justamente como trazer o texto corrigido.
 
+## :claude: Perguntar à IA
+
+Com o IntellexIA conectado ao :claude: **Claude** (veja o manual **Conectar sua
+IA**), você consulta o Diário Oficial conversando — a IA usa o mesmo acervo, a
+mesma busca e os mesmos alertas desta tela, com o seu login.
+
+O que dá para pedir:
+
+- **"Algum cliente saiu no Diário Oficial esta semana?"** — os clientes da
+  carteira citados, agrupados por empresa.
+- **"Quais recursos FAP foram julgados? Onde ganhamos?"** — os resultados
+  publicados pelo CRPS, com o processo e o CNPJ de cada estabelecimento.
+- **"O que o Ministério da Previdência publicou ontem na Seção 1?"** — o sumário
+  da edição, órgão por órgão, e as matérias do órgão pedido.
+- **"Tem portaria nova sobre o \"Fator Acidentário de Prevenção\"?"** — pesquisa
+  em todo o acervo, com o link da folha do PDF assinado para citar.
+- **"O CNPJ 33.592.510/0001-54 aparece no Diário?"** — CNPJ e número de processo
+  são reconhecidos sozinhos, com ou sem pontuação.
+- **"Se eu vigiar \"NTEP\", quantos alertas vou receber por dia?"** — o mesmo
+  teste que aparece antes de salvar uma regra em "O que vigiar". A IA só
+  consulta: a regra continua sendo criada nesta tela.
+- **"Até que dia o Diário está no sistema?"** — as últimas edições e a situação
+  da captura.
+
+Há também dois **comandos prontos**: `dou_do_dia` (o Diário de hoje para o
+escritório, com o que exige ação primeiro) e `radar_regulatorio_fap` (o que
+mudou nas regras do FAP, NTEP e RAT no período).
+
+> [!DOU] **Expressão ou sigla vai entre aspas.** Sem aspas, a pesquisa procura as
+> palavras soltas: "fator acidentário de prevenção" encontra 748 matérias, e
+> entre aspas, 7. A IA já é orientada a usar aspas, mas vale pedir assim.
+
+> [!ALERTA] Se a captura estiver atrasada, a IA avisa — "não encontrei nada"
+> num dia que ainda não entrou no sistema não quer dizer que nada foi publicado.
+
 ## Perguntas frequentes
 
 **Com que frequência o sistema busca o Diário?**

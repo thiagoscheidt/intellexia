@@ -306,7 +306,7 @@
         <p class="mb-3">
           O IntellexIA possui um <strong>conector MCP</strong> que permite ao <strong>Claude</strong> consultar os
           dados do seu escritório direto na conversa: painel FAP, contestações, benefícios, base de conhecimento,
-          processos e relatórios em Excel — sempre <strong>com o seu login</strong> e respeitando suas permissões.
+          processos, <strong>Diário Oficial da União</strong> e relatórios em Excel — sempre <strong>com o seu login</strong> e respeitando suas permissões.
         </p>
 
         <h6 class="fw-semibold"><i class="bi bi-plug me-1"></i>Como conectar no Claude Desktop / claude.ai</h6>
@@ -342,6 +342,18 @@
           Você não precisa chamá-las pelo nome — basta pedir em português, e a IA escolhe a ferramenta.
           Cada uma respeita as suas permissões de módulo.
         </p>
+        {% if mcp_cat.tem_novidade %}
+        <div class="alert alert-primary d-flex align-items-start gap-2 py-2 px-3 mb-2" role="note">
+          <i class="bi bi-newspaper fs-5 lh-1 mt-1"></i>
+          <div class="small">
+            <span class="badge text-bg-success me-1">Novo</span>
+            <strong>Diário Oficial da União na conversa.</strong>
+            Pergunte "algum cliente saiu no Diário Oficial esta semana?", peça os resultados de recurso FAP
+            publicados, o sumário da edição do dia ou pesquise uma portaria — com o link da folha do PDF assinado.
+            Comandos prontos <code>dou_do_dia</code> e <code>radar_regulatorio_fap</code>.
+          </div>
+        </div>
+        {% endif %}
         <div class="accordion accordion-flush border rounded" id="mcpCatalogo">
           {% for grupo in mcp_cat.grupos %}
           <div class="accordion-item">
@@ -350,6 +362,7 @@
                 data-bs-target="#mcpGrupo{{ loop.index }}" aria-expanded="false" aria-controls="mcpGrupo{{ loop.index }}">
                 <span class="me-2"><i class="bi {{ grupo.icone }} me-2 text-primary"></i>{{ grupo.titulo }}</span>
                 <span class="badge text-bg-secondary rounded-pill">{{ grupo.itens|length }}</span>
+                {% if grupo.novo %}<span class="badge text-bg-success ms-2">Novo</span>{% endif %}
               </button>
             </h2>
             <div id="mcpGrupo{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#mcpCatalogo">
@@ -368,6 +381,7 @@
                 data-bs-target="#mcpComandos" aria-expanded="false" aria-controls="mcpComandos">
                 <span class="me-2"><i class="bi bi-lightning-charge me-2 text-primary"></i>Comandos prontos</span>
                 <span class="badge text-bg-primary rounded-pill">{{ mcp_cat.comandos|length }}</span>
+                {% if mcp_cat.comandos|selectattr('novo')|list %}<span class="badge text-bg-success ms-2">Novo</span>{% endif %}
               </button>
             </h2>
             <div id="mcpComandos" class="accordion-collapse collapse" data-bs-parent="#mcpCatalogo">
@@ -378,7 +392,7 @@
               </p>
               <ul class="list-unstyled small mb-0 px-3 pb-2">
                 {% for item in mcp_cat.comandos %}
-                <li class="mb-2"><code>{{ item.nome }}</code><br><span class="text-muted">{{ item.descricao }}</span></li>
+                <li class="mb-2"><code>{{ item.nome }}</code>{% if item.novo %} <span class="badge text-bg-success">Novo</span>{% endif %}<br><span class="text-muted">{{ item.descricao }}</span></li>
                 {% endfor %}
               </ul>
             </div>

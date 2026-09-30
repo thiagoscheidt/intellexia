@@ -41,6 +41,7 @@ from app.services import dou_ingestion_service as ingestion
 from app.services import dou_search_service as busca_service
 from app.services import dou_alert_service as alert_service
 from app.services import dou_rule_service as rule_service
+from app.services import dou_edicao_service as edicao_service
 from app.services.dou_xml_parser import grifar_html, sanitizar_html
 
 dou_bp = Blueprint('dou', __name__, url_prefix='/dou')
@@ -111,24 +112,8 @@ def _dias_vizinhos(data):
 
 
 def _orgaos_da_secao(edition_id):
-    """Órgãos-raiz da seção com a contagem de matérias, para o filtro.
-
-    Só a raiz da hierarquia: uma seção tem ~104 hierarquias completas, que não
-    viram filtro usável, contra ~27 raízes. É o mesmo recorte da busca global
-    (``dou_search_service.orgao_raiz``), então os dois filtram igual.
-
-    A agregação é em Python porque cortar na barra dentro do SQL não é
-    portável entre SQLite e MySQL — e são ~100 linhas, não uma varredura.
-    """
-    linhas = (db.session.query(DouArticle.orgao_hierarquia, func.count())
-              .filter(DouArticle.edition_id == edition_id)
-              .group_by(DouArticle.orgao_hierarquia).all())
-    totais = {}
-    for hierarquia, qtd in linhas:
-        raiz = busca_service.orgao_raiz(hierarquia)
-        if raiz:
-            totais[raiz] = totais.get(raiz, 0) + qtd
-    return sorted(totais.items(), key=lambda item: (-item[1], item[0]))
+    """Órgãos-raiz da seção com a contagem — ver ``dou_edicao_service``."""
+    return edicao_service.orgaos_da_secao(edition_id)
 
 
 def _blocos_de_materias(itens, agrupar):
@@ -849,27 +834,8 @@ def _total_paginas(edicao_obj):
 
 
 def _sumario_da_edicao(edition_id):
-    """``[(órgão-raiz, primeira página)]`` da seção, na ordem das páginas.
-
-    É o "Sumário da Edição" do portal da Imprensa Nacional, reconstruído do
-    nosso acervo. Conferido contra o deles na Seção 1 de 10/08/2026: as mesmas
-    23 raízes, nas mesmas páginas (Agricultura 1, Comunicações 4, Cultura 7,
-    Defesa 14, Fazenda 23...).
-
-    Por raiz, e não pela hierarquia completa, pela mesma razão do filtro da
-    listagem: a hierarquia tem ~104 valores por seção e não vira índice.
-    """
-    linhas = (db.session.query(DouArticle.orgao_hierarquia,
-                               func.min(DouArticle.pagina_num))
-              .filter(DouArticle.edition_id == edition_id,
-                      DouArticle.pagina_num.isnot(None))
-              .group_by(DouArticle.orgao_hierarquia).all())
-    primeira = {}
-    for hierarquia, pagina in linhas:
-        raiz = busca_service.orgao_raiz(hierarquia)
-        if raiz:
-            primeira[raiz] = min(primeira.get(raiz, pagina), pagina)
-    return sorted(primeira.items(), key=lambda item: (item[1], item[0]))
+    """Sumário da edição por órgão-raiz — ver ``dou_edicao_service``."""
+    return edicao_service.sumario_da_edicao(edition_id)
 
 
 def _pagina_do_termo(artigo, consulta):

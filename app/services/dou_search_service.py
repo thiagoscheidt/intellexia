@@ -377,23 +377,31 @@ def reindex_all(desde=None, lote: int = LOTE_PADRAO, indice=None) -> int:
 # ---------------------------------------------------------------- consulta
 
 def search(termo: str, filtros: dict | None = None, ordem: str = 'relevancia',
-           pagina: int = 1, por_pagina: int = 20, indice=None) -> dict:
+           pagina: int = 1, por_pagina: int = 20, indice=None,
+           deslocamento: int | None = None, sem_termo: bool = False) -> dict:
     """Busca no acervo. Devolve sempre um dicionário, mesmo em falha.
 
     Chaves: hits, total, ms, facetas, tipo_consulta, indisponivel.
+
+    ``deslocamento`` substitui a conta por página (o MCP pagina por offset).
+    ``sem_termo=True`` aceita consulta vazia e devolve o recorte dos filtros —
+    "o que o Ministério X publicou em agosto" não tem palavra para procurar. A
+    tela continua com o padrão: sem termo, sem resultado.
     """
     vazio = {'hits': [], 'total': 0, 'total_navegavel': 0, 'ms': 0, 'facetas': {},
              'tipo_consulta': 'texto', 'indisponivel': False}
 
     tipo, normalizado = classificar_consulta(termo)
-    if not normalizado:
+    if not normalizado and not sem_termo:
         return vazio
 
+    offset = (deslocamento if deslocamento is not None
+              else (max(pagina, 1) - 1) * por_pagina)
     try:
         indice = indice or get_index()
         resultado = indice.search(
             normalizado,
-            offset=(max(pagina, 1) - 1) * por_pagina,
+            offset=offset,
             limit=por_pagina,
             filter=montar_filtro(filtros),
             facets=_FACETAS,
@@ -402,7 +410,8 @@ def search(termo: str, filtros: dict | None = None, ordem: str = 'relevancia',
             highlight_post_tag=MARCA_FIM,
             attributes_to_crop=['texto'],
             crop_length=TAM_TRECHO,
-            sort=['pub_date_num:desc'] if ordem == 'data' else None,
+            # Sem termo não há relevância para ordenar: vale a data.
+            sort=['pub_date_num:desc'] if (ordem == 'data' or not normalizado) else None,
         )
     except Exception as exc:  # noqa: BLE001 — buscar não derruba a tela
         logger.error('DOU busca: falha na consulta %r: %s', termo, exc)
@@ -531,6 +540,22 @@ def _formatar_hit(hit: dict, tipo: str = 'texto', normalizado: str = '') -> dict
         'data_br': hit.get('data_br') or '',
         'pagina': hit.get('pagina') or '',
     }
+
+
+def valores_das_facetas(indice=None) -> dict | None:
+    """``{campo: {valor: qtd}}`` do acervo inteiro — seções, órgãos, tipos.
+
+    Consulta vazia com facetas, sem documento nenhum: é barato e reflete o que
+    existe no índice, que é o que o filtro consegue casar. None se o índice
+    estiver fora do ar. Tipos de ato vêm até o teto do Meilisearch (100 mais
+    frequentes).
+    """
+    try:
+        indice = indice or get_index()
+        return indice.search('', facets=_FACETAS, limit=0).facet_distribution or {}
+    except Exception as exc:  # noqa: BLE001
+        logger.error('DOU busca: falha ao ler as facetas: %s', exc)
+        return None
 
 
 def montar_filtro(filtros: dict | None) -> str | None:

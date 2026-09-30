@@ -300,6 +300,24 @@ nunca derruba a tela.
   aquela função reconfigura atributos e ficaria na fila atrás dos documentos
   que está esperando.
 - **Índice de teste é sempre `dou_articles_test`, nunca o de produção.**
+- **MCP** (`mcp_server/tools/dou.py`, permissão `dou`, só leitura): `pesquisar_dou`,
+  `ler_materia_dou`, `valores_de_filtro_dou`, `ultimas_edicoes_dou`,
+  `sumario_edicao_dou` (acervo, sem tenant) e `resumo_dou_escritorio`,
+  `alertas_dou`, `detalhar_alerta_dou`, `regras_dou`, `testar_termo_dou`
+  (escritório, sempre por `law_firm_id`), mais os prompts `dou_do_dia` e
+  `radar_regulatorio_fap`. Tudo pelos serviços da tela: `search(...,
+  deslocamento=, sem_termo=True)` (o MCP pagina por offset e aceita só
+  filtros), `dou_edicao_service` (sumário e contagem por órgão, antes presos no
+  blueprint), `consulta_alertas` (a query do `listar`, com período e lista de
+  `client_ids` — "Santander" são dezenas de cadastros) e o `build_digest` do
+  e-mail. **Aspas mudam o número**: sem elas o Meilisearch casa as palavras
+  soltas e com tolerância a erro — "fator acidentário de prevenção" dá 748
+  matérias, entre aspas 7; "FAP" sem aspas traz FAPESP. A docstring, o prompt e
+  a própria resposta (`dica`) orientam a IA. Resultado vazio pode ser captura
+  atrasada: `ultimas_edicoes_dou` devolve `aviso` quando `health_counters`
+  acusa parada ou falha. Os editais do CRPS **não têm cabeçalho de tabela** —
+  `detalhar_alerta_dou` explica a ordem das colunas em vez de tratar a 1ª linha
+  de dados como cabeçalho. Teste: `tests/test_mcp_dou.py`.
 
 **Alertas de cliente no DOU (`dou_alert_service`)** — cruza os CNPJs da
 carteira de clientes com o texto de cada matéria capturada. Fonte única da tela
@@ -867,6 +885,7 @@ FapReview.revision [POST]
 | `inlabs_client`                        | Cliente HTTP do INLABS (Imprensa Nacional) — todo acesso isolado aqui: login, cookie de sessão, montagem de URL, retry com teto, timeout e relogin transparente |
 | `dou_xml_parser`                       | XML do DOU → dicts. Função pura, sem rede/banco/Flask — a peça que muda se a Imprensa Nacional alterar o schema |
 | `dou_ingestion_service`                | Ingestão do DOU: download → disco → parse → upsert → auditoria. Dedup por chave da matéria, janela de reverificação e retenção de PDF — fonte única da tela e do cron |
+| `dou_edicao_service`                   | Edição do dia do DOU: sumário por órgão-raiz (primeira página), contagem por órgão e tipo, últimas datas e período do acervo — fonte única da tela da edição, do leitor e das tools MCP de edição |
 | `dou_search_service`                   | Busca no acervo do DOU (Meilisearch): extração e normalização de CNPJ/processo, indexação e consulta com facetas — fonte única da tela de busca |
 | `dou_alert_service`                    | Alertas no DOU: validação de CNPJ (mod 11), carteira do escritório, casamento exato e por raiz, gravação dos hits de regra, geração e triagem — fonte única da tela `/dou/alertas`, do gancho na ingestão, do digest e do backfill |
 | `dou_rule_service`                     | Regras de palavra-chave do DOU: normalização, casamento por fronteira de palavra (sem modo OU), peneira SQL e o teste antes de salvar — **não sabe o que é alerta**, devolve `{article_id: [rule_id]}`. Ver a seção "Alertas por palavra-chave no DOU" |

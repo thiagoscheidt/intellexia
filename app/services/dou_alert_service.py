@@ -469,7 +469,21 @@ def resumo(law_firm_id: int) -> dict:
 def listar(law_firm_id: int, status=None, tipo=None, secao=None,
            client_id=None, fap=None, origem=None, rule_id=None,
            page: int = 1, por_pagina: int = 30):
-    """Página de alertas, do mais recente para o mais antigo.
+    """Página de alertas da tela — ver ``consulta_alertas``."""
+    return (consulta_alertas(law_firm_id, status=status, tipo=tipo, secao=secao,
+                             client_ids=[client_id] if client_id else None,
+                             fap=fap, origem=origem, rule_id=rule_id)
+            .paginate(page=page, per_page=por_pagina, error_out=False))
+
+
+def consulta_alertas(law_firm_id: int, status=None, tipo=None, secao=None,
+                     client_ids=None, fap=None, origem=None, rule_id=None,
+                     de=None, ate=None):
+    """Alertas do escritório, do mais recente para o mais antigo (query, sem paginar).
+
+    Fonte única da tela e do MCP: a tela pagina por página, o MCP por offset.
+    ``client_ids`` é lista porque a carteira tem um cadastro por
+    estabelecimento — "Santander" no MCP são dezenas de ids.
 
     Dentro do dia, **quem traz decisão de recurso vem primeiro**: é desfecho,
     não notícia, e num dia de 32 alertas a ordem por id o empurraria para o fim
@@ -501,11 +515,15 @@ def listar(law_firm_id: int, status=None, tipo=None, secao=None,
         query = query.filter(DouClientAlert.match_type == tipo)
     if secao:
         query = query.filter(DouClientAlert.pub_name == secao)
-    if client_id:
+    if client_ids:
         query = query.filter(DouClientAlert.id.in_(
             db.session.query(DouClientAlertMatch.alert_id)
             .filter(DouClientAlertMatch.law_firm_id == law_firm_id,
-                    DouClientAlertMatch.client_id == client_id)))
+                    DouClientAlertMatch.client_id.in_(client_ids))))
+    if de:
+        query = query.filter(DouClientAlert.pub_date >= de)
+    if ate:
+        query = query.filter(DouClientAlert.pub_date <= ate)
     if fap:
         # Os três recortes que o advogado pede: "houve decisão", "onde ganhamos"
         # e "onde há prazo correndo" — mais a decisão exata, quando ele já sabe
@@ -522,10 +540,9 @@ def listar(law_firm_id: int, status=None, tipo=None, secao=None,
         elif fap != FAP_QUALQUER:
             sub = sub.filter(DouClientAlertMatch.resultado == fap)
         query = query.filter(DouClientAlert.id.in_(sub))
-    return (query.order_by(DouClientAlert.pub_date.desc(),
-                           DouClientAlert.tem_resultado.desc(),
-                           DouClientAlert.id.desc())
-            .paginate(page=page, per_page=por_pagina, error_out=False))
+    return query.order_by(DouClientAlert.pub_date.desc(),
+                          DouClientAlert.tem_resultado.desc(),
+                          DouClientAlert.id.desc())
 
 
 def resultados_disponiveis(law_firm_id: int):

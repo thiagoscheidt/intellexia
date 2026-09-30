@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações e mais — com **44 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **54 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -16,6 +16,9 @@ O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de 
 - "**Me mostra o painel do FAP do BISTEK**" — abre um painel visual, com cartões e gráficos, dentro da própria conversa;
 - "Liste as contestações FAP da vigência 2023 que estão indeferidas";
 - "Quais as 10 filiais do grupo Vale com mais benefícios na vigência 2026?" — o ranking de estabelecimentos em uma chamada;
+- "**Algum cliente saiu no Diário Oficial esta semana?**" — os clientes citados e os resultados de recurso FAP publicados;
+- "O que o Ministério da Previdência publicou ontem na Seção 1?" — o sumário da edição, órgão por órgão;
+- "Saiu alguma portaria sobre o \"Fator Acidentário de Prevenção\" em agosto?" — pesquisa no acervo do Diário Oficial;
 - "Qual foi o resultado da contestação de protocolo 10128.053144/2025-42?" — e, na sequência, "quais benefícios dela foram deferidos?";
 - "O que temos na base de conhecimento sobre acidente de trajeto?";
 - "Pesquise o NB 6320957810 nos documentos" — retorna os trechos com link para abrir o PDF;
@@ -182,6 +185,29 @@ As publicações (intimações, citações, editais) que o radar captura no Diá
 
 > [!INFO] A consulta **ao vivo** mostra o que o Diário de Justiça tem sobre o processo, mas **não grava** nada no sistema: o radar só guarda o que pertence às OABs monitoradas. Ela exige o número completo (20 dígitos).
 
+### 📰 Diário Oficial da União
+
+O Diário Oficial capturado todo dia pelo sistema (tela **Diário Oficial**): a pesquisa em todo o acervo, as edições e o sumário do dia, e o que é do escritório — os **clientes citados**, os **resultados de recurso FAP** publicados pelo CRPS e o que casou com as regras de **"O que vigiar"**.
+
+| Ferramenta | O que faz | Origem |
+|---|---|---|
+| `pesquisar_dou` | Pesquisa no acervo por texto, **CNPJ** ou **número de processo** (reconhecidos sozinhos, com ou sem pontuação), com filtros de seção, órgão, tipo de ato e período. Traz o trecho encontrado, o total real e a distribuição por seção, órgão e tipo | Sistema |
+| `ler_materia_dou` | O **inteiro teor** de uma matéria, com CNPJs e processos citados e os links: no sistema, na **folha do PDF assinado** e no portal da Imprensa Nacional. Se a matéria gerou alerta para o escritório, diz para quais clientes | Sistema |
+| `valores_de_filtro_dou` | Seções, órgãos e tipos de ato que existem no acervo, e o período coberto — a IA consulta antes de filtrar | Sistema |
+| `ultimas_edicoes_dou` | As últimas edições capturadas: matérias por seção, edições extras, PDF assinado e a **situação da captura** | Sistema |
+| `sumario_edicao_dou` | O **sumário da edição** de um dia, como o do portal da Imprensa Nacional: órgãos na ordem das páginas, com quantas matérias cada um publicou; com um órgão, as matérias dele no dia | Sistema |
+| `resumo_dou_escritorio` | O que o Diário Oficial trouxe **para o escritório** nas últimas edições — o mesmo conteúdo do e-mail diário: clientes citados, recursos FAP julgados e regras que casaram | Cálculo |
+| `alertas_dou` | Os alertas do escritório com os filtros da tela: lidos ou não, cliente, **resultado FAP** (deferimento, indeferimento), origem, seção, regra e período | Sistema |
+| `detalhar_alerta_dou` | Um alerta por inteiro: cada estabelecimento citado com o resultado FAP e as **linhas do edital** (processo, CNPJ, instância, resultado) | Sistema |
+| `regras_dou` | As regras de "O que vigiar": termo, órgão, seções, quem criou, quantos alertas cada uma gerou e quando casou pela última vez | Sistema |
+| `testar_termo_dou` | Quantos alertas por dia um termo geraria **antes** de virar regra, com exemplos — o mesmo teste da tela. Só consulta: a regra se cria na tela | Cálculo |
+
+> [!DOU] **Use aspas para expressão ou sigla.** Sem aspas, a pesquisa procura as palavras soltas: "fator acidentário de prevenção" encontra **748** matérias; entre aspas, **7**. E "FAP" sem aspas traz também FAPESP, FAPEMIG e outras fundações. A IA é orientada a usar aspas, e a resposta avisa quando faltaram.
+
+> [!ALERTA] **"Não saiu nada" pode ser captura atrasada.** A pesquisa só enxerga as edições que o sistema já capturou. A IA consulta `ultimas_edicoes_dou` e avisa quando a captura está parada ou com falha, em vez de concluir que nada foi publicado.
+
+> [!INFO] O acervo do Diário Oficial é público e igual para todos; **alertas e regras são do escritório** e a IA só vê os do seu. Deferimento é ganho de causa (o FAP da empresa cai); indeferimento abre prazo para recorrer.
+
 ### 🔢 Como informar o número do processo
 
 Em todas as ferramentas que buscam por processo (`listar_processos`, `listar_comunicacoes`, `comunicacoes_do_processo`), o número pode ser digitado **de qualquer jeito**:
@@ -245,8 +271,10 @@ digite `/` e procure por `intellexia`; no Claude Desktop / claude.ai, eles ficam
 | `devolutiva_ao_advogado` | Transforma os achados em uma devolutiva construtiva para quem redigiu |
 | `ficha_empresa` | Ficha cadastral de uma empresa pelo CNPJ: razão social, situação, endereço, porte e resumo dos sócios |
 | `socios_empresa` | Só o quadro societário de um CNPJ: nome, CPF/CNPJ e qualificação de cada sócio |
+| `dou_do_dia` | O Diário Oficial de hoje para o escritório: recursos FAP julgados (com processo e CNPJ dos indeferidos), clientes citados, regras que casaram e os atos de previdência e trabalho da Seção 1 |
+| `radar_regulatorio_fap` | O que mudou nas regras do FAP, NTEP e RAT no período (padrão 30 dias): normas, pautas de julgamento do CRPS e o que acompanhar, com o link da folha do PDF assinado |
 
-> [!INFO] Os dois comandos acima **pedem o CNPJ** antes de executar, e consultam dados públicos da Receita. Sendo um CNPJ de **filial**, a resposta avisa — o quadro societário é sempre o da matriz. Em MEI e empresa individual, a resposta diz que não há sócios registrados, em vez de vir vazia.
+> [!INFO] `ficha_empresa` e `socios_empresa` **pedem o CNPJ** antes de executar, e consultam dados públicos da Receita. Sendo um CNPJ de **filial**, a resposta avisa — o quadro societário é sempre o da matriz. Em MEI e empresa individual, a resposta diz que não há sócios registrados, em vez de vir vazia.
 
 ---
 
@@ -261,6 +289,7 @@ O acesso da IA **espelha as suas permissões** no IntellexIA:
 | CATs, folha de pagamento, vínculos e rotatividade | Painel de Contestações |
 | Processos judiciais e Base de Jurisprudência | Painel de Processos |
 | Publicações do Diário de Justiça (monitoramento) | Monitoramento de Processos |
+| Diário Oficial da União (pesquisa, edições, alertas e "O que vigiar") | Diário Oficial |
 | Revisor de petições | Revisor de Petições |
 | Consulta de CNPJ | Qualquer usuário logado (dados públicos) |
 
