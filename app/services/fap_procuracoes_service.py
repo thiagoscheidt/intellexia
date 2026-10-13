@@ -160,6 +160,86 @@ def filtrar_por_outorgante(query, termo: str | None):
 
 
 # ---------------------------------------------------------------------------
+# Empresas sem procuração vigente
+# ---------------------------------------------------------------------------
+
+# Valor do filtro "Situação" da tela — não é situação do portal, é a visão por
+# empresa: quem está em ``fap_companies`` e não tem procuração valendo hoje.
+SEM_VIGENTE = 'SEM_VIGENTE'
+ROTULO_SEM_VIGENTE = 'Sem procuração vigente'
+
+
+def esta_vigente(rec, hoje: date) -> bool:
+    """Deferida e com hoje dentro da vigência (o portal mantém "Deferida" na vencida)."""
+    return (
+        rec.situacao_codigo == SITUACAO_VIGENTE
+        and (rec.data_inicio is None or rec.data_inicio <= hoje)
+        and (rec.data_fim is None or rec.data_fim >= hoje)
+    )
+
+
+def ultima_procuracao(procuracoes: list, hoje: date):
+    """A procuração que melhor explica a falta de vigente, ou ``None`` se há vigente.
+
+    Função pura. Fica a de vigência mais recente — é ela que diz "expirou em
+    tal dia"; no empate, a cadastrada por último.
+    """
+    if any(esta_vigente(p, hoje) for p in procuracoes):
+        return None
+    return max(
+        procuracoes,
+        key=lambda p: (p.data_fim or date.min, p.data_cadastro or datetime.min),
+        default=None,
+    )
+
+
+def empresas_sem_procuracao_vigente(
+    law_firm_id: int, hoje: date | None = None, termo: str | None = None,
+    so_sem_historico: bool = False,
+) -> list[dict]:
+    """Empresas do Painel FAP sem procuração valendo hoje — só consulta.
+
+    Dois casos, e a tela separa os dois: a empresa que **nunca teve**
+    procuração (entra pelo vínculo gov.br, como o grupo Vale) e a que **já
+    teve** e hoje só tem expirada/excluída. ``so_sem_historico`` devolve só o
+    primeiro: na lista geral a segunda já aparece pelas próprias procurações.
+    """
+    from app.models import FapCompany
+    from app.services.fap_company_sync_service import por_vinculo, ultima_sincronizacao as _ultima_sync
+
+    hoje = hoje or date.today()
+    por_raiz: dict[str, list] = {}
+    for rec in FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id):
+        raiz = completar_zeros(rec.cnpj_raiz_outorgante, TAMANHO_CNPJ_RAIZ) or ''
+        por_raiz.setdefault(raiz, []).append(rec)
+
+    termo = (termo or '').strip().lower()
+    digitos = apenas_digitos(termo)
+    ultima_sync = _ultima_sync(law_firm_id)
+
+    linhas = []
+    empresas = FapCompany.query.filter_by(law_firm_id=law_firm_id).order_by(FapCompany.nome, FapCompany.id)
+    for empresa in empresas:
+        raiz = completar_zeros(empresa.cnpj, TAMANHO_CNPJ_RAIZ) or ''
+        procuracoes = por_raiz.get(raiz, [])
+        ultima = ultima_procuracao(procuracoes, hoje)
+        if procuracoes and ultima is None:
+            continue  # tem vigente
+        if so_sem_historico and procuracoes:
+            continue
+        nome = (empresa.nome or '').strip()
+        if termo and termo not in nome.lower() and not (digitos and digitos in raiz):
+            continue
+        linhas.append({
+            'cnpj_raiz': raiz,
+            'nome': nome,
+            'por_vinculo': por_vinculo(empresa, ultima_sync),
+            'ultima': ultima,
+        })
+    return linhas
+
+
+# ---------------------------------------------------------------------------
 # Sincronização
 # ---------------------------------------------------------------------------
 

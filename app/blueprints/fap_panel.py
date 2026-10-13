@@ -2301,6 +2301,28 @@ def sync_procuracoes_list():
 # Página de listagem de procurações
 # ---------------------------------------------------------------------------
 
+def _empresas_sem_vigente_da_visao(law_firm_id, f_situacao, f_outorgante, outros_filtros):
+    """Linhas de empresa da tela/Excel de procurações + total para o cartão.
+
+    Filtro "Sem procuração vigente": todas. Sem filtro de situação: só as que
+    nunca tiveram procuração — as demais já estão na lista pelas próprias
+    procurações expiradas. Qualquer filtro que só existe em procuração
+    (tipo, protocolo, vigência) tira as empresas da visão.
+    """
+    todas = fap_procuracoes_service.empresas_sem_procuracao_vigente(law_firm_id)
+    if outros_filtros or f_situacao not in ('', fap_procuracoes_service.SEM_VIGENTE):
+        return [], len(todas)
+    so_sem_historico = not f_situacao
+    if f_outorgante:
+        linhas = fap_procuracoes_service.empresas_sem_procuracao_vigente(
+            law_firm_id, termo=f_outorgante, so_sem_historico=so_sem_historico)
+    elif so_sem_historico:
+        linhas = [e for e in todas if e['ultima'] is None]
+    else:
+        linhas = todas
+    return linhas, len(todas)
+
+
 @fap_panel_bp.route('/procuracoes')
 @require_law_firm
 def procuracoes_page():
@@ -2379,11 +2401,20 @@ def procuracoes_page():
 
     total = FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id).count()
 
+    empresas_sem, total_sem_vigente = _empresas_sem_vigente_da_visao(
+        law_firm_id, f_situacao, f_outorgante,
+        outros_filtros=bool(f_tipo or f_protocolo or f_vigencia_ini or f_vigencia_fim or f_vencendo_em),
+    )
+
     from datetime import date as _date
     return render_template(
         'fap_panel/procuracoes.html',
         rows=rows,
         total=total,
+        empresas_sem=empresas_sem,
+        total_sem_vigente=total_sem_vigente,
+        SEM_VIGENTE=fap_procuracoes_service.SEM_VIGENTE,
+        ROTULO_SEM_VIGENTE=fap_procuracoes_service.ROTULO_SEM_VIGENTE,
         today=_date.today(),
         f_situacao=f_situacao,
         f_tipo=f_tipo,
@@ -2446,6 +2477,14 @@ def procuracoes_export_excel():
 
     rows = query.order_by(FapWebProcuracao.data_cadastro.desc()).all()
 
+    # Mesmas linhas de empresa da tela.
+    empresas_sem, _ = _empresas_sem_vigente_da_visao(
+        law_firm_id, f_situacao, f_outorgante,
+        outros_filtros=bool(f_tipo or f_protocolo or f_vigencia_ini or f_vigencia_fim or f_vencendo_em),
+    )
+    rotulo_sem = fap_procuracoes_service.ROTULO_SEM_VIGENTE
+    total_linhas = len(rows) + len(empresas_sem)
+
     from datetime import date as _date
     hoje = _date.today()
 
@@ -2503,13 +2542,13 @@ def procuracoes_export_excel():
     # Filtros
     filter_pairs = [
         ('Protocolo',    f_protocolo  or 'Todos'),
-        ('Situação',     f_situacao   or 'Todas'),
+        ('Situação',     (rotulo_sem if f_situacao == fap_procuracoes_service.SEM_VIGENTE else f_situacao) or 'Todas'),
         ('Tipo',         f_tipo       or 'Todos'),
         ('Outorgante',   f_outorgante or 'Todos'),
         ('Vigência ini', f_vigencia_ini or '—'),
         ('Vigência fim', f_vigencia_fim or '—'),
         ('Vencendo em',  f'{f_vencendo_em} dias' if f_vencendo_em else '—'),
-        ('Total linhas', str(len(rows))),
+        ('Total linhas', str(total_linhas)),
     ]
     pairs_per_row = 4
     filter_start_row = 2
@@ -2592,8 +2631,43 @@ def procuracoes_export_excel():
                 c.font = data_font; c.fill = dfill; c.alignment = data_align_lft
         sheet.row_dimensions[xrow].height = 18
 
+    # Empresas sem procuração vigente: uma linha por empresa, com os dados da
+    # última procuração (quando houve) nas colunas de vigência.
+    sem_fill = PatternFill('solid', fgColor='FFEDD5')
+    sem_font = Font(name='Calibri', size=10, bold=True, color='9A3412')
+    for emp_idx, e in enumerate(empresas_sem):
+        xrow = data_start_row + len(rows) + emp_idx
+        u = e['ultima']
+        if e['por_vinculo']:
+            tipo = 'Vínculo gov.br'
+        else:
+            tipo = (u.tipo_procuracao_descricao or u.tipo_procuracao_codigo or '') if u else ''
+        situacao = rotulo_sem + (
+            f" (última: {u.situacao_descricao or u.situacao_codigo or '—'})" if u else ' (nunca teve procuração)'
+        )
+        row_values = [
+            (u.protocolo or '') if u else '',
+            tipo,
+            situacao,
+            e['nome'],
+            formatar_cnpj_raiz(e['cnpj_raiz']),
+            '',
+            '',
+            u.data_inicio.strftime('%d/%m/%Y') if u and u.data_inicio else '',
+            u.data_fim.strftime('%d/%m/%Y') if u and u.data_fim else '',
+            u.data_cadastro.strftime('%d/%m/%Y %H:%M') if u and u.data_cadastro else '',
+            u.last_synced_at.strftime('%d/%m/%Y %H:%M') if u and u.last_synced_at else '',
+        ]
+        for col_idx, val in enumerate(row_values, 1):
+            c = sheet.cell(row=xrow, column=col_idx, value=val)
+            c.border = cell_border
+            c.font = sem_font if col_idx == 3 else data_font
+            c.fill = sem_fill
+            c.alignment = data_align_lft if col_idx in (2, 3, 4) else data_align_ctr
+        sheet.row_dimensions[xrow].height = 18
+
     sheet.auto_filter.ref = (
-        f'A{header_row}:{get_column_letter(num_cols)}{header_row + len(rows)}'
+        f'A{header_row}:{get_column_letter(num_cols)}{header_row + total_linhas}'
     )
     sheet.freeze_panes = f'A{data_start_row}'
 
@@ -2602,10 +2676,11 @@ def procuracoes_export_excel():
         sheet.column_dimensions[get_column_letter(idx)].width = width
 
     # Totais
-    total_row = data_start_row + len(rows)
+    total_row = data_start_row + total_linhas
     sheet.merge_cells(start_row=total_row, start_column=1, end_row=total_row, end_column=num_cols)
     tl = sheet.cell(row=total_row, column=1,
-                    value=f'Total: {len(rows)} procuração(ões) exportada(s)')
+                    value=f'Total: {len(rows)} procuração(ões) exportada(s)'
+                          + (f' · {len(empresas_sem)} empresa(s) sem procuração vigente' if empresas_sem else ''))
     tl.font = total_font; tl.fill = total_fill
     tl.alignment = Alignment(horizontal='center', vertical='center'); tl.border = cell_border
     for col in range(2, num_cols + 1):

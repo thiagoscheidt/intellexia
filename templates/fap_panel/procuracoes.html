@@ -157,6 +157,8 @@
   .badge-situacao-EXCLUIDA    { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
   .badge-situacao-INDEFERIDA  { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
   .badge-situacao-PENDENTE    { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  .badge-situacao-SEM_VIGENTE { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
+  .linha-sem-vigente > td     { background: rgba(251,146,60,.07); }
   .badge-situacao-default     { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
 
   /* ── Paginação ───────────────────────────────────────────────────── */
@@ -229,7 +231,7 @@
         {% endif %}
       {% endif %}
     {% endfor %}
-    <div class="stat-cards mb-3" style="grid-template-columns: repeat(5,1fr);">
+    <div class="stat-cards mb-3" style="grid-template-columns: repeat(6,1fr);">
       <style>@media (max-width:900px){.stat-cards{grid-template-columns:repeat(3,1fr)!important;}}@media (max-width:500px){.stat-cards{grid-template-columns:1fr!important;}}</style>
       <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
         <div class="d-flex align-items-center gap-2 mb-1">
@@ -267,6 +269,16 @@
           <span class="sc-label">Vencem em 30 dias</span>
         </div>
         <div class="sc-value {% if cnt_venc30.v > 0 %}text-warning{% endif %}">{{ cnt_venc30.v }}</div>
+      </a>
+      <a href="{{ url_for('fap_panel.procuracoes_page', situacao=SEM_VIGENTE) }}"
+         class="stat-card text-decoration-none"
+         title="Empresas do Painel FAP que hoje não têm nenhuma procuração valendo"
+         style="--sc-color:#b45309;--sc-soft:rgba(180,83,9,.12);{% if f_situacao == SEM_VIGENTE %}outline:2px solid #b45309;{% endif %}">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-building-exclamation"></i></span>
+          <span class="sc-label">Empresas sem procuração vigente</span>
+        </div>
+        <div class="sc-value">{{ total_sem_vigente }}</div>
       </a>
     </div>
 
@@ -323,6 +335,7 @@
                 {% for cod, desc in all_situacoes %}
                 <option value="{{ cod }}" {% if f_situacao == cod %}selected{% endif %}>{{ desc or cod }}</option>
                 {% endfor %}
+                <option value="{{ SEM_VIGENTE }}" {% if f_situacao == SEM_VIGENTE %}selected{% endif %}>{{ ROTULO_SEM_VIGENTE }} (por empresa)</option>
               </select>
             </div>
 
@@ -394,7 +407,7 @@
     </div>
 
     {# ── Tabela ─────────────────────────────────────────────────────── #}
-    {% if rows %}
+    {% if rows or empresas_sem %}
     <div class="table-shell mb-4">
       <div class="table-toolbar">
         <h6>
@@ -402,6 +415,11 @@
           <span class="badge bg-secondary ms-1" style="font-size:.72rem;font-weight:500;">
             {{ rows|length }} de {{ total }}
           </span>
+          {% if empresas_sem %}
+          <span class="badge badge-situacao-SEM_VIGENTE ms-1" style="font-size:.72rem;font-weight:600;">
+            + {{ empresas_sem|length }} empresa(s) sem procuração vigente
+          </span>
+          {% endif %}
           {% if f_situacao or f_tipo or f_outorgante or f_protocolo or f_vigencia_ini or f_vigencia_fim or f_vencendo_em %}
           <span class="badge bg-warning text-dark ms-1" style="font-size:.7rem;">filtrado</span>
           {% endif %}
@@ -485,6 +503,40 @@
               </td>
             </tr>
             {% endfor %}
+            {# Empresas do Painel FAP sem procuração valendo hoje — uma linha por empresa #}
+            {% for e in empresas_sem %}
+            {% set u = e.ultima %}
+            <tr class="linha-sem-vigente">
+              <td><span class="text-muted">—</span></td>
+              <td class="small">
+                {% if e.por_vinculo %}<span class="badge text-bg-info"
+                  title="A empresa está vinculada ao CPF do login no gov.br; o acesso às contestações vem daí">Vínculo gov.br</span>
+                {% elif u %}{{ u.tipo_procuracao_descricao or u.tipo_procuracao_codigo or '—' }}
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                <span class="badge badge-situacao-SEM_VIGENTE" style="font-size:.75rem;font-weight:600;">{{ ROTULO_SEM_VIGENTE }}</span>
+                <div class="text-muted" style="font-size:.72rem;">
+                  {% if u %}Última: {{ u.situacao_descricao or u.situacao_codigo or '—' }}{% if u.protocolo %} · {{ u.protocolo }}{% endif %}
+                  {% else %}Nunca teve procuração{% endif %}
+                </div>
+              </td>
+              <td class="small" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ e.nome }}">
+                {{ e.nome or '—' }}
+              </td>
+              <td><span class="mono">{{ (e.cnpj_raiz | cnpj_raiz) or '—' }}</span></td>
+              <td class="mono small">—</td>
+              <td class="small text-nowrap">
+                {% if u and u.data_inicio %}{{ u.data_inicio.strftime('%d/%m/%Y') }}{% else %}—{% endif %}
+              </td>
+              <td class="small text-nowrap">
+                {% if u and u.data_fim %}<span class="text-danger fw-bold">{{ u.data_fim.strftime('%d/%m/%Y') }}</span>{% else %}—{% endif %}
+              </td>
+              <td class="small text-nowrap">
+                {% if u and u.data_cadastro %}{{ u.data_cadastro.strftime('%d/%m/%Y %H:%M') }}{% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
           </tbody>
         </table>
       </div>
@@ -507,7 +559,7 @@
       <div class="table-footer">
         <span>
           <i class="bi bi-file-earmark-person me-1"></i>
-          {{ rows|length }} procuração(ões) exibida(s) · {{ total }} no banco
+          {{ rows|length }} procuração(ões) exibida(s) · {{ total }} no banco{% if empresas_sem %} · {{ empresas_sem|length }} empresa(s) sem procuração vigente{% endif %}
         </span>
         <span>
           Atualizado via <a href="{{ url_for('fap_panel.sync_page') }}" class="text-decoration-none">Sincronização FAP</a>
