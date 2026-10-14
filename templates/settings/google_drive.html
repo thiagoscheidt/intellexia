@@ -1,0 +1,255 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Google Drive{% endblock %}
+
+{% macro selos(envios) %}
+  {% for e in envios %}
+  <div class="d-flex align-items-center gap-1 mb-1 flex-wrap">
+    {% if e.link %}
+    <a href="{{ url_for(e.link[0], **e.link[1]) }}" class="badge text-bg-{{ e.cor }} text-decoration-none"
+       title="Enviado {{ e.enviado_em|datetime_sp }}{% if e.quem %} por {{ e.quem }}{% endif %}">
+      {{ e.destino_rotulo }} · {{ e.situacao_rotulo }} <i class="bi bi-box-arrow-up-right ms-1"></i>
+    </a>
+    {% else %}
+    <span class="badge text-bg-{{ e.cor }}"
+          title="Enviado {{ e.enviado_em|datetime_sp }}{% if e.quem %} por {{ e.quem }}{% endif %}">
+      {{ e.destino_rotulo }} · {{ e.situacao_rotulo }}
+    </span>
+    {% endif %}
+    {% if e.situacao == 'erro' %}
+    <form method="POST" action="{{ url_for('settings.google_drive_tentar_de_novo', ingestion_id=e.id) }}" class="d-inline">
+      <button type="submit" class="btn btn-link btn-sm p-0 small">tentar de novo</button>
+    </form>
+    {% endif %}
+  </div>
+  {% if e.erro %}<div class="small text-danger mb-1">{{ e.erro|truncate(220) }}</div>{% endif %}
+  {% endfor %}
+{% endmacro %}
+
+{% block content %}
+{% call page_hero(title='Google Drive', subtitle='Arquivos que o escritório compartilhou com a conta de serviço do IntellexIA', icon='bi bi-google') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Google Drive</li></ol></nav>
+{% endcall %}
+
+{% if p.estado in ('nao_configurado', 'sem_escritorio', 'outro_escritorio') %}
+<div class="card card-outline card-secondary">
+  <div class="card-body">
+    <h5 class="mb-2"><i class="bi bi-plug me-2"></i>Integração não configurada{% if p.estado == 'outro_escritorio' %} para este escritório{% endif %}</h5>
+    {% if p.estado == 'outro_escritorio' %}
+    <p class="mb-0 text-muted">A conta de serviço desta instalação pertence a outro escritório.</p>
+    {% else %}
+    <p class="mb-2 text-muted">Defina no <code>.env</code> e reinicie a aplicação:</p>
+    <pre class="mb-0 small"><code>GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE=instance/intellexia-drive.json
+GOOGLE_DRIVE_LAW_FIRM_ID=&lt;id do escritório&gt;</code></pre>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Conta de serviço</div>
+      <div class="fw-semibold text-break">{{ p.conta or '—' }}</div>
+      <div class="small text-muted mt-1">Só enxerga o que for compartilhado com ela (Leitor).</div>
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Arquivos compartilhados</div>
+      <div class="fs-4 fw-bold">{{ p.total }}</div>
+      {% if p.pastas %}<div class="small text-muted">{{ p.pastas|length }} pasta(s)</div>{% endif %}
+    </div></div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card h-100"><div class="card-body">
+      <div class="text-muted small">Ainda não ingeridos</div>
+      <div class="fs-4 fw-bold {{ 'text-warning' if p.pendentes else '' }}">{{ p.pendentes }}</div>
+    </div></div>
+  </div>
+</div>
+
+{% if p.estado == 'erro' %}
+<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Não foi possível consultar o Google Drive agora: {{ p.erro }}</div>
+{% endif %}
+
+{% if p.estado == 'ok' %}
+<div class="card">
+  <form method="POST" action="{{ url_for('settings.google_drive_ingerir') }}" id="drive-lote">
+  <div class="card-header d-flex flex-wrap gap-2 align-items-center">
+    <input type="search" class="form-control form-control-sm" style="max-width: 260px" placeholder="Filtrar por nome" id="drive-filtro-nome">
+    <select class="form-select form-select-sm" style="max-width: 260px" id="drive-filtro-quem">
+      <option value="">Compartilhado por: todos</option>
+      {% for email in p.arquivos|map(attribute='compartilhado_por_email')|reject('none')|unique|sort %}
+      <option value="{{ email }}">{{ email }}</option>
+      {% endfor %}
+    </select>
+    <div class="form-check form-switch mb-0">
+      <input class="form-check-input" type="checkbox" id="drive-filtro-pendentes">
+      <label class="form-check-label small" for="drive-filtro-pendentes">Só os ainda não ingeridos</label>
+    </div>
+    <div class="ms-auto d-flex gap-2 align-items-center">
+      <span class="small text-muted" id="drive-contagem">0 marcado(s)</span>
+      <select name="destino" class="form-select form-select-sm" style="width: auto" required>
+        <option value="">Ingerir em…</option>
+        {% for chave, rotulo in p.destinos.items() %}<option value="{{ chave }}">{{ rotulo }}</option>{% endfor %}
+      </select>
+      <button type="submit" class="btn btn-primary btn-sm" id="drive-enviar" disabled>
+        <i class="bi bi-cloud-download me-1"></i>Ingerir marcados
+      </button>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    {% if not p.arquivos %}
+    <div class="p-4 text-center text-muted">
+      <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+      Nada compartilhado com a conta de serviço ainda.
+    </div>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th style="width: 32px"><input type="checkbox" class="form-check-input" id="drive-todos" title="Marcar todos os visíveis"></th>
+            <th>Arquivo</th>
+            <th>Compartilhado</th>
+            <th>Já enviado para</th>
+            <th class="text-end">Ação</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(pasta='__inicio__') %}
+          {% for a in p.arquivos %}
+          {% if p.pastas and a.pasta != ns.pasta %}
+          <tr class="table-light drive-grupo"><td colspan="5" class="small fw-semibold">
+            <i class="bi bi-folder2 me-1"></i>{{ a.pasta or 'Compartilhados diretamente' }}
+          </td></tr>
+          {% endif %}
+          {% set ns.pasta = a.pasta %}
+          <tr class="drive-linha" data-nome="{{ a.nome|lower }}" data-quem="{{ a.compartilhado_por_email or '' }}" data-pendente="{{ '1' if a.pendente else '0' }}">
+            <td><input type="checkbox" class="form-check-input drive-marca" name="file_ids" value="{{ a.id }}" {% if not a.tipo %}disabled title="Tipo não aceito"{% endif %}></td>
+            <td>
+              <div class="fw-semibold text-break">
+                {% if a.link %}<a href="{{ a.link }}" target="_blank" rel="noopener">{{ a.nome }}</a>{% else %}{{ a.nome }}{% endif %}
+              </div>
+              <div class="small text-muted">
+                <span class="badge text-bg-light border">{{ a.tipo_rotulo }}</span>
+                {% if a.tamanho %}{{ (a.tamanho / 1024)|round(0)|int }} KB{% endif %}
+              </div>
+            </td>
+            <td class="small">
+              <div>{{ a.compartilhado_por or '—' }}</div>
+              <div class="text-muted">{{ a.compartilhado_em|datetime_sp }}</div>
+            </td>
+            <td class="small">
+              {% if a.envios %}{{ selos(a.envios) }}{% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="text-end">
+              <div class="dropdown">
+                <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                  Ingerir em…
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  {% for d in a.destinos %}
+                  <li>
+                    {% if d.motivo %}
+                    <span class="dropdown-item disabled">
+                      {{ d.rotulo }}<br><small class="text-muted">{{ d.motivo }}</small>
+                    </span>
+                    {% else %}
+                    <button type="submit" class="dropdown-item" form="drive-um-{{ loop.index }}-{{ a.id }}">{{ d.rotulo }}</button>
+                    {% endif %}
+                  </li>
+                  {% endfor %}
+                </ul>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+  <div class="card-footer small text-muted">
+    Até {{ max_por_envio }} arquivos por envio. Peça-modelo e Base de Conhecimento aceitam PDF e DOCX; a Jurisprudência só PDF.
+    Documento do Google Docs é exportado em PDF.
+  </div>
+  </form>
+</div>
+
+{# Formulários de envio individual: fora do formulário do lote (form aninhado não vale). #}
+{% for a in p.arquivos %}{% for d in a.destinos %}{% if not d.motivo %}
+<form method="POST" action="{{ url_for('settings.google_drive_ingerir') }}" id="drive-um-{{ loop.index }}-{{ a.id }}" class="d-none">
+  <input type="hidden" name="file_ids" value="{{ a.id }}">
+  <input type="hidden" name="destino" value="{{ d.chave }}">
+</form>
+{% endif %}{% endfor %}{% endfor %}
+{% endif %}
+
+{% if p.orfaos %}
+<div class="card mt-3">
+  <div class="card-header"><h3 class="card-title mb-0 h6"><i class="bi bi-eye-slash me-2"></i>Enviados que não estão mais compartilhados</h3></div>
+  <div class="card-body p-0">
+    <table class="table mb-0 align-middle">
+      <tbody>
+        {% for o in p.orfaos %}
+        <tr><td class="fw-semibold text-break">{{ o.nome }}</td><td class="small">{{ selos(o.envios) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const linhas = Array.from(document.querySelectorAll('.drive-linha'));
+  if (!linhas.length) return;
+  const nome = document.getElementById('drive-filtro-nome');
+  const quem = document.getElementById('drive-filtro-quem');
+  const pendentes = document.getElementById('drive-filtro-pendentes');
+  const todos = document.getElementById('drive-todos');
+  const contagem = document.getElementById('drive-contagem');
+  const enviar = document.getElementById('drive-enviar');
+
+  function atualizarContagem() {
+    const n = document.querySelectorAll('.drive-marca:checked').length;
+    contagem.textContent = n + ' marcado(s)';
+    enviar.disabled = n === 0;
+  }
+
+  function filtrar() {
+    const termo = (nome.value || '').trim().toLowerCase();
+    linhas.forEach(function (tr) {
+      const visivel = (!termo || tr.dataset.nome.includes(termo))
+        && (!quem.value || tr.dataset.quem === quem.value)
+        && (!pendentes.checked || tr.dataset.pendente === '1');
+      tr.classList.toggle('d-none', !visivel);
+      if (!visivel) tr.querySelector('.drive-marca').checked = false;
+    });
+    atualizarContagem();
+  }
+
+  [nome, quem, pendentes].forEach(function (el) { el.addEventListener('input', filtrar); });
+  document.querySelectorAll('.drive-marca').forEach(function (cb) { cb.addEventListener('change', atualizarContagem); });
+  todos.addEventListener('change', function () {
+    linhas.forEach(function (tr) {
+      const cb = tr.querySelector('.drive-marca');
+      if (!tr.classList.contains('d-none') && !cb.disabled) cb.checked = todos.checked;
+    });
+    atualizarContagem();
+  });
+  document.getElementById('drive-lote').addEventListener('submit', function () {
+    enviar.disabled = true;
+    enviar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Baixando…';
+  });
+})();
+</script>
+{% endblock %}

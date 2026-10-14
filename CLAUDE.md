@@ -145,7 +145,7 @@ intellexia/
 | `fap_review` | `/fap-review` | Revisão de petições FAP com IA, score de qualidade por advogado |
 | `fap_reasons` | `/cases/fap-reasons` | Catálogo de motivos FAP configurável |
 | `case_comments` | — | Threads de comentários em casos |
-| `settings` | `/settings` | Perfil do usuário, dados do escritório e **Notificações** por e-mail (admin) |
+| `settings` | `/settings` | Perfil do usuário, dados do escritório, **Notificações** por e-mail e **Google Drive** (arquivos compartilhados com a conta de serviço; admin) |
 | `admin_users` | — | Gerenciamento de usuários (admin-only) |
 | `access_audit` | `/admin/access-audit` | Atividade de usuários (admin-only): último login, telas acessadas, online agora. Visitas de tela agregadas por dia em `user_page_visits`, gravadas pelo middleware no mesmo commit de `last_activity` |
 | `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
@@ -226,6 +226,38 @@ Regras oficiais que o client implementa — não as contorne:
 - Endpoints públicos além de `GET /comunicacao`: `GET /comunicacao/{hash}/certidao` (certidão), `GET /comunicacao/tribunal` (tribunais + data do último envio) e `GET /caderno/{sigla}/{data}/{meio}` (caderno diário compactado por tribunal, disponível a partir das 03:00). Login/POST/DELETE são exclusivos dos Tribunais.
 
 **Sincronização por caderno (modo alternativo)**: `sync_law_firm_from_cadernos` baixa o caderno diário de cada tribunal (zip de JSONs, mesmo schema de `/comunicacao`) e filtra localmente pelas OABs do escritório — 1 download por tribunal em vez de 1 consulta por advogado; não sofre o limite de 10.000 resultados. Tribunais padrão vêm do histórico do escritório (`firm_tribunal_siglas`). Usa o mesmo upsert por hash, então rodar junto com a sincronização por OAB não duplica. CLI: `scripts/sync_process_communications.py --caderno [--data YYYY-MM-DD] [--tribunais TRF4,TRF3]`. Escala: caderno do TRF4 ≈ 20 MB / 32 mil comunicações, varredura local ≈ 4s.
+
+### Integração Google Drive (conta de serviço)
+
+O escritório compartilha com `intellexia-drive@intellexia-503416.iam.gserviceaccount.com`
+(Leitor), **arquivo por arquivo**, os PDFs da planilha "Petições protocoladas
+(pós inicial)". Todo acesso autenticado ao Drive fica em
+`app/services/google_drive_client.py` (puro, sem Flask). Design em
+`docs/superpowers/specs/2026-10-14-google-drive-conta-servico-design.md`.
+
+- **Config só no `.env`**: `GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE` (JSON da chave em
+  `instance/`, fora do git — nunca no banco) e `GOOGLE_DRIVE_LAW_FIRM_ID`. A
+  credencial é **da instalação, não do escritório** (mesmo padrão do
+  `FAP_SYNC_LAW_FIRM_ID`): só o escritório configurado vê a tela.
+- **Arquivo não compartilhado responde 404, não 403.** A conta só enxerga o que
+  foi compartilhado com ela; sem acesso à pasta-mãe, `parents` vem vazio.
+- **Sem `google-auth`**: o JWT é assinado com `joserfc` (dependência do Authlib)
+  e trocado por token com `requests`. O `AssertionSession` do Authlib funciona,
+  mas emite aviso de API obsoleta a cada token.
+- **Download só vira arquivo depois de conferido** (`.part` → rename): nem página
+  HTML de erro nem download menor que o `size` anunciado chegam ao disco.
+- **Tela `/settings/google-drive`** (admin): lista **ao vivo** (sem cron) cruzada
+  com `drive_ingestions`, e "Ingerir em…" peça-modelo, decisão (Jurisprudência)
+  ou Base de Conhecimento — `drive_ingestion_service`. Cada destino entra pela
+  porta que a base já usa (`ingest_reference`, `receber_baixado`, `KnowledgeBase`
+  `pending`); a situação exibida é lida da linha de destino, nunca copiada. Um
+  registro por envio: o mesmo arquivo pode ir a destinos diferentes, nunca duas
+  vezes ao mesmo; conteúdo idêntico (`file_hash`) aponta para o existente.
+- **`download_drive_file(..., law_firm_id=)`** (importação de peças em lote e "Buscar PDFs no Drive"
+  da Jurisprudência) tenta a conta primeiro e cai no download anônimo — **só
+  para o escritório configurado**: sem a trava, outro escritório que importasse
+  uma planilha com os ids desses arquivos os baixaria pela conta.
+- Conferência real sob comando: `uv run python scripts/drive_conferir_acesso.py`.
 
 ### Integração INLABS / Diário Oficial da União
 
@@ -882,6 +914,8 @@ FapReview.revision [POST]
 | `access_audit_service`                 | Auditoria de acesso: registro de visitas de tela e estatísticas de atividade/online — fonte única do dashboard admin |
 | `comunica_pje_client`                  | Cliente HTTP da API pública do Comunica PJe/DJEN — todo acesso isolado aqui; pacing global + regras de rate limit (ver seção "Integração Comunica PJe") |
 | `communication_monitor_service`        | Monitoramento de Processos: sincronização por OAB e por caderno (dedup por hash da API), descoberta de processos (`origin='comunica_auto'` + triagem), explicação IA com cache (`explain_communication`), queries da tela e das tools MCP — fonte única |
+| `google_drive_client`                  | Google Drive pela conta de serviço — todo acesso autenticado isolado aqui: token JWT, listagem, metadados, download/exportação conferidos (ver seção "Integração Google Drive") |
+| `drive_ingestion_service`              | Tela do Google Drive: lista ao vivo do que foi compartilhado + envio a peça-modelo, decisão ou Base de Conhecimento pelas portas que cada base já usa |
 | `inlabs_client`                        | Cliente HTTP do INLABS (Imprensa Nacional) — todo acesso isolado aqui: login, cookie de sessão, montagem de URL, retry com teto, timeout e relogin transparente |
 | `dou_xml_parser`                       | XML do DOU → dicts. Função pura, sem rede/banco/Flask — a peça que muda se a Imprensa Nacional alterar o schema |
 | `dou_ingestion_service`                | Ingestão do DOU: download → disco → parse → upsert → auditoria. Dedup por chave da matéria, janela de reverificação e retenção de PDF — fonte única da tela e do cron |

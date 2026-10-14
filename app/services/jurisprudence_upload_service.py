@@ -12,9 +12,11 @@ entre manter a da base, substituir ou guardar as duas.
 """
 from __future__ import annotations
 
+import functools
 import hashlib
 import os
 import re
+import shutil
 import threading
 from datetime import datetime, timedelta
 from typing import Optional
@@ -81,22 +83,7 @@ def receber(law_firm_id: int, arquivos, user_id: Optional[int] = None) -> tuple[
         except ArquivoRecusado as erro:
             recusas.append(str(erro))
             continue
-        upload = JurisprudenceUpload(
-            law_firm_id=law_firm_id, original_filename=nome, file_path=caminho,
-            file_hash=assinatura, created_by_id=user_id, status=JurisprudenceUpload.STATUS_QUEUED,
-        )
-        # Arquivo idêntico a um já lido: não gasta IA, pergunta o que fazer.
-        igual = (JurisprudenceUpload.query
-                 .filter(JurisprudenceUpload.law_firm_id == law_firm_id,
-                         JurisprudenceUpload.file_hash == assinatura,
-                         JurisprudenceUpload.decision_id.isnot(None))
-                 .order_by(JurisprudenceUpload.id.desc()).first())
-        if igual is not None and igual.decision is not None:
-            upload.status = JurisprudenceUpload.STATUS_REVIEW
-            upload.duplicate_of_id = igual.decision_id
-            upload.error_message = 'Arquivo idêntico a um já lido.'
-        db.session.add(upload)
-        db.session.flush()
+        upload = _enfileirar(law_firm_id, caminho, nome, assinatura, user_id)
         if upload.status == JurisprudenceUpload.STATUS_QUEUED:
             ids.append(upload.id)
     if len(list(arquivos)) > MAX_ARQUIVOS:
@@ -104,6 +91,51 @@ def receber(law_firm_id: int, arquivos, user_id: Optional[int] = None) -> tuple[
     db.session.commit()
     disparar(law_firm_id, ids, user_id)
     return ids, recusas
+
+
+def _enfileirar(law_firm_id: int, caminho: str, nome: str, assinatura: str,
+                user_id: Optional[int]) -> JurisprudenceUpload:
+    upload = JurisprudenceUpload(
+        law_firm_id=law_firm_id, original_filename=nome, file_path=caminho,
+        file_hash=assinatura, created_by_id=user_id, status=JurisprudenceUpload.STATUS_QUEUED,
+    )
+    # Arquivo idêntico a um já lido: não gasta IA, pergunta o que fazer.
+    igual = (JurisprudenceUpload.query
+             .filter(JurisprudenceUpload.law_firm_id == law_firm_id,
+                     JurisprudenceUpload.file_hash == assinatura,
+                     JurisprudenceUpload.decision_id.isnot(None))
+             .order_by(JurisprudenceUpload.id.desc()).first())
+    if igual is not None and igual.decision is not None:
+        upload.status = JurisprudenceUpload.STATUS_REVIEW
+        upload.duplicate_of_id = igual.decision_id
+        upload.error_message = 'Arquivo idêntico a um já lido.'
+    db.session.add(upload)
+    db.session.flush()
+    return upload
+
+
+def receber_baixado(law_firm_id: int, caminho_baixado: str, nome: str,
+                    user_id: Optional[int] = None) -> JurisprudenceUpload:
+    """Enfileira um PDF que já está em disco (vindo do Google Drive).
+
+    Mesmas regras do envio pela tela: assinatura %PDF, tamanho máximo e
+    arquivo idêntico a um já lido vai para "revisar". O arquivo é movido para a
+    pasta da fila; recusado, fica onde estava para quem chamou apagar.
+    """
+    with open(caminho_baixado, 'rb') as fh:
+        conteudo = fh.read()
+    if not conteudo.startswith(b'%PDF'):
+        raise ArquivoRecusado(f'{nome}: o arquivo não é um PDF válido.')
+    if len(conteudo) > MAX_BYTES:
+        raise ArquivoRecusado(f'{nome}: maior que {MAX_BYTES // (1024 * 1024)} MB.')
+    carimbo = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    caminho = os.path.join(_pasta(law_firm_id), f'{carimbo}_{secure_filename(nome) or "decisao.pdf"}')
+    shutil.move(caminho_baixado, caminho)
+    upload = _enfileirar(law_firm_id, caminho, nome[:255], hashlib.sha256(conteudo).hexdigest(), user_id)
+    db.session.commit()
+    if upload.status == JurisprudenceUpload.STATUS_QUEUED:
+        disparar(law_firm_id, [upload.id], user_id)
+    return upload
 
 
 def disparar(law_firm_id: int, upload_ids: list[int], user_id: Optional[int] = None) -> None:
@@ -436,7 +468,7 @@ def baixar_do_drive(law_firm_id: int, decision_ids: list[int], *, baixar=None, p
     """Síncrono (a thread e os testes chamam isto). `baixar` é injetável."""
     import time
     from app.services.impugnacao_import_service import DriveAccessError, download_drive_file
-    baixar = baixar or download_drive_file
+    baixar = baixar or functools.partial(download_drive_file, law_firm_id=law_firm_id)
     baixadas, falhas, bloqueios_seguidos, parou = 0, 0, 0, False
     for decision_id in decision_ids:
         decisao = JurisprudenceDecision.query.filter_by(id=decision_id, law_firm_id=law_firm_id).first()

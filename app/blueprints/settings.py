@@ -2,7 +2,7 @@ import re
 
 from flask import Blueprint, render_template, session, redirect, url_for, jsonify, flash, request
 from app.models import db, LawFirm, NotificationSetting, User
-from app.services import email_service, notification_service
+from app.services import drive_ingestion_service, email_service, google_drive_client, notification_service
 from datetime import datetime
 from functools import wraps
 
@@ -389,6 +389,79 @@ def _get_logged_user():
     if not user_id:
         return None
     return User.query.get(user_id)
+
+
+# ── Google Drive (conta de serviço) ───────────────────────────────────
+
+def _somente_admin():
+    if session.get('user_role') != 'admin':
+        flash('Acesso negado. Apenas administradores podem acessar esta página.', 'danger')
+        return redirect(url_for('dashboard.dashboard'))
+    return None
+
+
+@settings_bp.route('/google-drive', methods=['GET'])
+@require_law_firm
+def google_drive():
+    """Arquivos que o escritório compartilhou com a conta de serviço (apenas admin)."""
+    negado = _somente_admin()
+    if negado:
+        return negado
+    return render_template(
+        'settings/google_drive.html',
+        p=drive_ingestion_service.painel(session.get('law_firm_id')),
+        max_por_envio=drive_ingestion_service.MAX_POR_ENVIO,
+    )
+
+
+def _avisar_resultados(resultados):
+    ok = [r for r in resultados if r['ok']]
+    if ok:
+        flash(f'{len(ok)} arquivo(s) enviado(s): ' + '; '.join(f'{r["nome"]} — {r["mensagem"]}' for r in ok),
+              'success')
+    for r in resultados:
+        if not r['ok']:
+            flash(f'{r["nome"]}: {r["mensagem"]}', 'warning')
+
+
+@settings_bp.route('/google-drive/ingerir', methods=['POST'])
+@require_law_firm
+def google_drive_ingerir():
+    negado = _somente_admin()
+    if negado:
+        return negado
+    file_ids = request.form.getlist('file_ids')
+    destino = request.form.get('destino') or ''
+    if not file_ids:
+        flash('Marque ao menos um arquivo.', 'warning')
+    elif destino not in drive_ingestion_service.DESTINOS:
+        flash('Escolha para onde enviar.', 'warning')
+    else:
+        try:
+            _avisar_resultados(drive_ingestion_service.ingerir(
+                session.get('law_firm_id'), file_ids, destino, session.get('user_id')))
+        except google_drive_client.DriveErro as erro:
+            flash(str(erro), 'danger')
+    return redirect(url_for('settings.google_drive'))
+
+
+@settings_bp.route('/google-drive/envios/<int:ingestion_id>/tentar-de-novo', methods=['POST'])
+@require_law_firm
+def google_drive_tentar_de_novo(ingestion_id):
+    negado = _somente_admin()
+    if negado:
+        return negado
+    try:
+        resultado = drive_ingestion_service.tentar_de_novo(
+            session.get('law_firm_id'), ingestion_id, session.get('user_id'))
+    except google_drive_client.DriveErro as erro:
+        flash(str(erro), 'danger')
+    else:
+        if resultado is None:
+            flash('Envio não encontrado.', 'warning')
+        else:
+            _avisar_resultados([resultado])
+    return redirect(url_for('settings.google_drive'))
 
 
 @settings_bp.route('/profile', methods=['GET'])

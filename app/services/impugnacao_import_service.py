@@ -6,8 +6,9 @@ importam este arquivo diretamente, sem contexto de aplicação).
 Duas responsabilidades:
 1. `parse_spreadsheet` — lê a planilha ("Petições protocoladas (pós inicial)")
    e devolve os candidatos a peça-modelo (agrupados por arquivo).
-2. `download_drive_file` — baixa anonimamente o arquivo do Google Drive
-   referenciado no hyperlink de cada linha.
+2. `download_drive_file` — baixa o arquivo do Google Drive referenciado no
+   hyperlink de cada linha (conta de serviço, quando configurada; senão
+   anônimo).
 
 Ver docs/superpowers/specs/2026-07-28-importacao-pecas-planilha-design.md
 para o desenho completo (modelo de dados, fluxo, decisões).
@@ -26,6 +27,8 @@ from urllib.parse import unquote
 import openpyxl
 import requests
 from werkzeug.utils import secure_filename
+
+from app.services import google_drive_client
 
 # ── Erros ─────────────────────────────────────────────────────────────
 
@@ -388,6 +391,11 @@ _RESTRICTED_MESSAGE = (
     'Arquivo sem compartilhamento público no Drive — libere o acesso '
     '(qualquer pessoa com o link) e reprocesse este item.'
 )
+_RESTRICTED_MESSAGE_WITH_ACCOUNT = (
+    'Arquivo sem compartilhamento com a conta de serviço do IntellexIA no '
+    'Drive — compartilhe com ela (Leitor) ou libere para qualquer pessoa com '
+    'o link e reprocesse este item.'
+)
 _RATE_LIMIT_MESSAGE = (
     'O Drive não devolveu o arquivo (possível limite de requisições). '
     'Tente reprocessar este item mais tarde.'
@@ -497,13 +505,41 @@ def _save_stream(response, first_chunk: bytes, drive_file_id: str, dest_dir: str
     return dest_path, original_filename, sha256.hexdigest()
 
 
-def download_drive_file(drive_file_id: str, dest_dir: str, *, timeout: int = 90) -> tuple:
-    """Baixa anonimamente do Drive. Retorna (caminho_salvo, nome_original, sha256).
+def _usa_conta_de_servico(law_firm_id: Optional[int]) -> bool:
+    # A conta enxerga os arquivos de UM escritório. Sem esta trava, outro
+    # escritório que importasse uma planilha com os ids desses arquivos os
+    # baixaria pela conta — a conta viraria porta entre tenants.
+    return (google_drive_client.configurado()
+            and law_firm_id is not None
+            and google_drive_client.law_firm_id_configurado() == law_firm_id)
 
-    Arquivo restrito devolve HTML de login -> DriveAccessError com mensagem
-    pronta para a tela.
+
+def download_drive_file(drive_file_id: str, dest_dir: str, *, law_firm_id: Optional[int],
+                        timeout: int = 90) -> tuple:
+    """Baixa do Drive. Retorna (caminho_salvo, nome_original, sha256).
+
+    Para o escritório dono da conta de serviço (`GOOGLE_DRIVE_LAW_FIRM_ID`),
+    tenta por ela primeiro — é o que abre o arquivo restrito que o escritório
+    compartilhou com a conta. Para os demais, sem configuração, ou se a conta
+    não enxerga o arquivo, vale o download anônimo, que serve a arquivo público.
     """
     os.makedirs(dest_dir, exist_ok=True)
+    if _usa_conta_de_servico(law_firm_id):
+        try:
+            return google_drive_client.cliente().baixar(drive_file_id, dest_dir)
+        except google_drive_client.DriveErro:
+            pass
+    try:
+        return _download_anonymous(drive_file_id, dest_dir, timeout=timeout)
+    except DriveAccessError as exc:
+        if _usa_conta_de_servico(law_firm_id) and str(exc) == _RESTRICTED_MESSAGE:
+            raise DriveAccessError(_RESTRICTED_MESSAGE_WITH_ACCOUNT) from exc
+        raise
+
+
+def _download_anonymous(drive_file_id: str, dest_dir: str, *, timeout: int) -> tuple:
+    """Download sem login. Arquivo restrito devolve HTML de login ->
+    DriveAccessError com mensagem pronta para a tela."""
     url = f'{_DRIVE_DOWNLOAD_URL}?id={drive_file_id}&export=download'
 
     response, first_chunk = _open_drive_stream(url, timeout)

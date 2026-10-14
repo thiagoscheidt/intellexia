@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -4702,3 +4702,47 @@ class JurisprudenceUpload(db.Model):
 
     def __repr__(self):
         return f'<JurisprudenceUpload {self.id} {self.original_filename} {self.status}>'
+
+
+def _drive_utcnow():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class DriveIngestion(db.Model):
+    """Arquivo do Google Drive enviado a uma base do IntellexIA.
+
+    Um registro por envio: o mesmo arquivo pode ir a destinos diferentes, nunca
+    duas vezes ao mesmo. A situação do processamento é lida da linha de destino
+    (`target_id`), não copiada para cá. Ver `drive_ingestion_service`.
+    """
+    __tablename__ = 'drive_ingestions'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'drive_file_id', 'destination',
+                            name='uq_drive_ingestions_firm_file_destination'),
+    )
+
+    DEST_PECA_MODELO = 'peca_modelo'
+    DEST_DECISAO = 'decisao'
+    DEST_BASE_CONHECIMENTO = 'base_conhecimento'
+
+    STATUS_ENVIADO = 'enviado'
+    STATUS_ERRO = 'erro'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    drive_file_id = db.Column(db.String(80), nullable=False, index=True)
+    file_name = db.Column(db.String(255), nullable=False)
+    destination = db.Column(db.String(30), nullable=False)
+    target_id = db.Column(db.Integer)
+    status = db.Column(db.String(20), nullable=False, default=STATUS_ENVIADO)
+    error_message = db.Column(db.Text)
+    file_hash = db.Column(db.String(64))
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    # UTC, como pede a convenção (a exibição converte por `datetime_sp`).
+    created_at = db.Column(db.DateTime, default=_drive_utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_drive_utcnow, onupdate=_drive_utcnow)
+
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+
+    def __repr__(self):
+        return f'<DriveIngestion {self.id} {self.drive_file_id} → {self.destination} {self.status}>'

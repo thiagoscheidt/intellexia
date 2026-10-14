@@ -350,7 +350,7 @@ def _run_import_job(app_obj, law_firm_id, job_id):
                     time.sleep(_DOWNLOAD_PAUSE_SECONDS)
                     try:
                         file_path, original_filename, sha256 = download_drive_file(
-                            item.drive_file_id, dest_dir
+                            item.drive_file_id, dest_dir, law_firm_id=law_firm_id
                         )
                     except DriveAccessError as error:
                         item.status = 'failed'
