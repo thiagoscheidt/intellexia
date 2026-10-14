@@ -2313,11 +2313,13 @@ def sync_procuracoes_list():
 def _empresas_sem_vigente_da_visao(law_firm_id, f_situacao, f_outorgante, outros_filtros):
     """Linhas de empresa da tela/Excel de procurações + contagens dos cartões.
 
-    Filtro "Sem procuração vigente": todas. Filtro "Vinculada pelo e-gov": só
-    as que entram pelo vínculo gov.br. Sem filtro de situação: só as que nunca
-    tiveram procuração — as demais já estão na lista pelas próprias procurações
-    expiradas. Qualquer filtro que só existe em procuração (tipo, protocolo,
-    vigência) tira as empresas da visão.
+    Empresa sem procuração valendo hoje cai em um de dois grupos, disjuntos:
+    **vinculada pelo e-gov** (tem acesso pelo vínculo gov.br do CPF do login) ou
+    **sem procuração vigente** (não tem acesso garantido — é quem precisa
+    renovar). Cada filtro mostra o seu grupo. Sem filtro de situação: só as que
+    nunca tiveram procuração — as demais já estão na lista pelas próprias
+    procurações expiradas. Qualquer filtro que só existe em procuração (tipo,
+    protocolo, vigência) tira as empresas da visão.
 
     Returns:
         ``(linhas, total_sem_vigente, total_vinculadas_egov)``
@@ -2326,8 +2328,9 @@ def _empresas_sem_vigente_da_visao(law_firm_id, f_situacao, f_outorgante, outros
     egov = fap_procuracoes_service.VINCULADA_EGOV
     todas = fap_procuracoes_service.empresas_sem_procuracao_vigente(law_firm_id)
     total_egov = sum(1 for e in todas if e['por_vinculo'])
+    total_sem = len(todas) - total_egov
     if outros_filtros or f_situacao not in ('', sem_vigente, egov):
-        return [], len(todas), total_egov
+        return [], total_sem, total_egov
     so_sem_historico = not f_situacao
     if f_outorgante:
         linhas = fap_procuracoes_service.empresas_sem_procuracao_vigente(
@@ -2338,7 +2341,15 @@ def _empresas_sem_vigente_da_visao(law_firm_id, f_situacao, f_outorgante, outros
         linhas = todas
     if f_situacao == egov:
         linhas = [e for e in linhas if e['por_vinculo']]
-    return linhas, len(todas), total_egov
+    elif f_situacao == sem_vigente:
+        linhas = [e for e in linhas if not e['por_vinculo']]
+    return linhas, total_sem, total_egov
+
+
+def _vigencia_do_vinculo(e):
+    """Colunas de vigência da empresa vinculada pelo e-gov: o gov.br dá o início, nunca o fim."""
+    desde = e.get('vinculo_desde')
+    return (desde.strftime('%d/%m/%Y') if desde else '', 'não informada')
 
 
 @fap_panel_bp.route('/procuracoes')
@@ -2662,14 +2673,17 @@ def procuracoes_export_excel():
     for emp_idx, e in enumerate(empresas_sem):
         xrow = data_start_row + len(rows) + emp_idx
         u = e['ultima']
+        tipo = (u.tipo_procuracao_descricao or u.tipo_procuracao_codigo or '') if u else ''
         if e['por_vinculo']:
             desde = e.get('vinculo_desde')
-            tipo = 'Vinculada pelo e-gov' + (f" desde {desde.strftime('%d/%m/%Y')}" if desde else '')
+            situacao = fap_procuracoes_service.ROTULO_VINCULADA_EGOV + (
+                f" desde {desde.strftime('%d/%m/%Y')}" if desde else '')
+            situacao += (f" (procuração: {u.situacao_descricao or u.situacao_codigo or '—'})"
+                         if u else ' (nunca teve procuração)')
         else:
-            tipo = (u.tipo_procuracao_descricao or u.tipo_procuracao_codigo or '') if u else ''
-        situacao = rotulo_sem + (
-            f" (última: {u.situacao_descricao or u.situacao_codigo or '—'})" if u else ' (nunca teve procuração)'
-        )
+            situacao = rotulo_sem + (
+                f" (última: {u.situacao_descricao or u.situacao_codigo or '—'})" if u else ' (nunca teve procuração)'
+            )
         row_values = [
             (u.protocolo or '') if u else '',
             tipo,
@@ -2678,8 +2692,10 @@ def procuracoes_export_excel():
             formatar_cnpj_raiz(e['cnpj_raiz']),
             '',
             '',
-            u.data_inicio.strftime('%d/%m/%Y') if u and u.data_inicio else '',
-            u.data_fim.strftime('%d/%m/%Y') if u and u.data_fim else '',
+            *(_vigencia_do_vinculo(e) if e['por_vinculo'] else (
+                u.data_inicio.strftime('%d/%m/%Y') if u and u.data_inicio else '',
+                u.data_fim.strftime('%d/%m/%Y') if u and u.data_fim else '',
+            )),
             u.data_cadastro.strftime('%d/%m/%Y %H:%M') if u and u.data_cadastro else '',
             u.last_synced_at.strftime('%d/%m/%Y %H:%M') if u and u.last_synced_at else '',
         ]

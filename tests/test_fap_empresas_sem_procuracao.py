@@ -66,12 +66,17 @@ def test_telas_e_excel():
         nunca = [e for e in todas if e['ultima'] is None]
 
         # Filtro por empresa: uma linha por empresa, nenhuma de procuração.
+        sem = [e for e in todas if not e['por_vinculo']]
+        egov = [e for e in todas if e['por_vinculo']]
         html = c.get(f'/fap-panel/procuracoes?situacao={svc.SEM_VIGENTE}').get_data(as_text=True)
-        assert html.count('class="linha-sem-vigente"') == len(todas), (html.count('linha-sem-vigente'), len(todas))
+        assert html.count('class="linha-sem-vigente"') == len(sem), (html.count('linha-sem-vigente'), len(sem))
+        assert 'class="linha-egov"' not in html  # quem tem vínculo e-gov tem acesso: não entra em "sem vigente"
+        html = c.get(f'/fap-panel/procuracoes?situacao={svc.VINCULADA_EGOV}').get_data(as_text=True)
+        assert html.count('class="linha-egov"') == len(egov) and 'class="linha-sem-vigente"' not in html
 
         # Lista geral: só quem nunca teve procuração (as outras já estão nas próprias linhas).
         html = c.get('/fap-panel/procuracoes').get_data(as_text=True)
-        assert html.count('class="linha-sem-vigente"') == len(nunca)
+        assert html.count('class="linha-sem-vigente"') + html.count('class="linha-egov"') == len(nunca)
         assert 'Empresas sem procuração vigente' in html
 
         # Filtro que só existe em procuração tira as empresas da visão.
@@ -83,8 +88,8 @@ def test_telas_e_excel():
         assert r.status_code == 200
         ws = load_workbook(BytesIO(r.data)).active
         linhas = [row for row in ws.iter_rows(values_only=True) if row[2] and str(row[2]).startswith(svc.ROTULO_SEM_VIGENTE)]
-        assert len(linhas) == len(todas), (len(linhas), len(todas))
-        print(f'      ({len(todas)} empresa(s) sem vigente, {len(nunca)} sem histórico)')
+        assert len(linhas) == len(sem), (len(linhas), len(sem))
+        print(f'      ({len(sem)} sem vigente, {len(egov)} pelo e-gov, {len(nunca)} sem histórico)')
 
 
 def test_linha_de_quem_nunca_teve_procuracao():
@@ -99,14 +104,17 @@ def test_linha_de_quem_nunca_teve_procuracao():
             html = c.get('/fap-panel/procuracoes').get_data(as_text=True)
             assert 'VALE S.A.' in html and 'Nunca teve procuração' in html and 'Vinculada pelo e-gov' in html
             assert 'desde 28/02/2019' in html
+            assert '28/02/2019' in html and 'não informada' in html  # vigência do vínculo
+            assert 'vinculada(s) pelo e-gov' in html and 'sem procuração vigente</span>' not in html.split('</h6>')[0][-600:]
             filtrado = c.get(f'/fap-panel/procuracoes?situacao={svc.VINCULADA_EGOV}').get_data(as_text=True)
-            assert 'VALE S.A.' in filtrado and 'linha-sem-vigente' in filtrado
+            assert 'VALE S.A.' in filtrado and 'class="linha-egov"' in filtrado
             assert '33.592.510' in html
             r = c.get('/fap-panel/procuracoes/export-excel')
             from openpyxl import load_workbook
             ws = load_workbook(BytesIO(r.data)).active
             linha = next(row for row in ws.iter_rows(values_only=True) if row[3] == 'VALE S.A.')
-            assert linha[1] == 'Vinculada pelo e-gov desde 28/02/2019' and 'nunca teve' in linha[2], linha
+            assert linha[2] == 'Vinculada pelo e-gov desde 28/02/2019 (nunca teve procuração)', linha
+            assert linha[7] == '28/02/2019' and linha[8] == 'não informada', linha
     finally:
         svc.empresas_sem_procuracao_vigente = original
 

@@ -162,15 +162,18 @@ Total, Deferidas, Excluídas, Indeferidas, **"Vencem em 30 dias"** (procuraçõe
 
 ### Empresas sem procuração vigente
 
-Além das procurações, a tela mostra as **empresas da Tela 2 que hoje não têm nenhuma procuração valendo** — isto é, nenhuma procuração Deferida dentro do período de vigência. Cada empresa aparece em **uma linha destacada**, com a situação **Sem procuração vigente** e, logo abaixo, o motivo:
+Além das procurações, a tela mostra as **empresas da Tela 2 que hoje não têm nenhuma procuração valendo** — isto é, nenhuma procuração Deferida dentro do período de vigência. Cada empresa aparece em **uma linha destacada**, e a situação separa dois casos:
 
-- **Nunca teve procuração** — o escritório acessa a empresa só pelo vínculo no gov.br (a coluna Tipo mostra **Vinculada pelo e-gov** e a data em que a empresa fez o vínculo). Não há protocolo nem vigência: o vínculo vale até a empresa desfazê-lo no gov.br.
+- **Vinculada pelo e-gov** (linha azul) — a empresa não tem procuração, mas o escritório tem acesso pelo vínculo gov.br do CPF do login, como o grupo Vale. A coluna **Vigência início** mostra a data em que a empresa fez o vínculo, e **Vigência fim** aparece como "não informada": o gov.br não divulga a validade do vínculo — só a própria empresa vê, entrando com o e-CNPJ dela.
+- **Sem procuração vigente** (linha laranja) — a empresa não tem procuração valendo nem vínculo e-gov. Logo abaixo, o motivo:
+
+- **Nunca teve procuração** — a empresa está no Painel FAP sem nunca ter dado procuração.
 - **Última: Expirada / Excluída** — a empresa já teve procuração; as colunas de vigência mostram as datas da última.
 
 Onde elas aparecem:
 
 - **Na lista geral**, entram só as empresas que **nunca tiveram** procuração. As demais já estão na lista pelas próprias procurações expiradas.
-- Clicando no cartão **"Empresas sem procuração vigente"** (ou escolhendo essa opção no filtro **Situação**), a tela passa a mostrar **uma linha por empresa**, com todas as que estão sem procuração vigente — é a lista de quem precisa renovar.
+- Clicando no cartão **"Empresas sem procuração vigente"** (ou escolhendo essa opção no filtro **Situação**), a tela passa a mostrar **uma linha por empresa**, com todas as que estão sem procuração vigente — é a lista de quem precisa renovar. As vinculadas pelo e-gov não entram aqui: elas têm acesso.
 - Clicando no cartão **"Vinculadas pelo e-gov"** (ou escolhendo **Vinculada pelo e-gov** no filtro **Situação**), aparecem só as empresas acessadas pelo vínculo gov.br — como o grupo Vale —, com a data em que cada uma fez o vínculo.
 
 > [!ALERTA]

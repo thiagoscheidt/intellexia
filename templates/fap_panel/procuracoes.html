@@ -160,6 +160,7 @@
   .badge-situacao-PENDENTE    { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
   .badge-situacao-SEM_VIGENTE { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
   .linha-sem-vigente > td     { background: rgba(251,146,60,.07); }
+  .linha-egov > td            { background: rgba(8,145,178,.06); }
   .badge-situacao-default     { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
 
   /* ── Paginação ───────────────────────────────────────────────────── */
@@ -427,9 +428,17 @@
           <span class="badge bg-secondary ms-1" style="font-size:.72rem;font-weight:500;">
             {{ rows|length }} de {{ total }}
           </span>
-          {% if empresas_sem %}
+          {% set n_egov = empresas_sem|selectattr('por_vinculo')|list|length %}
+          {% set n_sem = empresas_sem|length - n_egov %}
+          {% if n_egov %}
+          <span class="badge text-bg-info ms-1" style="font-size:.72rem;font-weight:600;"
+            title="Acesso pelo vínculo gov.br do CPF do login, sem procuração no FAP">
+            + {{ n_egov }} empresa(s) vinculada(s) pelo e-gov
+          </span>
+          {% endif %}
+          {% if n_sem %}
           <span class="badge badge-situacao-SEM_VIGENTE ms-1" style="font-size:.72rem;font-weight:600;">
-            + {{ empresas_sem|length }} empresa(s) sem procuração vigente
+            + {{ n_sem }} empresa(s) sem procuração vigente
           </span>
           {% endif %}
           {% if f_situacao or f_tipo or f_outorgante or f_protocolo or f_vigencia_ini or f_vigencia_fim or f_vencendo_em %}
@@ -515,20 +524,21 @@
               </td>
             </tr>
             {% endfor %}
-            {# Empresas do Painel FAP sem procuração valendo hoje — uma linha por empresa #}
+            {# Empresas do Painel FAP sem procuração valendo hoje — uma linha por empresa.
+               A que entra pelo vínculo gov.br tem acesso: a situação diz isso, não a falta de procuração. #}
             {% for e in empresas_sem %}
             {% set u = e.ultima %}
-            <tr class="linha-sem-vigente">
+            <tr class="{{ 'linha-egov' if e.por_vinculo else 'linha-sem-vigente' }}">
               <td><span class="text-muted">—</span></td>
               <td class="small">
-                {% if e.por_vinculo %}{{ selo_vinculo_egov(e.vinculo_desde) }}
-                {% elif u %}{{ u.tipo_procuracao_descricao or u.tipo_procuracao_codigo or '—' }}
+                {% if u %}{{ u.tipo_procuracao_descricao or u.tipo_procuracao_codigo or '—' }}
                 {% else %}—{% endif %}
               </td>
               <td>
-                <span class="badge badge-situacao-SEM_VIGENTE" style="font-size:.75rem;font-weight:600;">{{ ROTULO_SEM_VIGENTE }}</span>
+                {% if e.por_vinculo %}{{ selo_vinculo_egov(e.vinculo_desde) }}
+                {% else %}<span class="badge badge-situacao-SEM_VIGENTE" style="font-size:.75rem;font-weight:600;">{{ ROTULO_SEM_VIGENTE }}</span>{% endif %}
                 <div class="text-muted" style="font-size:.72rem;">
-                  {% if u %}Última: {{ u.situacao_descricao or u.situacao_codigo or '—' }}{% if u.protocolo %} · {{ u.protocolo }}{% endif %}
+                  {% if u %}{{ 'Procuração' if e.por_vinculo else 'Última' }}: {{ u.situacao_descricao or u.situacao_codigo or '—' }}{% if u.protocolo %} · {{ u.protocolo }}{% endif %}
                   {% else %}Nunca teve procuração{% endif %}
                 </div>
               </td>
@@ -537,12 +547,22 @@
               </td>
               <td><span class="mono">{{ (e.cnpj_raiz | cnpj_raiz) or '—' }}</span></td>
               <td class="mono small">—</td>
+              {% if e.por_vinculo %}
+              {# Vigência do vínculo: o gov.br informa o início, nunca o fim. #}
+              <td class="small text-nowrap" title="Data em que a empresa vinculou o CPF do login no gov.br">
+                {% if e.vinculo_desde %}{{ e.vinculo_desde.strftime('%d/%m/%Y') }}{% else %}—{% endif %}
+              </td>
+              <td class="small text-nowrap text-muted" title="O gov.br não informa a validade do vínculo — só a empresa vê, no e-CNPJ dela">
+                não informada
+              </td>
+              {% else %}
               <td class="small text-nowrap">
                 {% if u and u.data_inicio %}{{ u.data_inicio.strftime('%d/%m/%Y') }}{% else %}—{% endif %}
               </td>
               <td class="small text-nowrap">
                 {% if u and u.data_fim %}<span class="text-danger fw-bold">{{ u.data_fim.strftime('%d/%m/%Y') }}</span>{% else %}—{% endif %}
               </td>
+              {% endif %}
               <td class="small text-nowrap">
                 {% if u and u.data_cadastro %}{{ u.data_cadastro.strftime('%d/%m/%Y %H:%M') }}{% else %}—{% endif %}
               </td>
