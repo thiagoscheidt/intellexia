@@ -1,6 +1,7 @@
 {% extends "layout/base.html" %}
 
 {% from "partials/page_hero.html" import page_hero %}
+{% from "partials/fap_vinculo_egov.html" import selo_vinculo_egov %}
 
 {% block title %}Importação Automática FAP - IntellexIA{% endblock %}
 
@@ -167,7 +168,7 @@
                   <tr>
                     <td class="text-nowrap"><code>{{ c.cnpj }}</code></td>
                     <td><small>{{ c.nome or '-' }}</small></td>
-                    <td><small>{% if c.tipo_procuracao_descricao %}{{ c.tipo_procuracao_descricao }}{% elif c.id in vinculo_ids %}<span class="badge text-bg-info" title="Sem procuração eletrônica no FAP: a empresa está vinculada ao CPF do login no gov.br">Vínculo gov.br</span>{% else %}-{% endif %}</small></td>
+                    <td><small>{% if c.tipo_procuracao_descricao %}{{ c.tipo_procuracao_descricao }}{% elif c.id in vinculo_ids %}{{ selo_vinculo_egov(c.egov_vinculo_desde) }}{% else %}-{% endif %}</small></td>
                   </tr>
                   {% endfor %}
                 </tbody>

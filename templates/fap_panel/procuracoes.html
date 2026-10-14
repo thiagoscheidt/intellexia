@@ -1,6 +1,7 @@
 {% extends "layout/base.html" %}
 
 {% from "partials/page_hero.html" import page_hero %}
+{% from "partials/fap_vinculo_egov.html" import selo_vinculo_egov %}
 
 {% block title %}Procurações FAP - IntellexIA{% endblock %}
 
@@ -280,6 +281,16 @@
         </div>
         <div class="sc-value">{{ total_sem_vigente }}</div>
       </a>
+      <a href="{{ url_for('fap_panel.procuracoes_page', situacao=VINCULADA_EGOV) }}"
+         class="stat-card text-decoration-none"
+         title="Empresas acessadas pelo vínculo gov.br do CPF do login, sem procuração no FAP"
+         style="--sc-color:#0891b2;--sc-soft:rgba(8,145,178,.12);{% if f_situacao == VINCULADA_EGOV %}outline:2px solid #0891b2;{% endif %}">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-person-badge"></i></span>
+          <span class="sc-label">Vinculadas pelo e-gov</span>
+        </div>
+        <div class="sc-value">{{ total_vinculadas_egov }}</div>
+      </a>
     </div>
 
     {# ── Atalhos de vencimento ────────────────────────────────────────── #}
@@ -336,6 +347,7 @@
                 <option value="{{ cod }}" {% if f_situacao == cod %}selected{% endif %}>{{ desc or cod }}</option>
                 {% endfor %}
                 <option value="{{ SEM_VIGENTE }}" {% if f_situacao == SEM_VIGENTE %}selected{% endif %}>{{ ROTULO_SEM_VIGENTE }} (por empresa)</option>
+                <option value="{{ VINCULADA_EGOV }}" {% if f_situacao == VINCULADA_EGOV %}selected{% endif %}>{{ ROTULO_VINCULADA_EGOV }} (por empresa)</option>
               </select>
             </div>
 
@@ -509,8 +521,7 @@
             <tr class="linha-sem-vigente">
               <td><span class="text-muted">—</span></td>
               <td class="small">
-                {% if e.por_vinculo %}<span class="badge text-bg-info"
-                  title="A empresa está vinculada ao CPF do login no gov.br; o acesso às contestações vem daí">Vínculo gov.br</span>
+                {% if e.por_vinculo %}{{ selo_vinculo_egov(e.vinculo_desde) }}
                 {% elif u %}{{ u.tipo_procuracao_descricao or u.tipo_procuracao_codigo or '—' }}
                 {% else %}—{% endif %}
               </td>

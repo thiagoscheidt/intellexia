@@ -1,6 +1,7 @@
 {% extends "layout/base.html" %}
 
 {% from "partials/page_hero.html" import page_hero %}
+{% from "partials/fap_vinculo_egov.html" import selo_vinculo_egov %}
 
 {% block title %}Empresas FAP - IntellexIA{% endblock %}
 
@@ -23,7 +24,7 @@ benefícios e contestações por empresa.', icon='bi bi-buildings') %}
         <div class="card mb-3">
             <div class="card-body">
                 <form method="get" action="{{ url_for('fap_panel.empresas_page') }}" class="row g-2 align-items-end">
-                    <div class="col-md-5 col-lg-5">
+                    <div class="col-md-4 col-lg-4">
                         <label class="form-label small text-muted text-uppercase fw-semibold mb-1">Buscar
                             empresa</label>
                         <input type="text" class="form-control" name="q" value="{{ search }}"
@@ -41,7 +42,15 @@ benefícios e contestações por empresa.', icon='bi bi-buildings') %}
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4 col-lg-4 d-flex gap-2">
+                    <div class="col-md-2 col-lg-2">
+                        <label class="form-label small text-muted text-uppercase fw-semibold mb-1">Acesso</label>
+                        <select name="acesso" class="form-select">
+                            <option value="">Todos</option>
+                            <option value="procuracao" {{ 'selected' if f_acesso=='procuracao' }}>Procuração no FAP</option>
+                            <option value="egov" {{ 'selected' if f_acesso=='egov' }}>Vinculada pelo e-gov</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 col-lg-3 d-flex gap-2">
                         <button type="submit" class="btn btn-primary flex-fill">
                             <i class="bi bi-search me-1"></i> Buscar
                         </button>
@@ -105,8 +114,7 @@ benefícios e contestações por empresa.', icon='bi bi-buildings') %}
                                 </td>
                                 <td>
                                     {% if item.tipo_procuracao %}{{ item.tipo_procuracao }}
-                                    {% elif item.por_vinculo %}<span class="badge text-bg-info"
-                                        title="Sem procuração eletrônica no FAP: a empresa está vinculada ao CPF do login no gov.br">Vínculo gov.br</span>
+                                    {% elif item.por_vinculo %}{{ selo_vinculo_egov(item.vinculo_desde) }}
                                     {% else %}—{% endif %}
                                 </td>
                                 <td class="text-center"><span class="badge text-bg-light">{{ item.contestacoes_count

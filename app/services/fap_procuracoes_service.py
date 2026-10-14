@@ -167,6 +167,10 @@ def filtrar_por_outorgante(query, termo: str | None):
 # empresa: quem está em ``fap_companies`` e não tem procuração valendo hoje.
 SEM_VIGENTE = 'SEM_VIGENTE'
 ROTULO_SEM_VIGENTE = 'Sem procuração vigente'
+# Outro valor do mesmo filtro: só as empresas que o escritório acessa pelo
+# vínculo gov.br do CPF do login, sem procuração no FAP (grupo Vale).
+VINCULADA_EGOV = 'VINCULADA_EGOV'
+ROTULO_VINCULADA_EGOV = 'Vinculada pelo e-gov'
 
 
 def esta_vigente(rec, hoje: date) -> bool:
@@ -234,6 +238,7 @@ def empresas_sem_procuracao_vigente(
             'cnpj_raiz': raiz,
             'nome': nome,
             'por_vinculo': por_vinculo(empresa, ultima_sync),
+            'vinculo_desde': empresa.egov_vinculo_desde,
             'ultima': ultima,
         })
     return linhas

@@ -42,17 +42,17 @@ def ultima_sincronizacao(law_firm_id: int):
 def por_vinculo(company, ultima_sync) -> bool:
     """Empresa que está na lista só pelo vínculo gov.br — para exibição.
 
-    Sem coluna de origem, a regra é: sem tipo de procuração **e** presente na
-    última sincronização. A empresa que perde a procuração e fica só por ter
-    contestação não é mais tocada, então mantém o tipo antigo e o ``synced_at``
-    velho — não cai aqui. Se a última execução pegou a sessão parcial, as
-    vinculadas não foram tocadas e o rótulo some até a próxima execução completa.
+    Regra: sem tipo de procuração **e** com data de vínculo gravada
+    (``egov_vinculo_desde``, que só a leitura completa das vinculadas escreve)
+    ou presente na última sincronização — o segundo critério cobre o vínculo
+    que veio sem ``dataCriacao``. A empresa que perde a procuração e fica só por
+    ter contestação não é mais tocada, então mantém o tipo antigo — não cai aqui.
     """
-    return (
-        not (company.tipo_procuracao_descricao or company.tipo_procuracao_codigo)
-        and ultima_sync is not None
-        and company.synced_at == ultima_sync
-    )
+    if company.tipo_procuracao_descricao or company.tipo_procuracao_codigo:
+        return False
+    if company.egov_vinculo_desde is not None:
+        return True
+    return ultima_sync is not None and company.synced_at == ultima_sync
 
 
 def unir_empresas(procuracoes: list, vinculadas: list) -> list[dict]:
@@ -96,6 +96,8 @@ def sync_companies(svc, law_firm_id: int) -> dict:
     vinculadas = vinc.data if vinc.ok and isinstance(vinc.data, list) else []
 
     companies = unir_empresas(procuracoes, vinculadas)
+    # Vale também para quem tem procuração: o vínculo é outra porta de acesso.
+    desde_por_cnpj = {v['cnpj']: v.get('desde') for v in vinculadas}
     cnpjs_procuracao = {str(i.get('cnpj') or '').strip() for i in procuracoes}
     so_vinculo = sum(1 for c in companies if c['cnpj'] not in cnpjs_procuracao)
 
@@ -112,6 +114,8 @@ def sync_companies(svc, law_firm_id: int) -> dict:
             rec.tipo_procuracao_codigo = tipo.get('codigo')
             rec.tipo_procuracao_descricao = tipo.get('descricao')
             rec.synced_at = now
+            if vinc.ok:  # sessão parcial não diz nada sobre o vínculo
+                rec.egov_vinculo_desde = desde_por_cnpj.get(cnpj)
         else:
             db.session.add(FapCompany(
                 law_firm_id=law_firm_id,
@@ -119,6 +123,7 @@ def sync_companies(svc, law_firm_id: int) -> dict:
                 nome=nome,
                 tipo_procuracao_codigo=tipo.get('codigo'),
                 tipo_procuracao_descricao=tipo.get('descricao'),
+                egov_vinculo_desde=desde_por_cnpj.get(cnpj),
                 synced_at=now,
             ))
 
@@ -133,6 +138,7 @@ def sync_companies(svc, law_firm_id: int) -> dict:
                 law_firm_id=law_firm_id, fap_company_id=comp.id,
             ).first()
             if tem_contestacao:
+                comp.egov_vinculo_desde = None  # saiu das vinculadas também
                 continue  # mantém: empresa com histórico de contestações
             db.session.delete(comp)
             removed += 1

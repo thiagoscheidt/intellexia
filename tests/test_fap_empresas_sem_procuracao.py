@@ -89,20 +89,24 @@ def test_telas_e_excel():
 
 def test_linha_de_quem_nunca_teve_procuracao():
     """O banco de dev pode não ter empresa só por vínculo — simula uma."""
-    falsa = [{'cnpj_raiz': '33592510', 'nome': 'VALE S.A.', 'por_vinculo': True, 'ultima': None}]
+    falsa = [{'cnpj_raiz': '33592510', 'nome': 'VALE S.A.', 'por_vinculo': True,
+              'vinculo_desde': date(2019, 2, 28), 'ultima': None}]
     original = svc.empresas_sem_procuracao_vigente
     svc.empresas_sem_procuracao_vigente = lambda *a, **k: falsa
     try:
         with app.app_context():
             c, _ = _cliente()
             html = c.get('/fap-panel/procuracoes').get_data(as_text=True)
-            assert 'VALE S.A.' in html and 'Nunca teve procuração' in html and 'Vínculo gov.br' in html
+            assert 'VALE S.A.' in html and 'Nunca teve procuração' in html and 'Vinculada pelo e-gov' in html
+            assert 'desde 28/02/2019' in html
+            filtrado = c.get(f'/fap-panel/procuracoes?situacao={svc.VINCULADA_EGOV}').get_data(as_text=True)
+            assert 'VALE S.A.' in filtrado and 'linha-sem-vigente' in filtrado
             assert '33.592.510' in html
             r = c.get('/fap-panel/procuracoes/export-excel')
             from openpyxl import load_workbook
             ws = load_workbook(BytesIO(r.data)).active
             linha = next(row for row in ws.iter_rows(values_only=True) if row[3] == 'VALE S.A.')
-            assert linha[1] == 'Vínculo gov.br' and 'nunca teve' in linha[2], linha
+            assert linha[1] == 'Vinculada pelo e-gov desde 28/02/2019' and 'nunca teve' in linha[2], linha
     finally:
         svc.empresas_sem_procuracao_vigente = original
 

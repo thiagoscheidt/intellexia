@@ -1,0 +1,7 @@
+{# Empresa acessada pelo vínculo gov.br, sem procuração no FAP (ex.: grupo Vale).
+   `desde` = data em que a empresa vinculou o CPF do login (FapCompany.egov_vinculo_desde). #}
+{% macro selo_vinculo_egov(desde) -%}
+<span class="badge text-bg-info"
+  title="Sem procuração no FAP. A empresa vinculou no gov.br o CPF de quem faz o login (certificado digital) — o acesso vem daí e depende desse CPF.">Vinculada pelo e-gov</span>
+{%- if desde %}<div class="text-muted text-nowrap" style="font-size:.72rem;">desde {{ desde.strftime('%d/%m/%Y') }}</div>{% endif %}
+{%- endmacro %}

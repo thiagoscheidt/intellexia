@@ -149,6 +149,7 @@ def empresas_page():
     law_firm_id = get_current_law_firm_id()
     search = str(request.args.get('q') or '').strip()
     f_grupo = str(request.args.get('grupo') or '').strip()
+    f_acesso = str(request.args.get('acesso') or '').strip()  # '', 'procuracao', 'egov'
 
     query = FapCompany.query.filter_by(law_firm_id=law_firm_id)
     if search:
@@ -193,6 +194,7 @@ def empresas_page():
                 'cnpj_root': cnpj_root,
                 'tipo_procuracao': (company.tipo_procuracao_descricao or '').strip(),
                 'por_vinculo': por_vinculo(company, ultima_sync),
+                'vinculo_desde': company.egov_vinculo_desde,
                 'synced_at': company.synced_at,
                 'contestacoes_count': contestacoes_by_root.get(cnpj_root, 0),
                 'grupo': (grupos_por_raiz.get(cnpj_root) or {}).get('nome', ''),
@@ -200,12 +202,19 @@ def empresas_page():
             }
         )
 
+    # Origem do acesso: por_vinculo é calculado, então o filtro roda aqui.
+    if f_acesso == 'procuracao':
+        items = [i for i in items if i['tipo_procuracao']]
+    elif f_acesso == 'egov':
+        items = [i for i in items if i['por_vinculo']]
+
     return render_template(
         'fap_panel/empresas.html',
         items=items,
         search=search,
         total=len(items),
         f_grupo=f_grupo,
+        f_acesso=f_acesso,
         fap_group_options=fap_group_service.select_options(law_firm_id),
         sem_grupo_valor=fap_group_service.SEM_GRUPO,
         # Autocompletar do modal: evita criar "ADSERVI " duplicado por espaço.
@@ -2302,16 +2311,23 @@ def sync_procuracoes_list():
 # ---------------------------------------------------------------------------
 
 def _empresas_sem_vigente_da_visao(law_firm_id, f_situacao, f_outorgante, outros_filtros):
-    """Linhas de empresa da tela/Excel de procurações + total para o cartão.
+    """Linhas de empresa da tela/Excel de procurações + contagens dos cartões.
 
-    Filtro "Sem procuração vigente": todas. Sem filtro de situação: só as que
-    nunca tiveram procuração — as demais já estão na lista pelas próprias
-    procurações expiradas. Qualquer filtro que só existe em procuração
-    (tipo, protocolo, vigência) tira as empresas da visão.
+    Filtro "Sem procuração vigente": todas. Filtro "Vinculada pelo e-gov": só
+    as que entram pelo vínculo gov.br. Sem filtro de situação: só as que nunca
+    tiveram procuração — as demais já estão na lista pelas próprias procurações
+    expiradas. Qualquer filtro que só existe em procuração (tipo, protocolo,
+    vigência) tira as empresas da visão.
+
+    Returns:
+        ``(linhas, total_sem_vigente, total_vinculadas_egov)``
     """
+    sem_vigente = fap_procuracoes_service.SEM_VIGENTE
+    egov = fap_procuracoes_service.VINCULADA_EGOV
     todas = fap_procuracoes_service.empresas_sem_procuracao_vigente(law_firm_id)
-    if outros_filtros or f_situacao not in ('', fap_procuracoes_service.SEM_VIGENTE):
-        return [], len(todas)
+    total_egov = sum(1 for e in todas if e['por_vinculo'])
+    if outros_filtros or f_situacao not in ('', sem_vigente, egov):
+        return [], len(todas), total_egov
     so_sem_historico = not f_situacao
     if f_outorgante:
         linhas = fap_procuracoes_service.empresas_sem_procuracao_vigente(
@@ -2320,7 +2336,9 @@ def _empresas_sem_vigente_da_visao(law_firm_id, f_situacao, f_outorgante, outros
         linhas = [e for e in todas if e['ultima'] is None]
     else:
         linhas = todas
-    return linhas, len(todas)
+    if f_situacao == egov:
+        linhas = [e for e in linhas if e['por_vinculo']]
+    return linhas, len(todas), total_egov
 
 
 @fap_panel_bp.route('/procuracoes')
@@ -2401,7 +2419,7 @@ def procuracoes_page():
 
     total = FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id).count()
 
-    empresas_sem, total_sem_vigente = _empresas_sem_vigente_da_visao(
+    empresas_sem, total_sem_vigente, total_vinculadas_egov = _empresas_sem_vigente_da_visao(
         law_firm_id, f_situacao, f_outorgante,
         outros_filtros=bool(f_tipo or f_protocolo or f_vigencia_ini or f_vigencia_fim or f_vencendo_em),
     )
@@ -2415,6 +2433,9 @@ def procuracoes_page():
         total_sem_vigente=total_sem_vigente,
         SEM_VIGENTE=fap_procuracoes_service.SEM_VIGENTE,
         ROTULO_SEM_VIGENTE=fap_procuracoes_service.ROTULO_SEM_VIGENTE,
+        total_vinculadas_egov=total_vinculadas_egov,
+        VINCULADA_EGOV=fap_procuracoes_service.VINCULADA_EGOV,
+        ROTULO_VINCULADA_EGOV=fap_procuracoes_service.ROTULO_VINCULADA_EGOV,
         today=_date.today(),
         f_situacao=f_situacao,
         f_tipo=f_tipo,
@@ -2478,7 +2499,7 @@ def procuracoes_export_excel():
     rows = query.order_by(FapWebProcuracao.data_cadastro.desc()).all()
 
     # Mesmas linhas de empresa da tela.
-    empresas_sem, _ = _empresas_sem_vigente_da_visao(
+    empresas_sem, _, _ = _empresas_sem_vigente_da_visao(
         law_firm_id, f_situacao, f_outorgante,
         outros_filtros=bool(f_tipo or f_protocolo or f_vigencia_ini or f_vigencia_fim or f_vencendo_em),
     )
@@ -2542,7 +2563,10 @@ def procuracoes_export_excel():
     # Filtros
     filter_pairs = [
         ('Protocolo',    f_protocolo  or 'Todos'),
-        ('Situação',     (rotulo_sem if f_situacao == fap_procuracoes_service.SEM_VIGENTE else f_situacao) or 'Todas'),
+        ('Situação',     {
+            fap_procuracoes_service.SEM_VIGENTE: rotulo_sem,
+            fap_procuracoes_service.VINCULADA_EGOV: fap_procuracoes_service.ROTULO_VINCULADA_EGOV,
+        }.get(f_situacao, f_situacao) or 'Todas'),
         ('Tipo',         f_tipo       or 'Todos'),
         ('Outorgante',   f_outorgante or 'Todos'),
         ('Vigência ini', f_vigencia_ini or '—'),
@@ -2639,7 +2663,8 @@ def procuracoes_export_excel():
         xrow = data_start_row + len(rows) + emp_idx
         u = e['ultima']
         if e['por_vinculo']:
-            tipo = 'Vínculo gov.br'
+            desde = e.get('vinculo_desde')
+            tipo = 'Vinculada pelo e-gov' + (f" desde {desde.strftime('%d/%m/%Y')}" if desde else '')
         else:
             tipo = (u.tipo_procuracao_descricao or u.tipo_procuracao_codigo or '') if u else ''
         situacao = rotulo_sem + (

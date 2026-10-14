@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 
 from app.services.fap_company_sync_service import por_vinculo, unir_empresas
@@ -24,16 +24,18 @@ from app.services.fap_web_service import parse_empresas_vinculadas
 
 def test_parse_lista_completa():
     bruto = json.dumps([
-        {'cnpj': '33592510000154', 'razaoSocial': 'VALE S.A.', 'dataCriacao': 'x'},
-        {'cnpj': '33592510000235', 'razaoSocial': 'VALE S.A.', 'dataCriacao': 'x'},  # mesma raiz
-        {'cnpj': '5014452000146', 'razaoSocial': 'MONTESINOS'},  # zero à esquerda perdido
+        {'cnpj': '33592510000235', 'razaoSocial': 'VALE S.A.', 'dataCriacao': '2021-05-10T09:00:00.000-0300'},
+        {'cnpj': '33592510000154', 'razaoSocial': 'VALE S.A.', 'dataCriacao': '2019-02-28T16:21:35.710-0300'},  # mesma raiz, mais antigo
+        {'cnpj': '5014452000146', 'razaoSocial': 'MONTESINOS'},  # zero à esquerda perdido, sem data
+        {'cnpj': '72372998000166', 'razaoSocial': 'SEPETIBA', 'dataCriacao': 'x'},  # data ilegível
         {'cnpj': '123', 'razaoSocial': 'lixo'},
     ])
     r = parse_empresas_vinculadas(bruto)
     assert r.ok, r.message
     assert r.data == [
-        {'cnpj': '33592510', 'nome': 'VALE S.A.'},
-        {'cnpj': '05014452', 'nome': 'MONTESINOS'},
+        {'cnpj': '33592510', 'nome': 'VALE S.A.', 'desde': date(2019, 2, 28)},
+        {'cnpj': '05014452', 'nome': 'MONTESINOS', 'desde': None},
+        {'cnpj': '72372998', 'nome': 'SEPETIBA', 'desde': None},
     ], r.data
 
 
@@ -61,14 +63,18 @@ def test_unir_procuracao_tem_prioridade():
 def test_por_vinculo():
     agora, antes = datetime(2026, 9, 29, 6), datetime(2026, 9, 1, 6)
 
-    def empresa(codigo, descricao, synced_at):
-        return SimpleNamespace(tipo_procuracao_codigo=codigo, tipo_procuracao_descricao=descricao, synced_at=synced_at)
+    def empresa(codigo, descricao, synced_at, desde=None):
+        return SimpleNamespace(tipo_procuracao_codigo=codigo, tipo_procuracao_descricao=descricao,
+                               synced_at=synced_at, egov_vinculo_desde=desde)
 
     assert por_vinculo(empresa(None, None, agora), agora)                   # veio só pelo gov.br hoje
     assert not por_vinculo(empresa('GERAL', 'Geral', agora), agora)          # tem procuração
     assert not por_vinculo(empresa(None, None, antes), agora)               # não veio na última sync
     assert not por_vinculo(empresa('GERAL', 'Geral', antes), agora)          # perdeu procuração, ficou pelo histórico
     assert not por_vinculo(empresa(None, None, None), None)                 # nunca sincronizado
+    vale = date(2019, 2, 28)
+    assert por_vinculo(empresa(None, None, antes, vale), agora)             # sessão parcial na última sync: a data segura o rótulo
+    assert not por_vinculo(empresa('GERAL', 'Geral', agora, vale), agora)    # procuração + vínculo: mostra a procuração
 
 
 if __name__ == '__main__':

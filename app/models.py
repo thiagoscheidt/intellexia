@@ -2426,6 +2426,9 @@ class FapCompany(db.Model):
     nome = db.Column(db.String(500))
     tipo_procuracao_codigo = db.Column(db.String(100))
     tipo_procuracao_descricao = db.Column(db.String(255))
+    # Desde quando a empresa vinculou o CPF do login no gov.br (``dataCriacao``
+    # de ``empresasVinculadas``). NULL = não veio na última leitura completa.
+    egov_vinculo_desde = db.Column(db.Date, nullable=True)
 
     synced_at = db.Column(db.DateTime, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)

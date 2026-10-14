@@ -58,10 +58,12 @@ Lista as empresas a que o escritório tem acesso no portal FAP — as que deram 
 |---|---|---|
 | **Empresa** | Razão social (com a raiz do CNPJ como subtítulo). | Portal FAP Web. |
 | **CNPJ** | CNPJ formatado. | Portal FAP Web. |
-| **Tipo de Procuração** | Tipo da procuração eletrônica. Mostra **Vínculo gov.br** quando a empresa não tem procuração e o acesso vem do vínculo dela com o acesso do escritório no gov.br. | Portal FAP Web. |
+| **Tipo de Procuração** | Tipo da procuração eletrônica. Mostra **Vinculada pelo e-gov** (com a data, "desde 28/02/2019") quando a empresa não tem procuração no FAP e o acesso vem de ela ter vinculado no gov.br o CPF de quem faz o login — caso do grupo Vale. Esse acesso depende do certificado usado no login: entrando com outro CPF, a empresa some da lista. | Portal FAP Web. |
 | **Contestações** | Quantas contestações essa empresa tem no sistema. | Contagem no IntellexIA. |
 | **Última Sync** | Quando as empresas foram sincronizadas pela última vez. | Registro interno. |
 | **Ações** | Atalhos para os benefícios e para as contestações da empresa. | — |
+
+O filtro **Acesso** separa as empresas pela origem do acesso: **Procuração no FAP** ou **Vinculada pelo e-gov**.
 
 ---
 
@@ -144,7 +146,7 @@ Lista as procurações eletrônicas sincronizadas, uma linha por procuração.
 
 ### Cartões
 
-Total, Deferidas, Excluídas, Indeferidas, **"Vencem em 30 dias"** (procurações deferidas cuja vigência termina nos próximos 30 dias) e **"Empresas sem procuração vigente"**.
+Total, Deferidas, Excluídas, Indeferidas, **"Vencem em 30 dias"** (procurações deferidas cuja vigência termina nos próximos 30 dias) **"Empresas sem procuração vigente"** e **"Vinculadas pelo e-gov"** (empresas acessadas só pelo vínculo gov.br, sem procuração no FAP). Os dois últimos são clicáveis e filtram a tela.
 
 ### Colunas
 
@@ -162,13 +164,14 @@ Total, Deferidas, Excluídas, Indeferidas, **"Vencem em 30 dias"** (procuraçõe
 
 Além das procurações, a tela mostra as **empresas da Tela 2 que hoje não têm nenhuma procuração valendo** — isto é, nenhuma procuração Deferida dentro do período de vigência. Cada empresa aparece em **uma linha destacada**, com a situação **Sem procuração vigente** e, logo abaixo, o motivo:
 
-- **Nunca teve procuração** — o escritório acessa a empresa só pelo vínculo no gov.br (a coluna Tipo mostra **Vínculo gov.br**).
+- **Nunca teve procuração** — o escritório acessa a empresa só pelo vínculo no gov.br (a coluna Tipo mostra **Vinculada pelo e-gov** e a data em que a empresa fez o vínculo). Não há protocolo nem vigência: o vínculo vale até a empresa desfazê-lo no gov.br.
 - **Última: Expirada / Excluída** — a empresa já teve procuração; as colunas de vigência mostram as datas da última.
 
 Onde elas aparecem:
 
 - **Na lista geral**, entram só as empresas que **nunca tiveram** procuração. As demais já estão na lista pelas próprias procurações expiradas.
 - Clicando no cartão **"Empresas sem procuração vigente"** (ou escolhendo essa opção no filtro **Situação**), a tela passa a mostrar **uma linha por empresa**, com todas as que estão sem procuração vigente — é a lista de quem precisa renovar.
+- Clicando no cartão **"Vinculadas pelo e-gov"** (ou escolhendo **Vinculada pelo e-gov** no filtro **Situação**), aparecem só as empresas acessadas pelo vínculo gov.br — como o grupo Vale —, com a data em que cada uma fez o vínculo.
 
 > [!ALERTA]
 > Quando a procuração expira e a empresa não tem vínculo no gov.br, o portal deixa de liberar as contestações dela: os dados já sincronizados continuam no sistema, mas param de ser atualizados.

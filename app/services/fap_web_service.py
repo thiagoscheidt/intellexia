@@ -19,6 +19,7 @@ import urllib.error
 import urllib.request
 import base64
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
 
 
@@ -507,7 +508,8 @@ def parse_empresas_vinculadas(bruto) -> FapWebResult:
     Chega como texto JSON: ``[{cnpj (14), razaoSocial, dataCriacao}]`` na
     sessão completa, ou ``{"errors": [...]}`` quando a sessão perdeu as
     vinculadas. O portal reduz à raiz de 8 dígitos, uma entrada por raiz — aqui
-    também.
+    também. ``desde`` é o ``dataCriacao`` mais antigo da raiz (date ou None):
+    quando a empresa vinculou o CPF do login — a origem do acesso sem procuração.
     """
     try:
         dado = json.loads(bruto) if isinstance(bruto, str) else bruto
@@ -527,8 +529,24 @@ def parse_empresas_vinculadas(bruto) -> FapWebResult:
         if len(digitos) < 8:
             continue
         raiz = digitos.zfill(14)[:8] if len(digitos) > 8 else digitos
-        empresas.setdefault(raiz, {'cnpj': raiz, 'nome': (item.get('razaoSocial') or '').strip()})
+        empresa = empresas.setdefault(
+            raiz, {'cnpj': raiz, 'nome': (item.get('razaoSocial') or '').strip(), 'desde': None})
+        desde = _data_do_vinculo(item.get('dataCriacao'))
+        if desde and (empresa['desde'] is None or desde < empresa['desde']):
+            empresa['desde'] = desde
     return FapWebResult(ok=True, data=list(empresas.values()))
+
+
+def _data_do_vinculo(valor) -> date | None:
+    """``"2019-02-28T16:21:35.710-0300"`` → ``date(2019, 2, 28)``.
+
+    A data já vem no fuso de Brasília; só o dia interessa, então basta o
+    prefixo — sem converter fuso, que poderia virar o dia.
+    """
+    try:
+        return date.fromisoformat(str(valor or '')[:10])
+    except ValueError:
+        return None
 
 
 # ---------------------------------------------------------------------------
