@@ -29,6 +29,14 @@ _VALID_TRF_REGIONS = {f"TRF{n}" for n in range(1, 7)}
 _VALID_THESIS_KEY_RE = re.compile(r"^[a-z0-9_\-]+$")
 
 
+# A fila de tarefas do Meilisearch é uma só para todos os índices: com vários
+# documentos sendo indexados ao mesmo tempo (importação em lote em paralelo), a
+# espera fica atrás das tarefas dos outros. Estourar a espera NÃO cancela a
+# tarefa — e desistir entre o "apagar" e o "adicionar" deixava a peça sem
+# trechos no índice. Por isso a espera é longa.
+MEILI_WAIT_MS = 120_000
+
+
 def _get_index():
     client = MeilisearchClient(MEILISEARCH_HOST, MEILISEARCH_API_KEY)
     index = client.get_or_create_index(uid=IMPUGNACAO_REFERENCES_MEILI_INDEX, primary_key="id")
@@ -36,12 +44,12 @@ def _get_index():
     current_filterable = index.get_filterable_attributes() or []
     if set(current_filterable) != set(_FILTERABLE):
         task = index.update_filterable_attributes(_FILTERABLE)
-        client.wait_for_task(task.task_uid, timeout_in_ms=10000)
+        client.wait_for_task(task.task_uid, timeout_in_ms=MEILI_WAIT_MS)
 
     current_searchable = index.get_searchable_attributes() or []
     if list(current_searchable) != list(_SEARCHABLE):
         task = index.update_searchable_attributes(_SEARCHABLE)
-        client.wait_for_task(task.task_uid, timeout_in_ms=10000)
+        client.wait_for_task(task.task_uid, timeout_in_ms=MEILI_WAIT_MS)
 
     return client, index
 
@@ -76,11 +84,11 @@ def index_reference_chunks(reference, chunk_records) -> bool:
     try:
         client, index = _get_index()
         task = index.delete_documents_by_filter(f"reference_id = {int(reference.id)}")
-        client.wait_for_task(task.task_uid, timeout_in_ms=10000)
+        client.wait_for_task(task.task_uid, timeout_in_ms=MEILI_WAIT_MS)
         documents = _build_documents(reference, chunk_records)
         if documents:
             task = index.add_documents(documents)
-            client.wait_for_task(task.task_uid, timeout_in_ms=30000)
+            client.wait_for_task(task.task_uid, timeout_in_ms=MEILI_WAIT_MS)
         return True
     except Exception as error:
         print(f"[impugnacao_reference_search] Falha ao indexar ref {reference.id}: {error}")
@@ -91,7 +99,7 @@ def delete_reference(reference_id: int) -> bool:
     try:
         client, index = _get_index()
         task = index.delete_documents_by_filter(f"reference_id = {int(reference_id)}")
-        client.wait_for_task(task.task_uid, timeout_in_ms=10000)
+        client.wait_for_task(task.task_uid, timeout_in_ms=MEILI_WAIT_MS)
         return True
     except Exception as error:
         print(f"[impugnacao_reference_search] Falha ao remover ref {reference_id}: {error}")
@@ -103,7 +111,7 @@ def delete_all_for_law_firm(law_firm_id: int) -> bool:
     try:
         client, index = _get_index()
         task = index.delete_documents_by_filter(f"law_firm_id = {int(law_firm_id)}")
-        client.wait_for_task(task.task_uid, timeout_in_ms=30000)
+        client.wait_for_task(task.task_uid, timeout_in_ms=MEILI_WAIT_MS)
         return True
     except Exception as error:
         print(f"[impugnacao_reference_search] Falha ao limpar índice do escritório {law_firm_id}: {error}")
@@ -126,7 +134,7 @@ def update_reference_status(reference) -> bool:
         task = index.update_documents(
             [{"id": chunk_id, "status": reference.status} for chunk_id in chunk_ids]
         )
-        client.wait_for_task(task.task_uid, timeout_in_ms=30000)
+        client.wait_for_task(task.task_uid, timeout_in_ms=MEILI_WAIT_MS)
         return True
     except Exception as error:
         print(f"[impugnacao_reference_search] Falha ao atualizar status da ref {reference.id}: {error}")
@@ -160,7 +168,7 @@ def update_reference_metadata(reference) -> bool:
             }
             for chunk_id in chunk_ids
         ])
-        client.wait_for_task(task.task_uid, timeout_in_ms=30000)
+        client.wait_for_task(task.task_uid, timeout_in_ms=MEILI_WAIT_MS)
         return True
     except Exception as error:
         print(f"[impugnacao_reference_search] Falha ao atualizar metadados da ref {reference.id}: {error}")

@@ -233,7 +233,7 @@ def decisao_pdf(decision_id):
     if not d.pdf_path or not os.path.exists(d.pdf_path):
         abort(404)
     # Markdown vai como texto puro — nunca HTML, o conteúdo veio de upload.
-    mimetype = ('text/plain; charset=utf-8' if d.pdf_path.lower().endswith('.md')
+    mimetype = ('text/plain' if d.pdf_path.lower().endswith('.md')
                 else 'application/pdf')
     resposta = send_file(os.path.abspath(d.pdf_path), mimetype=mimetype,
                          as_attachment=False, download_name=d.original_filename or 'decisao.pdf')

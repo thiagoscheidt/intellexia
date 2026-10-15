@@ -29,6 +29,25 @@ QDRANT_UPSERT_BATCH_SIZE = int(os.getenv("QDRANT_UPSERT_BATCH_SIZE", "64"))
 MEILISEARCH_ADD_BATCH_SIZE = int(os.getenv("MEILISEARCH_ADD_BATCH_SIZE", "500"))
 
 
+EMBEDDING_BATCH_SIZE = 64
+
+
+def embed_many(client, texts: list[str], model: str, batch_size: int = EMBEDDING_BATCH_SIZE) -> list[list[float]]:
+    """Embeddings de vários textos com uma chamada por lote, na ordem de `texts`.
+
+    Uma chamada por trecho custava ~0,8 s cada (medido em 15/10/2026); um lote
+    custa praticamente o mesmo que um texto só. Os vetores são os mesmos.
+    Lote de 64 trechos de ~3 mil caracteres fica bem abaixo do teto de tokens
+    por requisição da API de embeddings.
+    """
+    vectors: list[list[float]] = []
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start:start + batch_size]
+        response = client.embeddings.create(input=batch, model=model)
+        vectors.extend(item.embedding for item in sorted(response.data, key=lambda item: item.index))
+    return vectors
+
+
 class KnowledgeIngestionAgent:
     """Recebe e processa arquivos para ingestão na base vetorial."""
 
@@ -69,11 +88,21 @@ class KnowledgeIngestionAgent:
         response = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
         return response.data[0].embedding
 
+    def _embed_many(self, texts: list[str]) -> list[list[float]]:
+        if not EMBEDDING_MODEL:
+            raise RuntimeError("EMBEDDING_MODEL não definido no .env")
+        if self.openai is None:
+            self.openai = OpenAI()
+        return embed_many(self.openai, texts, EMBEDDING_MODEL)
+
     def _ensure_meilisearch_index(self) -> None:
         self.meilisearch.get_or_create_index(uid=self.collection, primary_key="id")
         self._ensure_meilisearch_filterable_attributes()
 
-    def _wait_for_meilisearch_task(self, task_info, timeout_in_ms: int | None = 10000) -> None:
+    def _wait_for_meilisearch_task(self, task_info, timeout_in_ms: int | None = 120_000) -> None:
+        # Fila única do Meilisearch para todos os índices: com indexação em
+        # paralelo, 10 s estouravam e o arquivo virava erro com a tarefa ainda
+        # rodando (medido na importação do lote .md, 15/10/2026).
         task_uid = getattr(task_info, "task_uid", None)
         if task_uid is None:
             return
@@ -248,6 +277,10 @@ class KnowledgeIngestionAgent:
         point_ids: list[str] = []
         total = len(chunks)
         print(f"Dividindo documento '{source}' em {total} chunks")
+        vectors = self._embed_many([
+            chunk_data.get("text", chunk_data) if isinstance(chunk_data, dict) else chunk_data
+            for chunk_data in chunks
+        ])
 
         points: list[rest.PointStruct] = []
         meilisearch_documents: list[dict] = []
@@ -260,7 +293,7 @@ class KnowledgeIngestionAgent:
                 f"Processando chunk {idx + 1}/{total} ({len(chunk_text)} chars)"
                 + (f" - Página {chunk_page}" if chunk_page else "")
             )
-            vector = self._embed(chunk_text)
+            vector = vectors[idx]
             point_id = str(uuid.uuid4())
             payload = {
                 "text": chunk_text,

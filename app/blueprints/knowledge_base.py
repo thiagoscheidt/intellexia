@@ -1056,7 +1056,7 @@ def view(file_id):
             # Markdown/texto vai como texto puro — nunca HTML, o conteúdo veio de
             # upload. Decodificado aqui para .txt em cp1252 não sair com acento quebrado.
             resposta = current_app.response_class(read_text_file(resolved_path),
-                                                  mimetype='text/plain; charset=utf-8')
+                                                  mimetype='text/plain')
         else:
             resposta = send_file(resolved_path, as_attachment=True, download_name=file.original_filename,
                                  mimetype='application/octet-stream')

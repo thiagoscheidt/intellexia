@@ -8,7 +8,9 @@ import os
 
 def _attach_file_links(items: list[dict], law_firm_id: int, app_public_url: str,
                        file_id_key: str = "file_id") -> list[dict]:
-    """Adiciona 'url_abrir' (rota /knowledge-base/<id>/view do sistema) aos itens.
+    """Adiciona 'url_abrir' (rota /knowledge-base/<id>/view do sistema) aos itens,
+    e 'url_original' quando o arquivo guarda o endereço do original (ex.: o PDF
+    protocolado no Drive, de que o .md da base é a conversão).
 
     Só gera link para arquivos ativos do escritório do usuário — a própria rota
     também revalida login e tenant ao abrir.
@@ -20,18 +22,20 @@ def _attach_file_links(items: list[dict], law_firm_id: int, app_public_url: str,
         return items
 
     allowed = {
-        kb.id
+        kb.id: kb.source_url
         for kb in KnowledgeBase.query.filter(
             KnowledgeBase.id.in_(file_ids),
             KnowledgeBase.law_firm_id == law_firm_id,
             KnowledgeBase.is_active.is_(True),
-        ).with_entities(KnowledgeBase.id).all()
+        ).with_entities(KnowledgeBase.id, KnowledgeBase.source_url).all()
     }
     base = app_public_url.rstrip("/")
     for item in items:
         file_id = item.get(file_id_key)
         if file_id in allowed:
             item["url_abrir"] = f"{base}/knowledge-base/{file_id}/view"
+            if allowed[file_id]:
+                item["url_original"] = allowed[file_id]
     return items
 
 
@@ -167,6 +171,8 @@ def read_kb_file_handler(arquivo_id: int, law_firm_id: int, deslocamento: int = 
     }
     if app_public_url:
         saida["url_abrir"] = f"{app_public_url.rstrip('/')}/knowledge-base/{arquivo.id}/view"
+    if arquivo.source_url:
+        saida["url_original"] = arquivo.source_url
     if origem == "indice_de_busca":
         saida["observacao"] = ("Texto remontado dos trechos indexados: o conteúdo é o do documento, "
                                "mas tabelas e quebras de linha podem diferir do original.")
@@ -317,6 +323,7 @@ def kb_search_handler(
                 },
                 **({"url_abrir": f"{app_public_url.rstrip('/')}/knowledge-base/{kb.id}/view"}
                    if app_public_url else {}),
+                **({"url_original": kb.source_url} if kb.source_url else {}),
             })
 
         collected.sort(key=lambda r: r["relevancia_percentual"], reverse=True)

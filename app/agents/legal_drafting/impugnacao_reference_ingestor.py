@@ -462,6 +462,10 @@ class ImpugnacaoReferenceIngestor:
         response = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
         return response.data[0].embedding
 
+    def _embed_many(self, texts: list[str]) -> list[list[float]]:
+        from app.agents.knowledge_base.knowledge_ingestion_agent import embed_many
+        return embed_many(self.openai, texts, EMBEDDING_MODEL)
+
     def _classify_theses_with_ai(
         self,
         *,
@@ -606,6 +610,10 @@ class ImpugnacaoReferenceIngestor:
         ingested_at = datetime.utcnow().isoformat() + "Z"
 
         # ── Índice dos chunks principais ───────────────────────────────
+        # Vetores pedidos em lote, com o mesmo filtro do laço abaixo.
+        vetores = iter(self._embed_many([
+            seg["text"] for seg in segments if seg["text"] and len(seg["text"]) >= 40
+        ]))
         for order, seg in enumerate(segments):
             chunk_text = seg["text"]
             if not chunk_text or len(chunk_text) < 40:
@@ -630,7 +638,7 @@ class ImpugnacaoReferenceIngestor:
             )
 
             point_id = str(uuid.uuid4())
-            vector = self._embed(chunk_text)
+            vector = next(vetores)
 
             payload = {
                 "text": chunk_text,
@@ -693,13 +701,16 @@ class ImpugnacaoReferenceIngestor:
         juris_order_base = len(segments) * 2
         doc_primary_thesis = document_thesis_catalog_ids[0] if document_thesis_catalog_ids else None
 
+        vetores_juris = iter(self._embed_many([
+            (jitem.texto_integral or "").strip() for jitem in juris_items if (jitem.texto_integral or "").strip()
+        ]))
         for j_idx, jitem in enumerate(juris_items):
             jtext = (jitem.texto_integral or "").strip()
             if not jtext:
                 continue
 
             jpoint_id = str(uuid.uuid4())
-            jvector = self._embed(jtext)
+            jvector = next(vetores_juris)
 
             juris_heading = jitem.processo or jitem.tribunal or "jurisprudência"
 

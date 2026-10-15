@@ -129,6 +129,11 @@
 
         <div class="tab-pane fade" id="t-pdf">
           {% if pdf_disponivel %}
+          {% if d.drive_link %}
+          <div class="d-flex justify-content-end mb-2">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ d.drive_link }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir original no Drive</a>
+          </div>
+          {% endif %}
           <div class="ratio" style="--bs-aspect-ratio: 120%">
             <iframe src="{{ url_for('jurisprudence.decisao_pdf', decision_id=d.id) }}" title="Arquivo da decisão" class="rounded border"{% if eh_md %} style="background: #fff"{% endif %}></iframe>
           </div>

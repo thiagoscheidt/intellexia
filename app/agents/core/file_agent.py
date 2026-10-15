@@ -9,6 +9,8 @@ import requests
 from dotenv import load_dotenv
 from openai import OpenAI
 
+from app.utils.text_files import is_text_file, read_text_file
+
 _ = load_dotenv()
 
 
@@ -25,6 +27,10 @@ class FileAgent:
 
         - Para URL pública: `file_data` recebe a URL
         - Para arquivo local: `file_data` recebe data URL base64
+        - Para arquivo local de texto (.md/.txt): parte de TEXTO, não de arquivo.
+          O leitor de arquivo do provedor só aceita PDF — `.md` anexado volta
+          400 "badly formatted or corrupted", e os agentes que tratam o erro
+          seguiam sem a leitura da IA, em silêncio.
         """
         normalized = str(file_path or '').strip()
         if not normalized:
@@ -44,6 +50,12 @@ class FileAgent:
         path_obj = Path(local_path)
         if not path_obj.exists() or not path_obj.is_file():
             raise FileNotFoundError(f'Arquivo não encontrado: {local_path}')
+
+        if is_text_file(path_obj):
+            return {
+                'type': 'text',
+                'text': f'Conteúdo do arquivo {path_obj.name}:\n\n{read_text_file(path_obj)}',
+            }
 
         file_bytes = path_obj.read_bytes()
         mime_type = mimetypes.guess_type(path_obj.name)[0] or 'application/octet-stream'

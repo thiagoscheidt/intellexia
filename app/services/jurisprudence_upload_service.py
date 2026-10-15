@@ -128,25 +128,30 @@ def _enfileirar(law_firm_id: int, caminho: str, nome: str, assinatura: str,
 
 
 def receber_baixado(law_firm_id: int, caminho_baixado: str, nome: str,
-                    user_id: Optional[int] = None) -> JurisprudenceUpload:
-    """Enfileira um PDF que já está em disco (vindo do Google Drive).
+                    user_id: Optional[int] = None, *, mover: bool = True,
+                    iniciar: bool = True) -> JurisprudenceUpload:
+    """Enfileira um PDF ou Markdown que já está em disco (Google Drive, lote).
 
-    Mesmas regras do envio pela tela: assinatura %PDF, tamanho máximo e
+    Mesmas regras do envio pela tela: conteúdo conferido, tamanho máximo e
     arquivo idêntico a um já lido vai para "revisar". O arquivo é movido para a
-    pasta da fila; recusado, fica onde estava para quem chamou apagar.
+    pasta da fila (`mover=False` copia, para quem precisa do original intacto);
+    recusado, fica onde estava para quem chamou apagar. `iniciar=False` deixa
+    na fila para o `scripts/process_jurisprudence_uploads.py` — script que
+    termina mata a thread da leitura no meio.
     """
+    if not nome.lower().endswith(EXTENSOES):
+        raise ArquivoRecusado(f'{nome}: só PDF ou Markdown (.md).')
     with open(caminho_baixado, 'rb') as fh:
         conteudo = fh.read()
-    if not conteudo.startswith(b'%PDF'):
-        raise ArquivoRecusado(f'{nome}: o arquivo não é um PDF válido.')
+    _conferir_conteudo(nome, conteudo)
     if len(conteudo) > MAX_BYTES:
         raise ArquivoRecusado(f'{nome}: maior que {MAX_BYTES // (1024 * 1024)} MB.')
     carimbo = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
     caminho = os.path.join(_pasta(law_firm_id), f'{carimbo}_{secure_filename(nome) or "decisao.pdf"}')
-    shutil.move(caminho_baixado, caminho)
+    (shutil.move if mover else shutil.copyfile)(caminho_baixado, caminho)
     upload = _enfileirar(law_firm_id, caminho, nome[:255], hashlib.sha256(conteudo).hexdigest(), user_id)
     db.session.commit()
-    if upload.status == JurisprudenceUpload.STATUS_QUEUED:
+    if iniciar and upload.status == JurisprudenceUpload.STATUS_QUEUED:
         disparar(law_firm_id, [upload.id], user_id)
     return upload
 

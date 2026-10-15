@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **55 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **56 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -80,6 +80,7 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `consultar_base_conhecimento` | Pergunta em linguagem natural com **resposta elaborada e fontes** (RAG) | IA |
 | `pesquisar_base_conhecimento` | Pesquisa Inteligente: retorna os **trechos/documentos** encontrados, com fonte, página, relevância e **link para abrir o arquivo** | IA |
 | `ler_arquivo_base_conhecimento` | Lê o **arquivo inteiro** de um resultado da pesquisa — útil quando o trecho não basta, como num resumo em `.md`. Markdown e texto vêm do arquivo original; PDF e DOCX, remontados dos trechos indexados. Documento grande vem em partes | Sistema |
+| `buscar_por_numero_processo` | Acha **tudo de um processo pelo número** — petições e documentos da Base de Conhecimento, decisões da Jurisprudência, peças-modelo e o processo no Painel —, com ou sem pontuação, completo ou só parte do número (mínimo 7 dígitos). Traz o link de cada item e, quando houver, o **original no Drive** | Sistema |
 
 > [!IA] A pesquisa decide sozinha entre busca **semântica** (conceitos) e **textual** (termos exatos). Números de benefício, NIT, CPF e CNPJ são buscados de forma exata e determinística.
 

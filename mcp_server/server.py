@@ -100,6 +100,7 @@ from mcp_server.tools.petition_review_read import (
     review_audit_log_handler,
 )
 from mcp_server.tools.utilities import consultar_cnpj_handler
+from mcp_server.tools.numero_processo import search_by_process_number_handler
 from mcp_server.tools.jurisprudence import (
     decision_detail_handler,
     export_jurisprudence_excel_handler,
@@ -249,7 +250,8 @@ def consultar_base_conhecimento(pergunta: str) -> dict:
     Returns:
         Dicionário com 'resposta', 'fontes', 'fontes_detalhe' (cada fonte com
         'url_abrir' para o usuário visualizar o documento no navegador — apresente
-        como link clicável) e 'perguntas_sugeridas'. Para ler uma fonte inteira,
+        como link clicável — e, quando houver, 'url_original' com o documento
+        original no Drive, ex.: o PDF protocolado) e 'perguntas_sugeridas'. Para ler uma fonte inteira,
         use ler_arquivo_base_conhecimento com o 'file_id' da fonte.
     """
     claims = require_module("knowledge_base")
@@ -285,7 +287,8 @@ def pesquisar_base_conhecimento(
         Dicionário com 'modo_busca', 'modo_decidido_por', 'pergunta_melhorada',
         'total_resultados' e 'resultados' (trecho, fonte, página, relevância,
         arquivo e 'url_abrir' para o usuário visualizar o documento no navegador —
-        apresente como link clicável). O trecho vem cortado: quando precisar do
+        apresente como link clicável —, mais 'url_original' quando o arquivo é a
+        conversão de um original no Drive, ex.: o PDF protocolado). O trecho vem cortado: quando precisar do
         documento inteiro (ex.: um resumo em .md), chame ler_arquivo_base_conhecimento
         com o 'arquivo.id' do resultado.
     """
@@ -316,7 +319,9 @@ def ler_arquivo_base_conhecimento(arquivo_id: int, deslocamento: int = 0) -> dic
     Returns:
         Dicionário com 'arquivo' (nome, tipo, categoria…), 'origem_texto'
         ('arquivo_original' ou 'indice_de_busca'), 'texto', 'total_caracteres',
-        'tem_mais'/'proximo_deslocamento' e 'url_abrir' (apresente como link clicável).
+        'tem_mais'/'proximo_deslocamento', 'url_abrir' (apresente como link clicável)
+        e, quando houver, 'url_original' (o documento original no Drive — o .md da
+        base é a conversão dele; aponte esse link quando o usuário quiser a peça oficial).
     """
     claims = require_module("knowledge_base")
     with app.app_context():
@@ -893,6 +898,51 @@ def exportar_contestacoes_excel(
             cnpj=cnpj, cnpj_raiz=cnpj_raiz, ano_vigencia=ano_vigencia,
             situacao_codigo=situacao_codigo, instancia_codigo=instancia_codigo,
         )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# BUSCA POR NÚMERO DE PROCESSO (todas as bases)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def buscar_por_numero_processo(
+    numero: str,
+    bases: list[str] | None = None,
+    limite: int = 20,
+    deslocamento: int = 0,
+) -> dict:
+    """Acha tudo o que o escritório tem de um processo, pelo número — em todas as bases.
+
+    Busca exata e sem IA: compara só os dígitos, então o número vale com ou sem
+    pontuação ("5001181-56.2023.4.03.6100" ou "50011815620234036100"). Com os 20
+    dígitos procura o número exato; com menos (mínimo 7), procura quem CONTÉM
+    esses dígitos — serve para número incompleto ("5001181" ou "5001181-56.2023").
+    Prefira esta tool a pesquisar_base_conhecimento quando a pergunta traz um
+    número de processo: aquela busca por texto e significado.
+
+    Args:
+        numero: Número do processo, completo ou parcial (mínimo 7 dígitos).
+        bases: Quais bases consultar (padrão: todas as que o usuário pode ver):
+            'base_conhecimento' (petições e documentos), 'jurisprudencia'
+            (decisões), 'pecas_modelo' e 'processos' (Painel de Processos).
+        limite: Máximo de itens POR BASE (padrão 20).
+        deslocamento: Paginação dentro de uma base — repasse o
+            'proximo_deslocamento' junto com bases=[a base].
+
+    Returns:
+        'digitos' buscados, 'comparacao' (igual ou contém), 'total_encontrado' e
+        'bases' — um grupo por base com 'total_encontrado', 'itens' (cada um com
+        id, número, o que é e 'url'/'url_abrir' — apresente como link clicável —,
+        mais 'url_original' quando houver o original no Drive) e 'proximo_passo'
+        (qual tool lê o item inteiro). 'sem_permissao' lista bases que o usuário
+        não pode ver.
+    """
+    claims = get_identity()
+    with app.app_context():
+        return search_by_process_number_handler(
+            claims["law_firm_id"], claims.get("modules") or [], numero, bases=bases,
+            limite=limite, deslocamento=deslocamento, app_public_url=APP_PUBLIC_URL)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -72,6 +72,16 @@ def main():
         r = processador.process_document(vazio)
         check('arquivo vazio não inventa página', r.total_pages == 0 and not r.chunks_with_pages)
 
+        # Agentes que leem o arquivo pela IA: o provedor só aceita PDF como
+        # anexo ("badly formatted or corrupted" para .md), e a classificação de
+        # teses das peças-modelo seguia sem IA, em silêncio.
+        from app.agents.core.file_agent import FileAgent
+        parte = FileAgent().build_openrouter_file_part(md)
+        check('.md vai para a IA como texto, não como anexo',
+              parte.get('type') == 'text' and '# Impugnação ao FAP' in parte.get('text', ''), parte.get('type'))
+        pdf = _arquivo(pasta, 'peca.pdf', b'%PDF-1.4 falso')
+        check('PDF continua indo como anexo', FileAgent().build_openrouter_file_part(pdf).get('type') == 'file')
+
     print('\n' + '=' * 60)
     if FALHAS:
         print(f'❌ {len(FALHAS)} falha(s): {", ".join(FALHAS)}')

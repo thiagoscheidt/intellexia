@@ -656,6 +656,15 @@ def view_reference_file(ref_id):
             download_name=reference.original_filename,
             mimetype='application/pdf',
         )
+    elif ext in ('md', 'txt'):
+        # Markdown/texto abre como texto puro — nunca como HTML.
+        response = send_file(
+            os.path.abspath(file_path),
+            as_attachment=False,
+            download_name=reference.original_filename,
+            mimetype='text/plain',
+        )
+        response.headers['Content-Security-Policy'] = "default-src 'none'; sandbox"
     else:
         response = send_file(
             os.path.abspath(file_path),

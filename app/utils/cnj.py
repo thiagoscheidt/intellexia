@@ -26,7 +26,7 @@ def cnj_digits(value):
 MIN_DIGITOS_BUSCA = 7
 
 
-def filtro_numero_processo(texto, coluna_digitos=None, coluna_mascara=None):
+def filtro_numero_processo(texto, coluna_digitos=None, coluna_mascara=None, varios_numeros=False):
     """Condição SQL para achar processo pelo número, digitado de qualquer jeito.
 
     Compara só dígitos — com ou sem pontuação, completo ou parcial. Comparar
@@ -36,6 +36,11 @@ def filtro_numero_processo(texto, coluna_digitos=None, coluna_mascara=None):
     Passe `coluna_digitos` quando a tabela guarda só dígitos; senão, a
     `coluna_mascara` tem a pontuação removida no próprio SQL (REPLACE vale igual
     no SQLite e no MySQL).
+
+    `varios_numeros=True` para coluna que pode guardar mais de um número
+    ("5001…, 5002…", como `knowledge_base.lawsuit_number`): aí até o número
+    completo é procurado por conteúdo, senão o arquivo com dois números nunca
+    casaria pelos 20 dígitos.
 
     Levanta ValueError com menos de MIN_DIGITOS_BUSCA dígitos.
     """
@@ -53,7 +58,7 @@ def filtro_numero_processo(texto, coluna_digitos=None, coluna_mascara=None):
         expr = coluna_mascara
         for sep in ('.', '-', '/', ' '):
             expr = func.replace(expr, sep, '')
-    if len(digits) == 20:
+    if len(digits) == 20 and not varios_numeros:
         return expr == digits
     return expr.like(f'%{digits}%')
 

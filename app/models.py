@@ -665,6 +665,7 @@ class KnowledgeBase(db.Model):
     file_size = db.Column(db.Integer)  # Tamanho em bytes
     file_type = db.Column(db.String(50))  # PDF, DOCX, TXT, etc.
     file_hash = db.Column(db.String(64), index=True)  # SHA-256 do conteúdo do arquivo
+    source_url = db.Column(db.String(500))  # original fora do sistema (ex.: PDF protocolado no Drive)
     
     # Descrição e categorização
     description = db.Column(db.Text)
