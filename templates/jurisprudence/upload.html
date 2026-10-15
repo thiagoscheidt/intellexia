@@ -10,7 +10,7 @@
 
 {% block content %}
 <div class="jur-page">
-{% call page_hero(title='Enviar decisões', subtitle='Sentenças, acórdãos e embargos em PDF: a IA lê e classifica', icon='bi bi-cloud-arrow-up') %}
+{% call page_hero(title='Enviar decisões', subtitle='Sentenças, acórdãos e embargos em PDF ou Markdown (.md): a IA lê e classifica', icon='bi bi-cloud-arrow-up') %}
 <div class="d-flex flex-column align-items-md-end gap-2">
   <span class="badge text-bg-light border" title="Troque em Painel de Processos › Configurações de IA"><i class="bi bi-cpu me-1"></i>Modelo: {{ modelo }}</span>
   <nav aria-label="breadcrumb">
@@ -26,10 +26,10 @@
 <form method="post" enctype="multipart/form-data" id="form-envio">
   <label class="dropzone d-block mb-3" id="dropzone" for="arquivos">
     <i class="bi bi-file-earmark-pdf display-5 text-danger"></i>
-    <h5 class="mt-2 mb-1">Arraste os PDFs das decisões aqui</h5>
-    <p class="text-body-secondary small mb-3">Vários de uma vez (até 50). Cada arquivo vira uma decisão; o processo e a instância vêm de dentro do documento.</p>
+    <h5 class="mt-2 mb-1">Arraste os arquivos das decisões aqui</h5>
+    <p class="text-body-secondary small mb-3">PDF ou Markdown (.md), vários de uma vez (até 50). Cada arquivo vira uma decisão; o processo e a instância vêm de dentro do documento.</p>
     <span class="btn btn-primary btn-sm"><i class="bi bi-folder2-open me-1"></i>Escolher arquivos</span>
-    <input type="file" id="arquivos" name="arquivos" accept="application/pdf,.pdf" multiple class="d-none">
+    <input type="file" id="arquivos" name="arquivos" accept="application/pdf,.pdf,.md" multiple class="d-none">
   </label>
 </form>
 
@@ -54,7 +54,7 @@
           Cada arquivo é casado com a decisão pelo <strong>nome do arquivo</strong> que a planilha registrou; o texto é extraído
           sem IA e entra no índice. Arquivo sem decisão correspondente é avisado, nunca anexado a outra.</p>
         <div class="d-flex flex-wrap gap-2">
-          <input type="file" name="arquivos" accept="application/pdf,.pdf" multiple required class="form-control form-control-sm" style="max-width: 360px">
+          <input type="file" name="arquivos" accept="application/pdf,.pdf,.md" multiple required class="form-control form-control-sm" style="max-width: 360px">
           <button class="btn btn-sm btn-outline-primary"><i class="bi bi-paperclip me-1"></i>Anexar</button>
         </div>
       </form>
@@ -181,8 +181,8 @@
     ['dragenter', 'dragover'].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.add('arrastando'); }));
     ['dragleave', 'drop'].forEach(ev => zona.addEventListener(ev, e => { e.preventDefault(); zona.classList.remove('arrastando'); }));
     zona.addEventListener('drop', e => {
-      const pdfs = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
-      if (!pdfs.length) { alert('Só PDF.'); return; }
+      const pdfs = Array.from(e.dataTransfer.files).filter(f => f.type === 'application/pdf' || /\.(pdf|md)$/i.test(f.name));
+      if (!pdfs.length) { alert('Só PDF ou Markdown (.md).'); return; }
       const dt = new DataTransfer(); pdfs.forEach(f => dt.items.add(f)); campo.files = dt.files; enviar();
     });
 

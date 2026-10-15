@@ -28,6 +28,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.config import DEFAULT_MODEL_ROBUST
 from app.agents.core.file_agent import FileAgent
+from app.utils.text_files import is_text_file, read_text_file
 from app.services.token_usage_service import TokenUsageService
 
 _PROMPT = (Path(__file__).resolve().parents[2] / 'prompts' / 'jurisprudence_extraction.md').read_text(encoding='utf-8')
@@ -134,12 +135,25 @@ class JurisprudenceDecisionExtractorAgent:
             # Contabilidade não derruba a leitura que deu certo.
             print(f'[JurisprudenceExtractor] falha ao registrar tokens: {erro}')
 
+    @staticmethod
+    def _parte_do_arquivo(file_path: str) -> dict:
+        caminho = Path(file_path)
+        if is_text_file(caminho):
+            if not caminho.is_file():
+                raise FileNotFoundError(file_path)
+            texto = read_text_file(caminho)
+            return {'type': 'text', 'text': f'Conteúdo da decisão (arquivo {caminho.name}):\n\n{texto}'}
+        return FileAgent().build_openrouter_file_part(file_path)
+
     def extrair(self, file_path: str, *, teses_referencia: Optional[list[str]] = None,
                 law_firm_id: Optional[int] = None, user_id: Optional[int] = None) -> dict:
-        """Lê o PDF e devolve o registro bruto (chaves do Banco Mestre) +
-        `ementa_modo` ('literal' | 'resumo' | None)."""
+        """Lê o PDF (ou Markdown) e devolve o registro bruto (chaves do Banco
+        Mestre) + `ementa_modo` ('literal' | 'resumo' | None).
+
+        Markdown já é texto: vai direto na mensagem, sem passar pelo leitor de
+        arquivo do provedor (que existe para PDF)."""
         try:
-            file_part = FileAgent().build_openrouter_file_part(file_path)
+            file_part = self._parte_do_arquivo(file_path)
         except FileNotFoundError as erro:
             raise ExtracaoFalhou('O arquivo não está mais no servidor. Envie de novo.') from erro
 

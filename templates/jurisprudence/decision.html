@@ -63,7 +63,7 @@
           <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-args" type="button">Argumentos <span class="badge text-bg-light border">{{ n_args }}</span></button></li>
           <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-fund" type="button">Fundamentos <span class="badge text-bg-light border">{{ (d.fundamentos_json or []) | length }}</span></button></li>
           <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-prec" type="button">Precedentes <span class="badge text-bg-light border">{{ precedentes | length }}</span></button></li>
-          <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-pdf" type="button"><i class="bi bi-file-earmark-pdf"></i> PDF</button></li>
+          <li class="nav-item">{% set eh_md = (d.pdf_path or '').lower().endswith('.md') %}<button class="nav-link" data-bs-toggle="tab" data-bs-target="#t-pdf" type="button"><i class="bi {{ 'bi-markdown' if eh_md else 'bi-file-earmark-pdf' }}"></i> {{ 'Markdown' if eh_md else 'PDF' }}</button></li>
         </ul>
       </div>
       <div class="card-body tab-content">
@@ -130,20 +130,20 @@
         <div class="tab-pane fade" id="t-pdf">
           {% if pdf_disponivel %}
           <div class="ratio" style="--bs-aspect-ratio: 120%">
-            <iframe src="{{ url_for('jurisprudence.decisao_pdf', decision_id=d.id) }}" title="PDF da decisão" class="rounded border"></iframe>
+            <iframe src="{{ url_for('jurisprudence.decisao_pdf', decision_id=d.id) }}" title="Arquivo da decisão" class="rounded border"{% if eh_md %} style="background: #fff"{% endif %}></iframe>
           </div>
           {% else %}
           <div class="text-center text-body-secondary py-4">
             <i class="bi bi-file-earmark-pdf display-5"></i>
-            <p class="mt-2 mb-3">O PDF desta decisão não está no sistema.
+            <p class="mt-2 mb-3">O arquivo desta decisão não está no sistema.
               {% if d.drive_link %}<br>Ela veio da planilha, e o arquivo está no Drive do escritório.{% endif %}</p>
             {% if d.drive_link %}<a class="btn btn-sm btn-outline-secondary mb-3" href="{{ d.drive_link }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir no Drive</a>{% endif %}
           </div>
           {% endif %}
           <form method="post" enctype="multipart/form-data" action="{{ url_for('jurisprudence.anexar_pdf', decision_id=d.id) }}"
                 class="d-flex flex-wrap gap-2 align-items-center mt-2">
-            <input type="file" name="arquivo" accept="application/pdf,.pdf" class="form-control form-control-sm" style="max-width: 360px" required>
-            <button class="btn btn-sm btn-outline-primary">{{ 'Trocar PDF' if pdf_disponivel else 'Anexar PDF' }}</button>
+            <input type="file" name="arquivo" accept="application/pdf,.pdf,.md" class="form-control form-control-sm" style="max-width: 360px" required>
+            <button class="btn btn-sm btn-outline-primary">{{ 'Trocar arquivo' if pdf_disponivel else 'Anexar PDF ou .md' }}</button>
           </form>
         </div>
       </div>
@@ -197,7 +197,7 @@
       <div class="text-body-secondary mb-2"><i class="bi bi-clock-history me-1"></i>Origem</div>
       <div>
         {% if d.source == 'planilha' %}Importada da planilha{% if d.original_filename %} ({{ d.original_filename }}){% endif %}
-        {% else %}Lida pela IA do PDF <strong>{{ d.original_filename or '' }}</strong>{% if d.extraction_model %} · {{ d.extraction_model }}{% endif %}{% endif %}
+        {% else %}Lida pela IA do arquivo <strong>{{ d.original_filename or '' }}</strong>{% if d.extraction_model %} · {{ d.extraction_model }}{% endif %}{% endif %}
         em {{ d.created_at.strftime('%d/%m/%Y') }}{% if d.created_by %} por {{ d.created_by.name }}{% endif %}.
       </div>
       {% if d.manual_fields_json %}

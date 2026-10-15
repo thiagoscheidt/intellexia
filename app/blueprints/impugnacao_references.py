@@ -562,7 +562,7 @@ def new_reference():
 
     upload = request.files.get('file')
     if not upload or not upload.filename:
-        flash('Envie um arquivo da peça-modelo (PDF, DOCX, TXT).', 'warning')
+        flash('Envie um arquivo da peça-modelo (PDF, DOCX, TXT, MD).', 'warning')
         return redirect(url_for('impugnacao_references.new_reference'))
     if not _allowed_file(upload.filename):
         flash('Formato de arquivo não suportado.', 'warning')

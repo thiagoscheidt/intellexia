@@ -40,6 +40,7 @@ TRAVADA_MINUTOS = 20
 MAX_BYTES = 60 * 1024 * 1024
 MAX_ARQUIVOS = 50
 MAX_ARQUIVOS_LOTE = 300
+EXTENSOES = ('.pdf', '.md')
 
 
 class ArquivoRecusado(ValueError):
@@ -52,17 +53,29 @@ def _pasta(law_firm_id: int) -> str:
     return pasta
 
 
-def salvar_pdf(law_firm_id: int, arquivo) -> tuple[str, str, str]:
-    """Grava o PDF enviado. Devolve (caminho, nome original, sha256).
-
-    Confere a assinatura %PDF antes de aceitar: extensão sozinha não prova nada.
-    """
-    nome = arquivo.filename or 'decisao.pdf'
-    if not nome.lower().endswith('.pdf'):
-        raise ArquivoRecusado(f'{nome}: só PDF.')
-    conteudo = arquivo.read()
-    if not conteudo.startswith(b'%PDF'):
+def _conferir_conteudo(nome: str, conteudo: bytes) -> None:
+    """Extensão sozinha não prova nada: PDF tem de começar por %PDF; Markdown
+    tem de ser texto UTF-8 de verdade (binário renomeado para .md não passa)."""
+    if nome.lower().endswith('.md'):
+        try:
+            texto = conteudo.decode('utf-8-sig')
+        except UnicodeDecodeError:
+            raise ArquivoRecusado(f'{nome}: o arquivo não é um texto Markdown (UTF-8) válido.')
+        if '\x00' in texto:
+            raise ArquivoRecusado(f'{nome}: o arquivo não é um texto Markdown válido.')
+        if not texto.strip():
+            raise ArquivoRecusado(f'{nome}: o arquivo está vazio.')
+    elif not conteudo.startswith(b'%PDF'):
         raise ArquivoRecusado(f'{nome}: o arquivo não é um PDF válido.')
+
+
+def salvar_arquivo(law_firm_id: int, arquivo) -> tuple[str, str, str]:
+    """Grava o PDF ou Markdown enviado. Devolve (caminho, nome original, sha256)."""
+    nome = arquivo.filename or 'decisao.pdf'
+    if not nome.lower().endswith(EXTENSOES):
+        raise ArquivoRecusado(f'{nome}: só PDF ou Markdown (.md).')
+    conteudo = arquivo.read()
+    _conferir_conteudo(nome, conteudo)
     if len(conteudo) > MAX_BYTES:
         raise ArquivoRecusado(f'{nome}: maior que {MAX_BYTES // (1024 * 1024)} MB.')
     carimbo = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
@@ -79,7 +92,7 @@ def receber(law_firm_id: int, arquivos, user_id: Optional[int] = None) -> tuple[
         if not arquivo or not arquivo.filename:
             continue
         try:
-            caminho, nome, assinatura = salvar_pdf(law_firm_id, arquivo)
+            caminho, nome, assinatura = salvar_arquivo(law_firm_id, arquivo)
         except ArquivoRecusado as erro:
             recusas.append(str(erro))
             continue
@@ -377,7 +390,7 @@ def reprocessar_decisao(law_firm_id: int, decisao: JurisprudenceDecision, user_i
 
 
 def anexar_pdf(law_firm_id: int, decisao: JurisprudenceDecision, arquivo) -> None:
-    caminho, nome, _ = salvar_pdf(law_firm_id, arquivo)
+    caminho, nome, _ = salvar_arquivo(law_firm_id, arquivo)
     _anexar(decisao, caminho, nome)
     db.session.commit()
     indice.agendar(law_firm_id, [decisao.id])
@@ -419,7 +432,7 @@ def anexar_em_lote(law_firm_id: int, arquivos) -> dict:
             sem_par.append(arquivo.filename)
             continue
         try:
-            caminho, nome, _ = salvar_pdf(law_firm_id, arquivo)
+            caminho, nome, _ = salvar_arquivo(law_firm_id, arquivo)
         except ArquivoRecusado as erro:
             recusas.append(str(erro))
             continue

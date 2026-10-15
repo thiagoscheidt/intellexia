@@ -10,7 +10,7 @@ Rotas:
     GET  /process-panel/jurisprudencia/                         pesquisa
     GET  /process-panel/jurisprudencia/decisao/<id>             decisão
     GET|POST .../decisao/<id>/editar                            corrigir dados
-    GET  .../decisao/<id>/pdf                                   PDF inline
+    GET  .../decisao/<id>/pdf                                   PDF (ou .md) inline
     POST .../decisao/<id>/anexar-pdf | reprocessar | excluir
     GET|POST .../importar          GET .../importar/<token>     conferência
     POST .../importar/<token>/confirmar
@@ -232,7 +232,10 @@ def decisao_pdf(decision_id):
     d = _decisao(decision_id)
     if not d.pdf_path or not os.path.exists(d.pdf_path):
         abort(404)
-    resposta = send_file(os.path.abspath(d.pdf_path), mimetype='application/pdf',
+    # Markdown vai como texto puro — nunca HTML, o conteúdo veio de upload.
+    mimetype = ('text/plain; charset=utf-8' if d.pdf_path.lower().endswith('.md')
+                else 'application/pdf')
+    resposta = send_file(os.path.abspath(d.pdf_path), mimetype=mimetype,
                          as_attachment=False, download_name=d.original_filename or 'decisao.pdf')
     resposta.headers['X-Content-Type-Options'] = 'nosniff'
     return resposta
@@ -285,11 +288,11 @@ def anexar_pdf(decision_id):
     d = _decisao(decision_id)
     arquivo = request.files.get('arquivo')
     if not arquivo or not arquivo.filename:
-        flash('Escolha o PDF da decisão.', 'warning')
+        flash('Escolha o arquivo da decisão (PDF ou .md).', 'warning')
     else:
         try:
             envios.anexar_pdf(d.law_firm_id, d, arquivo)
-            flash('PDF anexado. Agora a decisão pode ser reprocessada pela IA.', 'success')
+            flash('Arquivo anexado. Agora a decisão pode ser reprocessada pela IA.', 'success')
         except envios.ArquivoRecusado as erro:
             flash(str(erro), 'warning')
     return redirect(url_for('jurisprudence.decisao', decision_id=d.id))
@@ -405,7 +408,7 @@ def anexar_lote():
     for recusa in r['recusas']:
         flash(recusa, 'warning')
     if r['anexadas']:
-        flash(f"{r['anexadas']} PDF(s) anexado(s) às decisões. O inteiro teor é extraído e indexado em segundo plano.",
+        flash(f"{r['anexadas']} arquivo(s) anexado(s) às decisões. O inteiro teor é extraído e indexado em segundo plano.",
               'success')
     if r['sem_par']:
         amostra = ', '.join(r['sem_par'][:5]) + ('…' if len(r['sem_par']) > 5 else '')

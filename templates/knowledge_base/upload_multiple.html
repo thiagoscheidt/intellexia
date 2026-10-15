@@ -102,7 +102,7 @@
                                         <i class="bi bi-files text-primary"></i> Arquivos *
                                     </label>
                                     <input type="file" class="d-none" id="files" name="files" required multiple
-                                        accept=".pdf,.doc,.docx,.txt,.odt,.rtf">
+                                        accept=".pdf,.doc,.docx,.txt,.md,.odt,.rtf">
 
                                     <div id="dropZone" class="drop-zone">
                                         <i class="bi bi-cloud-arrow-up-fill text-primary" style="font-size: 2rem;"></i>
@@ -224,7 +224,7 @@
         const multiUploadBtn = document.getElementById('multiUploadBtn');
         const multiUploadBtnText = document.getElementById('multiUploadBtnText');
         const multiUploadBtnLoading = document.getElementById('multiUploadBtnLoading');
-        const allowedExtensions = ['pdf', 'doc', 'docx', 'txt', 'odt', 'rtf'];
+        const allowedExtensions = ['pdf', 'doc', 'docx', 'txt', 'md', 'odt', 'rtf'];
 
         function renderSelectedFiles(files) {
             const count = files.length;

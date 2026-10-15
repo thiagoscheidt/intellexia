@@ -111,7 +111,8 @@ mesmo ponto, mesmo com outras palavras.
   correção não é sobrescrita.
 - :btn-outline-secondary[Reprocessar com IA] — lê o PDF de novo. Só funciona com
   o PDF no sistema.
-- **Anexar PDF** (aba PDF) — para decisões que vieram da planilha sem o arquivo.
+- **Anexar PDF ou .md** (aba PDF) — para decisões que vieram da planilha sem o
+  arquivo. Quando o arquivo é `.md`, a aba se chama **Markdown** e mostra o texto.
 
 ### Trazer decisões para a base
 
@@ -123,7 +124,8 @@ vê a conferência: quantas decisões são novas, quantas já existem, o que ser
 padronizado (grafias de tribunal, instância, resultado e tese) e o que entra com
 aviso (sem vigência, sem data). Reimportar a mesma planilha não duplica nada.
 
-**Enviar decisões** — arraste os PDFs das sentenças, acórdãos e embargos. A IA
+**Enviar decisões** — arraste os arquivos das sentenças, acórdãos e embargos,
+em PDF ou Markdown (`.md`). O `.md` vai direto para a IA, sem conversão. A IA
 lê cada um em segundo plano (pode fechar a tela) e classifica processo,
 tribunal, resultado, teses, fundamentos e argumentos. A fila mostra a situação
 de cada arquivo:

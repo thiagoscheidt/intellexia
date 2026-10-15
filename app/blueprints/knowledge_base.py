@@ -17,6 +17,7 @@ from app.agents.knowledge_base.knowledge_query_agent import KnowledgeQueryAgent
 from datetime import datetime
 import builtins
 from werkzeug.utils import secure_filename
+from app.utils.text_files import is_text_file, read_text_file
 from app.agents.document_processing.agent_document_summary import AgentDocumentSummary
 from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.services.knowledge_base.chat_context import build_attachments_context
@@ -494,7 +495,7 @@ def upload_multiple():
         tags_list = [tag.strip() for tag in tags_text.split(',') if tag.strip()]
         tags = ','.join(tags_list)
 
-        allowed_extensions = {'pdf', 'doc', 'docx', 'txt', 'odt', 'rtf'}
+        allowed_extensions = {'pdf', 'doc', 'docx', 'txt', 'md', 'odt', 'rtf'}
         invalid_files = []
         duplicate_files = []
         seen_hashes_in_batch = set()
@@ -525,7 +526,7 @@ def upload_multiple():
 
         if invalid_files:
             flash(
-                f'Formato não permitido: {", ".join(invalid_files)}. Formatos aceitos: PDF, DOC, DOCX, TXT, ODT, RTF.',
+                f'Formato não permitido: {", ".join(invalid_files)}. Formatos aceitos: PDF, DOC, DOCX, TXT, MD, ODT, RTF.',
                 'error'
             )
             return redirect(request.url)
@@ -1043,8 +1044,25 @@ def view(file_id):
         flash('Arquivo não encontrado no servidor.', 'error')
         return redirect(url_for('knowledge_base.list'))
 
+    # O link "url_abrir" do MCP cai aqui para qualquer tipo de arquivo: cada
+    # tipo é entregue com o próprio mimetype, nunca "adivinhado" pelo navegador.
+    ext = os.path.splitext(resolved_path)[1].lower()
+    if ext == '.docx':
+        return redirect(url_for('knowledge_base.view_docx', file_id=file.id))
     try:
-        return send_file(resolved_path, as_attachment=False, mimetype='application/pdf')
+        if ext == '.pdf':
+            resposta = send_file(resolved_path, as_attachment=False, mimetype='application/pdf')
+        elif is_text_file(resolved_path):
+            # Markdown/texto vai como texto puro — nunca HTML, o conteúdo veio de
+            # upload. Decodificado aqui para .txt em cp1252 não sair com acento quebrado.
+            resposta = current_app.response_class(read_text_file(resolved_path),
+                                                  mimetype='text/plain; charset=utf-8')
+        else:
+            resposta = send_file(resolved_path, as_attachment=True, download_name=file.original_filename,
+                                 mimetype='application/octet-stream')
+            resposta.headers['Content-Security-Policy'] = "default-src 'none'; sandbox"
+        resposta.headers['X-Content-Type-Options'] = 'nosniff'
+        return resposta
     except Exception as e:
         flash(f'Erro ao visualizar o arquivo: {str(e)}', 'error')
         return redirect(url_for('knowledge_base.list'))

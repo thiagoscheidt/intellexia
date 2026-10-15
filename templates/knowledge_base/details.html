@@ -137,6 +137,12 @@
                                         <i class="bi bi-file-earmark-pdf-fill"></i> Visualizar PDF
                                     </button>
                                     {% endif %}
+                                    {% if file.file_type in ('MD', 'TXT') %}
+                                    <a href="{{ url_for('knowledge_base.view', file_id=file.id) }}" target="_blank" rel="noopener"
+                                        class="btn btn-info btn-sm shadow" style="border-radius: 8px;">
+                                        <i class="bi bi-file-earmark-text-fill"></i> Visualizar texto
+                                    </a>
+                                    {% endif %}
                                     {% if file.file_type == 'DOCX' %}
                                     <button type="button" class="btn btn-warning btn-sm shadow"
                                         style="border-radius: 8px;"

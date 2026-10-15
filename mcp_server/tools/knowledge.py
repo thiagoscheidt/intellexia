@@ -3,6 +3,8 @@ Tools: Base de Conhecimento (RAG)
 """
 from __future__ import annotations
 
+import os
+
 
 def _attach_file_links(items: list[dict], law_firm_id: int, app_public_url: str,
                        file_id_key: str = "file_id") -> list[dict]:
@@ -31,6 +33,149 @@ def _attach_file_links(items: list[dict], law_firm_id: int, app_public_url: str,
         if file_id in allowed:
             item["url_abrir"] = f"{base}/knowledge-base/{file_id}/view"
     return items
+
+
+MAX_CARACTERES_LEITURA = 40000   # ~10 mil tokens por chamada
+_LOTE_INDICE = 1000
+
+
+def _pedacos_do_indice(file_id: int) -> list[dict]:
+    """Pedaços indexados do arquivo (a ordem do documento é refeita em `_emendar`).
+
+    Meilisearch primeiro (lista por filtro, sem busca); fora do ar, o Qdrant —
+    os dois guardam o mesmo payload (`text`, `page`, `chunk_index`).
+    """
+    from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
+
+    agente = KnowledgeIngestionAgent(require_embeddings=False, create_missing_indexes=False)
+    campos = ["text", "page", "chunk_index"]
+    try:
+        indice = agente.meilisearch.index(agente.collection)
+        pedacos, inicio = [], 0
+        while True:
+            lote = indice.get_documents(filter=f"file_id = {int(file_id)}", fields=campos,
+                                        offset=inicio, limit=_LOTE_INDICE)
+            pedacos.extend(lote.results)
+            inicio += len(lote.results)
+            if not lote.results or inicio >= lote.total:
+                break
+    except Exception as erro:
+        print(f"[mcp.ler_arquivo_kb] Meilisearch indisponível ({erro}); lendo do Qdrant.")
+        from qdrant_client.http import models as rest
+        filtro = rest.Filter(must=[rest.FieldCondition(key="file_id", match=rest.MatchValue(value=int(file_id)))])
+        pedacos, proximo = [], None
+        while True:
+            pontos, proximo = agente.qdrant.scroll(collection_name=agente.collection, scroll_filter=filtro,
+                                                   limit=256, offset=proximo, with_payload=campos,
+                                                   with_vectors=False)
+            pedacos.extend(p.payload or {} for p in pontos)
+            if proximo is None:
+                break
+    return pedacos
+
+
+def _emendar(pedacos: list[dict]) -> str:
+    """Remonta o texto. Marca a página quando ela muda (a IA cita a página) e
+    tira a sobreposição de até 20 caracteres que o corte sem página deixa
+    entre um pedaço e o seguinte."""
+    partes: list[str] = []
+    pagina_atual = None
+    anterior = ""
+    for pedaco in sorted(pedacos, key=lambda p: int(p.get("chunk_index") or 0)):
+        texto = str(pedaco.get("text") or "").strip()
+        if not texto:
+            continue
+        pagina = pedaco.get("page")
+        if pagina is not None and pagina != pagina_atual:
+            partes.append(f"[Página {pagina}]")
+            pagina_atual = pagina
+        elif pagina is None and anterior:
+            for k in range(min(40, len(anterior), len(texto)), 4, -1):
+                if anterior.endswith(texto[:k]):
+                    texto = texto[k:].lstrip()
+                    break
+        if texto:
+            partes.append(texto)
+            anterior = texto
+    return "\n\n".join(partes)
+
+
+def _janela(texto: str, deslocamento: int) -> str:
+    """Até MAX_CARACTERES_LEITURA a partir do deslocamento, terminando em fim de
+    parágrafo quando dá — corte no meio da frase confunde quem lê em partes."""
+    fim = deslocamento + MAX_CARACTERES_LEITURA
+    if fim >= len(texto):
+        return texto[deslocamento:]
+    quebra = texto.rfind("\n\n", deslocamento + MAX_CARACTERES_LEITURA // 2, fim)
+    return texto[deslocamento:(quebra + 2) if quebra != -1 else fim]
+
+
+def read_kb_file_handler(arquivo_id: int, law_firm_id: int, deslocamento: int = 0,
+                         app_public_url: str = "") -> dict:
+    """Conteúdo completo de um arquivo da base de conhecimento, em partes.
+
+    Markdown/texto vem do arquivo original, sem conversão. Os demais tipos não
+    têm o texto guardado no banco: são remontados dos pedaços já indexados, na
+    ordem do documento — sem reprocessar o arquivo.
+    """
+    from fastmcp.exceptions import ToolError
+
+    from app.models import KnowledgeBase
+    from app.utils.text_files import is_text_file, read_text_file
+    from mcp_server.tools.pagination import clamp_offset
+
+    arquivo = KnowledgeBase.query.filter_by(id=arquivo_id, law_firm_id=law_firm_id, is_active=True).first()
+    if arquivo is None:
+        raise ToolError(f"Arquivo {arquivo_id} não encontrado na base de conhecimento do escritório. "
+                        "Use o 'arquivo.id' devolvido por pesquisar_base_conhecimento.")
+
+    texto, origem = None, None
+    if is_text_file(arquivo.file_path) and os.path.isfile(arquivo.file_path):
+        texto, origem = read_text_file(arquivo.file_path).strip(), "arquivo_original"
+    else:
+        try:
+            texto, origem = _emendar(_pedacos_do_indice(arquivo.id)), "indice_de_busca"
+        except Exception as erro:
+            raise ToolError(f"Não foi possível ler o arquivo agora: índices de busca indisponíveis ({erro}).")
+
+    descricao_arquivo = {
+        "id": arquivo.id,
+        "nome": arquivo.original_filename,
+        "tipo": arquivo.file_type,
+        "descricao": arquivo.description,
+        "categoria": arquivo.category or None,
+        "numero_processo": arquivo.lawsuit_number or None,
+        "status_processamento": arquivo.processing_status,
+    }
+    if not texto:
+        motivo = ("o arquivo ainda não foi processado" if arquivo.processing_status != "completed"
+                  else "o processamento não extraiu texto (ex.: PDF escaneado sem camada de texto)")
+        return {"arquivo": descricao_arquivo, "texto": "", "total_caracteres": 0,
+                "aviso": f"Sem conteúdo disponível: {motivo}."}
+
+    inicio = min(clamp_offset(deslocamento), len(texto))
+    parte = _janela(texto, inicio)
+    proximo = inicio + len(parte)
+    saida = {
+        "arquivo": descricao_arquivo,
+        "origem_texto": origem,
+        "total_caracteres": len(texto),
+        "deslocamento": inicio,
+        "retornados": len(parte),
+        "tem_mais": proximo < len(texto),
+        "texto": parte,
+    }
+    if app_public_url:
+        saida["url_abrir"] = f"{app_public_url.rstrip('/')}/knowledge-base/{arquivo.id}/view"
+    if origem == "indice_de_busca":
+        saida["observacao"] = ("Texto remontado dos trechos indexados: o conteúdo é o do documento, "
+                               "mas tabelas e quebras de linha podem diferir do original.")
+    if saida["tem_mais"]:
+        saida["proximo_deslocamento"] = proximo
+        saida["dica"] = (f"Parte {inicio:,}–{proximo:,} de {len(texto):,} caracteres. Para continuar, "
+                         f"chame de novo com deslocamento={proximo}. Se só precisa de um ponto do "
+                         f"documento, pesquisar_base_conhecimento acha o trecho sem ler tudo.").replace(",", ".")
+    return saida
 
 
 def query_knowledge_base_handler(question: str, law_firm_id: int, user_id: int | None = None,

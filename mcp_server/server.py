@@ -52,7 +52,7 @@ from main import app  # noqa: E402 — importa o app Flask com DB e configs
 
 from mcp_server.identity import get_identity, require_admin, require_module
 from mcp_server.oauth_provider import IntellexiaOAuthProvider
-from mcp_server.tools.knowledge import kb_search_handler, query_knowledge_base_handler
+from mcp_server.tools.knowledge import kb_search_handler, query_knowledge_base_handler, read_kb_file_handler
 from mcp_server.tools.fap import (
     list_fap_companies_handler,
     list_fap_contestacoes_handler,
@@ -249,7 +249,8 @@ def consultar_base_conhecimento(pergunta: str) -> dict:
     Returns:
         Dicionário com 'resposta', 'fontes', 'fontes_detalhe' (cada fonte com
         'url_abrir' para o usuário visualizar o documento no navegador — apresente
-        como link clicável) e 'perguntas_sugeridas'.
+        como link clicável) e 'perguntas_sugeridas'. Para ler uma fonte inteira,
+        use ler_arquivo_base_conhecimento com o 'file_id' da fonte.
     """
     claims = require_module("knowledge_base")
     with app.app_context():
@@ -284,12 +285,43 @@ def pesquisar_base_conhecimento(
         Dicionário com 'modo_busca', 'modo_decidido_por', 'pergunta_melhorada',
         'total_resultados' e 'resultados' (trecho, fonte, página, relevância,
         arquivo e 'url_abrir' para o usuário visualizar o documento no navegador —
-        apresente como link clicável).
+        apresente como link clicável). O trecho vem cortado: quando precisar do
+        documento inteiro (ex.: um resumo em .md), chame ler_arquivo_base_conhecimento
+        com o 'arquivo.id' do resultado.
     """
     claims = require_module("knowledge_base")
     with app.app_context():
         return kb_search_handler(pergunta, claims["law_firm_id"], modo_busca, limite,
                                  app_public_url=APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def ler_arquivo_base_conhecimento(arquivo_id: int, deslocamento: int = 0) -> dict:
+    """Lê o conteúdo COMPLETO de um arquivo da base de conhecimento.
+
+    Use depois de pesquisar_base_conhecimento (ou consultar_base_conhecimento),
+    quando os trechos não bastarem e o documento inteiro importar — típico de
+    resumos e notas em Markdown (.md), que já são curtos e perdem o sentido
+    cortados. Markdown e .txt vêm do arquivo original, sem conversão; PDF e DOCX
+    vêm remontados dos trechos indexados, com marcas [Página N].
+
+    Documento grande vem em partes de até 40 mil caracteres: se 'tem_mais' for
+    true, chame de novo com deslocamento='proximo_deslocamento'. Para achar um
+    ponto específico de um documento longo, pesquisar é mais barato que ler tudo.
+
+    Args:
+        arquivo_id: O 'arquivo.id' devolvido pela pesquisa.
+        deslocamento: Caractere a partir do qual ler (padrão 0 = início).
+
+    Returns:
+        Dicionário com 'arquivo' (nome, tipo, categoria…), 'origem_texto'
+        ('arquivo_original' ou 'indice_de_busca'), 'texto', 'total_caracteres',
+        'tem_mais'/'proximo_deslocamento' e 'url_abrir' (apresente como link clicável).
+    """
+    claims = require_module("knowledge_base")
+    with app.app_context():
+        return read_kb_file_handler(arquivo_id, claims["law_firm_id"], deslocamento,
+                                    app_public_url=APP_PUBLIC_URL)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

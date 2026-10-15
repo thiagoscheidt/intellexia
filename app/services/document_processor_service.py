@@ -17,6 +17,8 @@ from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+from app.utils.text_files import TEXT_SUFFIXES, read_text_file
+
 
 @dataclass
 class PageContent:
@@ -780,6 +782,82 @@ class DocumentProcessorService:
         _flush_page()
         return page_texts, tables
 
+    # Markdown e texto puro já são texto: lidos direto, sem conversão. O
+    # Docling não pagina Markdown (0 páginas, 0 trechos — só o full_text) e
+    # recusa .txt ("File format not allowed"), que saía vazio.
+    TEXT_SUFFIXES = TEXT_SUFFIXES
+    read_text_file = staticmethod(read_text_file)
+
+    _MD_TABLE_SEPARATOR_RE = re.compile(r"^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$")
+
+    @classmethod
+    def _markdown_tables(cls, block: str) -> list[list[str]]:
+        """Tabelas Markdown do bloco, cada linha no formato do pdfplumber:
+        'célula | célula' (sem a linha separadora `|---|`)."""
+        tables: list[list[str]] = []
+        run: list[str] = []
+
+        def _close() -> None:
+            nonlocal run
+            if len(run) >= 2 and any(cls._MD_TABLE_SEPARATOR_RE.match(line) for line in run):
+                rows = [
+                    " | ".join(" ".join(cell.split()) for cell in line.strip("|").split("|"))
+                    for line in run
+                    if not cls._MD_TABLE_SEPARATOR_RE.match(line)
+                ]
+                rows = [row for row in rows if row.replace("|", "").strip()]
+                if rows:
+                    tables.append(rows)
+            run = []
+
+        for raw_line in block.splitlines():
+            line = raw_line.strip()
+            if line.startswith("|"):
+                run.append(line)
+            else:
+                _close()
+        _close()
+        return tables
+
+    def _extract_pages_and_tables_from_text(
+        self, file_path: str | Path
+    ) -> tuple[list[tuple[int, str]], list[dict]]:
+        """[(página sintética, texto)] + tabelas de um .md/.txt, no formato do DOCX.
+
+        Quebra a página só em linha em branco — parágrafo e tabela nunca ficam
+        divididos entre duas páginas. O texto vai sem alteração, com a
+        marcação Markdown (títulos `##` também são reconhecidos como seção).
+        """
+        try:
+            text = self.read_text_file(file_path)
+        except Exception as exc:
+            print(f"[DocumentProcessorService][texto] Falha ao ler o arquivo: {exc}")
+            return [], []
+
+        page_texts: list[tuple[int, str]] = []
+        tables: list[dict] = []
+        current_blocks: list[str] = []
+        current_chars = 0
+        page_no = 1
+
+        normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+        for block in re.split(r"\n[ \t]*\n", normalized):
+            block = block.strip("\n").rstrip()
+            if not block.strip():
+                continue
+            for rows in self._markdown_tables(block):
+                tables.append({"page": page_no, "section": None, "text": rows})
+            current_blocks.append(block)
+            current_chars += len(block)
+            if current_chars >= self.DOCX_SYNTHETIC_PAGE_CHARS:
+                page_texts.append((page_no, "\n\n".join(current_blocks)))
+                current_blocks, current_chars = [], 0
+                page_no += 1
+
+        if current_blocks:
+            page_texts.append((page_no, "\n\n".join(current_blocks)))
+        return page_texts, tables
+
     def _build_pages_with_sections(
         self, page_texts: list[tuple[int, str]]
     ) -> tuple[list[PageContent], list[dict]]:
@@ -858,8 +936,9 @@ class DocumentProcessorService:
         1. Caminho rápido: PDFs com camada de texto são extraídos com pdfplumber
            (segundos). O Docling (modelos de layout por página, minutos em CPU)
            fica só para o fallback.
+           DOCX vai por python-docx; .md/.txt são lidos direto, sem conversão.
         2. Fallback Docling: texto esparso/vazio (provável escaneado) ou arquivo
-           não-PDF.
+           de outro formato.
         3. Monta `chunks_with_pages` prontos para ingestão no formato
            [{"text": "...", "page": N}, ...]. As tabelas sempre vêm do
            pdfplumber, em qualquer caminho.
@@ -920,6 +999,23 @@ class DocumentProcessorService:
                 for table in docx_tables:
                     table["section"] = page_section_map.get(table.get("page"))
                 tables = docx_tables
+
+        # 1c) Markdown / texto puro — já é texto: lido direto, sem conversão
+        elif file_path.suffix.lower() in self.TEXT_SUFFIXES:
+            page_texts, text_tables = self._extract_pages_and_tables_from_text(file_path)
+            if page_texts:
+                total_pages = len(page_texts)
+                print(
+                    f"[DocumentProcessorService][texto] {total_pages} página(s) sintética(s) / "
+                    f"{len(text_tables)} tabela(s) (lido direto, sem conversão)"
+                )
+                pages, chunks_with_pages = self._build_pages_with_sections(page_texts)
+                full_text = "\n\n".join(text for _, text in page_texts)
+
+                page_section_map = {page.page: page.section for page in pages}
+                for table in text_tables:
+                    table["section"] = page_section_map.get(table.get("page"))
+                tables = text_tables
 
         # 2) Fallback — Docling
         if not chunks_with_pages:

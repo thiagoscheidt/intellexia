@@ -457,6 +457,26 @@ def test_agente():
     finally:
         os.remove(caminho)
 
+    # Markdown já é texto: vai direto na mensagem, sem o leitor de arquivo do provedor.
+    with tempfile.NamedTemporaryFile(suffix='.md', delete=False, mode='w', encoding='utf-8') as f:
+        f.write('# ACÓRDÃO\n\nProcesso 5099999-11.2024.4.04.7200. Excluído o acidente de trajeto.')
+        caminho_md = f.name
+    usuario = []
+
+    class _Captura:
+        def invoke(self, mensagens):
+            usuario.append(mensagens[1]['content'])
+            from app.agents.jurisprudence.decision_extractor_agent import DecisaoExtraida
+            return {'raw': _FakeRaw(), 'parsed': DecisaoExtraida(**DADOS_PDF), 'parsing_error': None}
+    try:
+        JurisprudenceDecisionExtractorAgent(model_name='fake', llm_factory=lambda _r: _Captura()).extrair(caminho_md)
+        partes = usuario[0] if usuario else []
+        check('.md vai como texto na mensagem, sem parte de arquivo',
+              not any(p.get('type') == 'file' for p in partes)
+              and any('Excluído o acidente de trajeto' in (p.get('text') or '') for p in partes), partes)
+    finally:
+        os.remove(caminho_md)
+
 
 def test_fila():
     print('\n7. Fila de PDFs')
@@ -474,6 +494,18 @@ def test_fila():
         _, recusas2 = up.receber(1, [FileStorage(stream=io.BytesIO(b'nao e pdf'), filename='x.pdf')], user_id=1)
     check('dois PDFs na fila', len(ids) == 2 and not recusas)
     check('arquivo que não começa com %PDF é recusado', len(recusas2) == 1)
+
+    with app.test_request_context():
+        ids_md, recusas_md = up.receber(1, [
+            FileStorage(stream=io.BytesIO('# Sentença\n\nJulgo procedente.'.encode('utf-8')), filename='sentenca.md'),
+            FileStorage(stream=io.BytesIO(b'\x89PNG\r\n\x1a\n\x00\x00binario'), filename='imagem.md'),
+            FileStorage(stream=io.BytesIO(b'PK\x03\x04'), filename='decisao.docx'),
+        ], user_id=1)
+    check('.md entra na fila', len(ids_md) == 1, ids_md)
+    check('binário renomeado para .md e .docx são recusados', len(recusas_md) == 2, recusas_md)
+    for upload_md in U.query.filter(U.id.in_(ids_md)).all():   # fora da contagem do painel abaixo
+        db.session.delete(upload_md)
+    db.session.commit()
 
     u = up.processar(1, ids[0], agente=agente(DADOS_PDF))
     check('leitura nova vira decisão', u.status == 'done' and u.decision is not None and u.decision.source == 'pdf')
@@ -539,6 +571,12 @@ def test_indice():
     check('o inteiro teor é extraído, página a página, sem IA',
           sentenca.texto_paginas == 2 and 'concausalidade' in (sentenca.texto_integral or ''), sentenca.texto_paginas)
     check('a decisão com PDF ganha um ponto por página', sentenca.index_chunks == 3, sentenca.index_chunks)
+
+    caminho_md = os.path.join(PASTA_TMP, 'decisao.md')
+    with open(caminho_md, 'w', encoding='utf-8') as f:
+        f.write('## 1. RELATÓRIO\n\nA empresa pede a exclusão.\n\n## 2. VOTO\n\nO nexo foi afastado.')
+    paginas_md = _indice.extrair_paginas(caminho_md)
+    check('inteiro teor do .md sai lido direto', paginas_md and 'nexo foi afastado' in paginas_md[0], paginas_md)
 
     if MEILI_NO_AR:
         achados = _indice.buscar_inteiro_teor(1, 'concausalidade', indice=INDICE_TESTE)
@@ -654,6 +692,22 @@ def test_rotas():
     resp = get(f'/process-panel/jurisprudencia/decisao/{d.id}')
     check('página da decisão abre', resp.status_code == 200 and 'Citação pronta' in resp.get_data(as_text=True))
     check('edição abre', get(f'/process-panel/jurisprudencia/decisao/{d.id}/editar').status_code == 200)
+
+    caminho_md = os.path.join(PASTA_TMP, 'rota.md')
+    with open(caminho_md, 'w', encoding='utf-8') as f:
+        f.write('# Acórdão\n\n<script>alert(1)</script>')
+    d.pdf_path = caminho_md
+    db.session.commit()
+    pagina = get(f'/process-panel/jurisprudencia/decisao/{d.id}').get_data(as_text=True)
+    check('decisão com .md mostra a aba Markdown', 'bi-markdown' in pagina)
+    resp = get(f'/process-panel/jurisprudencia/decisao/{d.id}/pdf')
+    check('arquivo .md é servido como texto puro, nunca HTML',
+          resp.status_code == 200 and resp.mimetype == 'text/plain'
+          and resp.headers.get('X-Content-Type-Options') == 'nosniff', (resp.status_code, resp.mimetype))
+    resp.close()
+    d = db.session.get(D, d.id)
+    d.pdf_path = None
+    db.session.commit()
     resp = cliente.post(f'/process-panel/jurisprudencia/decisao/{d.id}/editar',
                         data={'processo': d.processo, 'tribunal': d.tribunal, 'orgao_julgador': d.orgao_julgador,
                               'tipo_documento': 'acordao', 'resultado': 'favoravel', 'uf': d.uf,
