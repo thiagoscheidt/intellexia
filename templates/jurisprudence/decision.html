@@ -128,10 +128,12 @@
         </div>
 
         <div class="tab-pane fade" id="t-pdf">
+          {# O link vem da planilha importada: só http(s) vira href — "javascript:" executaria na origem do app. #}
+          {% set drive_seguro = d.drive_link and d.drive_link.startswith(('https://', 'http://')) %}
           {% if pdf_disponivel %}
-          {% if d.drive_link %}
+          {% if drive_seguro %}
           <div class="d-flex justify-content-end mb-2">
-            <a class="btn btn-sm btn-outline-secondary" href="{{ d.drive_link }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir original no Drive</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ d.drive_link }}" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir original no Drive</a>
           </div>
           {% endif %}
           <div class="ratio" style="--bs-aspect-ratio: 120%">
@@ -142,7 +144,7 @@
             <i class="bi bi-file-earmark-pdf display-5"></i>
             <p class="mt-2 mb-3">O arquivo desta decisão não está no sistema.
               {% if d.drive_link %}<br>Ela veio da planilha, e o arquivo está no Drive do escritório.{% endif %}</p>
-            {% if d.drive_link %}<a class="btn btn-sm btn-outline-secondary mb-3" href="{{ d.drive_link }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir no Drive</a>{% endif %}
+            {% if drive_seguro %}<a class="btn btn-sm btn-outline-secondary mb-3" href="{{ d.drive_link }}" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir no Drive</a>{% endif %}
           </div>
           {% endif %}
           <form method="post" enctype="multipart/form-data" action="{{ url_for('jurisprudence.anexar_pdf', decision_id=d.id) }}"
