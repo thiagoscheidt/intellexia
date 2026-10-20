@@ -2864,6 +2864,105 @@ class FapWebProcuracaoChangeHistory(db.Model):
         )
 
 
+class FapCalculoEstabelecimento(db.Model):
+    """Um estabelecimento numa vigência, como a Consulta do FAP o enxerga.
+
+    Guarda o cálculo atual (e o original) e o histórico de cálculos, para saber
+    de onde vieram os itens de ``fap_calculo_itens`` e se há o que buscar.
+    ``situacao``: ok | sem_calculo | sem_acesso | erro.
+    """
+    __tablename__ = 'fap_calculo_estabelecimentos'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'ano_vigencia', 'cnpj', name='uq_fap_calc_estab'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    ano_vigencia = db.Column(db.Integer, nullable=False, index=True)
+    cnpj = db.Column(db.String(14), nullable=False, index=True)
+    cnpj_raiz = db.Column(db.String(8), nullable=False, index=True)
+
+    calculo_atual_id = db.Column(db.BigInteger)
+    calculo_atual_tipo = db.Column(db.String(80))
+    calculo_atual_data = db.Column(db.Date)
+    calculo_original_id = db.Column(db.BigInteger)
+    tem_itens = db.Column(db.Boolean, nullable=False, default=False)
+    # Lista {id, tipo, data} do /calculos, mais recente primeiro.
+    historico_json = db.Column(db.Text)
+    protocolo = db.Column(db.String(40))
+
+    situacao = db.Column(db.String(20))
+    erro = db.Column(db.String(255))
+    synced_at = db.Column(db.DateTime)  # UTC
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+
+    def __repr__(self):
+        return f'<FapCalculoEstabelecimento {self.cnpj}/{self.ano_vigencia} {self.situacao}>'
+
+
+class FapCalculoItem(db.Model):
+    """Benefício (B91/B92/B93/B94) ou CAT do cálculo FAP, como veio da Consulta do FAP.
+
+    ``identificador`` é o NB ou o número da CAT. Mesmo número em vigências
+    diferentes são linhas diferentes (``ano_vigencia`` faz parte da chave).
+    """
+    __tablename__ = 'fap_calculo_itens'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'law_firm_id', 'ano_vigencia', 'cnpj', 'tipo', 'identificador',
+            name='uq_fap_calc_item',
+        ),
+        db.Index('ix_fap_calc_item_firm_cpf', 'law_firm_id', 'cpf'),
+        db.Index('ix_fap_calc_item_firm_nit', 'law_firm_id', 'nit'),
+        db.Index('ix_fap_calc_item_firm_ident', 'law_firm_id', 'identificador'),
+        db.Index('ix_fap_calc_item_firm_ano_tipo', 'law_firm_id', 'ano_vigencia', 'tipo'),
+        db.Index('ix_fap_calc_item_firm_raiz', 'law_firm_id', 'cnpj_raiz'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    ano_vigencia = db.Column(db.Integer, nullable=False)
+    cnpj = db.Column(db.String(14), nullable=False)
+    cnpj_raiz = db.Column(db.String(8), nullable=False)
+    tipo = db.Column(db.String(4), nullable=False)  # B91|B92|B93|B94|CAT
+    identificador = db.Column(db.String(30), nullable=False)  # NB ou nº da CAT
+
+    nit = db.Column(db.String(20))
+    cpf = db.Column(db.String(11))
+    data_nascimento = db.Column(db.Date)
+    valor_mensal = db.Column(db.Numeric(14, 2))
+    total_pago = db.Column(db.Numeric(14, 2))
+    data_despacho = db.Column(db.Date)
+    data_inicio = db.Column(db.Date)
+    data_cessacao = db.Column(db.Date)
+    data_inicio_contabilizacao = db.Column(db.Date)
+    data_fim_contabilizacao = db.Column(db.Date)
+    meses_contabilizacao = db.Column(db.Numeric(10, 4))
+    bloqueio = db.Column(db.Boolean)
+    estado_atual = db.Column(db.String(20))
+    estado_original = db.Column(db.String(20))
+    calculo_id = db.Column(db.BigInteger)
+    cnpj_original = db.Column(db.String(14))
+    cnpj_atribuido = db.Column(db.String(14))
+    data_acidente = db.Column(db.Date)
+    data_cadastro_cat = db.Column(db.Date)
+    data_obito = db.Column(db.Date)
+    recibo_esocial = db.Column(db.String(60))
+    raw_json = db.Column(db.Text)
+
+    first_seen_at = db.Column(db.DateTime)  # UTC
+    last_seen_at = db.Column(db.DateTime)   # UTC
+
+    law_firm = db.relationship('LawFirm')
+
+    def __repr__(self):
+        return f'<FapCalculoItem {self.tipo} {self.identificador} {self.cnpj}/{self.ano_vigencia}>'
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # FAP REVIEW MODULE — Revisão de Petição Inicial FAP
 # ═══════════════════════════════════════════════════════════════════════════════
