@@ -239,6 +239,13 @@ def buscar_por_segurado_handler(
         "cats": {"total": len(cats), "itens": cats},
         "processos": {"total": len(processos), "itens": processos},
     }
+    # Base do cálculo FAP (Consulta do portal): acha o segurado que não tem
+    # contestação na Central. Só por CPF/NIT; o nome não existe nessa base.
+    # A tool já exige o módulo fap_panel.
+    if cpf or nit:
+        from mcp_server.tools.fap_calculo import itens_do_segurado
+
+        resultado["beneficios_calculo_fap"] = itens_do_segurado(law_firm_id, cpf, nit, limite=30)
     if nome:
         resultado["aviso"] = AVISO_SEM_NOME
     return resultado

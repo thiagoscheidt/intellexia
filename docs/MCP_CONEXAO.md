@@ -78,6 +78,8 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `listar_rotatividade_fap` | Taxas de rotatividade contestadas |
 | `listar_beneficios_fap` | Lista benefícios (filtros: CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência, status na 1ª/2ª instância) |
 | `detalhar_beneficio` | Detalhes completos de um benefício |
+| `listar_beneficios_calculo_fap` | Benefícios e CATs do cálculo FAP (contestados ou não), com CPF inteiro e filtro por situação e contestado |
+| `resumo_beneficios_calculo_fap` | Contagens do cálculo FAP: por tipo, excluídos, não contestados e cruzamento |
 | `resumo_fap` | Estatísticas agregadas de contestações e benefícios, com cruzamento tipo × status por instância |
 | `prazos_e_alertas` | Contestações aguardando resultado, decisões recentes e processos por fase |
 | `comparar_vigencias` | Compara resultados de benefícios entre vigências FAP |
@@ -142,7 +144,7 @@ Exemplos de uso no Claude:
 | Ferramenta | Módulo exigido no IntellexIA |
 |---|---|
 | `consultar_base_conhecimento`, `pesquisar_base_conhecimento` | Base de Conhecimento |
-| `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel` | Painel FAP |
+| `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `listar_beneficios_calculo_fap`, `resumo_beneficios_calculo_fap`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel` | Painel FAP |
 | `listar_cats_fap`, `listar_massas_salariais_fap`, `listar_vinculos_fap`, `listar_rotatividade_fap` | Painel de Contestações |
 | `listar_processos`, `detalhar_processo`, `pesquisar_jurisprudencia`, `detalhar_decisao`, `panorama_jurisprudencia`, `valores_de_filtro_jurisprudencia`, `decisoes_parecidas`, `exportar_jurisprudencia_excel` | Painel de Processos |
 | `revisar_peticao_inicial`, `listar_peticoes_revisao`, `detalhar_revisao`, `historico_revisoes_peticao`, `comparar_versoes_peticao`, `ler_manual_revisor`, `versoes_manual_revisor`, `auditoria_revisor` | Revisor de Petições |

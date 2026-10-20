@@ -64,6 +64,10 @@ from mcp_server.tools.fap import (
     list_fap_procuracoes_handler,
     fap_filter_values_handler,
 )
+from mcp_server.tools.fap_calculo import (
+    listar_beneficios_calculo_fap_handler,
+    resumo_beneficios_calculo_fap_handler,
+)
 from mcp_server.tools.disputes import (
     list_cats_handler,
     list_employment_links_handler,
@@ -551,6 +555,8 @@ def buscar_por_segurado(
 
     Útil quando chega uma intimação ou consulta sobre uma pessoa específica.
     CATs e processos só entram se você tiver acesso aos respectivos módulos.
+    Com CPF ou NIT, traz também 'beneficios_calculo_fap': os benefícios e CATs do
+    cálculo FAP (base da Consulta do portal), que existem mesmo sem contestação.
 
     Args:
         nit: NIT do segurado (identificador mais completo para o cruzamento).
@@ -745,6 +751,83 @@ def detalhar_contestacao(contestacao_id: int) -> dict:
     with app.app_context():
         return get_contestacao_detail_handler(contestacao_id, claims["law_firm_id"],
                                               app_public_url=APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def listar_beneficios_calculo_fap(
+    vigencia: int | None = None,
+    empresa: str | None = None,
+    grupo: str | None = None,
+    cnpj: str | None = None,
+    cpf: str | None = None,
+    nit: str | None = None,
+    numero: str | None = None,
+    tipo: str | None = None,
+    situacao: str | None = None,
+    contestado: bool | None = None,
+    limite: int = 50,
+    deslocamento: int = 0,
+) -> dict:
+    """Lista os benefícios (B91/B92/B93/B94) e CATs que entraram no CÁLCULO do FAP.
+
+    É a base da Consulta do FAP no portal, sincronizada por vigência: traz tudo
+    que o portal usou no cálculo, tenha o escritório contestado ou não. Para
+    benefícios JÁ contestados (status por instância, justificativas) use
+    listar_beneficios_fap. Para apenas contar, use resumo_beneficios_calculo_fap.
+
+    Args:
+        vigencia: Ano da vigência FAP (ex: 2023).
+        empresa: Nome (ou parte) da empresa FAP.
+        grupo: Grupo empresarial cadastrado (nomes em valores_de_filtro_fap).
+        cnpj: CNPJ do estabelecimento (14 dígitos) ou raiz de 8, com ou sem pontuação.
+        cpf: CPF do segurado — vem inteiro, com ou sem pontuação.
+        nit: NIT do segurado.
+        numero: Número do benefício (NB) ou da CAT.
+        tipo: B91, B92, B93, B94 ou CAT.
+        situacao: "conta" (entra no cálculo) ou "excluido" (o portal tirou do
+            cálculo no recálculo — foi excluído, por exemplo, por contestação
+            deferida).
+        contestado: true/false. É por VIGÊNCIA: "contestado" = o mesmo número
+            existe na Central na mesma vigência; o mesmo NB contestado em outra
+            vigência conta como não contestado aqui.
+        limite: Máximo de registros por página (padrão 50).
+        deslocamento: Pula os N primeiros (paginação); repasse o 'proximo_deslocamento'.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return listar_beneficios_calculo_fap_handler(
+            claims["law_firm_id"], vigencia, empresa, grupo, cnpj, cpf, nit, numero,
+            tipo, situacao, contestado, limite, deslocamento,
+        )
+
+
+@mcp.tool()
+def resumo_beneficios_calculo_fap(
+    vigencia: int | None = None,
+    empresa: str | None = None,
+    grupo: str | None = None,
+    cnpj: str | None = None,
+    tipo: str | None = None,
+) -> dict:
+    """Contagens dos benefícios e CATs do cálculo FAP, em uma chamada.
+
+    Devolve total, total por tipo, quantos foram excluídos do cálculo, quantos
+    não foram contestados e o cruzamento tipo × situação (conta/excluido) ×
+    contestado/nao_contestado. "Contestado" é por vigência (mesmo número e mesma
+    vigência na Central). Use para "quantos B91 excluídos da Vale em 2023 não
+    contestamos?" antes de listar.
+
+    Args:
+        vigencia: Ano da vigência FAP (ex: 2023).
+        empresa: Nome (ou parte) da empresa FAP.
+        grupo: Grupo empresarial cadastrado.
+        cnpj: CNPJ do estabelecimento ou raiz, com ou sem pontuação.
+        tipo: B91, B92, B93, B94 ou CAT.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return resumo_beneficios_calculo_fap_handler(
+            claims["law_firm_id"], vigencia, empresa, grupo, cnpj, tipo)
 
 
 @mcp.tool()

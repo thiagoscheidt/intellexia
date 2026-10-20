@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **56 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **58 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -93,6 +93,8 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `detalhar_contestacao` | Contestação completa + **benefícios vinculados** + alterações recentes + **link do PDF** | FAP Web |
 | `listar_beneficios_fap` | Benefícios com filtros ricos (**empresa por nome**, **grupo empresarial**, **protocolo da contestação**, **resultado na 1ª e na 2ª instância**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) e o status em cada instância | FAP Web |
 | `detalhar_beneficio` | Todos os campos de um benefício, incluindo justificativas, pareceres e decisões de julgamento | Sistema |
+| `listar_beneficios_calculo_fap` | Benefícios (B91–B94) e CATs do **cálculo do FAP**, contestados ou não, com CPF e nascimento inteiros; filtros por vigência, empresa, grupo, CNPJ, CPF, NIT, número, tipo, situação (**conta** ou **excluído** do cálculo) e **contestado** (por vigência) | FAP Web |
+| `resumo_beneficios_calculo_fap` | Contagens do cálculo em uma chamada: total, por tipo, excluídos, não contestados e o cruzamento tipo × situação × contestado | FAP Web |
 | `listar_procuracoes_fap` | Procurações eletrônicas com situação e vigência | FAP Web |
 | `valores_de_filtro_fap` | Códigos e valores válidos para filtros (**grupos empresariais**, situações, instâncias, tópicos, motivos) — a IA consulta antes de filtrar | Sistema |
 
