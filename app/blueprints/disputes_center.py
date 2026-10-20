@@ -95,6 +95,12 @@ FILTER_FIELD_MAP = {
 # Índice da coluna no DataTables -> coluna ordenável no banco. Os índices
 # precisam acompanhar a ordem do <thead> do template; colunas derivadas (sem
 # coluna SQL correspondente) ficam de fora e são marcadas orderable:false lá.
+# NB do INSS tem 10 dígitos; com isso ou mais, "contém" é o próprio número.
+_NB_TAMANHO_MINIMO = 10
+# Até quantos benefícios filtrados a listagem resolve com uma passagem só pela
+# tabela (ver list_disputes_center_api). Acima disso volta ao caminho antigo.
+_LISTA_IDS_PASSAGEM_UNICA = 5000
+
 ORDER_COLUMN_MAP = {
     0: Benefit.id,
     1: Benefit.benefit_number,
@@ -1884,6 +1890,15 @@ def _apply_benefits_filters(
                 )
             continue
 
+        # NB completo por igualdade: o LIKE '%…%' com lower() não usa índice e faz o
+        # MySQL ler cada benefício do escritório (linhas de dezenas de KB — 2,2 GB na
+        # homologação). Igualdade vai direto pelo índice (law_firm_id, benefit_number).
+        if field == 'benefit_number' and operator in ('contains', 'equals'):
+            bruto = (item.get('value') or '').strip()
+            if bruto.isdigit() and len(bruto) >= _NB_TAMANHO_MINIMO:
+                query = query.filter(Benefit.benefit_number == bruto)
+                continue
+
         column = FILTER_FIELD_MAP.get(field)
         if column is None:
             continue
@@ -3408,7 +3423,19 @@ def list_disputes_center_api():
         quick_vigencia=payload.get('quick_vigencia', ''),
     )
 
-    records_filtered = filtered_query.with_entities(func.count(Benefit.id)).scalar() or 0
+    # Uma passagem só pela tabela. benefits tem linhas de dezenas de KB (2,2 GB na
+    # homologação), e cada contagem abaixo, com filtro que o índice não resolve,
+    # lia o escritório inteiro de novo — 7 passagens e 12 s para achar 1 benefício.
+    # Com os ids em mão (só o id é lido), o resto vai pela chave primária.
+    ids_filtrados = [
+        bid for (bid,) in filtered_query.order_by(None).with_entities(Benefit.id)
+        .limit(_LISTA_IDS_PASSAGEM_UNICA + 1).all()
+    ]
+    if len(ids_filtrados) <= _LISTA_IDS_PASSAGEM_UNICA:
+        filtered_query = _base_benefits_query(law_firm_id).filter(Benefit.id.in_(ids_filtrados or [-1]))
+        records_filtered = len(ids_filtrados)
+    else:
+        records_filtered = filtered_query.with_entities(func.count(Benefit.id)).scalar() or 0
 
     filtered_overall_stats = _build_overall_stats_from_instances(filtered_query)
     approved_filtered = int(filtered_overall_stats['approved'] or 0)
@@ -3456,11 +3483,17 @@ def list_disputes_center_api():
     else:
         filtered_query = filtered_query.order_by(order_column.desc(), Benefit.id.desc())
 
-    paged_results = (
-        filtered_query
-        .offset(payload['start'])
-        .limit(payload['length'])
-        .all()
+    # Primeiro os ids da página, depois as linhas completas só deles: pedir as
+    # colunas todas no ORDER BY … LIMIT faz o MySQL carregar os textos longos de
+    # cada linha que testa, inclusive das descartadas (5 s na homologação).
+    page_ids = [
+        bid for (bid,) in filtered_query.with_entities(Benefit.id)
+        .offset(payload['start']).limit(payload['length']).all()
+    ]
+    posicao = {bid: i for i, bid in enumerate(page_ids)}
+    paged_results = sorted(
+        _base_benefits_query(law_firm_id).filter(Benefit.id.in_(page_ids or [-1])).all(),
+        key=lambda linha: posicao[linha[0].id],
     )
 
     # Contagem de decisões (ocorrências) da página em uma única query agregada.
