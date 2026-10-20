@@ -777,21 +777,46 @@ def sync_download_batch():
     })
 
 
+def _arquivo_local_contestacao(rec) -> str | None:
+    """Caminho absoluto do PDF local da contestação, se ele estiver no disco."""
+    if not rec.file_path:
+        return None
+    abs_path = os.path.abspath(os.path.join(current_app.root_path, rec.file_path))
+    return abs_path if os.path.isfile(abs_path) else None
+
+
+def _contestacao_do_portal(rec, inline: bool):
+    """Busca o PDF ao vivo no portal quando o local não está no disco.
+
+    ``file_path`` preenchido não garante arquivo: o banco copiado da produção
+    para a homologação aponta para PDFs que só existem no disco da produção, e
+    o cron não baixa de novo o que já tem ``file_path`` (FAP-32 da R09). Em
+    vez do 404, a mesma rota que a tela usa para quem não tem arquivo local.
+    """
+    current_app.logger.warning(
+        'PDF local da contestação %s não está no disco (%s); buscando no portal.',
+        rec.id, rec.file_path,
+    )
+    url = url_for(
+        'disputes_center.fap_auto_import_download_contestacao',
+        year=rec.ano_vigencia,
+        cnpj=(rec.cnpj or '').zfill(14),
+        contestacao_id=rec.contestacao_id,
+    )
+    return redirect(url + ('?inline=1' if inline else ''))
+
+
 @fap_panel_bp.route('/contestacoes/<int:rec_id>/file')
 @require_law_firm
 def serve_contestacao_file(rec_id):
     """Serve o arquivo PDF local — download direto ou redireciona para URL amigável (inline)."""
-    from flask import abort
-
     law_firm_id = get_current_law_firm_id()
     rec = FapWebContestacao.query.filter_by(id=rec_id, law_firm_id=law_firm_id).first_or_404()
 
-    if not rec.file_path:
-        abort(404)
-
-    abs_path = os.path.abspath(os.path.join(current_app.root_path, rec.file_path))
-    if not os.path.isfile(abs_path):
-        abort(404)
+    inline = request.args.get('inline') == '1'
+    abs_path = _arquivo_local_contestacao(rec)
+    if abs_path is None:
+        return _contestacao_do_portal(rec, inline)
 
     filename = os.path.basename(abs_path)
     parts = filename.split('_', 1)
@@ -799,7 +824,6 @@ def serve_contestacao_file(rec_id):
     ext = os.path.splitext(raw_name)[1] or '.pdf'
     display_name = f'FAP_{rec.protocolo}{ext}' if rec.protocolo else f'FAP_{rec.contestacao_id}{ext}'
 
-    inline = request.args.get('inline') == '1'
     if inline:
         # Redireciona para URL cujo path termina com o nome amigável.
         # O browser usa o último segmento da URL como título da aba.
@@ -816,17 +840,12 @@ def serve_contestacao_file(rec_id):
 @require_law_firm
 def view_contestacao_file(rec_id, display_filename):
     """Serve o PDF inline via URL com nome amigável — browser exibe display_filename como título."""
-    from flask import abort
-
     law_firm_id = get_current_law_firm_id()
     rec = FapWebContestacao.query.filter_by(id=rec_id, law_firm_id=law_firm_id).first_or_404()
 
-    if not rec.file_path:
-        abort(404)
-
-    abs_path = os.path.abspath(os.path.join(current_app.root_path, rec.file_path))
-    if not os.path.isfile(abs_path):
-        abort(404)
+    abs_path = _arquivo_local_contestacao(rec)
+    if abs_path is None:
+        return _contestacao_do_portal(rec, inline=True)
 
     return send_file(abs_path, mimetype='application/pdf', as_attachment=False, download_name=display_filename)
 
