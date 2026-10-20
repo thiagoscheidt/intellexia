@@ -3,7 +3,7 @@
 Fonte única da tela do Painel FAP e das tools do MCP. "Contestado" = mesmo
 número **e mesma vigência** na Central: o mesmo NB em outra vigência não conta.
 """
-from sqlalchemy import Integer, and_, cast, exists, func, or_
+from sqlalchemy import Integer, and_, cast, exists, false, func, or_
 
 from app.models import (
     Benefit, FapCalculoItem as Item, FapCompany, FapContestationCat,
@@ -55,6 +55,13 @@ def _beneficio_central_id_expr(law_firm_id):
 
 def filtrar(law_firm_id, *, vigencia=None, raizes=None, grupo=None, cnpj=None,
             identificador=None, tipos=None, situacao=None, contestado=None):
+    """Query de ``FapCalculoItem`` do escritório, com os filtros dados.
+
+    ``vigencia`` tem de ser conversível em int (quem chama valida). Filtro com
+    valor inutilizável (sem dígitos, tipo ou situação desconhecidos) filtra para
+    vazio, em vez de ignorar e mostrar tudo — mesma convenção de
+    ``fap_group_service.group_condition``.
+    """
     # O escritório vai junto na query (execution option) para contadores/pagina.
     q = Item.query.filter(Item.law_firm_id == law_firm_id).execution_options(
         fap_law_firm_id=law_firm_id)
@@ -67,52 +74,79 @@ def filtrar(law_firm_id, *, vigencia=None, raizes=None, grupo=None, cnpj=None,
             q, law_firm_id, grupo, Item.cnpj_raiz, coluna_e_raiz=True)
     if cnpj:
         digitos = apenas_digitos(cnpj)
-        if digitos:
-            q = q.filter(Item.cnpj == completar_zeros(digitos, 14))
+        q = q.filter(Item.cnpj == completar_zeros(digitos, 14)) if digitos else q.filter(false())
     if identificador:
         digitos = apenas_digitos(identificador)
-        if digitos:
-            if len(digitos) <= 11:
-                q = q.filter(or_(
-                    Item.cpf == completar_zeros(digitos, 11),
-                    Item.nit == digitos,
-                    Item.identificador == digitos,
-                ))
-            else:
-                q = q.filter(or_(Item.identificador == digitos, Item.nit == digitos))
+        if not digitos:
+            q = q.filter(false())
+        elif len(digitos) <= 11:
+            q = q.filter(or_(
+                Item.cpf == completar_zeros(digitos, 11),
+                Item.nit == digitos,
+                Item.identificador == digitos,
+            ))
+        else:
+            q = q.filter(or_(Item.identificador == digitos, Item.nit == digitos))
     if tipos:
-        q = q.filter(Item.tipo.in_([t.upper() for t in tipos]))
-    if situacao in _ESTADO:
-        q = q.filter(Item.estado_atual == _ESTADO[situacao])
+        validos = [t.upper() for t in tipos if t and t.upper() in TIPOS]
+        q = q.filter(Item.tipo.in_(validos)) if validos else q.filter(false())
+    if situacao:
+        if situacao in _ESTADO:
+            q = q.filter(Item.estado_atual == _ESTADO[situacao])
+        else:
+            q = q.filter(false())
     if contestado is not None:
         expr = contestado_expr(law_firm_id)
         q = q.filter(expr if contestado else ~expr)
     return q
 
 
-def _firm_id(query):
-    return query._execution_options.get('fap_law_firm_id')
+def _firm_id(query, law_firm_id=None):
+    firm_id = law_firm_id or query.get_execution_options().get('fap_law_firm_id')
+    if firm_id is None:
+        raise ValueError(
+            'Consulta sem escritório: monte a query com filtrar() '
+            'ou passe law_firm_id.')
+    return firm_id
 
 
-def contadores(query):
-    """Totais por GROUP BY, sem carregar linhas."""
-    base = query.order_by(None)
+def contadores(query, *, law_firm_id=None):
+    """Totais por um GROUP BY só (tipo, situação, contestado), sem carregar linhas.
+
+    ``cruzamento``: {tipo: {'conta'|'excluido': {'contestado': n, 'nao_contestado': n}}}.
+    Situação fora de ORIGINAL/EXCLUIDO entra nos totais, não no cruzamento.
+    """
+    firm_id = _firm_id(query, law_firm_id)
+    cont = contestado_expr(firm_id).label('contestado')
     por_tipo = {t: 0 for t in TIPOS}
-    total = excluidos = 0
-    for tipo, estado, n in base.with_entities(
-            Item.tipo, Item.estado_atual, func.count()).group_by(
-            Item.tipo, Item.estado_atual).all():
+    cruzamento = {t: {s: {'contestado': 0, 'nao_contestado': 0} for s in SITUACOES}
+                  for t in TIPOS}
+    estado_para_situacao = {v: k for k, v in _ESTADO.items()}
+    total = excluidos = nao_contestados = 0
+    # A expressão é por linha: calcula na subquery e agrupa por colunas simples
+    # (GROUP BY direto na expressão quebra only_full_group_by no MySQL).
+    sub = query.order_by(None).with_entities(
+        Item.tipo.label('tipo'), Item.estado_atual.label('estado'), cont).subquery()
+    linhas = (db.session.query(sub.c.tipo, sub.c.estado, sub.c.contestado, func.count())
+              .group_by(sub.c.tipo, sub.c.estado, sub.c.contestado).all())
+    for tipo, estado, contestado, n in linhas:
         por_tipo[tipo] = por_tipo.get(tipo, 0) + n
         total += n
         if estado == 'EXCLUIDO':
             excluidos += n
-    nao_contestados = base.filter(~contestado_expr(_firm_id(query))).count()
+        if not contestado:
+            nao_contestados += n
+        situacao = estado_para_situacao.get(estado)
+        if situacao and tipo in cruzamento:
+            cruzamento[tipo][situacao]['contestado' if contestado else 'nao_contestado'] += n
     return {'total': total, 'por_tipo': por_tipo, 'excluidos': excluidos,
-            'nao_contestados': nao_contestados}
+            'nao_contestados': nao_contestados, 'cruzamento': cruzamento}
 
 
-def pagina(query, page, per_page=50):
-    firm_id = _firm_id(query)
+def pagina(query, page, per_page=50, *, law_firm_id=None):
+    """Uma página de itens (dicts). ``per_page`` é limitado a 200."""
+    firm_id = _firm_id(query, law_firm_id)
+    per_page = max(1, min(int(per_page), 200))
     total = query.order_by(None).count()
     linhas = (
         query.order_by(None)

@@ -149,6 +149,13 @@ def test_contadores_batem_com_filtro(f):
     check('não contestados', c['nao_contestados'] == svc.filtrar(f.id, contestado=False).count() == 3,
           str(c['nao_contestados']))
     c26 = svc.contadores(svc.filtrar(f.id, vigencia=2026))
+    cr = c['cruzamento']
+    soma = sum(v['contestado'] + v['nao_contestado'] for t in cr.values() for v in t.values())
+    check('cruzamento soma o total', soma == c['total'], str(cr))
+    check('cruzamento: B91 conta 1 contestado + 1 não', cr['B91']['conta'] == {'contestado': 1, 'nao_contestado': 1}, str(cr['B91']))
+    check('cruzamento: B94 excluído não contestado', cr['B94']['excluido'] == {'contestado': 0, 'nao_contestado': 1})
+    check('cruzamento bate com nao_contestados',
+          sum(v['nao_contestado'] for t in cr.values() for v in t.values()) == c['nao_contestados'])
     check('contadores respeitam o filtro', c26['total'] == 3 and c26['nao_contestados'] == 3, str(c26))
 
 
@@ -158,6 +165,27 @@ def test_tenant(f, outra):
     itens, total = svc.pagina(svc.filtrar(outra.id), 1)
     check('B vê o seu item, sem contestado nem nome',
           total == 1 and not itens[0]['contestado'] and itens[0]['empresa_nome'] is None, str(itens))
+
+
+def test_sem_escritorio_e_filtros_invalidos(f):
+    print('\n7. escritório explícito e filtros inutilizáveis')
+    bruta = FapCalculoItem.query.filter_by(law_firm_id=f.id)
+    for nome, fn in (('contadores', lambda: svc.contadores(bruta)),
+                     ('pagina', lambda: svc.pagina(bruta, 1))):
+        try:
+            fn()
+            check(f'{nome} sem escritório levanta', False)
+        except ValueError:
+            check(f'{nome} sem escritório levanta', True)
+    c = svc.contadores(bruta, law_firm_id=f.id)
+    itens, total = svc.pagina(bruta, 1, 500, law_firm_id=f.id)
+    check('law_firm_id explícito funciona', c['total'] == 5 and total == 5 and len(itens) == 5)
+    check('contestado correto com escritório explícito', sum(i['contestado'] for i in itens) == 2)
+    for rotulo, kw in (('identificador sem dígitos', {'identificador': 'abc'}),
+                       ('cnpj sem dígitos', {'cnpj': '--'}),
+                       ('situação desconhecida', {'situacao': 'xyz'}),
+                       ('tipo desconhecido', {'tipos': ['B99']})):
+        check(f'{rotulo} filtra para vazio', svc.filtrar(f.id, **kw).count() == 0)
 
 
 def main() -> int:
@@ -170,6 +198,7 @@ def main() -> int:
             test_situacao_excluido(f)
             test_contadores_batem_com_filtro(f)
             test_tenant(f, outra)
+            test_sem_escritorio_e_filtros_invalidos(f)
         finally:
             db.session.rollback()
             for firm in (f, outra):
