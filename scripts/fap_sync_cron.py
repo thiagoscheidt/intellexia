@@ -21,7 +21,8 @@ Variáveis de ambiente (.env):
   FAP_SYNC_LAW_FIRM_ID — ID do escritório a sincronizar (padrão: 1)
   FAP_SYNC_YEARS       — Anos específicos separados por vírgula (sobrepõe o intervalo padrão)
                          Exemplo: 2026,2025,2024
-  FAP_SYNC_START_YEAR  — Ano inicial do intervalo padrão (padrão: 2010 → busca de 2010 ao ano atual)
+  FAP_SYNC_START_YEAR  — Ano inicial do intervalo padrão (padrão: 2010 → busca de 2010 à vigência
+                         mais nova: o ano atual, ou o seguinte a partir de outubro, quando ele é divulgado)
   FAP_SYNC_FETCH_WORKERS    — Nº de buscas de contestações em paralelo (padrão: 8, máx: 20)
   FAP_SYNC_DOWNLOAD    — '1' (padrão) baixa os PDFs após a sincronização; '0' desativa
   FAP_SYNC_DOWNLOAD_WORKERS — Nº de downloads em paralelo (fila global) (padrão: 8, máx: 30)
@@ -75,9 +76,10 @@ def _get_sync_years() -> list[int]:
         except ValueError:
             _log(f"AVISO: FAP_SYNC_START_YEAR inválido ('{raw_start}'). Usando {FAP_SYNC_START_YEAR}.")
 
-    current = datetime.now().year
-    # Do ano atual para trás, até o ano inicial (ex.: 2026, 2025, ..., 2010).
-    return list(range(current, start - 1, -1))
+    # Da vigência mais nova que pode existir (a do ano seguinte, a partir de
+    # outubro) para trás, até o ano inicial (ex.: 2027, 2026, ..., 2010).
+    from app.services.fap_vigencia_service import anos_portal
+    return anos_portal(inicio=start)
 
 
 def _download_enabled() -> bool:

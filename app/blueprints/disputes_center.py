@@ -3916,10 +3916,8 @@ def delete_fap_contestation_report(report_id):
 @disputes_center_bp.route('/fap-auto-import', methods=['GET'])
 @require_law_firm
 def fap_auto_import():
-    from datetime import date
     law_firm_id = get_current_law_firm_id()
-    current_year = date.today().year
-    years = list(range(current_year, 2009, -1))
+    years = fap_vigencia_service.anos_portal()
     companies = (
         FapCompany.query.filter_by(law_firm_id=law_firm_id)
         .order_by(FapCompany.nome.asc())

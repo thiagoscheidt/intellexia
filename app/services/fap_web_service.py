@@ -366,6 +366,11 @@ class FapWebService:
             body, _ = self._get(url, timeout=30)
         except urllib.error.HTTPError as e:
             detail = e.read().decode('utf-8', errors='replace')
+            if e.code == 403 and 'ainda não publicada' in detail:
+                # O portal responde 403 {"mensagem": "Vigência informada ainda
+                # não publicada: 2028"} — não é sessão nem procuração: a
+                # vigência só não existe ainda. Medido em 20/10/2026.
+                return FapWebResult(ok=True, data=[], message='Vigência ainda não publicada no portal.')
             if e.code in (401, 403):
                 msg = (
                     f'Sessão expirada ou não autorizada (HTTP {e.code}). '

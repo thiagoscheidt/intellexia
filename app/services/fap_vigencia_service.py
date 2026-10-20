@@ -33,6 +33,34 @@ from app.models import db
 TODAS = '__all__'
 
 
+# ── Anos que se consulta no portal FAP ──────────────────────────────────
+# A vigência N é divulgada no ano N-1 (o índice sai até 30 de setembro e as
+# contestações são feitas em novembro). Ir só até o ano do calendário fazia a
+# vigência 2027 chegar ao sistema apenas em janeiro de 2027 (FAP-34 da R09).
+# Antes de outubro a vigência seguinte ainda não existe: não se pergunta por ela.
+PRIMEIRO_ANO_PORTAL = 2010
+MES_DIVULGACAO_VIGENCIA_SEGUINTE = 10
+
+
+def ultimo_ano_portal(hoje=None):
+    """Vigência mais nova que pode existir no portal FAP hoje."""
+    from datetime import date
+
+    hoje = hoje or date.today()
+    if hoje.month >= MES_DIVULGACAO_VIGENCIA_SEGUINTE:
+        return hoje.year + 1
+    return hoje.year
+
+
+def anos_portal(inicio=PRIMEIRO_ANO_PORTAL, hoje=None):
+    """Vigências a consultar no portal, da mais nova para a mais antiga.
+
+    Calculada a cada chamada — uma lista montada quando o servidor sobe
+    continuaria sem o ano novo até alguém reiniciar o serviço.
+    """
+    return list(range(ultimo_ano_portal(hoje), inicio - 1, -1))
+
+
 def normalize_year(valor):
     """Entrada do filtro → ano como string, ou '' quando não é um ano."""
     texto = str(valor or '').strip()

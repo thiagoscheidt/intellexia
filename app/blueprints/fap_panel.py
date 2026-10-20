@@ -53,6 +53,7 @@ from app.models import (
 from app.services import fap_group_service
 from app.services import fap_group_import_service
 from app.services import fap_procuracoes_service
+from app.services import fap_vigencia_service
 from app.services.fap_procuracoes_service import filtrar_por_outorgante
 from app.utils.cnpj import formatar_cnpj_raiz, formatar_cpf, raiz_contestacao_fap
 from app.services.fap_web_service import (
@@ -76,13 +77,6 @@ def require_law_firm(f):
             return redirect(url_for('auth.login'))
         return f(*args, **kwargs)
     return decorated
-
-
-# ---------------------------------------------------------------------------
-# Anos de vigência disponíveis (mesmos da importação: 2010 até ano atual)
-# ---------------------------------------------------------------------------
-
-FAP_AVAILABLE_YEARS = list(range(datetime.now().year, 2009, -1))
 
 
 def _only_digits(value: str | None) -> str:
@@ -135,7 +129,7 @@ def sync_page():
     return render_template(
         'fap_panel/sync.html',
         companies=companies,
-        years=FAP_AVAILABLE_YEARS,
+        years=fap_vigencia_service.anos_portal(),
         saved_auth=saved_auth,
         total_synced=total_synced,
         total_procuracoes=total_procuracoes,
@@ -1577,7 +1571,7 @@ def contestacoes_page():
         'fap_panel/contestacoes.html',
         mostrar_outras=mostrar_outras,
         companies=companies,
-        years=FAP_AVAILABLE_YEARS,
+        years=fap_vigencia_service.anos_portal(),
         table_rows=table_rows,
         total=total_contestacoes,
         with_file_count=with_file_count,
