@@ -159,6 +159,21 @@ def filtrar_por_outorgante(query, termo: str | None):
     return query.filter(db.or_(*condicoes))
 
 
+def filtrar_por_raiz_outorgante(query, raiz: str | None):
+    """Raiz exata da outorgante, com ou sem os zeros — o filtro do MCP.
+
+    O banco guarda a raiz como o portal mandou, sem os zeros (``7718633``), e
+    quem pergunta escreve como está no cartão CNPJ (``07718633``). Comparar
+    só por igualdade dava 0 procurações para a UNIDASUL (E01 da Remessa R09).
+    """
+    digitos = apenas_digitos(raiz)
+    if not digitos:
+        return query
+    formas = {digitos, digitos.lstrip('0') or digitos,
+              completar_zeros(digitos, TAMANHO_CNPJ_RAIZ)}
+    return query.filter(FapWebProcuracao.cnpj_raiz_outorgante.in_(formas))
+
+
 # ---------------------------------------------------------------------------
 # Empresas sem procuração vigente
 # ---------------------------------------------------------------------------

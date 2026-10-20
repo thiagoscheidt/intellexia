@@ -75,3 +75,25 @@ def formatar_cpf(valor) -> str:
     if len(digitos) != TAMANHO_CPF:
         return str(valor)
     return f'{digitos[:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:11]}'
+
+
+def raiz_contestacao_fap(item: dict, fallback_raiz=None) -> str:
+    """Raiz (8 dígitos) de uma contestação vinda do portal FAP.
+
+    O portal manda ``cnpj`` e ``cnpjRaiz`` como número, então 07.718.633/0081-63
+    chega como ``7718633008163``. Os 8 primeiros dígitos disso são ``77186330``
+    — foi assim que as contestações da UNIDASUL sumiram do filtro por raiz
+    (E01 da Remessa R09). Ordem de confiança:
+
+    1. ``cnpjRaiz``, o campo canônico, com os zeros devolvidos;
+    2. ``cnpj`` completado para 14 antes de cortar;
+    3. a raiz da empresa consultada — vigências antigas não trazem ``cnpj``.
+    """
+    raiz = completar_zeros(item.get('cnpjRaiz'), TAMANHO_CNPJ_RAIZ)
+    if raiz and len(raiz) == TAMANHO_CNPJ_RAIZ:
+        return raiz
+    # Até 8 dígitos o "cnpj" já é uma raiz: completá-lo para 14 daria "00000079".
+    cnpj = completar_zeros(item.get('cnpj'), TAMANHO_CNPJ)
+    if cnpj and len(cnpj) == TAMANHO_CNPJ and len(cnpj.lstrip('0')) > TAMANHO_CNPJ_RAIZ:
+        return cnpj[:TAMANHO_CNPJ_RAIZ]
+    return completar_zeros(fallback_raiz, TAMANHO_CNPJ_RAIZ) or ''

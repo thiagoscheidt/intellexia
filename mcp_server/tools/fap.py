@@ -250,6 +250,7 @@ def list_fap_contestacoes_handler(
     """Retorna contestações FAP filtradas, com total encontrado."""
     from app.models import FapWebContestacao
     from app.services import fap_protocolo_service
+    from app.utils.cnpj import completar_zeros
 
     limit = clamp_limit(limit, 100)
     offset = clamp_offset(offset)
@@ -263,7 +264,8 @@ def list_fap_contestacoes_handler(
     if cnpj:
         query = query.filter(FapWebContestacao.cnpj == cnpj)
     if cnpj_raiz:
-        query = query.filter(FapWebContestacao.cnpj_raiz == cnpj_raiz)
+        # Contestação guarda a raiz com os 8 dígitos; "7718633" é a UNIDASUL sem o zero.
+        query = query.filter(FapWebContestacao.cnpj_raiz == (completar_zeros(cnpj_raiz, 8) or cnpj_raiz))
     if ano_vigencia:
         query = query.filter(FapWebContestacao.ano_vigencia == ano_vigencia)
     if situacao_codigo:
@@ -607,7 +609,7 @@ def fap_summary_handler(
     if cnpj:
         digits = "".join(ch for ch in cnpj if ch.isdigit())
         if len(digits) <= 8:
-            cont_q = cont_q.filter(FapWebContestacao.cnpj_raiz == digits)
+            cont_q = cont_q.filter(FapWebContestacao.cnpj_raiz == digits.zfill(8))
         else:
             cont_q = cont_q.filter(FapWebContestacao.cnpj == digits)
     if empresa:
@@ -782,13 +784,14 @@ def list_fap_procuracoes_handler(
 ) -> dict:
     """Procurações eletrônicas sincronizadas do portal FAP Web."""
     from app.models import FapWebProcuracao
+    from app.services import fap_procuracoes_service
 
     limit = clamp_limit(limit, 100)
     offset = clamp_offset(offset)
 
     query = FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id)
     if cnpj_raiz:
-        query = query.filter(FapWebProcuracao.cnpj_raiz_outorgante == cnpj_raiz)
+        query = fap_procuracoes_service.filtrar_por_raiz_outorgante(query, cnpj_raiz)
     if situacao_codigo:
         query = query.filter(FapWebProcuracao.situacao_codigo == situacao_codigo)
 

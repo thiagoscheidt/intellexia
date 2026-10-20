@@ -54,7 +54,7 @@ from app.services import fap_group_service
 from app.services import fap_group_import_service
 from app.services import fap_procuracoes_service
 from app.services.fap_procuracoes_service import filtrar_por_outorgante
-from app.utils.cnpj import formatar_cnpj_raiz, formatar_cpf
+from app.utils.cnpj import formatar_cnpj_raiz, formatar_cpf, raiz_contestacao_fap
 from app.services.fap_web_service import (
     FapWebAuthPayload, FapWebService, build_fap_service, resolve_fap_auth, slug_situacao,
 )
@@ -486,9 +486,7 @@ def sync_run_year():
             # Garante string com 14 dígitos
             cnpj_digits = ''.join(ch for ch in cnpj_full if ch.isdigit())
             cnpj_full_14 = cnpj_digits.zfill(14) if len(cnpj_digits) <= 14 else cnpj_digits
-            # Raiz = primeiros 8 dígitos do CNPJ ORIGINAL (antes do zfill à esquerda).
-            # Se derivada de cnpj_full_14, o padding desloca a raiz (ex.: "79894168" → "00000079").
-            cnpj_raiz_8 = cnpj_digits[:8]
+            cnpj_raiz_8 = raiz_contestacao_fap(item, fallback_raiz=cnpj_raiz)
 
             instancia   = item.get('instancia') or {}
             situacao    = item.get('situacao') or {}

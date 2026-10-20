@@ -228,6 +228,8 @@ def persist_contestacoes_for_company(
 
     Roda no thread principal — escrita sequencial no banco.
     """
+    from app.utils.cnpj import raiz_contestacao_fap
+
     cnpj_raw = str(company.cnpj or '').strip()
     cnpj_digits = ''.join(ch for ch in cnpj_raw if ch.isdigit())
 
@@ -256,9 +258,7 @@ def persist_contestacoes_for_company(
             cnpj_full = str(item.get('cnpj') or '').strip() or cnpj_digits[:8]
             cnpj_item_digits = ''.join(ch for ch in cnpj_full if ch.isdigit())
             cnpj_full_14 = cnpj_item_digits.zfill(14) if len(cnpj_item_digits) <= 14 else cnpj_item_digits
-            # Raiz = primeiros 8 dígitos do CNPJ ORIGINAL (antes do zfill à esquerda).
-            # Se derivada de cnpj_full_14, o padding desloca a raiz (ex.: "79894168" → "00000079").
-            cnpj_raiz_item = cnpj_item_digits[:8]
+            cnpj_raiz_item = raiz_contestacao_fap(item, fallback_raiz=cnpj_digits[:8])
 
             instancia = item.get('instancia') or {}
             situacao = item.get('situacao') or {}
