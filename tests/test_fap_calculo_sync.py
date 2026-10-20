@@ -178,6 +178,93 @@ def test_tem_itens_false_nao_chama_beneficios(fid):
           and len(_itens(fid)) == 0)
 
 
+ESTAB_B1, ESTAB_B2 = '11111111000191', '11111111000272'
+
+
+class Portal:
+    """Dublê do portal inteiro, para ``sincronizar``: ``estabs`` por raiz (int = status de falha)."""
+
+    def __init__(self, estabs, expira_em=None):
+        self.estabs, self.expira_em = estabs, expira_em
+        self.chamadas_calculos = []
+
+    def anos(self, svc):
+        return FapWebResult(ok=True, data=[ANO])
+
+    def estabelecimentos(self, svc, ano, raiz):
+        v = self.estabs[raiz]
+        if isinstance(v, int):
+            return FapWebResult(ok=False, status_code=v, message='x', expired=v == 401)
+        return FapWebResult(ok=True, data=v)
+
+    def calculos(self, svc, ano, cnpj):
+        self.chamadas_calculos.append(cnpj)
+        if self.expira_em and cnpj == self.expira_em:
+            return FapWebResult(ok=False, status_code=401, message='x', expired=True)
+        return FapWebResult(ok=True, data=[_calc(500, 'CALCULO_ORIGINAL', '2025-09-30', b91=1)])
+
+    def beneficios(self, svc, ano, cnpj, cid):
+        return FapWebResult(ok=True, data=[{**_ben(int(cnpj[-4:]) + 7000000000, 'ORIGINAL'),
+                                            'cnpj': int(cnpj)}])
+
+    def cats(self, svc, ano, cnpj, cid):
+        return FapWebResult(ok=True, data=[])
+
+
+def _com_portal(p, fn):
+    nomes = ('listar_anos', 'listar_estabelecimentos', 'listar_calculos', 'listar_beneficios', 'listar_cats')
+    orig = [getattr(client, n) for n in nomes]
+    for n, f in zip(nomes, (p.anos, p.estabelecimentos, p.calculos, p.beneficios, p.cats)):
+        setattr(client, n, f)
+    try:
+        return fn()
+    finally:
+        for n, f in zip(nomes, orig):
+            setattr(client, n, f)
+
+
+def test_sincronizar_duas_raizes_uma_sem_acesso(fid):
+    print('sincronizar: uma raiz sem acesso')
+    _limpar(fid)
+    p = Portal({'22222222': 403, '11111111': [ESTAB_B1, ESTAB_B2]})
+    r = _com_portal(p, lambda: sync.sincronizar(
+        fid, None, anos=[ANO], raizes=['22222222', '11111111'], workers=2, log=lambda *_: None))
+    check('sem_acesso 1', r['sem_acesso'] == 1, str(r))
+    check('2 estabelecimentos', r['estabelecimentos'] == 2 and r['com_itens'] == 2, str(r))
+    check('2 itens novos', r['itens_novos'] == 2 and r['erros'] == 0 and not r['expirada'], str(r))
+    check('itens de B gravados', len(_itens(fid)) == 2)
+    check('nada de A', FapCalculoEstabelecimento.query.filter_by(
+        law_firm_id=fid, cnpj_raiz='22222222').count() == 0)
+
+
+def test_somente_novos_pula_gravados(fid):
+    print('somente_novos pula gravados')
+    p = Portal({'11111111': [ESTAB_B1, ESTAB_B2, '11111111000353']})
+    r = _com_portal(p, lambda: sync.sincronizar(
+        fid, None, anos=[ANO], raizes=['11111111'], workers=2, somente_novos=True,
+        log=lambda *_: None))
+    check('só o novo consultado', p.chamadas_calculos == ['11111111000353'], str(p.chamadas_calculos))
+    check('1 estabelecimento', r['estabelecimentos'] == 1, str(r))
+
+
+def test_expirada_interrompe(fid):
+    print('expirada interrompe')
+    _limpar(fid)
+    p = Portal({'11111111': [ESTAB_B1, ESTAB_B2]}, expira_em=ESTAB_B2)
+    r = _com_portal(p, lambda: sync.sincronizar(
+        fid, None, anos=[ANO], raizes=['11111111'], workers=1, log=lambda *_: None))
+    check('expirada True', r['expirada'] is True, str(r))
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'fap_calculo_sync_script', Path(__file__).resolve().parent.parent / 'scripts' / 'fap_calculo_sync.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    codigo = _com_portal(p, lambda: mod.main(
+        ['--vigencia', str(ANO), '--empresa', '11111111', '--sem-completar',
+         '--escritorio', str(fid), '--workers', '1'], svc=object()))
+    check('saída 2', codigo == 2, str(codigo))
+
+
 def main():
     with app.app_context():
         firm = LawFirm.query.filter_by(cnpj=TEST_CNPJ).first()
@@ -192,7 +279,9 @@ def main():
         try:
             for t in (test_primeira_busca_grava_itens, test_mesmo_calculo_nao_busca_itens,
                       test_item_que_sumiu_fica, test_sem_calculo, test_403_nao_apaga,
-                      test_tem_itens_false_nao_chama_beneficios):
+                      test_tem_itens_false_nao_chama_beneficios,
+                      test_sincronizar_duas_raizes_uma_sem_acesso, test_somente_novos_pula_gravados,
+                      test_expirada_interrompe):
                 t(fid)
         finally:
             db.session.rollback()

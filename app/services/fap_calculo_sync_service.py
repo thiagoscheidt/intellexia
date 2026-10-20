@@ -11,6 +11,8 @@ execução tenta de novo. Nada de CPF em log.
 from __future__ import annotations
 
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 
@@ -223,4 +225,118 @@ def completar_central(law_firm_id: int, ano: int | None = None) -> dict:
             for campo in aplicar_item(b, dados):
                 conta[campo] += 1
         db.session.commit()
+    return conta
+
+
+_LOG_A_CADA = 200
+
+
+def _raizes_do_escritorio(law_firm_id: int) -> list[str]:
+    from app.models import FapCompany
+    from app.utils.cnpj import TAMANHO_CNPJ_RAIZ, completar_zeros
+
+    raizes = {completar_zeros(c, TAMANHO_CNPJ_RAIZ)
+              for (c,) in db.session.query(FapCompany.cnpj).filter(FapCompany.law_firm_id == law_firm_id)}
+    return sorted(r for r in raizes if r and len(r) == TAMANHO_CNPJ_RAIZ)
+
+
+def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
+                raizes: list[str] | None = None, cnpjs: list[str] | None = None,
+                workers: int = 8, somente_novos: bool = False, log=print) -> dict:
+    """Consulta do FAP de todas as vigências, empresas e estabelecimentos.
+
+    Rede em ``ThreadPoolExecutor``; banco só no fluxo principal, um commit por
+    estabelecimento. Nunca apaga por ausência. Sessão expirada interrompe tudo
+    (``expirada=True``); o que já foi gravado fica.
+    """
+    from app.utils.cnpj import TAMANHO_CNPJ, TAMANHO_CNPJ_RAIZ, completar_zeros
+
+    conta = {'estabelecimentos': 0, 'com_itens': 0, 'itens_novos': 0, 'itens_atualizados': 0,
+             'sem_acesso': 0, 'erros': 0, 'expirada': False}
+
+    if anos is None:
+        r = client.listar_anos(svc)
+        if not r.ok:
+            conta['expirada'] = bool(r.expired)
+            conta['erros'] += 0 if r.expired else 1
+            return conta
+        anos = [int(a) for a in (r.data or [])]
+    anos = sorted(set(anos), reverse=True)
+
+    filtro_cnpjs: dict[str, set] = {}
+    for c in cnpjs or []:
+        c14 = completar_zeros(c, TAMANHO_CNPJ)
+        filtro_cnpjs.setdefault(c14[:TAMANHO_CNPJ_RAIZ], set()).add(c14)
+    if raizes is None:
+        raizes = list(filtro_cnpjs) if filtro_cnpjs else _raizes_do_escritorio(law_firm_id)
+    raizes = [completar_zeros(r, TAMANHO_CNPJ_RAIZ) for r in raizes]
+
+    t0 = time.time()
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+        for ano in anos:
+            for raiz in raizes:
+                re = client.listar_estabelecimentos(svc, ano, raiz)
+                if not re.ok:
+                    if re.expired:
+                        conta['expirada'] = True
+                        return conta
+                    if re.status_code == 403:
+                        conta['sem_acesso'] += 1
+                    elif re.status_code != 404:
+                        conta['erros'] += 1
+                    continue
+                estabs = list(re.data or [])
+                if filtro_cnpjs.get(raiz):
+                    estabs = [c for c in estabs if c in filtro_cnpjs[raiz]]
+                if not estabs:
+                    continue
+
+                gravados = {
+                    c: (cal, sit) for c, cal, sit in db.session.query(
+                        FapCalculoEstabelecimento.cnpj, FapCalculoEstabelecimento.calculo_atual_id,
+                        FapCalculoEstabelecimento.situacao).filter(
+                        FapCalculoEstabelecimento.law_firm_id == law_firm_id,
+                        FapCalculoEstabelecimento.ano_vigencia == ano,
+                        FapCalculoEstabelecimento.cnpj.in_(estabs))
+                }
+                if somente_novos:
+                    estabs = [c for c in estabs
+                              if gravados.get(c, (None, None))[1] not in SITUACOES_QUE_GRAVAM_ITENS]
+
+                futuros = {pool.submit(buscar_estabelecimento, svc, ano, c,
+                                       gravados.get(c, (None, None))[0]): c for c in estabs}
+                for futuro in as_completed(futuros):
+                    cnpj = futuros[futuro]
+                    try:
+                        busca = futuro.result()
+                    except Exception as e:
+                        conta['erros'] += 1
+                        log(f'  ERRO {ano} {cnpj}: {type(e).__name__}')
+                        continue
+                    if busca.situacao == 'expirada':
+                        for f in futuros:
+                            f.cancel()
+                        conta['expirada'] = True
+                        return conta
+                    conta['estabelecimentos'] += 1
+                    if busca.situacao == 'sem_acesso':
+                        conta['sem_acesso'] += 1
+                    elif busca.situacao == 'erro':
+                        conta['erros'] += 1
+                    try:
+                        cont = gravar_estabelecimento(law_firm_id, busca)
+                        db.session.commit()
+                    except Exception as e:
+                        db.session.rollback()
+                        conta['erros'] += 1
+                        log(f'  ERRO ao gravar {ano} {cnpj}: {type(e).__name__}')
+                        continue
+                    conta['itens_novos'] += cont['itens_novos']
+                    conta['itens_atualizados'] += cont['itens_atualizados']
+                    if busca.situacao == 'ok' and (busca.resumo or {}).get('tem_itens'):
+                        conta['com_itens'] += 1
+                    if conta['estabelecimentos'] % _LOG_A_CADA == 0:
+                        log(f"  {conta['estabelecimentos']} estabelecimentos ({time.time() - t0:.0f}s) — "
+                            f"itens novos {conta['itens_novos']}, sem acesso {conta['sem_acesso']}, "
+                            f"erros {conta['erros']}")
     return conta
