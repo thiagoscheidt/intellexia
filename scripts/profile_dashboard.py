@@ -1,14 +1,18 @@
 """
-Profiling do dashboard: mostra onde vai o tempo de uma requisição /dashboard.
+Profiling de uma tela: mostra onde vai o tempo de uma requisição (padrão /dashboard).
 
 Somente leitura — não altera nada no banco. Roda uma requisição real pelo
 test_client (mesmo caminho do usuário: middleware, view, context processors e
 template), captura todo SQL emitido com o tempo de cada statement e imprime o
 ranking dos mais caros.
 
-Executar (no servidor onde o dashboard está lento):
+Executar (no servidor onde a tela está lenta):
     uv run python scripts/profile_dashboard.py
     uv run python scripts/profile_dashboard.py --runs 5 --top 20
+    uv run python scripts/profile_dashboard.py --url '/disputes-center/api/list?draw=1&start=0&length=25'
+
+``--url`` mede qualquer endereço do app (GET), inclusive APIs JSON — o nome
+ficou do dashboard, que foi a primeira tela medida.
 """
 
 import argparse
@@ -31,7 +35,8 @@ def _fmt(ms):
 
 
 def main():
-    ap = argparse.ArgumentParser(description='Profiling read-only do /dashboard')
+    ap = argparse.ArgumentParser(description='Profiling read-only de uma tela (padrão /dashboard)')
+    ap.add_argument('--url', default='/dashboard', help='endereço a medir (default: /dashboard)')
     ap.add_argument('--runs', type=int, default=3, help='requisições medidas (default: 3)')
     ap.add_argument('--top', type=int, default=12, help='quantas consultas listar (default: 12)')
     ap.add_argument('--user-id', type=int, help='usuário a simular (default: o primeiro do escritório)')
@@ -64,7 +69,7 @@ def main():
             return 1
         uid, law_firm_id, role = user.id, user.law_firm_id, user.role
 
-    print(f'Simulando usuário id={uid} (escritório {law_firm_id}, papel {role})')
+    print(f'Simulando usuário id={uid} (escritório {law_firm_id}, papel {role}) em {args.url}')
 
     client = app.test_client()
     with client.session_transaction() as sess:
@@ -73,7 +78,7 @@ def main():
         sess['user_role'] = role
 
     # Aquecimento (conexão, cache de query plan, import tardio) — não é medido.
-    client.get('/dashboard')
+    client.get(args.url)
 
     piores = defaultdict(lambda: [0, 0.0])
     total_req = total_sql = 0.0
@@ -82,7 +87,7 @@ def main():
     for i in range(args.runs):
         stmts.clear()
         t0 = time.perf_counter()
-        resp = client.get('/dashboard')
+        resp = client.get(args.url)
         elapsed = (time.perf_counter() - t0) * 1000
         sql_ms = sum(d for d, _ in stmts)
 
@@ -104,7 +109,7 @@ def main():
           f'SQL {_fmt(total_sql/runs)} ({n_stmts} statements) | '
           f'Python+template {_fmt((total_req - total_sql)/runs)}')
 
-    if 'Erro ao carregar dashboard' in resp.get_data(as_text=True):
+    if args.url == '/dashboard' and 'Erro ao carregar dashboard' in resp.get_data(as_text=True):
         print('\n  ATENÇÃO: a página caiu no fallback de erro — os números abaixo '
               'não representam o dashboard funcionando.')
 
