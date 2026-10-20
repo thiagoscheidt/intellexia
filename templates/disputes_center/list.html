@@ -1258,10 +1258,23 @@
         render: function (_, __, row) {
           const dib = row.benefit_start_date || '-';
           const dcb = row.benefit_end_date || '-';
+          // RMI e total pago vêm da Consulta do FAP (scripts/fap_completar_beneficios.py).
+          const brl = (v) => (v === '' || v === null || v === undefined || isNaN(Number(v)))
+            ? null
+            : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+          const rmi = brl(row.initial_monthly_benefit);
+          const pago = brl(row.total_paid);
+          const valores = (rmi || pago)
+            ? `<div class="text-muted mt-1 text-nowrap" style="font-size:0.75rem;">
+                ${rmi ? `<div>RMI ${escapeHtml(rmi)}</div>` : ''}
+                ${pago ? `<div>Pago ${escapeHtml(pago)}</div>` : ''}
+              </div>`
+            : '';
           return `
               <div class="small">
                 <div><strong>DIB:</strong> ${escapeHtml(dib)}</div>
                 <div><strong>DCB:</strong> ${escapeHtml(dcb)}</div>
+                ${valores}
               </div>`;
         }
       },
