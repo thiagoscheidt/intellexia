@@ -12,7 +12,9 @@ Executar (no servidor onde a tela está lenta):
     uv run python scripts/profile_dashboard.py --url '/disputes-center/api/list?draw=1&start=0&length=25'
 
 ``--url`` mede qualquer endereço do app (GET), inclusive APIs JSON — o nome
-ficou do dashboard, que foi a primeira tela medida.
+ficou do dashboard, que foi a primeira tela medida. ``--explain`` mostra, no
+fim, o plano do MySQL (EXPLAIN) das consultas mais caras e o tamanho das
+tabelas que elas leem — é o que diz se a lentidão é varredura completa.
 """
 
 import argparse
@@ -41,6 +43,8 @@ def main():
     ap.add_argument('--top', type=int, default=12, help='quantas consultas listar (default: 12)')
     ap.add_argument('--user-id', type=int, help='usuário a simular (default: o primeiro do escritório)')
     ap.add_argument('--law-firm-id', type=int, help='escritório (default: o do usuário)')
+    ap.add_argument('--explain', type=int, nargs='?', const=4, default=0, metavar='N',
+                    help='mostra o EXPLAIN das N consultas mais caras (default: 4)')
     args = ap.parse_args()
 
     stmts = []
@@ -49,10 +53,14 @@ def main():
     def before(conn, cursor, statement, parameters, context, executemany):
         started[id(context)] = time.perf_counter()
 
+    exemplos = {}
+
     def after(conn, cursor, statement, parameters, context, executemany):
         t0 = started.pop(id(context), None)
         if t0 is not None:
-            stmts.append(((time.perf_counter() - t0) * 1000, ' '.join(statement.split())))
+            sql = ' '.join(statement.split())
+            stmts.append(((time.perf_counter() - t0) * 1000, sql))
+            exemplos.setdefault(re.sub(r'\d+', '?', sql)[:160], (statement, parameters))
 
     with app.app_context():
         event.listen(db.engine, 'before_cursor_execute', before)
@@ -114,10 +122,49 @@ def main():
               'não representam o dashboard funcionando.')
 
     print(f'\nConsultas mais caras (tempo somado nas {runs} execuções):')
-    for chave, (vezes, dur) in sorted(piores.items(), key=lambda kv: -kv[1][1])[:args.top]:
+    ranking = sorted(piores.items(), key=lambda kv: -kv[1][1])
+    for chave, (vezes, dur) in ranking[:args.top]:
         print(f'  {_fmt(dur):>9}  x{vezes:<4} {chave}')
 
+    if args.explain:
+        _explain(ranking[:args.explain], exemplos)
     return 0
+
+
+def _explain(ranking, exemplos):
+    """EXPLAIN das consultas mais caras + tamanho das tabelas envolvidas (só leitura)."""
+    with app.app_context():
+        conn = db.engine.raw_connection()
+        try:
+            cur = conn.cursor()
+            tabelas = set()
+            for n, (chave, (vezes, dur)) in enumerate(ranking, 1):
+                statement, parameters = exemplos[chave]
+                if not statement.lstrip().upper().startswith('SELECT'):
+                    continue
+                print(f'\n[{n}] {_fmt(dur / vezes)} por execução — {chave[:100]}')
+                try:
+                    cur.execute('EXPLAIN ' + statement, parameters)
+                except Exception as e:
+                    print(f'    EXPLAIN falhou: {e}')
+                    continue
+                cols = [c[0] for c in cur.description]
+                for linha in cur.fetchall():
+                    d = dict(zip(cols, linha))
+                    tabelas.add(d.get('table'))
+                    print(f"    {d.get('select_type')!s:<12} tabela={d.get('table')!s:<22} tipo={d.get('type')!s:<7} "
+                          f"chave={d.get('key')!s:<38} linhas={d.get('rows')!s:<8} extra={d.get('Extra')}")
+            tabelas = sorted(t for t in tabelas if t and not str(t).startswith('<'))
+            if tabelas:
+                cur.execute(
+                    'SELECT table_name, table_rows, ROUND(data_length/1048576), ROUND(index_length/1048576), row_format '
+                    'FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name IN ('
+                    + ','.join(['%s'] * len(tabelas)) + ')', tabelas)
+                print('\nTamanho das tabelas (MB de dados / MB de índices):')
+                for nome, linhas, dados, indices, formato in cur.fetchall():
+                    print(f'    {nome:<28} ~{linhas} linhas  {dados} MB dados  {indices} MB índices  ({formato})')
+        finally:
+            conn.close()
 
 
 if __name__ == '__main__':
