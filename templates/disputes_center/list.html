@@ -292,6 +292,42 @@
     border-top: 1px dashed rgba(15, 23, 42, .12);
     margin: .5rem 0 1rem;
   }
+
+  /* ── Carregamento da tabela (FAP-33) ───────────────────────────────
+     O "Carregando…" padrão do DataTables é um quadrinho no meio da tabela,
+     fácil de passar despercebido, e enquanto isso o rodapé diz "0 de 0".
+     O painel cobre tabela, contagem e paginação e fica no topo. */
+  .central-table-shell {
+    position: relative;
+  }
+
+  .central-table-shell .dataTables_processing {
+    display: none !important;
+  }
+
+  #centralTableLoading {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: .75rem;
+    padding-top: 4rem;
+    background: rgba(var(--bs-body-bg-rgb), .85);
+    backdrop-filter: blur(2px);
+    font-weight: 600;
+    color: var(--bs-primary-text-emphasis);
+  }
+
+  #centralTableLoading.is-loading {
+    display: flex;
+  }
+
+  #applyCentralFiltersBtn.is-pending {
+    box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .35);
+  }
 </style>
 {% endblock %}
 
@@ -693,12 +729,25 @@
 
               <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
                 <small class="text-muted">Filtros ativos</small>
-                <button id="clearCentralFiltersBtn" type="button" class="btn btn-outline-secondary btn-sm">Limpar
-                  todos</button>
+                <div class="d-flex align-items-center flex-wrap gap-2">
+                  <small id="centralFiltersPendingHint" class="text-warning-emphasis d-none">
+                    <i class="bi bi-exclamation-circle me-1"></i>Filtros alterados — clique em Pesquisar
+                  </small>
+                  <button id="clearCentralFiltersBtn" type="button" class="btn btn-outline-secondary btn-sm">Limpar
+                    todos</button>
+                  <button id="applyCentralFiltersBtn" type="button" class="btn btn-primary btn-sm px-4">
+                    <i class="bi bi-search me-1"></i><span class="js-label">Pesquisar</span>
+                  </button>
+                </div>
               </div>
               <div id="activeCentralFilters" class="d-flex flex-wrap gap-2 mt-2"></div>
             </div>
 
+            <div class="central-table-shell">
+            <div id="centralTableLoading" role="status" aria-live="polite">
+              <div class="spinner-border text-primary" style="width:2.2rem;height:2.2rem;" aria-hidden="true"></div>
+              <span>Pesquisando benefícios…</span>
+            </div>
             <div class="table-responsive">
               <table id="centralBenefitsTable" class="table table-hover align-middle mb-0">
                 <thead class="table-light">
@@ -718,6 +767,7 @@
                 </thead>
                 <tbody></tbody>
               </table>
+            </div>
             </div>
           </div>
         </div>
@@ -1038,6 +1088,12 @@
     serverSide: true,
     searchDelay: 350,
     deferRender: true,
+    // Uma carga só, quando o DataTables termina de iniciar (o idioma vem por
+    // URL): a essa altura os filtros da URL já foram aplicados.
+    deferLoading: 0,
+    initComplete: function () {
+      this.api().ajax.reload();
+    },
     ajax: {
       url: apiListUrl,
       type: 'GET',
@@ -1659,7 +1715,7 @@
         if (idx >= 0) {
           filters.splice(idx, 1);
           renderActiveFilters();
-          table.ajax.reload();
+          markFiltersPending();
         }
       });
 
@@ -1747,8 +1803,31 @@
 
     setCurrentFilterValue('');
     renderActiveFilters();
-    table.ajax.reload();
+    markFiltersPending();
   });
+
+  // Filtro muda → só marca; quem busca é o Pesquisar (FAP-33). Cada filtro
+  // disparando a consulta deixava a tela recarregando a 63 mil linhas a cada
+  // clique, antes de a pessoa terminar de montar a pesquisa.
+  function markFiltersPending() {
+    $('#applyCentralFiltersBtn').addClass('is-pending');
+    $('#centralFiltersPendingHint').removeClass('d-none');
+  }
+
+  function runCentralSearch() {
+    $('#applyCentralFiltersBtn').removeClass('is-pending');
+    $('#centralFiltersPendingHint').addClass('d-none');
+    table.ajax.reload();
+  }
+
+  table.on('processing.dt', function (e, settings, processing) {
+    $('#centralTableLoading').toggleClass('is-loading', processing);
+    const btn = $('#applyCentralFiltersBtn');
+    btn.prop('disabled', processing);
+    btn.find('.js-label').text(processing ? 'Pesquisando…' : 'Pesquisar');
+  });
+
+  $('#applyCentralFiltersBtn').on('click', runCentralSearch);
 
   $('#clearCentralFiltersBtn').on('click', function () {
     filters.splice(0, filters.length);
@@ -1765,7 +1844,7 @@
     $('#quickVigenciaFilter').val('{{ vigencia_default }}');
     renderActiveFilters();
     table.search('');
-    table.ajax.reload();
+    runCentralSearch();
   });
 
   function populateCnpjFilter(root) {
@@ -1797,29 +1876,16 @@
       $('#quickCnpjFilterWrapper').hide();
       $('#quickCnpjFilterSpacer').show();
     }
-    table.ajax.reload();
+    markFiltersPending();
   });
 
-  $('#quickCnpjFilter').on('change', function () {
-    table.ajax.reload();
-  });
+  $('#quickCnpjFilter, #quickGrupoFilter, #quickVigenciaFilter, #quickCategoryModeFilter').on('change', markFiltersPending);
 
-  let protocoloFilterTimer = null;
-  $('#quickProtocoloFilter').on('input', function () {
-    clearTimeout(protocoloFilterTimer);
-    protocoloFilterTimer = setTimeout(function () { table.ajax.reload(); }, 400);
-  });
-
-  $('#quickGrupoFilter').on('change', function () {
-    table.ajax.reload();
-  });
-
-  $('#quickVigenciaFilter').on('change', function () {
-    table.ajax.reload();
-  });
-
-  $('#quickCategoryModeFilter').on('change', function () {
-    table.ajax.reload();
+  $('#quickProtocoloFilter').on('input', markFiltersPending).on('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      runCentralSearch();
+    }
   });
 
   $('#clearVigenciaFilterBtn').on('click', function () {
@@ -1857,13 +1923,6 @@
 
   renderVigenciaFilterNotice();
   renderActiveFilters();
-  if (
-    filters.length ||
-    $('#quickRootCnpjFilter').val() ||
-    ($('#quickCategoryModeFilter').val() || 'all') !== 'all'
-  ) {
-    table.ajax.reload();
-  }
 
   $('#exportCentralBenefitsBtn').on('click', function () {
     exportFilteredBenefitsToExcel();
