@@ -57,7 +57,7 @@ from app.blueprints import (
     petitions_bp, assistant_bp, tools_bp, settings_bp,
     knowledge_base_bp, admin_users_bp, access_audit_bp, process_panel_bp,
     disputes_center_bp, fap_panel_bp, fap_review_bp,
-    impugnacao_references_bp, jurisprudence_bp, process_knowledge_bp, docs_bp, communications_bp, dou_bp,
+    impugnacao_references_bp, jurisprudence_bp, fap_calculo_bp, process_knowledge_bp, docs_bp, communications_bp, dou_bp,
 )
 from app.blueprints.case_comments import case_comments_bp
 from app.blueprints.fap_reasons import fap_reasons_bp
@@ -86,6 +86,7 @@ app.register_blueprint(fap_panel_bp)
 app.register_blueprint(fap_review_bp)
 app.register_blueprint(impugnacao_references_bp)
 app.register_blueprint(jurisprudence_bp)
+app.register_blueprint(fap_calculo_bp)
 app.register_blueprint(process_knowledge_bp)
 app.register_blueprint(docs_bp)
 app.register_blueprint(communications_bp)
@@ -164,9 +165,10 @@ app.add_template_filter(format_date_sp, name='date_sp')
 
 # CNPJ raiz e CPF chegam do portal FAP como número e perdem o zero à esquerda;
 # os filtros devolvem os zeros e aplicam a máscara.
-from app.utils.cnpj import formatar_cnpj_raiz, formatar_cpf
+from app.utils.cnpj import formatar_cnpj, formatar_cnpj_raiz, formatar_cpf
 app.add_template_filter(formatar_cnpj_raiz, name='cnpj_raiz')
 app.add_template_filter(formatar_cpf, name='cpf')
+app.add_template_filter(formatar_cnpj, name='cnpj')
 
 # Prioridade de correção do Revisor: separa o nível do plano de ação (fonte
 # única em fap_review_service, usada pelo resultado e pelo detalhe da petição)

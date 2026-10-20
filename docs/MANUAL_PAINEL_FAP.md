@@ -183,6 +183,42 @@ A exportação para Excel acompanha o que está na tela, incluindo essas linhas.
 
 ---
 
+## Tela 5 — Benefícios do cálculo FAP
+
+Lista **todos os benefícios (B91, B92, B93 e B94) e CATs que o portal usou nos cálculos FAP** das empresas do Painel FAP — de todas as vigências e estabelecimentos, uma linha por item. É o retrato do cálculo do portal, não das contestações: aqui aparece também o que o escritório nunca contestou.
+
+### Filtros
+
+**Vigência**, **Grupo**, **Empresa** (CNPJ raiz), **Estabelecimento** (CNPJ de 14 dígitos), uma busca por **CPF, NIT, NB ou número da CAT** (com ou sem pontuação), os botões de **Tipo** (B91, B92, B93, B94, CAT), **No cálculo atual** e **Contestado**. A tela só pesquisa ao clicar em :btn-primary[Pesquisar].
+
+### Cartões
+
+Total de itens do filtro, quantidade por espécie de benefício, CATs, **excluídos no recálculo** e **não contestados**. Os cartões acompanham os filtros escolhidos.
+
+### Colunas
+
+| Coluna | O que significa |
+|---|---|
+| **Vig.** | Vigência do cálculo. O mesmo número em vigências diferentes é uma linha para cada. |
+| **Estabelecimento** | CNPJ de 14 dígitos e nome da empresa. |
+| **Tipo** | B91, B92, B93, B94 ou CAT. |
+| **NB / nº CAT** | Número do benefício ou da CAT. |
+| **NIT · CPF** | Identificação do segurado, mostrada inteira. |
+| **Nasc., RMI, Total pago** | Nascimento, renda mensal inicial e total pago no benefício (nas CATs não se aplicam). |
+| **Início → Cessação** | Período do benefício; na CAT, a data do acidente. |
+| **No cálculo atual** | **Conta** (o portal usa o item no cálculo) ou **Excluído** (veja abaixo). |
+| **Contestado** | **Sim** quando o item já está na Central de Contestações, com o link **ver** para o benefício. |
+
+Clicando na seta ao fim da linha, a linha se expande e mostra o restante: despacho, período de contabilização, bloqueio e o cálculo de origem; para a CAT, data de cadastro, data de óbito, CNPJ original e atribuído e o recibo do eSocial.
+
+> [!INFO]
+> **Excluído** quer dizer que o próprio portal tirou o item do cálculo no recálculo — em geral porque uma contestação foi acatada. O item continua listado aqui para não se perder o histórico.
+
+> [!INFO]
+> **Contestado** significa que o **mesmo número** existe na Central de Contestações **na mesma vigência**. O mesmo NB em outra vigência não conta: ele aparece como **Não** até ser contestado naquela vigência.
+
+---
+
 ## Exportações para Excel
 
 A tela de Contestações permite exportar:

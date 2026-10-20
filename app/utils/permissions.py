@@ -40,6 +40,7 @@ ROLE_DEFAULT_MODULE_PERMISSIONS = {
 ENDPOINT_MODULE_MAP = {
     'dashboard.': 'dashboard',
     'fap_panel.': 'fap_panel',
+    'fap_calculo.': 'fap_panel',
     'disputes_center.': 'disputes_center',
     'fap_review.': 'fap_review',
     'process_panel.': 'process_panel',

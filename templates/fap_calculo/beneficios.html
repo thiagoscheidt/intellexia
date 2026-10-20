@@ -1,0 +1,198 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Benefícios do cálculo FAP - IntellexIA{% endblock %}
+
+{% macro data(d) %}{{ d.strftime('%d/%m/%Y') if d else '—' }}{% endmacro %}
+{% macro dinheiro(v) %}{% if v is not none %}R$ {{ '{:,.2f}'.format(v|float).replace(',', 'X').replace('.', ',').replace('X', '.') }}{% else %}—{% endif %}{% endmacro %}
+
+{% block extra_css %}
+<style>
+  .calc-page .calc-label { font-size: .7rem; text-transform: uppercase; color: var(--bs-secondary-color); margin-bottom: 2px; }
+  .calc-page .calc-stat { border: 1px solid var(--bs-border-color); border-radius: 10px; padding: 10px 14px; background: var(--bs-body-bg); height: 100%; }
+  .calc-page .calc-stat b { font-size: 1.25rem; }
+  .calc-page .calc-table th { font-size: .75rem; text-transform: uppercase; white-space: nowrap; color: var(--bs-secondary-color); }
+  .calc-page .calc-table td { font-size: .85rem; vertical-align: top; }
+  .calc-page .calc-detail td { background: var(--bs-tertiary-bg); }
+  .calc-page .calc-detail dt { font-size: .7rem; text-transform: uppercase; color: var(--bs-secondary-color); font-weight: 600; }
+  .calc-page .calc-detail dd { margin-bottom: .5rem; }
+  .calc-page .calc-toggle[aria-expanded="true"] i { transform: rotate(90deg); }
+  .calc-page .calc-toggle i { transition: transform .15s; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="calc-page">
+{% call page_hero(title='Benefícios do cálculo FAP', subtitle='Todos os benefícios e CATs que o portal usou nos cálculos FAP, por empresa, vigência e estabelecimento.', icon='bi bi-list-check') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('fap_panel.sync_page') }}">Painel FAP</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Benefícios do cálculo</li>
+  </ol>
+</nav>
+{% endcall %}
+
+<form method="get" action="{{ url_for('fap_calculo.beneficios_page') }}" class="card border-0 shadow-sm mb-3">
+  <div class="card-body">
+    <div class="row g-3 align-items-end">
+      <div class="col-6 col-md-2">
+        <div class="calc-label">Vigência</div>
+        <select name="vigencia" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          {% for ano in vigencias %}<option value="{{ ano }}" {{ 'selected' if f.vigencia == ano }}>{{ ano }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="calc-label">Grupo</div>
+        <select name="grupo" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          {% for g in grupos %}<option value="{{ g.value }}" {{ 'selected' if f.grupo == g.value }}>{{ g.label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="calc-label">Empresa (CNPJ raiz)</div>
+        <select name="raiz" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          {% for e in empresas %}<option value="{{ e.cnpj }}" {{ 'selected' if f.raiz == e.cnpj }}>{{ e.cnpj|cnpj_raiz }} — {{ e.nome }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-3">
+        <div class="calc-label">Estabelecimento (CNPJ)</div>
+        <input type="text" name="cnpj" value="{{ f.cnpj }}" class="form-control form-control-sm" placeholder="com ou sem pontuação">
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="calc-label">CPF / NIT / NB / nº CAT</div>
+        <input type="text" name="q" value="{{ f.q }}" class="form-control form-control-sm" placeholder="com ou sem pontuação">
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="calc-label">No cálculo atual</div>
+        <select name="situacao" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          <option value="conta" {{ 'selected' if f.situacao == 'conta' }}>Conta</option>
+          <option value="excluido" {{ 'selected' if f.situacao == 'excluido' }}>Excluído</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="calc-label">Contestado</div>
+        <select name="contestado" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          <option value="sim" {{ 'selected' if f.contestado == 'sim' }}>Sim</option>
+          <option value="nao" {{ 'selected' if f.contestado == 'nao' }}>Não</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="calc-label">Tipo</div>
+        <div class="d-flex flex-wrap gap-1">
+          {% for t in tipos_disponiveis %}
+          <input type="checkbox" class="btn-check" id="tipo-{{ t }}" name="tipo" value="{{ t }}" {{ 'checked' if t in f.tipos }}>
+          <label class="btn btn-outline-secondary btn-sm rounded-pill" for="tipo-{{ t }}">{{ t }}</label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="col-12 d-flex gap-2 justify-content-end">
+        <a href="{{ url_for('fap_calculo.beneficios_page') }}" class="btn btn-outline-secondary btn-sm">Limpar</a>
+        <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Pesquisar</button>
+      </div>
+    </div>
+  </div>
+</form>
+
+{% set cnt = contadores %}
+<div class="row g-2 mb-3">
+  <div class="col-6 col-md"><div class="calc-stat"><b>{{ '{:,}'.format(cnt.total).replace(',', '.') }}</b><br><small class="text-muted">no total</small></div></div>
+  <div class="col-6 col-md-4"><div class="calc-stat">
+    {% for t in ('B91', 'B92', 'B93', 'B94') %}{% if not loop.first %} · {% endif %}<b style="font-size:1rem">{{ t }}</b> {{ cnt.por_tipo.get(t, 0) }}{% endfor %}<br><small class="text-muted">benefícios por espécie</small></div></div>
+  <div class="col-4 col-md"><div class="calc-stat"><b>{{ cnt.por_tipo.get('CAT', 0) }}</b><br><small class="text-muted">CATs</small></div></div>
+  <div class="col-4 col-md"><div class="calc-stat"><b>{{ cnt.excluidos }}</b><br><small class="text-muted">excluídos no recálculo</small></div></div>
+  <div class="col-4 col-md"><div class="calc-stat"><b>{{ cnt.nao_contestados }}</b><br><small class="text-muted">não contestados</small></div></div>
+</div>
+
+<div class="card border-0 shadow-sm">
+  <div class="card-body p-0">
+    {% if not itens %}
+    <div class="text-center text-muted py-5">
+      <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+      Nenhum benefício ou CAT encontrado para estes filtros.
+    </div>
+    {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 calc-table">
+        <thead>
+          <tr>
+            <th>Vig.</th><th>Estabelecimento</th><th>Tipo</th><th>NB / nº CAT</th><th>NIT · CPF</th>
+            <th>Nasc.</th><th>RMI</th><th>Total pago</th><th>Início → Cessação</th>
+            <th>No cálculo atual</th><th>Contestado</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for i in itens %}
+          <tr>
+            <td>{{ i.ano_vigencia }}</td>
+            <td>{{ i.cnpj|cnpj }}{% if i.empresa_nome %}<br><small class="text-muted">{{ i.empresa_nome }}</small>{% endif %}</td>
+            <td><span class="badge {{ 'text-bg-warning' if i.tipo == 'CAT' else 'text-bg-secondary' }}">{{ i.tipo }}</span></td>
+            <td>{{ i.identificador }}</td>
+            <td>{% if i.nit %}{{ i.nit }}{% else %}—{% endif %}{% if i.cpf %}<br><small class="text-muted">{{ i.cpf|cpf }}</small>{% endif %}</td>
+            <td>{{ data(i.data_nascimento) }}</td>
+            <td>{{ dinheiro(i.valor_mensal) if i.tipo != 'CAT' else '—' }}</td>
+            <td>{{ dinheiro(i.total_pago) if i.tipo != 'CAT' else '—' }}</td>
+            <td>{% if i.tipo == 'CAT' %}Acidente {{ data(i.data_acidente) }}{% else %}{{ data(i.data_inicio) }} → {{ data(i.data_cessacao) }}{% endif %}</td>
+            <td>
+              {% if i.estado_atual == 'EXCLUIDO' %}<span class="badge text-bg-danger">Excluído</span>
+              {% elif i.estado_atual == 'ORIGINAL' %}<span class="badge text-bg-success">Conta</span>
+              {% else %}<span class="badge text-bg-light">{{ i.estado_atual or '—' }}</span>{% endif %}
+            </td>
+            <td>
+              {% if i.contestado %}
+                <b>Sim</b>
+                {% if i.beneficio_central_id and can_view_module('disputes_center') %}
+                · <a href="{{ url_for('disputes_center.edit_dispute', benefit_id=i.beneficio_central_id) }}" title="Abrir o benefício na Central de Contestações">ver</a>
+                {% endif %}
+              {% else %}<b>Não</b>{% endif %}
+            </td>
+            <td>
+              <button type="button" class="btn btn-sm btn-link p-0 calc-toggle" data-bs-toggle="collapse"
+                data-bs-target="#det-{{ i.id }}" aria-expanded="false" aria-controls="det-{{ i.id }}"
+                aria-label="Mostrar detalhes"><i class="bi bi-chevron-right"></i></button>
+            </td>
+          </tr>
+          <tr class="collapse calc-detail" id="det-{{ i.id }}">
+            <td colspan="12">
+              <dl class="row mb-0">
+                {% if i.tipo == 'CAT' %}
+                <div class="col-6 col-md-3"><dt>Data de cadastro</dt><dd>{{ data(i.data_cadastro_cat) }}</dd></div>
+                <div class="col-6 col-md-3"><dt>Data de óbito</dt><dd>{{ data(i.data_obito) }}</dd></div>
+                <div class="col-6 col-md-3"><dt>CNPJ original</dt><dd>{{ (i.cnpj_original|cnpj) if i.cnpj_original else '—' }}</dd></div>
+                <div class="col-6 col-md-3"><dt>CNPJ atribuído</dt><dd>{{ (i.cnpj_atribuido|cnpj) if i.cnpj_atribuido else '—' }}</dd></div>
+                <div class="col-12 col-md-6"><dt>Recibo do eSocial</dt><dd>{{ i.recibo_esocial or '—' }}</dd></div>
+                {% else %}
+                <div class="col-6 col-md-3"><dt>Despacho</dt><dd>{{ data(i.data_despacho) }}</dd></div>
+                <div class="col-6 col-md-3"><dt>Contabilização</dt><dd>{{ data(i.data_inicio_contabilizacao) }} → {{ data(i.data_fim_contabilizacao) }}{% if i.meses_contabilizacao is not none %} ({{ ('%.3f'|format(i.meses_contabilizacao|float)).replace('.', ',') }} meses){% endif %}</dd></div>
+                <div class="col-6 col-md-3"><dt>Bloqueio</dt><dd>{{ 'Sim' if i.bloqueio else ('Não' if i.bloqueio is not none else '—') }}</dd></div>
+                {% endif %}
+                <div class="col-12 col-md-6"><dt>Cálculo</dt><dd>{{ i.calculo_id or '—' }} · situação original: {{ i.estado_original or '—' }}</dd></div>
+              </dl>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </div>
+  {% if total_pages > 1 %}
+  <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <small class="text-muted">Página {{ page }} de {{ total_pages }} · {{ total }} item(ns)</small>
+    <ul class="pagination pagination-sm mb-0">
+      <li class="page-item {{ 'disabled' if page <= 1 }}"><a class="page-link" href="{{ url_for('fap_calculo.beneficios_page', page=1, **filtros) }}">&laquo;</a></li>
+      <li class="page-item {{ 'disabled' if page <= 1 }}"><a class="page-link" href="{{ url_for('fap_calculo.beneficios_page', page=page-1, **filtros) }}">&lsaquo;</a></li>
+      <li class="page-item disabled"><span class="page-link">{{ page }} / {{ total_pages }}</span></li>
+      <li class="page-item {{ 'disabled' if page >= total_pages }}"><a class="page-link" href="{{ url_for('fap_calculo.beneficios_page', page=page+1, **filtros) }}">&rsaquo;</a></li>
+      <li class="page-item {{ 'disabled' if page >= total_pages }}"><a class="page-link" href="{{ url_for('fap_calculo.beneficios_page', page=total_pages, **filtros) }}">&raquo;</a></li>
+    </ul>
+  </div>
+  {% endif %}
+</div>
+</div>
+{% endblock %}

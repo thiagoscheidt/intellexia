@@ -58,9 +58,9 @@
         {# ── Painel FAP ────────────────────────────────────────────────── #}
         {% if can_view_module('fap_panel') %}
         <li
-          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('fap_panel.') else '' }}">
+          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('fap_panel.') or request.endpoint.startswith('fap_calculo.')) else '' }}">
           <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('fap_panel.') else '' }}">
+            class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('fap_panel.') or request.endpoint.startswith('fap_calculo.')) else '' }}">
             <i class="nav-icon bi bi-shield-check"></i>
             <p>
               Painel FAP
@@ -90,6 +90,14 @@
                 style="font-size: 0.9em;">
                 <i class="nav-icon bi bi-file-earmark-person" style="margin-right: 8px; color: #6c757d;"></i>
                 <p style="margin-left: 15px;">Procurações</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('fap_calculo.beneficios_page') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_calculo.beneficios_page' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-list-check" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Benefícios do cálculo</p>
               </a>
             </li>
             <li class="nav-item">
