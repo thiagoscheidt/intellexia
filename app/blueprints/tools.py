@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, send_file
+from flask import Blueprint, current_app, render_template, request, session, redirect, url_for, flash, jsonify, send_file
 from rich import print
 from app.models import (
     db,
@@ -223,6 +223,7 @@ def datajud_search():
     processos = []
     total_resultados = 0
     erro = None
+    erro_indisponivel = False
     tempo_busca = 0
     
     # Dados para os selects
@@ -359,14 +360,16 @@ def datajud_search():
             
             # Processar resultado
             if resultado.get('error'):
-                erro = f"Erro na busca: {resultado.get('message')}"
+                erro = resultado.get('message')
+                erro_indisponivel = bool(resultado.get('unavailable'))
             else:
                 tempo_busca = resultado.get('took', 0)
                 total_resultados = api.obter_total_resultados(resultado)
                 processos = api.extrair_processos(resultado)
         
-        except Exception as e:
-            erro = f"Erro ao buscar: {str(e)}"
+        except Exception:
+            current_app.logger.exception('Falha na pesquisa DataJud')
+            erro = 'Não foi possível concluir a busca no DataJud. Tente novamente em alguns minutos.'
     
     return render_template(
         'tools/datajud_search.html',
@@ -377,7 +380,8 @@ def datajud_search():
         tempo_busca=tempo_busca,
         assuntos=assuntos,
         classes=classes,
-        erro=erro
+        erro=erro,
+        erro_indisponivel=erro_indisponivel,
     )
 
 

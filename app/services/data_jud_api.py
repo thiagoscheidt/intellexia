@@ -1,12 +1,23 @@
+import logging
 import os
+import time
 from dotenv import load_dotenv
 import requests
 from typing import Dict, List, Optional, Any
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
 DATA_JUD_API_URL = os.getenv('DATA_JUD_API_URL', 'https://api-publica.datajud.cnj.jus.br')
 DATA_JUD_API_KEY = os.getenv('DATA_JUD_API_KEY', 'cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==')
+
+# (conexão, leitura). O CNJ às vezes demora a responder (RPI-34 da R09: TRF2
+# estourou os 30 s de leitura); a conexão em si, quando funciona, é rápida.
+DATA_JUD_TIMEOUT = (10, 30)
+# Uma nova tentativa só, para falha transitória: a tela espera a resposta, e
+# duas leituras de 30 s já são o máximo razoável para alguém olhando.
+DATA_JUD_RETRY_WAIT = 2
 
 class DataJudAPI:
     """
@@ -73,6 +84,55 @@ class DataJudAPI:
             'Content-Type': 'application/json'
         })
     
+    def _post(self, url: str, query: Dict[str, Any], tribunal: str) -> Dict[str, Any]:
+        """POST no ``_search`` com uma nova tentativa para falha transitória.
+
+        Erro volta no formato de sempre (``error``/``message``/``status_code``),
+        com ``message`` já escrita para a tela — o texto técnico
+        (``HTTPSConnectionPool(...): Read timed out``) vai para o log e para
+        ``detail``. ``unavailable`` separa "o CNJ não respondeu" de "a consulta
+        está errada", para quem quiser tratar diferente.
+        """
+        for tentativa in (1, 2):
+            try:
+                response = self.session.post(url, json=query, timeout=DATA_JUD_TIMEOUT)
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                erro = self._erro(tribunal, None, str(e))
+            except requests.exceptions.RequestException as e:
+                return self._erro(tribunal, None, str(e))
+            else:
+                if response.ok:
+                    return response.json()
+                erro = self._erro(tribunal, response.status_code, response.text[:500])
+            if not erro['unavailable'] or tentativa == 2:
+                return erro
+            time.sleep(DATA_JUD_RETRY_WAIT)
+        return erro
+
+    @staticmethod
+    def _erro(tribunal: str, status_code: Optional[int], detail: str) -> Dict[str, Any]:
+        unavailable = status_code is None or status_code == 429 or status_code >= 500
+        if status_code is None:
+            message = ('O DataJud (CNJ) não respondeu a tempo. O serviço público do CNJ '
+                       'está lento ou instável no momento — tente novamente em alguns minutos.')
+        elif status_code == 429:
+            message = 'Muitas consultas ao DataJud em sequência. Aguarde um minuto e tente novamente.'
+        elif status_code >= 500:
+            message = (f'O DataJud (CNJ) está indisponível no momento (HTTP {status_code}). '
+                       'Tente novamente em alguns minutos.')
+        elif status_code == 404:
+            message = f"Tribunal '{tribunal}' não disponível na API pública do DataJud."
+        else:
+            message = f'Não foi possível consultar o DataJud (HTTP {status_code}).'
+        logger.warning('DataJud %s falhou (HTTP %s): %s', tribunal, status_code, detail)
+        return {
+            'error': True,
+            'unavailable': unavailable,
+            'message': message,
+            'status_code': status_code,
+            'detail': detail,
+        }
+
     def _get_endpoint(self, tribunal: str) -> str:
         """
         Obtém o endpoint correto para o tribunal
@@ -124,29 +184,8 @@ class DataJudAPI:
             "size": size
         }
         
-        try:
-            response = self.session.post(url, json=query, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            status_code = getattr(e.response, 'status_code', None)
-            message = str(e)
-            if status_code == 404:
-                message = f"Tribunal '{tribunal}' não disponível na API pública do DataJud."
-            details = None
-            if getattr(e, 'response', None) is not None:
-                try:
-                    details = e.response.text
-                except Exception:
-                    details = None
-            if details:
-                message = f"{message} | {details}"
-            return {
-                'error': True,
-                'message': message,
-                'status_code': status_code
-            }
-    
+        return self._post(url, query, tribunal)
+
     def buscar_por_classe_e_orgao(
         self,
         codigo_classe: int,
@@ -181,21 +220,8 @@ class DataJudAPI:
             "size": size
         }
         
-        try:
-            response = self.session.post(url, json=query, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            status_code = getattr(e.response, 'status_code', None)
-            message = str(e)
-            if status_code == 404:
-                message = f"Tribunal '{tribunal}' não disponível na API pública do DataJud."
-            return {
-                'error': True,
-                'message': message,
-                'status_code': status_code
-            }
-    
+        return self._post(url, query, tribunal)
+
     def buscar_com_paginacao(
         self,
         query: Dict[str, Any],
@@ -234,21 +260,8 @@ class DataJudAPI:
         if search_after:
             query['search_after'] = search_after
         
-        try:
-            response = self.session.post(url, json=query, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            status_code = getattr(e.response, 'status_code', None)
-            message = str(e)
-            if status_code == 404:
-                message = f"Tribunal '{tribunal}' não disponível na API pública do DataJud."
-            return {
-                'error': True,
-                'message': message,
-                'status_code': status_code
-            }
-    
+        return self._post(url, query, tribunal)
+
     def buscar_por_assunto(
         self,
         codigo_assunto: int,
@@ -283,21 +296,8 @@ class DataJudAPI:
             "size": size
         }
         
-        try:
-            response = self.session.post(url, json=query, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            status_code = getattr(e.response, 'status_code', None)
-            message = str(e)
-            if status_code == 404:
-                message = f"Tribunal '{tribunal}' não disponível na API pública do DataJud."
-            return {
-                'error': True,
-                'message': message,
-                'status_code': status_code
-            }
-    
+        return self._post(url, query, tribunal)
+
     def buscar_movimentos_por_codigo(
         self,
         codigo_movimento: int,
@@ -363,17 +363,8 @@ class DataJudAPI:
             "size": size
         }
         
-        try:
-            response = self.session.post(url, json=query, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            return {
-                'error': True,
-                'message': str(e),
-                'status_code': getattr(e.response, 'status_code', None)
-            }
-    
+        return self._post(url, query, tribunal)
+
     def extrair_processos(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Extrai a lista de processos da resposta da API

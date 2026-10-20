@@ -95,9 +95,15 @@
 {% if erro %}
 <div class="row mb-3">
   <div class="col-12">
+    {% if erro_indisponivel %}
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+      <i class="bi bi-cloud-slash me-2"></i>
+      <strong>DataJud indisponível:</strong> {{ erro }}
+    {% else %}
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
       <i class="bi bi-exclamation-triangle me-2"></i>
       <strong>Erro:</strong> {{ erro }}
+    {% endif %}
       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
   </div>
@@ -118,7 +124,7 @@
               <div class="col-md-6">
                 <label for="numero_processo" class="form-label fw-600">Número do Processo</label>
                 <input type="text" class="form-control form-control-lg" id="numero_processo" name="numero_processo"
-                  placeholder="Ex: 0000832-35.2018.4.01.3202" value="{{ request.args.get('numero_processo', '') }}"
+                  placeholder="Ex: 0000832-35.2018.4.01.3202" value="{{ request.form.get('numero_processo') or request.args.get('numero_processo', '') }}"
                   inputmode="numeric" autocomplete="off" maxlength="25" required>
                 <small class="text-muted">Número CNJ com ou sem formatação</small>
               </div>
@@ -129,7 +135,7 @@
                   data-placeholder="Selecione um tribunal...">
                   <option value="">Selecione um tribunal...</option>
                   {% for sigla, nome in tribunais %}
-                  <option value="{{ sigla }}" {% if request.args.get('tribunal')==sigla %}selected{% endif %}>{{ nome }}
+                  <option value="{{ sigla }}" {% if (request.form.get('tribunal') if request.form.get('tipo_busca') == 'numero' else request.args.get('tribunal'))==sigla %}selected{% endif %}>{{ nome }}
                   </option>
                   {% endfor %}
                 </select>
@@ -743,12 +749,14 @@
   </div>
 </div>
 
-{% elif resultado %}
+{% elif resultado and not erro %}
 <div class="row">
   <div class="col-12">
     <div class="alert alert-info alert-dismissible fade show" role="alert">
       <i class="bi bi-info-circle me-2"></i>
       <strong>Nenhum resultado encontrado.</strong> Tente modificar os critérios de busca.
+      <div class="small mt-1">O DataJud é alimentado pelos tribunais com atraso — processos com movimentação
+        recente podem ainda não constar na base pública do CNJ.</div>
       <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
   </div>
