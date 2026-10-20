@@ -161,3 +161,51 @@ def gravar_estabelecimento(law_firm_id: int, busca: BuscaEstabelecimento) -> dic
 
     db.session.commit()
     return contagem
+
+
+def completar_central(law_firm_id: int, ano: int | None = None) -> dict:
+    """Preenche CPF, nascimento, RMI e total pago dos benefícios da Central.
+
+    Lê de ``fap_calculo_itens`` (sem rede): casa NB sem zeros à esquerda e a
+    mesma vigência (``vigencia_year`` da FK do benefício == ``ano_vigencia``),
+    nunca CAT. Com mais de uma linha, prefere a do CNPJ do benefício. Regras de
+    campo em ``fap_beneficio_portal_service.aplicar_item``. Commit por ano.
+    """
+    from app.models import Benefit, FapVigenciaCnpj
+    from app.services.fap_beneficio_portal_service import aplicar_item, chave_nb
+
+    conta = {'beneficios_vistos': 0, 'cpf': 0, 'nascimento': 0, 'rmi': 0, 'total_pago': 0}
+
+    q = (db.session.query(Benefit, FapVigenciaCnpj)
+         .join(FapVigenciaCnpj, Benefit.fap_vigencia_cnpj_id == FapVigenciaCnpj.id)
+         .filter(Benefit.law_firm_id == law_firm_id))
+    if ano is not None:
+        q = q.filter(FapVigenciaCnpj.vigencia_year == str(ano))
+    por_ano: dict[int, list] = {}
+    for b, vig in q.order_by(Benefit.id).all():
+        try:
+            por_ano.setdefault(int(vig.vigencia_year), []).append((b, vig.employer_cnpj))
+        except (TypeError, ValueError):
+            continue
+
+    for ano_vig in sorted(por_ano):
+        itens: dict[str, list] = {}
+        linhas = (FapCalculoItem.query
+                  .filter(FapCalculoItem.law_firm_id == law_firm_id,
+                          FapCalculoItem.ano_vigencia == ano_vig,
+                          FapCalculoItem.tipo != 'CAT')
+                  .order_by(FapCalculoItem.id).all())
+        for it in linhas:
+            itens.setdefault(chave_nb(it.identificador), []).append(it)
+        for b, cnpj_vig in por_ano[ano_vig]:
+            conta['beneficios_vistos'] += 1
+            candidatos = itens.get(chave_nb(b.benefit_number))
+            if not candidatos:
+                continue
+            escolhido = next((c for c in candidatos if c.cnpj == cnpj_vig), candidatos[0])
+            dados = {'cpf': escolhido.cpf, 'data_nascimento': escolhido.data_nascimento,
+                     'valor_mensal': escolhido.valor_mensal, 'total_pago': escolhido.total_pago}
+            for campo in aplicar_item(b, dados):
+                conta[campo] += 1
+        db.session.commit()
+    return conta

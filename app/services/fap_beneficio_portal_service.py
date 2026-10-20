@@ -85,6 +85,29 @@ def buscar_vigencia(svc, ano: int, cnpj14: str, nbs: set[str]) -> BuscaVigencia:
     return BuscaVigencia(ano, cnpj14, 'ok', itens)
 
 
+def aplicar_item(benefit, item: dict) -> list[str]:
+    """Um benefício + um item normalizado → nomes dos campos alterados.
+
+    Fonte única da regra: CPF e nascimento o portal sobrescreve; RMI e total
+    pago só preenchem o vazio. Chaves do item: cpf, data_nascimento,
+    valor_mensal, total_pago. Não faz commit.
+    """
+    mudou = []
+    if item.get('cpf') and benefit.insured_cpf != item['cpf']:
+        benefit.insured_cpf = item['cpf']
+        mudou.append('cpf')
+    if item.get('data_nascimento') and benefit.insured_date_of_birth != item['data_nascimento']:
+        benefit.insured_date_of_birth = item['data_nascimento']
+        mudou.append('nascimento')
+    if benefit.initial_monthly_benefit is None and item.get('valor_mensal') is not None:
+        benefit.initial_monthly_benefit = item['valor_mensal']
+        mudou.append('rmi')
+    if benefit.total_paid is None and item.get('total_pago') is not None:
+        benefit.total_paid = item['total_pago']
+        mudou.append('total_pago')
+    return mudou
+
+
 def aplicar(law_firm_id: int, vigencia_id: int, busca: BuscaVigencia) -> dict:
     """Grava nos benefícios da vigência o que veio do portal. Não faz commit.
 
@@ -100,16 +123,6 @@ def aplicar(law_firm_id: int, vigencia_id: int, busca: BuscaVigencia) -> dict:
         if item is None:
             conta['nao_encontrados'] += 1
             continue
-        if item['cpf'] and b.insured_cpf != item['cpf']:
-            b.insured_cpf = item['cpf']
-            conta['cpf'] += 1
-        if item['data_nascimento'] and b.insured_date_of_birth != item['data_nascimento']:
-            b.insured_date_of_birth = item['data_nascimento']
-            conta['nascimento'] += 1
-        if b.initial_monthly_benefit is None and item['valor_mensal'] is not None:
-            b.initial_monthly_benefit = item['valor_mensal']
-            conta['rmi'] += 1
-        if b.total_paid is None and item['total_pago'] is not None:
-            b.total_paid = item['total_pago']
-            conta['total_pago'] += 1
+        for campo in aplicar_item(b, item):
+            conta[campo] += 1
     return conta
