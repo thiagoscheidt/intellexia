@@ -119,6 +119,78 @@ def _filter_benefit_grupo(query, law_firm_id: int, grupo_chave: str):
     return fap_group_service.apply_group_filter(query, law_firm_id, grupo_chave, Benefit.employer_cnpj)
 
 
+# ── Status por instância (E03 da R09) ─────────────────────────────────────────
+# "B91 da Vale indeferidos na 1ª instância" exigia ler os 759 B91 página por
+# página: não havia filtro por instância, e o resumo contava tipo e status
+# separados. Os valores e a regra de "pendente" são os da tela (contadores do
+# Painel de Contestações), para o número do MCP bater com o que se vê lá.
+
+STATUS_INSTANCIA = ("deferido", "indeferido", "em_analise", "pendente")
+_STATUS_DECIDIDOS = ("deferido", "indeferido", "analyzing")  # como a tela normaliza
+
+
+def resolver_status_instancia(valor: str, campo: str) -> str:
+    """Texto livre ("indeferidos", "Em análise", "rejected") → valor do filtro."""
+    from fastmcp.exceptions import ToolError
+
+    from app.services import jurisprudence_normalizer as norm
+
+    k = norm.chave(valor).replace("_", " ")
+    # "indeferido" contém "deferido": o negativo vem primeiro.
+    if k.startswith(("INDEF", "NEGAD", "REJECT")):
+        return "indeferido"
+    if k.startswith(("DEF", "APPROV", "APROV")):
+        return "deferido"
+    if "ANALIS" in k or "ANALY" in k or "REVIEW" in k or "ANDAMENTO" in k:
+        return "em_analise"
+    if k.startswith(("PEND", "AGUARD", "SEM DECIS", "NAO JULG", "NAO INFORM")):
+        return "pendente"
+    raise ToolError(
+        f"{campo} '{valor}' não reconhecido. Use: deferido, indeferido, em_analise ou pendente."
+    )
+
+
+def _status_instancia_exprs():
+    """(1ª, 2ª) como expressões SQL com os valores de STATUS_INSTANCIA.
+
+    A 2ª instância segue os contadores da tela: 1ª deferida ou em análise não
+    tem 2ª instância ("nao_se_aplica"), mesmo que algo tenha sido gravado lá —
+    sem isso o MCP contava 3 indeferidos a mais que a tela na base local.
+    """
+    from sqlalchemy import case
+
+    from app.blueprints.disputes_center import _normalized_status_sql
+    from app.models import Benefit
+
+    n1 = _normalized_status_sql(Benefit.first_instance_status)
+    n2 = _normalized_status_sql(Benefit.second_instance_status)
+
+    def _rotulo(expr):
+        return case(
+            (expr == "deferido", "deferido"),
+            (expr == "indeferido", "indeferido"),
+            (expr == "analyzing", "em_analise"),
+            else_="pendente",
+        )
+
+    primeira = _rotulo(n1)
+    segunda = case(
+        (n1.in_(("deferido", "analyzing")), "nao_se_aplica"),
+        (n2.in_(_STATUS_DECIDIDOS), _rotulo(n2)),
+        else_="pendente",
+    )
+    return primeira, segunda
+
+
+def _filter_status_instancia(query, primeira: str | None, segunda: str | None):
+    s1, s2 = _status_instancia_exprs()
+    if primeira:
+        query = query.filter(s1 == primeira)
+    if segunda:
+        query = query.filter(s2 == segunda)
+    return query
+
+
 def _cnpj_formatado(d: str) -> str:
     if len(d) != 14:
         return d
@@ -416,13 +488,20 @@ def list_fap_benefits_handler(
     offset: int = 0,
     protocolo: str | None = None,
     grupo: str | None = None,
+    *,
+    status_1a_instancia: str | None = None,
+    status_2a_instancia: str | None = None,
 ) -> dict:
     """Retorna benefícios FAP filtrados, com total encontrado."""
+    from sqlalchemy.orm import load_only
+
     from app.models import Benefit, db
     from app.services import fap_protocolo_service
 
     limit = clamp_limit(limit, 50)
     offset = clamp_offset(offset)
+    s1 = resolver_status_instancia(status_1a_instancia, "status_1a_instancia") if status_1a_instancia else None
+    s2 = resolver_status_instancia(status_2a_instancia, "status_2a_instancia") if status_2a_instancia else None
 
     query = Benefit.query.filter_by(law_firm_id=law_firm_id)
 
@@ -462,12 +541,17 @@ def list_fap_benefits_handler(
         query = query.filter(Benefit.benefit_number == numero_beneficio)
     if ano_vigencia:
         query = query.filter(Benefit.fap_vigencia_years.like(f"%{ano_vigencia}%"))
+    query = _filter_status_instancia(query, s1, s2)
 
-    total = query.count()
+    # count() sobre a entidade inteira vira SELECT count(*) FROM (SELECT benefits.* ...).
+    total = query.order_by(None).with_entities(db.func.count(Benefit.id)).scalar() or 0
     benefits = fetch_page(
         # Centenas de benefícios compartilham o mesmo created_at (carga em lote):
         # sem o id, o banco não garante ordem entre eles e a paginação pularia linhas.
-        query.order_by(Benefit.created_at.desc(), Benefit.id.desc()),
+        # load_only: o benefício tem 8 colunas de texto longo (parecer, justificativa,
+        # notas) que a listagem não usa.
+        query.options(load_only(*_colunas_listagem_beneficio()))
+        .order_by(Benefit.created_at.desc(), Benefit.id.desc()),
         limit, offset,
     )
 
@@ -499,6 +583,21 @@ def list_fap_benefits_handler(
         for b in benefits
     ]
     return page_envelope(total, offset, itens)
+
+
+def _colunas_listagem_beneficio():
+    from app.models import Benefit
+
+    return (
+        Benefit.id, Benefit.benefit_number, Benefit.benefit_type, Benefit.request_type,
+        Benefit.status, Benefit.insured_name, Benefit.insured_nit, Benefit.insured_cpf,
+        Benefit.employer_cnpj, Benefit.employer_name, Benefit.benefit_start_date,
+        Benefit.benefit_end_date, Benefit.accident_date, Benefit.accident_company_name,
+        Benefit.cat_number, Benefit.fap_vigencia_years, Benefit.fap_contestation_topics_json,
+        Benefit.fap_contestation_topic, Benefit.first_instance_status,
+        Benefit.second_instance_status, Benefit.initial_monthly_benefit, Benefit.total_paid,
+        Benefit.created_at,
+    )
 
 
 def get_benefit_detail_handler(benefit_id: int, law_firm_id: int) -> dict:
@@ -588,12 +687,18 @@ def fap_summary_handler(
     cnpj: str | None = None,
     empresa: str | None = None,
     grupo: str | None = None,
+    *,
+    tipo_beneficio: str | None = None,
+    status_1a_instancia: str | None = None,
+    status_2a_instancia: str | None = None,
 ) -> dict:
     """Resumo estatístico do FAP: contestações e benefícios agregados."""
     from app.models import Benefit, FapCompany, FapWebContestacao, db
     from app.services import fap_group_service
 
     grupo_info = resolver_grupo(law_firm_id, grupo) if grupo else None
+    s1 = resolver_status_instancia(status_1a_instancia, "status_1a_instancia") if status_1a_instancia else None
+    s2 = resolver_status_instancia(status_2a_instancia, "status_2a_instancia") if status_2a_instancia else None
 
     empresa_raizes: list[str] = []
     if empresa:
@@ -651,6 +756,20 @@ def fap_summary_handler(
         ben_q = _filter_benefit_grupo(ben_q, law_firm_id, grupo_info["chave"])
     if ano_vigencia:
         ben_q = ben_q.filter(Benefit.fap_vigencia_years.like(f"%{ano_vigencia}%"))
+    if tipo_beneficio:
+        ben_q = ben_q.filter(Benefit.benefit_type == tipo_beneficio)
+    ben_q = _filter_status_instancia(ben_q, s1, s2)
+
+    st1, st2 = _status_instancia_exprs()
+
+    def _cruzado(expr):
+        """{tipo: {status: n}} — "B91 indeferidos na 1ª" sai daqui sem listar nada."""
+        out: dict[str, dict[str, int]] = {}
+        rows = ben_q.with_entities(Benefit.benefit_type, expr, db.func.count()).group_by(
+            Benefit.benefit_type, expr).all()
+        for tipo, st, n in rows:
+            out.setdefault(tipo or "(vazio)", {})[st] = n
+        return out
 
     por_topico: dict[str, int] = {}
     com_topico_contestacao = 0
@@ -680,6 +799,8 @@ def fap_summary_handler(
         "por_tipo_pedido": _count_by(ben_q, Benefit.request_type),
         "por_status_primeira_instancia": _count_by(ben_q, Benefit.first_instance_status),
         "por_status_segunda_instancia": _count_by(ben_q, Benefit.second_instance_status),
+        "por_tipo_x_status_primeira_instancia": _cruzado(st1),
+        "por_tipo_x_status_segunda_instancia": _cruzado(st2),
         "por_topico_contestacao": dict(sorted(por_topico.items(), key=lambda kv: -kv[1])),
         "com_topico_contestacao": com_topico_contestacao,
         "financeiro": {
@@ -700,6 +821,13 @@ def fap_summary_handler(
     }
     if grupo_info:
         resultado["filtros"]["grupo"] = grupo_info["nome"]
+    filtros_beneficio = {"tipo_beneficio": tipo_beneficio, "status_1a_instancia": s1, "status_2a_instancia": s2}
+    if any(filtros_beneficio.values()):
+        resultado["filtros"].update({k: v for k, v in filtros_beneficio.items() if v})
+        resultado["aviso_filtros"] = (
+            "tipo_beneficio e status por instância filtram só os benefícios; "
+            "os números de contestações não mudam com eles."
+        )
     if empresa or grupo_info:
         empresas = _empresas_na_conta(ben_q, names)
         resultado["empresas_na_conta"] = empresas
@@ -883,6 +1011,9 @@ def fap_filter_values_handler(law_firm_id: int) -> dict:
             "status": _distinct(Benefit, Benefit.status),
             "status_primeira_instancia": _distinct(Benefit, Benefit.first_instance_status),
             "status_segunda_instancia": _distinct(Benefit, Benefit.second_instance_status),
+            # O que os filtros status_1a_instancia/status_2a_instancia aceitam
+            # (os valores acima são os brutos gravados, com grafias misturadas).
+            "status_instancia_filtro": list(STATUS_INSTANCIA),
             "topicos_contestacao": sorted(topicos),
         },
         "procuracoes": {

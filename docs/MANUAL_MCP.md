@@ -91,7 +91,7 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `listar_empresas_fap` | Empresas sincronizadas — busca por **parte do nome**, CNPJ ou tipo de procuração | FAP Web |
 | `listar_contestacoes_fap` | Contestações com filtros (**protocolo**, CNPJ, raiz, vigência, situação, instância), com resultado do deferimento, nome da empresa e status do PDF | FAP Web |
 | `detalhar_contestacao` | Contestação completa + **benefícios vinculados** + alterações recentes + **link do PDF** | FAP Web |
-| `listar_beneficios_fap` | Benefícios com filtros ricos (**empresa por nome**, **grupo empresarial**, **protocolo da contestação**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) e o status em cada instância | FAP Web |
+| `listar_beneficios_fap` | Benefícios com filtros ricos (**empresa por nome**, **grupo empresarial**, **protocolo da contestação**, **resultado na 1ª e na 2ª instância**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) e o status em cada instância | FAP Web |
 | `detalhar_beneficio` | Todos os campos de um benefício, incluindo justificativas, pareceres e decisões de julgamento | Sistema |
 | `listar_procuracoes_fap` | Procurações eletrônicas com situação e vigência | FAP Web |
 | `valores_de_filtro_fap` | Códigos e valores válidos para filtros (**grupos empresariais**, situações, instâncias, tópicos, motivos) — a IA consulta antes de filtrar | Sistema |
@@ -100,7 +100,7 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 
 | Ferramenta | O que faz | Origem |
 |---|---|---|
-| `resumo_fap` | Contagens agregadas em uma chamada: contestações por vigência/situação/instância/**empresa**; benefícios por tipo/status/tópico, **ranking de filiais** (os estabelecimentos com mais benefícios) + **financeiro** (total pago). Filtra por empresa, CNPJ, vigência ou **grupo empresarial** | Cálculo |
+| `resumo_fap` | Contagens agregadas em uma chamada: contestações por vigência/situação/instância/**empresa**; benefícios por tipo/status/tópico, **tipo × resultado em cada instância** ("quantos B91 indeferidos na 1ª?" numa chamada), **ranking de filiais** (os estabelecimentos com mais benefícios) + **financeiro** (total pago). Filtra por empresa, CNPJ, vigência, **grupo empresarial**, tipo de benefício e resultado por instância | Cálculo |
 | `painel_fap` | Os **mesmos números** do `resumo_fap`, só que como **painel visual** na conversa: cartões de totais e gráficos de barras por situação, vigência, empresa, tópico e instância | Cálculo |
 | `alteracoes_recentes_fap` | O que mudou nas sincronizações com o portal ("o que mudou essa semana?") | FAP Web |
 | `prazos_e_alertas` | O que pede atenção: contestações aguardando resultado, decisões recentes (janela de recurso) e processos por fase | Cálculo |

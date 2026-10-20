@@ -76,9 +76,9 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `listar_massas_salariais_fap` | Folha de pagamento contestada por competência |
 | `listar_vinculos_fap` | Vínculos empregatícios contestados por competência |
 | `listar_rotatividade_fap` | Taxas de rotatividade contestadas |
-| `listar_beneficios_fap` | Lista benefícios (filtros: CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência) |
+| `listar_beneficios_fap` | Lista benefícios (filtros: CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência, status na 1ª/2ª instância) |
 | `detalhar_beneficio` | Detalhes completos de um benefício |
-| `resumo_fap` | Estatísticas agregadas de contestações e benefícios |
+| `resumo_fap` | Estatísticas agregadas de contestações e benefícios, com cruzamento tipo × status por instância |
 | `prazos_e_alertas` | Contestações aguardando resultado, decisões recentes e processos por fase |
 | `comparar_vigencias` | Compara resultados de benefícios entre vigências FAP |
 | `buscar_por_segurado` | Visão 360º de um segurado (benefícios, CATs, processos) |

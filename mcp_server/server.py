@@ -423,19 +423,27 @@ def listar_beneficios_fap(
     empresa: str | None = None,
     grupo: str | None = None,
     protocolo: str | None = None,
+    status_1a_instancia: str | None = None,
+    status_2a_instancia: str | None = None,
     limite: int = 50,
     deslocamento: int = 0,
 ) -> dict:
     """Lista benefícios previdenciários vinculados a contestações FAP, com total encontrado.
 
-    Para apenas CONTAR benefícios (ex: "quantos benefícios da empresa X?"),
-    prefira resumo_fap — responde em uma única chamada, sem listar registros.
+    Para apenas CONTAR benefícios (ex: "quantos benefícios da empresa X?",
+    "quantos B91 da Vale foram indeferidos na 1ª instância?"), prefira
+    resumo_fap — responde em uma única chamada, sem listar registros.
+
+    Combine os filtros numa chamada só em vez de listar tudo e separar depois:
+    "B91 da Vale indeferidos na 1ª instância" é grupo="Vale",
+    tipo_beneficio="B91", status_1a_instancia="indeferido".
 
     Args:
         empresa: Nome (ou parte do nome) da empresa/empregador — casa nome do
             empregador e as raízes de CNPJ da empresa FAP correspondente.
         cnpj: CNPJ do empregador (aceita formatado, só dígitos ou raiz de 8).
-        status: Status do benefício (ex: pending, approved, rejected).
+        status: Status geral do benefício (ex: pending, approved, rejected) — NÃO é
+            o resultado por instância; para isso use status_1a_instancia/status_2a_instancia.
         tipo_pedido: exclusao, inclusao ou revisao.
         tipo_beneficio: Ex: B91 (auxílio-acidente), B94 (auxílio-doença acidentário).
         topico_contestacao: Tópico jurídico da contestação (ex: ACIDENTE DE TRAJETO).
@@ -450,6 +458,11 @@ def listar_beneficios_fap(
             completo ou trecho) — traz os benefícios daquela contestação (CNPJ +
             vigência), com o status de cada um na 1ª e na 2ª instância. É o
             mesmo critério do filtro de protocolo da tela de Benefícios.
+        status_1a_instancia: Resultado na 1ª instância administrativa: deferido,
+            indeferido, em_analise ou pendente (aceita "indeferidos", "em análise"...).
+        status_2a_instancia: Resultado na 2ª instância (recurso), mesmos valores.
+            Pendente na 2ª segue a tela: só quem ainda pode recorrer — 1ª deferida
+            ou em análise não entra.
         limite: Número máximo de registros retornados (padrão 50).
         deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
             'proximo_deslocamento' que veio na resposta anterior.
@@ -464,6 +477,7 @@ def listar_beneficios_fap(
             claims["law_firm_id"], cnpj, status, tipo_pedido, tipo_beneficio,
             topico_contestacao, segurado, nit, cpf, numero_beneficio, ano_vigencia,
             empresa, limite, deslocamento, protocolo=protocolo, grupo=grupo,
+            status_1a_instancia=status_1a_instancia, status_2a_instancia=status_2a_instancia,
         )
 
 
@@ -551,6 +565,9 @@ def resumo_fap(
     cnpj: str | None = None,
     empresa: str | None = None,
     grupo: str | None = None,
+    tipo_beneficio: str | None = None,
+    status_1a_instancia: str | None = None,
+    status_2a_instancia: str | None = None,
 ) -> dict:
     """Resumo estatístico do FAP do escritório: contagens agregadas em uma chamada.
 
@@ -562,6 +579,13 @@ def resumo_fap(
     ranking de estabelecimentos (beneficios.por_estabelecimento: os 20 CNPJs
     com mais benefícios, com nome e matriz/filial) — é a resposta para "quais
     filiais têm mais benefícios?", sem listar benefício por benefício.
+
+    Tipo × resultado por instância vem cruzado em
+    beneficios.por_tipo_x_status_primeira_instancia e
+    ..._segunda_instancia ({"B91": {"indeferido": 120, ...}}): "quantos B91 da
+    Vale foram indeferidos na 1ª instância?" é resumo_fap(grupo="Vale") e ler
+    a célula, sem listar nada. Para restringir todo o bloco de benefícios, use
+    tipo_beneficio e status_1a_instancia/status_2a_instancia.
 
     Com filtro por empresa ou grupo, 'empresas_na_conta' diz quais empresas
     (CNPJ raiz) entraram no número. Se vier 'aviso_empresas', o nome casou com
@@ -576,10 +600,19 @@ def resumo_fap(
             Itajaí". Para um grupo econômico, prefira `grupo`.
         grupo: Grupo empresarial cadastrado no sistema (ex: "Vale") — todas as
             empresas do grupo e só elas. Nomes em valores_de_filtro_fap.
+        tipo_beneficio: Restringe os benefícios a um tipo (ex: B91) (opcional).
+        status_1a_instancia: deferido, indeferido, em_analise ou pendente —
+            restringe os benefícios ao resultado na 1ª instância (opcional).
+        status_2a_instancia: Mesmos valores, para a 2ª instância (opcional).
+            Esses três filtros não mudam os números de contestações.
     """
     claims = require_module("fap_panel")
     with app.app_context():
-        return fap_summary_handler(claims["law_firm_id"], ano_vigencia, cnpj, empresa, grupo=grupo)
+        return fap_summary_handler(
+            claims["law_firm_id"], ano_vigencia, cnpj, empresa, grupo=grupo,
+            tipo_beneficio=tipo_beneficio, status_1a_instancia=status_1a_instancia,
+            status_2a_instancia=status_2a_instancia,
+        )
 
 
 try:
