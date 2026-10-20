@@ -52,7 +52,10 @@
 - [ ] **Step 4: Run** o teste — Expected: `✅ Tudo verde`.
 - [ ] **Step 5: Commit** `git add app/models.py database/add_fap_calculo_tables.py tests/test_fap_calculo_modelos.py && git commit -m "FAP cálculo: tabelas de estabelecimentos e itens do cálculo"`
 
-### Task 2: Cliente da Consulta do FAP
+### Task 2: Cliente da Consulta do FAP — JÁ FEITO (commit 1c1e188)
+
+`app/services/fap_calculo_client.py` existe com as cinco funções e os contratos abaixo, coberto por `tests/test_fap_completar_beneficios.py`. Nada a fazer além de consumir.
+
 
 **Files:**
 - Create: `app/services/fap_calculo_client.py`
@@ -74,7 +77,10 @@
 - [ ] **Step 4: Run** — Expected: `✅ Tudo verde`.
 - [ ] **Step 5: Commit** `git add app/services/fap_calculo_client.py tests/test_fap_calculo_client.py && git commit -m "FAP cálculo: cliente da Consulta do FAP"`
 
-### Task 3: Parser puro
+### Task 3: Parser puro — PARCIALMENTE FEITO (commit 1c1e188)
+
+`app/services/fap_calculo_parser.py` já tem `resumir_calculos`, `normalizar_beneficio` e `normalizar_cat` com os contratos abaixo; `resumir_calculos` e `normalizar_beneficio` estão testados em `tests/test_fap_completar_beneficios.py`. Falta só: o teste `test_cat` e o `test_tem_itens_pelo_original` (em `tests/test_fap_calculo_parser.py`) e qualquer ajuste que eles revelarem. `normalizar_beneficio`/`normalizar_cat` não devolvem `cnpj` na CAT nem `estado_original`/`calculo_id`: quem grava (Task 4) acrescenta.
+
 
 **Files:**
 - Create: `app/services/fap_calculo_parser.py`
@@ -119,6 +125,7 @@
 
 **Interfaces:**
 - Consumes: Task 1, modelos `Benefit`, `FapVigenciaCnpj`.
+- Reuso obrigatório: as regras de campo já estão em `app/services/fap_beneficio_portal_service.aplicar` (CPF e nascimento sobrescrevem; RMI e total só se vazios; contagem por campo). Extrair a parte "um benefício + um item normalizado → campos alterados" para uma função `aplicar_item(benefit, item) -> list[str]` nesse módulo e usá-la nos dois lugares — duas cópias da regra divergiriam.
 - Produces: `completar_central(law_firm_id: int, ano: int | None = None) -> dict` → `{'beneficios_vistos', 'cpf', 'nascimento', 'rmi', 'total_pago'}` (quantos campos foram gravados). Casa `Benefit.benefit_number` (só dígitos) com `FapCalculoItem.identificador`, tipo ≠ CAT, **mesma vigência** (`FapVigenciaCnpj.vigencia_year` da FK do benefício == `str(item.ano_vigencia)`); com mais de uma linha (mesma vigência, CNPJs diferentes) prefere a do CNPJ do benefício. Idempotente.
 
 - [ ] **Step 1: Write the failing tests:** `test_preenche_vazios` (benefício 2026 sem CPF/RMI/total → recebe `'…'`, `1598.72`, `2991.15`); `test_cpf_sobrescreve_rmi_nao` (benefício com CPF diferente e RMI preenchida → CPF trocado, RMI mantida); `test_mesma_vigencia` (NB em 2025 e 2026 com totais diferentes; benefício ligado à vigência 2026 recebe o total de 2026); `test_sem_item_nao_toca`; `test_tenant` (item de outro escritório não completa).
