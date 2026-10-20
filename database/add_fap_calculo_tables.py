@@ -7,6 +7,11 @@ vigência: o cálculo atual e todos os benefícios e CATs dele.
 Cria as tabelas pelo metadata do SQLAlchemy — funciona igual em SQLite e MySQL,
 e já traz índices e unicidades declarados nos modelos. Idempotente.
 
+Os modelos fixam utf8mb4 / utf8mb4_unicode_ci (a collation de ``benefits``) para
+comparar ``benefit_number`` com ``identificador`` sem "Illegal mix of
+collations". Tabelas já criadas mantêm a collation que tinham (não são
+alteradas aqui); confira com ``SHOW TABLE STATUS LIKE 'fap_calculo_%'``.
+
 Executar:
     uv run python database/add_fap_calculo_tables.py
 """

@@ -8,7 +8,7 @@ Escritórios descartáveis, criados e removidos no fim.
 """
 
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -17,6 +17,7 @@ from main import app
 from app.models import (
     db, LawFirm, User, Benefit, FapVigenciaCnpj, FapContestationCat,
     FapContestationJudgmentReport, FapCalculoItem, FapCompany,
+    FapCalculoEstabelecimento,
 )
 from app.services import fap_calculo_query_service as svc
 
@@ -87,6 +88,7 @@ def setup():
 def cleanup(firm):
     FapCalculoItem.query.filter_by(law_firm_id=firm.id).delete()
     FapCompany.query.filter_by(law_firm_id=firm.id).delete()
+    FapCalculoEstabelecimento.query.filter_by(law_firm_id=firm.id).delete()
     FapContestationCat.query.filter_by(law_firm_id=firm.id).delete()
     Benefit.query.filter_by(law_firm_id=firm.id).delete()
     FapVigenciaCnpj.query.filter_by(law_firm_id=firm.id).delete()
@@ -188,6 +190,42 @@ def test_sem_escritorio_e_filtros_invalidos(f):
         check(f'{rotulo} filtra para vazio', svc.filtrar(f.id, **kw).count() == 0)
 
 
+def test_raiz_no_filtro_cnpj_e_dados_do_estabelecimento(f):
+    print('\n8. cnpj com raiz, cálculo de origem e item ausente')
+    r = svc.filtrar(f.id, cnpj=RAIZ).all()
+    check('raiz de 8 dígitos acha os estabelecimentos', len(r) == 5, str(len(r)))
+    check('raiz com pontuação', len(svc.filtrar(f.id, cnpj='12.345.678').all()) == 5)
+    check('14 dígitos continua exato', len(svc.filtrar(f.id, cnpj=EMPRESA).all()) == 5)
+    check('outro estabelecimento não acha', svc.filtrar(f.id, cnpj='12345678000270').count() == 0)
+
+    db.session.add(FapCalculoEstabelecimento(
+        law_firm_id=f.id, ano_vigencia=2025, cnpj=EMPRESA, cnpj_raiz=RAIZ,
+        calculo_atual_id=500, calculo_atual_tipo='RECALCULO_ELETRONICO_PRIMEIRA_INSTANCIA',
+        calculo_atual_data=date(2025, 10, 1), protocolo='PROT-123',
+        historico_json='[{"id": 500, "tipo": "RECALCULO_ELETRONICO_PRIMEIRA_INSTANCIA", "data": "2025-10-01"},'
+                       ' {"id": 400, "tipo": "CALCULO_ORIGINAL", "data": "2025-09-01"}]'))
+    FapCalculoItem.query.filter_by(law_firm_id=f.id, ano_vigencia=2025, tipo='B91').update(
+        {'calculo_id': 400})
+    FapCalculoItem.query.filter_by(law_firm_id=f.id, ano_vigencia=2025, tipo='CAT').update(
+        {'calculo_id': 500})
+    db.session.commit()
+    itens, _ = svc.pagina(svc.filtrar(f.id, vigencia=2025), 1)
+    por = {i['tipo']: i for i in itens}
+    cat, b91 = por['CAT'], por['B91']
+    check('protocolo exposto', cat['protocolo'] == 'PROT-123')
+    check('tipo e data do cálculo', cat['calculo_tipo'] == 'Recálculo 1ª instância'
+          and cat['calculo_data'] == date(2025, 10, 1), str(cat['calculo_tipo']))
+    check('histórico com rótulos', [h['rotulo'] for h in cat['historico']]
+          == ['Recálculo 1ª instância', 'Cálculo original'], str(cat['historico']))
+    check('item do cálculo atual não é ausente', cat['ausente_no_calculo_atual'] is False)
+    check('item de cálculo antigo é ausente', b91['ausente_no_calculo_atual'] is True)
+    check('CAT contestada traz o id da Central', cat['cat_central_id'] is not None
+          and b91['cat_central_id'] is None, str(cat['cat_central_id']))
+    itens26, _ = svc.pagina(svc.filtrar(f.id, vigencia=2026), 1)
+    check('sem estabelecimento gravado: sem ausência', all(
+        not i['ausente_no_calculo_atual'] and i['historico'] == [] for i in itens26))
+
+
 def main() -> int:
     with app.app_context():
         f, outra = setup()
@@ -199,6 +237,7 @@ def main() -> int:
             test_contadores_batem_com_filtro(f)
             test_tenant(f, outra)
             test_sem_escritorio_e_filtros_invalidos(f)
+            test_raiz_no_filtro_cnpj_e_dados_do_estabelecimento(f)
         finally:
             db.session.rollback()
             for firm in (f, outra):

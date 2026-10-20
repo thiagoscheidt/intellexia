@@ -139,7 +139,8 @@
             <td>{{ dinheiro(i.total_pago) if i.tipo != 'CAT' else '—' }}</td>
             <td>{% if i.tipo == 'CAT' %}Acidente {{ data(i.data_acidente) }}{% else %}{{ data(i.data_inicio) }} → {{ data(i.data_cessacao) }}{% endif %}</td>
             <td>
-              {% if i.estado_atual == 'EXCLUIDO' %}<span class="badge text-bg-danger">Excluído</span>
+              {% if i.ausente_no_calculo_atual %}<span class="badge text-bg-warning" title="O cálculo atual não traz mais este item; o estado exibido é o do último cálculo em que apareceu.">Ausente no cálculo atual</span><br><small class="text-muted">visto em {{ data(i.last_seen_at) }}</small>
+              {% elif i.estado_atual == 'EXCLUIDO' %}<span class="badge text-bg-danger">Excluído</span>
               {% elif i.estado_atual == 'ORIGINAL' %}<span class="badge text-bg-success">Conta</span>
               {% else %}<span class="badge text-bg-light">{{ i.estado_atual or '—' }}</span>{% endif %}
             </td>
@@ -148,6 +149,9 @@
                 <b>Sim</b>
                 {% if i.beneficio_central_id and can_view_module('disputes_center') %}
                 · <a href="{{ url_for('disputes_center.edit_dispute', benefit_id=i.beneficio_central_id) }}" title="Abrir o benefício na Central de Contestações">ver</a>
+                {% endif %}
+                {% if i.cat_central_id and can_view_module('disputes_center') %}
+                · <a href="{{ url_for('disputes_center.edit_cat', cat_id=i.cat_central_id) }}" title="Abrir a CAT na Central de Contestações">ver</a>
                 {% endif %}
               {% else %}<b>Não</b>{% endif %}
             </td>
@@ -171,7 +175,11 @@
                 <div class="col-6 col-md-3"><dt>Contabilização</dt><dd>{{ data(i.data_inicio_contabilizacao) }} → {{ data(i.data_fim_contabilizacao) }}{% if i.meses_contabilizacao is not none %} ({{ ('%.3f'|format(i.meses_contabilizacao|float)).replace('.', ',') }} meses){% endif %}</dd></div>
                 <div class="col-6 col-md-3"><dt>Bloqueio</dt><dd>{{ 'Sim' if i.bloqueio else ('Não' if i.bloqueio is not none else '—') }}</dd></div>
                 {% endif %}
-                <div class="col-12 col-md-6"><dt>Cálculo</dt><dd>{{ i.calculo_id or '—' }} · situação original: {{ i.estado_original or '—' }}</dd></div>
+                <div class="col-12 col-md-6"><dt>Cálculo</dt><dd>{{ i.calculo_tipo or '—' }}{% if i.calculo_data %} de {{ data(i.calculo_data) }}{% endif %} (id {{ i.calculo_id or '—' }}) · situação original: {{ i.estado_original or '—' }}</dd></div>
+                <div class="col-12 col-md-6"><dt>Protocolo</dt><dd>{{ i.protocolo or '—' }}</dd></div>
+                <div class="col-12"><dt>Histórico de cálculos do estabelecimento</dt><dd>
+                  {% if i.historico %}{% for h in i.historico|reverse %}{{ h.rotulo or '—' }}{% if h.data %} ({{ h.data }}){% endif %}{% if not loop.last %} → {% endif %}{% endfor %}{% else %}—{% endif %}
+                </dd></div>
               </dl>
             </td>
           </tr>

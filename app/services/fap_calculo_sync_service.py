@@ -252,14 +252,23 @@ def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
     from app.utils.cnpj import TAMANHO_CNPJ, TAMANHO_CNPJ_RAIZ, completar_zeros
 
     conta = {'estabelecimentos': 0, 'com_itens': 0, 'itens_novos': 0, 'itens_atualizados': 0,
-             'sem_acesso': 0, 'erros': 0, 'expirada': False}
+             'sem_acesso': 0, 'erros': 0, 'expirada': False,
+             'incompleta': False, 'anos_falhou': False}
+
+    def _fim():
+        conta['incompleta'] = bool(conta['erros'] or conta['anos_falhou']
+                                   or conta.pop('listagem_falhou', False))
+        return conta
 
     if anos is None:
         r = client.listar_anos(svc)
         if not r.ok:
             conta['expirada'] = bool(r.expired)
-            conta['erros'] += 0 if r.expired else 1
-            return conta
+            if not r.expired:
+                conta['erros'] += 1
+                conta['anos_falhou'] = True
+                log(f'  ERRO ao listar as vigências: {r.status_code} {r.message}')
+            return _fim()
         anos = [int(a) for a in (r.data or [])]
     anos = sorted(set(anos), reverse=True)
 
@@ -275,17 +284,20 @@ def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         for ano in anos:
             for raiz in raizes:
-                re = client.listar_estabelecimentos(svc, ano, raiz)
-                if not re.ok:
-                    if re.expired:
+                resp = client.listar_estabelecimentos(svc, ano, raiz)
+                if not resp.ok:
+                    if resp.expired:
                         conta['expirada'] = True
-                        return conta
-                    if re.status_code == 403:
+                        return _fim()
+                    if resp.status_code == 403:
                         conta['sem_acesso'] += 1
-                    elif re.status_code != 404:
+                    elif resp.status_code != 404:
                         conta['erros'] += 1
+                        conta['listagem_falhou'] = True
+                    log(f'  ERRO ao listar estabelecimentos {raiz} {ano}: '
+                        f'{resp.status_code} {resp.message}')
                     continue
-                estabs = list(re.data or [])
+                estabs = list(resp.data or [])
                 if filtro_cnpjs.get(raiz):
                     estabs = [c for c in estabs if c in filtro_cnpjs[raiz]]
                 if not estabs:
@@ -317,7 +329,7 @@ def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
                         for f in futuros:
                             f.cancel()
                         conta['expirada'] = True
-                        return conta
+                        return _fim()
                     conta['estabelecimentos'] += 1
                     if busca.situacao == 'sem_acesso':
                         conta['sem_acesso'] += 1
@@ -339,4 +351,4 @@ def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
                         log(f"  {conta['estabelecimentos']} estabelecimentos ({time.time() - t0:.0f}s) — "
                             f"itens novos {conta['itens_novos']}, sem acesso {conta['sem_acesso']}, "
                             f"erros {conta['erros']}")
-    return conta
+    return _fim()

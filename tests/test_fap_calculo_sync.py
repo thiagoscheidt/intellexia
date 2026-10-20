@@ -265,6 +265,32 @@ def test_expirada_interrompe(fid):
     check('saída 2', codigo == 2, str(codigo))
 
 
+def test_falha_na_lista_de_anos_e_incompleta(fid):
+    print('falha em /vigencias/anos: incompleta, saída 3')
+    p = Portal({'11111111': [ESTAB_B1]})
+    p.anos = lambda svc: FapWebResult(ok=False, status_code=502, message='HTTP 502')
+    logs = []
+    r = _com_portal(p, lambda: sync.sincronizar(fid, None, raizes=['11111111'], log=logs.append))
+    check('incompleta', r['incompleta'] is True and r['erros'] == 1 and not r['expirada'], str(r))
+    check('motivo no log', any('502' in str(m) for m in logs), str(logs))
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'fap_calculo_sync_script3', Path(__file__).resolve().parent.parent / 'scripts' / 'fap_calculo_sync.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    codigo = _com_portal(p, lambda: mod.main(
+        ['--empresa', '11111111', '--escritorio', str(fid), '--workers', '1'], svc=object()))
+    check('saída 3', codigo == 3, str(codigo))
+    p2 = Portal({'11111111': 502})
+    r = _com_portal(p2, lambda: sync.sincronizar(
+        fid, None, anos=[ANO], raizes=['11111111'], log=logs.append))
+    check('listagem 502 incompleta', r['incompleta'] is True, str(r))
+    p3 = Portal({'11111111': 403})
+    r = _com_portal(p3, lambda: sync.sincronizar(
+        fid, None, anos=[ANO], raizes=['11111111'], log=logs.append))
+    check('403 não é incompleta', r['incompleta'] is False, str(r))
+
+
 def main():
     with app.app_context():
         firm = LawFirm.query.filter_by(cnpj=TEST_CNPJ).first()
@@ -281,7 +307,7 @@ def main():
                       test_item_que_sumiu_fica, test_sem_calculo, test_403_nao_apaga,
                       test_tem_itens_false_nao_chama_beneficios,
                       test_sincronizar_duas_raizes_uma_sem_acesso, test_somente_novos_pula_gravados,
-                      test_expirada_interrompe):
+                      test_expirada_interrompe, test_falha_na_lista_de_anos_e_incompleta):
                 t(fid)
         finally:
             db.session.rollback()

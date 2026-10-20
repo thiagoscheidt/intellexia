@@ -17,7 +17,8 @@ Variáveis (.env):
   FAP_SYNC_LAW_FIRM_ID        — escritório (ou --escritorio)
   FAP_CALCULO_SYNC_WORKERS    — consultas em paralelo (padrão 8, máx 20)
 
-Códigos de saída: 0 ok, 1 erro de configuração, 2 sessão FAP expirada.
+Códigos de saída: 0 ok, 1 erro de configuração, 2 sessão FAP expirada,
+3 execução incompleta (erros, ou a lista de vigências / de estabelecimentos falhou).
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from main import app  # carrega o .env
 
-EXIT_OK, EXIT_ERRO, EXIT_EXPIRADA = 0, 1, 2
+EXIT_OK, EXIT_ERRO, EXIT_EXPIRADA, EXIT_INCOMPLETA = 0, 1, 2, 3
 WORKERS_PADRAO, WORKERS_MAX = 8, 20
 
 
@@ -98,8 +99,14 @@ def main(argv=None, svc=None) -> int:
             _log('ERRO: sessão FAP expirada no meio. Faça login, atualize o FAP_AUTH_JSON e rode de novo '
                  'com --somente-novos (o que já foi gravado fica).')
             return EXIT_EXPIRADA
+        if r.get('anos_falhou'):
+            _log('ERRO: a lista de vigências falhou; nada foi sincronizado.')
+            return EXIT_INCOMPLETA
         if not args.sem_completar:
             _log(f'Central completada: {completar_central(law_firm_id)}')
+        if r.get('incompleta'):
+            _log('AVISO: execução incompleta (erros acima). Rode de novo com --somente-novos.')
+            return EXIT_INCOMPLETA
     return EXIT_OK
 
 

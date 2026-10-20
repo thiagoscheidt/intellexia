@@ -2874,6 +2874,7 @@ class FapCalculoEstabelecimento(db.Model):
     __tablename__ = 'fap_calculo_estabelecimentos'
     __table_args__ = (
         db.UniqueConstraint('law_firm_id', 'ano_vigencia', 'cnpj', name='uq_fap_calc_estab'),
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2921,6 +2922,7 @@ class FapCalculoItem(db.Model):
         db.Index('ix_fap_calc_item_firm_ident', 'law_firm_id', 'identificador'),
         db.Index('ix_fap_calc_item_firm_ano_tipo', 'law_firm_id', 'ano_vigencia', 'tipo'),
         db.Index('ix_fap_calc_item_firm_raiz', 'law_firm_id', 'cnpj_raiz'),
+        {'mysql_charset': 'utf8mb4', 'mysql_collate': 'utf8mb4_unicode_ci'},
     )
 
     id = db.Column(db.Integer, primary_key=True)

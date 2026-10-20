@@ -3,10 +3,13 @@
 Fonte única da tela do Painel FAP e das tools do MCP. "Contestado" = mesmo
 número **e mesma vigência** na Central: o mesmo NB em outra vigência não conta.
 """
+import json
+from datetime import date
+
 from sqlalchemy import Integer, and_, cast, exists, false, func, or_
 
 from app.models import (
-    Benefit, FapCalculoItem as Item, FapCompany, FapContestationCat,
+    Benefit, FapCalculoEstabelecimento as Estab, FapCalculoItem as Item, FapCompany, FapContestationCat,
     FapVigenciaCnpj, db,
 )
 from app.services import fap_group_service
@@ -53,6 +56,51 @@ def _beneficio_central_id_expr(law_firm_id):
     )
 
 
+def _cat_central_id_expr(law_firm_id):
+    return (
+        db.select(func.min(FapContestationCat.id))
+        .where(Item.tipo == 'CAT',
+               FapContestationCat.law_firm_id == law_firm_id,
+               FapContestationCat.cat_number == Item.identificador,
+               _igual_ano(FapContestationCat.vigencia_year))
+        .correlate(Item)
+        .scalar_subquery()
+    )
+
+
+ROTULOS_CALCULO = {
+    'CALCULO_ORIGINAL': 'Cálculo original',
+    'RECALCULO_ELETRONICO_PRIMEIRA_INSTANCIA': 'Recálculo 1ª instância',
+    'RECALCULO_ELETRONICO_SEGUNDA_INSTANCIA': 'Recálculo 2ª instância',
+}
+
+
+def rotulo_calculo(tipo):
+    return ROTULOS_CALCULO.get(tipo, tipo)
+
+
+def _data_br(valor):
+    if not valor:
+        return None
+    try:
+        return date.fromisoformat(str(valor)[:10]).strftime('%d/%m/%Y')
+    except ValueError:
+        return str(valor)
+
+
+def _historico(texto):
+    try:
+        lista = json.loads(texto) if texto else []
+    except ValueError:
+        return []
+    out = []
+    for h in lista if isinstance(lista, list) else []:
+        if isinstance(h, dict):
+            out.append({'id': h.get('id'), 'tipo': h.get('tipo'),
+                        'rotulo': rotulo_calculo(h.get('tipo')), 'data': _data_br(h.get('data'))})
+    return out
+
+
 def filtrar(law_firm_id, *, vigencia=None, raizes=None, grupo=None, cnpj=None,
             identificador=None, tipos=None, situacao=None, contestado=None):
     """Query de ``FapCalculoItem`` do escritório, com os filtros dados.
@@ -74,7 +122,12 @@ def filtrar(law_firm_id, *, vigencia=None, raizes=None, grupo=None, cnpj=None,
             q, law_firm_id, grupo, Item.cnpj_raiz, coluna_e_raiz=True)
     if cnpj:
         digitos = apenas_digitos(cnpj)
-        q = q.filter(Item.cnpj == completar_zeros(digitos, 14)) if digitos else q.filter(false())
+        if not digitos:
+            q = q.filter(false())
+        elif len(digitos) <= 8:  # raiz (8 dígitos): todos os estabelecimentos dela
+            q = q.filter(Item.cnpj_raiz == completar_zeros(digitos, 8))
+        else:
+            q = q.filter(Item.cnpj == completar_zeros(digitos, 14))
     if identificador:
         digitos = apenas_digitos(identificador)
         if not digitos:
@@ -154,6 +207,7 @@ def pagina(query, page, per_page=50, *, law_firm_id=None):
             Item,
             contestado_expr(firm_id).label('contestado'),
             _beneficio_central_id_expr(firm_id).label('central_id'),
+            _cat_central_id_expr(firm_id).label('cat_id'),
         )
         .order_by(Item.ano_vigencia.desc(), Item.cnpj, Item.tipo,
                   Item.identificador, Item.id)
@@ -167,13 +221,30 @@ def pagina(query, page, per_page=50, *, law_firm_id=None):
             db.session.query(FapCompany.cnpj, FapCompany.nome).filter(
                 FapCompany.law_firm_id == firm_id, FapCompany.cnpj.in_(raizes)).all())
 
+    estabs = {}
+    if linhas:
+        for e in Estab.query.filter(
+                Estab.law_firm_id == firm_id,
+                Estab.cnpj.in_({linha[0].cnpj for linha in linhas}),
+                Estab.ano_vigencia.in_({linha[0].ano_vigencia for linha in linhas})).all():
+            estabs[(e.ano_vigencia, e.cnpj)] = e
+
     itens = []
-    for item, contestado, central_id in linhas:
+    for item, contestado, central_id, cat_id in linhas:
         d = {c.name: getattr(item, c.name) for c in Item.__table__.columns
              if c.name != 'raw_json'}
         d['empresa_nome'] = nomes.get(item.cnpj_raiz)
         d['contestado'] = bool(contestado)
         d['beneficio_central_id'] = (
             central_id if contestado and item.tipo != 'CAT' else None)
+        d['cat_central_id'] = cat_id if contestado and item.tipo == 'CAT' else None
+        e = estabs.get((item.ano_vigencia, item.cnpj))
+        d['calculo_tipo'] = rotulo_calculo(e.calculo_atual_tipo) if e and e.calculo_atual_tipo else None
+        d['calculo_data'] = e.calculo_atual_data if e else None
+        d['protocolo'] = e.protocolo if e else None
+        d['historico'] = _historico(e.historico_json) if e else []
+        d['ausente_no_calculo_atual'] = bool(
+            e and e.calculo_atual_id and item.calculo_id
+            and item.calculo_id != e.calculo_atual_id)
         itens.append(d)
     return itens, total

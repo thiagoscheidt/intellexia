@@ -6,14 +6,15 @@ Escritório e usuários descartáveis, removidos no fim.
     uv run python tests/test_fap_calculo_tela.py
 """
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from main import app
 from app.models import (
-    Benefit, FapCalculoItem, FapVigenciaCnpj, LawFirm, User, UserPageVisit, db,
+    Benefit, FapCalculoEstabelecimento, FapCalculoItem, FapContestationCat,
+    FapContestationJudgmentReport, FapVigenciaCnpj, LawFirm, User, UserPageVisit, db,
 )
 from app.utils.cnpj import formatar_cpf
 
@@ -33,6 +34,8 @@ def check(nome, condicao, detalhe=''):
 
 
 def cleanup(firm):
+    FapContestationCat.query.filter_by(law_firm_id=firm.id).delete()
+    FapContestationJudgmentReport.query.filter_by(law_firm_id=firm.id).delete()
     users = User.query.filter_by(law_firm_id=firm.id).all()
     ids = [u.id for u in users]
     if ids:
@@ -42,6 +45,7 @@ def cleanup(firm):
     Benefit.query.filter_by(law_firm_id=firm.id).delete()
     FapVigenciaCnpj.query.filter_by(law_firm_id=firm.id).delete()
     FapCalculoItem.query.filter_by(law_firm_id=firm.id).delete()
+    FapCalculoEstabelecimento.query.filter_by(law_firm_id=firm.id).delete()
     db.session.delete(firm)
     db.session.commit()
 
@@ -69,9 +73,24 @@ def setup():
         db.session.add(FapCalculoItem(**base))
 
     item('B91', '6505977833', cpf='12455224092', nit='12455224092',
-         data_nascimento=date(1976, 5, 14))
-    item('CAT', '20230000099', cpf='98765432100', data_acidente=date(2023, 4, 5))
-    item('B92', '6000000001', estado_atual='EXCLUIDO')
+         data_nascimento=date(1976, 5, 14), calculo_id=804, last_seen_at=datetime(2026, 9, 3))
+    item('CAT', '20230000099', cpf='98765432100', data_acidente=date(2023, 4, 5), calculo_id=804)
+    item('B92', '6000000001', estado_atual='EXCLUIDO', calculo_id=700,
+         last_seen_at=datetime(2026, 9, 3))
+    db.session.add(FapCalculoEstabelecimento(
+        law_firm_id=firm.id, ano_vigencia=2026, cnpj='07718633008163', cnpj_raiz='07718633',
+        calculo_atual_id=804, calculo_atual_tipo='RECALCULO_ELETRONICO_SEGUNDA_INSTANCIA',
+        calculo_atual_data=date(2026, 10, 20), protocolo='10128.048333/2025-01',
+        historico_json='[{"id": 804, "tipo": "RECALCULO_ELETRONICO_SEGUNDA_INSTANCIA", "data": "2026-10-20"},'
+                       ' {"id": 700, "tipo": "RECALCULO_ELETRONICO_PRIMEIRA_INSTANCIA", "data": "2026-06-01"},'
+                       ' {"id": 600, "tipo": "CALCULO_ORIGINAL", "data": "2026-01-10"}]'))
+    report = FapContestationJudgmentReport(user_id=admin.id, law_firm_id=firm.id,
+                                           original_filename='r.pdf', file_path='/dev/null')
+    db.session.add(report)
+    db.session.flush()
+    cat = FapContestationCat(law_firm_id=firm.id, report_id=report.id,
+                             cat_number='20230000099', vigencia_year='2026')
+    db.session.add(cat)
 
     vig = FapVigenciaCnpj(law_firm_id=firm.id, employer_cnpj='07718633008163', vigencia_year='2026')
     db.session.add(vig)
@@ -80,7 +99,7 @@ def setup():
                     fap_vigencia_cnpj_id=vig.id)
     db.session.add(benef)
     db.session.commit()
-    return firm, admin, comum, benef
+    return firm, admin, comum, benef, cat.id
 
 
 def login(client, user):
@@ -93,7 +112,7 @@ def login(client, user):
 
 def main():
     with app.app_context():
-        firm, admin, comum, benef = setup()
+        firm, admin, comum, benef, cat_id = setup()
         try:
             client = app.test_client()
             login(client, admin)
@@ -123,6 +142,25 @@ def main():
             print('test_link_contestado')
             html = client.get(URL + '?tipo=B91').get_data(as_text=True)
             check('link para o benefício da Central', f'/disputes-center/{benef.id}/edit' in html)
+
+            print('test_link_cat_contestada')
+            html = client.get(URL + '?tipo=CAT').get_data(as_text=True)
+            check('link para a CAT da Central', f'/disputes-center/cats/{cat_id}/edit' in html)
+
+            print('test_detalhe_do_calculo')
+            html = client.get(URL + '?tipo=B91').get_data(as_text=True)
+            check('protocolo', '10128.048333/2025-01' in html)
+            check('tipo e data do cálculo', 'Recálculo 2ª instância de 20/10/2026' in html)
+            check('histórico do estabelecimento', 'Cálculo original (10/01/2026) → '
+                  'Recálculo 1ª instância (01/06/2026) → Recálculo 2ª instância (20/10/2026)' in html)
+
+            print('test_ausente_no_calculo_atual')
+            html = client.get(URL + '?tipo=B92').get_data(as_text=True)
+            check('selo de ausente com data', 'Ausente no cálculo atual' in html
+                  and 'visto em 03/09/2026' in html)
+            check('sem selo Excluído', 'text-bg-danger">Excluído' not in html)
+            check('item do cálculo atual sem selo', 'Ausente no cálculo atual' not in
+                  client.get(URL + '?tipo=B91').get_data(as_text=True))
 
             print('test_sem_modulo_fap_panel')
             outro = app.test_client()
