@@ -461,8 +461,10 @@ def listar_beneficios_fap(
         status_1a_instancia: Resultado na 1ª instância administrativa: deferido,
             indeferido, em_analise ou pendente (aceita "indeferidos", "em análise"...).
         status_2a_instancia: Resultado na 2ª instância (recurso), mesmos valores.
-            Pendente na 2ª segue a tela: só quem ainda pode recorrer — 1ª deferida
-            ou em análise não entra.
+            Pendente na 2ª = nenhum resultado nem andamento de recurso registrado
+            no sistema; 1ª deferida ou em análise não entra (igual à tela). NÃO
+            indica se o prazo de recurso ainda está aberto — não afirme que o
+            recurso "ainda é possível" ou "segue cabível".
         limite: Número máximo de registros retornados (padrão 50).
         deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
             'proximo_deslocamento' que veio na resposta anterior.
@@ -604,6 +606,10 @@ def resumo_fap(
         status_1a_instancia: deferido, indeferido, em_analise ou pendente —
             restringe os benefícios ao resultado na 1ª instância (opcional).
         status_2a_instancia: Mesmos valores, para a 2ª instância (opcional).
+            Pendente na 2ª = nenhum resultado nem andamento de recurso registrado;
+            não diz se o prazo de recurso ainda está aberto, então não afirme que
+            o recurso ainda é possível. Em por_tipo_x_status_segunda_instancia,
+            "nao_se_aplica" é quem foi deferido ou está em análise na 1ª.
             Esses três filtros não mudam os números de contestações.
     """
     claims = require_module("fap_panel")
