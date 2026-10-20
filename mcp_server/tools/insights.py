@@ -161,7 +161,7 @@ def buscar_por_segurado_handler(
 ) -> dict:
     """Reúne benefícios, CATs e (se permitido) processos de um segurado."""
     from app.models import Benefit, FapContestationCat, JudicialProcessBenefit
-    from mcp_server.tools.fap import _parse_topics
+    from mcp_server.tools.fap import AVISO_SEM_NOME, _parse_topics, cpf_condicao
 
     if not any([nit, cpf, nome]):
         return {"erro": "Informe ao menos um identificador: nit, cpf ou nome."}
@@ -171,14 +171,18 @@ def buscar_por_segurado_handler(
     if nit:
         bq = bq.filter(Benefit.insured_nit == nit)
     if cpf:
-        bq = bq.filter(Benefit.insured_cpf == cpf)
+        bq = bq.filter(cpf_condicao(Benefit.insured_cpf, cpf))
     if nome:
         bq = bq.filter(Benefit.insured_name.ilike(f"%{nome}%"))
+    encontrados = bq.order_by(Benefit.created_at.desc()).limit(50).all()
     beneficios = [
         {
             "id": b.id,
             "numero_beneficio": b.benefit_number,
             "tipo_beneficio": b.benefit_type,
+            "segurado_nit": b.insured_nit,
+            "segurado_cpf": b.insured_cpf,
+            "segurado_data_nascimento": _iso(b.insured_date_of_birth),
             "empregador_nome": b.employer_name,
             "empregador_cnpj": b.employer_cnpj,
             "vigencias_fap": b.fap_vigencia_years,
@@ -187,15 +191,19 @@ def buscar_por_segurado_handler(
             "status_segunda_instancia": b.second_instance_status,
             "total_pago": float(b.total_paid) if b.total_paid is not None else None,
         }
-        for b in bq.order_by(Benefit.created_at.desc()).limit(50).all()
+        for b in encontrados
     ]
+
+    # CAT e processo não têm CPF: o elo é o NIT. Pedido só por CPF usa os NITs
+    # dos benefícios daquele CPF — antes a consulta de CAT ia sem filtro e
+    # devolvia 30 CATs quaisquer do escritório.
+    nits = {nit} if nit else {b.insured_nit for b in encontrados if cpf and b.insured_nit}
 
     # CATs (mesmo domínio FAP; exige módulo de contestações)
     cats = []
-    if "disputes_center" in modules and (nit or cpf):
-        cq = FapContestationCat.query.filter_by(law_firm_id=law_firm_id)
-        if nit:
-            cq = cq.filter(FapContestationCat.insured_nit == nit)
+    if "disputes_center" in modules and nits:
+        cq = FapContestationCat.query.filter_by(law_firm_id=law_firm_id).filter(
+            FapContestationCat.insured_nit.in_(nits))
         cats = [
             {
                 "numero_cat": c.cat_number,
@@ -208,11 +216,11 @@ def buscar_por_segurado_handler(
 
     # Processos judiciais vinculados (só se permitido)
     processos = []
-    if "process_panel" in modules and nit:
+    if "process_panel" in modules and nits:
         pbq = (
             JudicialProcessBenefit.query
             .join(JudicialProcessBenefit.process)
-            .filter(JudicialProcessBenefit.nit_number == nit)
+            .filter(JudicialProcessBenefit.nit_number.in_(nits))
         )
         for pb in pbq.limit(30).all():
             proc = pb.process
@@ -225,9 +233,12 @@ def buscar_por_segurado_handler(
                     "numero_beneficio": pb.benefit_number,
                 })
 
-    return {
+    resultado = {
         "identificadores": {"nit": nit, "cpf": cpf, "nome": nome},
         "beneficios": {"total": len(beneficios), "itens": beneficios},
         "cats": {"total": len(cats), "itens": cats},
         "processos": {"total": len(processos), "itens": processos},
     }
+    if nome:
+        resultado["aviso"] = AVISO_SEM_NOME
+    return resultado

@@ -447,9 +447,12 @@ def listar_beneficios_fap(
         tipo_pedido: exclusao, inclusao ou revisao.
         tipo_beneficio: Ex: B91 (auxílio-acidente), B94 (auxílio-doença acidentário).
         topico_contestacao: Tópico jurídico da contestação (ex: ACIDENTE DE TRAJETO).
-        segurado: Nome (ou parte do nome) do segurado.
+        segurado: Nome (ou parte do nome) do segurado. ATENÇÃO: o relatório e o
+            portal do FAP não trazem nome — só acha cadastro manual. Se a pergunta
+            vier com o nome da pessoa, diga que o sistema não tem o nome do
+            segurado e peça o CPF ou o NIT.
         nit: NIT do segurado (busca exata).
-        cpf: CPF do segurado (busca exata, apenas números).
+        cpf: CPF do segurado — com ou sem pontuação.
         numero_beneficio: Número do benefício (busca exata).
         ano_vigencia: Ano de vigência FAP em que o benefício aparece (ex: "2023").
         grupo: Grupo empresarial cadastrado (ex: "Vale") — todas as empresas do
@@ -551,8 +554,11 @@ def buscar_por_segurado(
 
     Args:
         nit: NIT do segurado (identificador mais completo para o cruzamento).
-        cpf: CPF do segurado (apenas números).
-        nome: Nome ou parte do nome do segurado.
+        cpf: CPF do segurado, com ou sem pontuação. Só com o CPF, CATs e
+            processos vêm pelos NITs dos benefícios desse CPF.
+        nome: Nome ou parte do nome do segurado. O sistema não tem o nome do
+            segurado (relatório e portal do FAP não trazem): se a pergunta vier
+            com o nome, avise isso e peça o CPF ou o NIT.
     """
     claims = require_module("fap_panel")
     with app.app_context():

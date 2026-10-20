@@ -191,6 +191,29 @@ def _filter_status_instancia(query, primeira: str | None, segunda: str | None):
     return query
 
 
+# ── Segurado (E02 da R09) ─────────────────────────────────────────────────────
+
+AVISO_SEM_NOME = (
+    "O sistema não tem o nome do segurado: o relatório de julgamento e o portal do FAP "
+    "não trazem nome, então a busca por nome só acha benefícios cadastrados à mão. "
+    "Peça o CPF (ou o NIT) e busque por ele."
+)
+
+
+def cpf_condicao(coluna, cpf: str):
+    """CPF com ou sem pontuação, e sem o zero à esquerda que o portal come.
+
+    O script de completar grava só dígitos; o cadastro manual pode ter
+    gravado formatado — as duas formas casam.
+    """
+    from app.utils.cnpj import TAMANHO_CPF, completar_zeros, formatar_cpf
+
+    digitos = completar_zeros(cpf, TAMANHO_CPF)
+    if not digitos:
+        return coluna == cpf
+    return coluna.in_({digitos, formatar_cpf(digitos), str(cpf).strip()})
+
+
 def _cnpj_formatado(d: str) -> str:
     if len(d) != 14:
         return d
@@ -536,7 +559,7 @@ def list_fap_benefits_handler(
     if nit:
         query = query.filter(Benefit.insured_nit == nit)
     if cpf:
-        query = query.filter(Benefit.insured_cpf == cpf)
+        query = query.filter(cpf_condicao(Benefit.insured_cpf, cpf))
     if numero_beneficio:
         query = query.filter(Benefit.benefit_number == numero_beneficio)
     if ano_vigencia:
@@ -566,6 +589,7 @@ def list_fap_benefits_handler(
             "segurado_nome": b.insured_name,
             "segurado_nit": b.insured_nit,
             "segurado_cpf": b.insured_cpf,
+            "segurado_data_nascimento": _iso(b.insured_date_of_birth),
             "empregador_cnpj": b.employer_cnpj,
             "empregador_nome": b.employer_name or _empresa_por_cnpj(b.employer_cnpj, names),
             "data_inicio_beneficio": _iso(b.benefit_start_date),
@@ -582,7 +606,10 @@ def list_fap_benefits_handler(
         }
         for b in benefits
     ]
-    return page_envelope(total, offset, itens)
+    envelope = page_envelope(total, offset, itens)
+    if segurado:
+        envelope["aviso"] = AVISO_SEM_NOME
+    return envelope
 
 
 def _colunas_listagem_beneficio():
@@ -591,6 +618,7 @@ def _colunas_listagem_beneficio():
     return (
         Benefit.id, Benefit.benefit_number, Benefit.benefit_type, Benefit.request_type,
         Benefit.status, Benefit.insured_name, Benefit.insured_nit, Benefit.insured_cpf,
+        Benefit.insured_date_of_birth,
         Benefit.employer_cnpj, Benefit.employer_name, Benefit.benefit_start_date,
         Benefit.benefit_end_date, Benefit.accident_date, Benefit.accident_company_name,
         Benefit.cat_number, Benefit.fap_vigencia_years, Benefit.fap_contestation_topics_json,
