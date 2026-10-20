@@ -8,6 +8,7 @@ Escritórios descartáveis, criados e removidos no fim.
 """
 
 import sys
+from decimal import Decimal
 from datetime import date, datetime
 from pathlib import Path
 
@@ -73,11 +74,13 @@ def setup():
                 fap_vigencia_cnpj_id=vig25.id),
         FapContestationCat(law_firm_id=firm.id, report_id=report.id, cat_number='2025000001',
                            vigencia_year='2025'),
-        _item(firm.id, 2025, 'B91', '6111111111', cpf='01234567890', nit='12455224092'),
-        _item(firm.id, 2026, 'B91', '6111111111'),
+        _item(firm.id, 2025, 'B91', '6111111111', cpf='01234567890', nit='12455224092',
+              total_pago=Decimal('100.00')),
+        _item(firm.id, 2026, 'B91', '6111111111', total_pago=Decimal('250.50')),
         _item(firm.id, 2025, 'CAT', '2025000001'),
         _item(firm.id, 2026, 'CAT', '2025000001'),
-        _item(firm.id, 2026, 'B94', '6222222222', estado_atual='EXCLUIDO'),
+        _item(firm.id, 2026, 'B94', '6222222222', estado_atual='EXCLUIDO',
+              total_pago=Decimal('40.00')),
         # mesmo NB no outro escritório
         _item(outra.id, 2025, 'B91', '6111111111'),
     ])
@@ -159,6 +162,13 @@ def test_contadores_batem_com_filtro(f):
     check('cruzamento bate com nao_contestados',
           sum(v['nao_contestado'] for t in cr.values() for v in t.values()) == c['nao_contestados'])
     check('contadores respeitam o filtro', c26['total'] == 3 and c26['nao_contestados'] == 3, str(c26))
+    check('contestados = total − não contestados', c['contestados'] == 2, str(c['contestados']))
+    check('total pago soma os benefícios (CAT entra como zero)',
+          c['total_pago'] == Decimal('390.50'), str(c['total_pago']))
+    check('total pago dos não contestados', c['total_pago_nao_contestado'] == Decimal('290.50'),
+          str(c['total_pago_nao_contestado']))
+    check('total pago dos excluídos', c['total_pago_excluido'] == Decimal('40.00'),
+          str(c['total_pago_excluido']))
 
 
 def test_tenant(f, outra):

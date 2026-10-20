@@ -151,8 +151,13 @@ def main():
             html = client.get(URL + '?tipo=B91').get_data(as_text=True)
             check('protocolo', '10128.048333/2025-01' in html)
             check('tipo e data do cálculo', 'Recálculo 2ª instância de 20/10/2026' in html)
-            check('histórico do estabelecimento', 'Cálculo original (10/01/2026) → '
-                  'Recálculo 1ª instância (01/06/2026) → Recálculo 2ª instância (20/10/2026)' in html)
+            etapas = ['Cálculo original · 10/01/2026', 'Recálculo 1ª instância · 01/06/2026',
+                      'Recálculo 2ª instância · 20/10/2026']
+            posicoes = [html.find(e) for e in etapas]
+            check('histórico do estabelecimento, do original ao atual',
+                  all(p >= 0 for p in posicoes) and posicoes == sorted(posicoes), str(posicoes))
+            check('etapa atual destacada',
+                  '<span class="etapa atual">Recálculo 2ª instância · 20/10/2026</span>' in html)
 
             print('test_ausente_no_calculo_atual')
             html = client.get(URL + '?tipo=B92').get_data(as_text=True)
@@ -161,6 +166,16 @@ def main():
             check('sem selo Excluído', 'text-bg-danger">Excluído' not in html)
             check('item do cálculo atual sem selo', 'Ausente no cálculo atual' not in
                   client.get(URL + '?tipo=B91').get_data(as_text=True))
+
+            print('test_estabelecimentos_json')
+            r = client.get(URL + 'estabelecimentos.json?raiz=7718633')
+            itens = r.get_json()['itens']
+            check('lista os estabelecimentos da empresa, raiz sem o zero',
+                  [e['cnpj'] for e in itens] == ['07718633008163'], str(itens))
+            check('texto com CNPJ formatado e quantidade de itens',
+                  itens and itens[0]['texto'].startswith('07.718.633/0081-63 · '), str(itens))
+            check('raiz de outra empresa não traz nada',
+                  client.get(URL + 'estabelecimentos.json?raiz=33592510').get_json()['itens'] == [])
 
             print('test_sem_modulo_fap_panel')
             outro = app.test_client()

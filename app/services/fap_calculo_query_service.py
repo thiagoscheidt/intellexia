@@ -5,6 +5,7 @@ número **e mesma vigência** na Central: o mesmo NB em outra vigência não con
 """
 import json
 from datetime import date
+from decimal import Decimal
 
 from sqlalchemy import Integer, and_, cast, exists, false, func, or_
 
@@ -168,6 +169,8 @@ def contadores(query, *, law_firm_id=None):
 
     ``cruzamento``: {tipo: {'conta'|'excluido': {'contestado': n, 'nao_contestado': n}}}.
     Situação fora de ORIGINAL/EXCLUIDO entra nos totais, não no cruzamento.
+    ``total_pago`` (e o recorte dos não contestados e dos excluídos) soma o
+    ``total_pago`` dos benefícios; CAT não tem valor e entra como zero.
     """
     firm_id = _firm_id(query, law_firm_id)
     cont = contestado_expr(firm_id).label('contestado')
@@ -176,24 +179,33 @@ def contadores(query, *, law_firm_id=None):
                   for t in TIPOS}
     estado_para_situacao = {v: k for k, v in _ESTADO.items()}
     total = excluidos = nao_contestados = 0
+    pago = pago_nao_contestado = pago_excluido = Decimal('0')
     # A expressão é por linha: calcula na subquery e agrupa por colunas simples
     # (GROUP BY direto na expressão quebra only_full_group_by no MySQL).
     sub = query.order_by(None).with_entities(
-        Item.tipo.label('tipo'), Item.estado_atual.label('estado'), cont).subquery()
-    linhas = (db.session.query(sub.c.tipo, sub.c.estado, sub.c.contestado, func.count())
+        Item.tipo.label('tipo'), Item.estado_atual.label('estado'), cont,
+        Item.total_pago.label('total_pago')).subquery()
+    linhas = (db.session.query(sub.c.tipo, sub.c.estado, sub.c.contestado, func.count(),
+                               func.sum(sub.c.total_pago))
               .group_by(sub.c.tipo, sub.c.estado, sub.c.contestado).all())
-    for tipo, estado, contestado, n in linhas:
+    for tipo, estado, contestado, n, soma in linhas:
+        soma = Decimal(str(soma or 0))
         por_tipo[tipo] = por_tipo.get(tipo, 0) + n
         total += n
+        pago += soma
         if estado == 'EXCLUIDO':
             excluidos += n
+            pago_excluido += soma
         if not contestado:
             nao_contestados += n
+            pago_nao_contestado += soma
         situacao = estado_para_situacao.get(estado)
         if situacao and tipo in cruzamento:
             cruzamento[tipo][situacao]['contestado' if contestado else 'nao_contestado'] += n
     return {'total': total, 'por_tipo': por_tipo, 'excluidos': excluidos,
-            'nao_contestados': nao_contestados, 'cruzamento': cruzamento}
+            'nao_contestados': nao_contestados, 'contestados': total - nao_contestados,
+            'total_pago': pago, 'total_pago_nao_contestado': pago_nao_contestado,
+            'total_pago_excluido': pago_excluido, 'cruzamento': cruzamento}
 
 
 def pagina(query, page, per_page=50, *, law_firm_id=None):
