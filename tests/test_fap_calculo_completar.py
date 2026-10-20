@@ -128,6 +128,22 @@ def test_mesma_vigencia():
         _cleanup(firm)
 
 
+def test_desempate_por_cnpj():
+    print('\n3b. Desempate pelo CNPJ do benefício')
+    firm = _firm(CNPJ_A)
+    try:
+        _item(firm, 2026, cnpj='07718633008001', total_pago=Decimal('111.00'))
+        _item(firm, 2026, cnpj=ESTAB, total_pago=Decimal('222.00'))
+        b = _benefit(firm, 2026)
+        db.session.commit()
+        sync.completar_central(firm.id)
+        db.session.refresh(b)
+        check('pega a linha do CNPJ da vigência', b.total_paid == Decimal('222.00'), str(b.total_paid))
+    finally:
+        db.session.rollback()
+        _cleanup(firm)
+
+
 def test_sem_item_nao_toca():
     print('\n4. Sem item não toca')
     firm = _firm(CNPJ_A)
@@ -170,6 +186,7 @@ def main() -> int:
         test_preenche_vazios()
         test_cpf_sobrescreve_rmi_nao()
         test_mesma_vigencia()
+        test_desempate_por_cnpj()
         test_sem_item_nao_toca()
         test_tenant()
     if _falhas:
