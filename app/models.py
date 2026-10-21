@@ -3824,6 +3824,43 @@ class NotificationSetting(db.Model):
                 f'law_firm_id={self.law_firm_id} enabled={self.is_enabled}>')
 
 
+class UserMcpCall(db.Model):
+    """Tabela user_mcp_calls - Uso do MCP por usuário, agregado por dia.
+
+    Mesmo molde de ``user_page_visits``: uma linha por (usuário, função, dia
+    em São Paulo), incrementada pelo middleware do servidor MCP a cada chamada.
+    ``kind`` separa ferramenta (``tool``) de comando pronto (``prompt``).
+    **Os argumentos da chamada não são gravados** — trazem CPF, texto de
+    petição, nomes; para auditoria de uso basta saber o quê, quando e se deu
+    certo.
+    """
+    __tablename__ = 'user_mcp_calls'
+
+    KIND_TOOL = 'tool'
+    KIND_PROMPT = 'prompt'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+
+    kind = db.Column(db.String(10), nullable=False, default=KIND_TOOL)
+    name = db.Column(db.String(100), nullable=False)
+    call_date = db.Column(db.Date, nullable=False)          # dia em America/Sao_Paulo
+    calls = db.Column(db.Integer, nullable=False, default=0)
+    errors = db.Column(db.Integer, nullable=False, default=0)
+    total_ms = db.Column(db.BigInteger, nullable=False, default=0)
+    last_called_at = db.Column(db.DateTime, nullable=False)  # UTC
+    last_error = db.Column(db.String(255))
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'kind', 'name', 'call_date', name='uq_user_mcp_calls_user_name_date'),
+        db.Index('ix_user_mcp_calls_firm_date', 'law_firm_id', 'call_date'),
+    )
+
+    def __repr__(self):
+        return f'<UserMcpCall user_id={self.user_id} {self.kind}:{self.name} {self.call_date} calls={self.calls}>'
+
+
 class UserPageVisit(db.Model):
     """Tabela user_page_visits - Agregado diário de telas acessadas por usuário.
 

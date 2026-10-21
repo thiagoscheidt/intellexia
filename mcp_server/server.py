@@ -52,6 +52,7 @@ from main import app  # noqa: E402 — importa o app Flask com DB e configs
 
 from mcp_server.identity import get_identity, require_admin, require_module
 from mcp_server.oauth_provider import IntellexiaOAuthProvider
+from mcp_server.usage_log import UsoMcpMiddleware
 from mcp_server.tools.knowledge import kb_search_handler, query_knowledge_base_handler, read_kb_file_handler
 from mcp_server.tools.fap import (
     list_fap_companies_handler,
@@ -213,6 +214,8 @@ mcp = FastMCP(
     ),
     auth=auth_provider,
 )
+# Uso por usuário (ferramenta, dia, erros, tempo) para a tela de Atividade de Usuários.
+mcp.add_middleware(UsoMcpMiddleware(app))
 
 
 # ──────────────────────────────────────────────────────────────────────────────

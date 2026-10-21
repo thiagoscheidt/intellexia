@@ -76,10 +76,17 @@
         <div class="card card-outline card-primary">
             <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
                 <h3 class="card-title mb-0"><i class="bi bi-activity"></i> Atividade por usuário</h3>
-                <span class="text-muted small">
-                    <i class="bi bi-google me-1"></i>
-                    {{ stats.google_users }} de {{ stats.total_users }} já entraram com Google
-                    {% if stats.google_logins_today %}· {{ stats.google_logins_today }} hoje{% endif %}
+                <span class="text-muted small d-flex flex-wrap gap-3">
+                    <span>
+                        <i class="bi bi-google me-1"></i>
+                        {{ stats.google_users }} de {{ stats.total_users }} já entraram com Google
+                        {% if stats.google_logins_today %}· {{ stats.google_logins_today }} hoje{% endif %}
+                    </span>
+                    <span>
+                        <i class="bi bi-plug me-1"></i>
+                        {{ stats.mcp_connected }} de {{ stats.total_users }} conectados ao MCP
+                        {% if stats.mcp_active_today %}· {{ stats.mcp_active_today }} usaram hoje{% endif %}
+                    </span>
                 </span>
             </div>
             <div class="card-body p-0">
@@ -93,6 +100,7 @@
                                 <th>Status</th>
                                 <th>Último login</th>
                                 <th>Login com Google</th>
+                                <th>MCP</th>
                                 <th>Última atividade</th>
                                 <th>Última tela (hoje)</th>
                                 <th class="text-center">Telas hoje</th>
@@ -140,6 +148,31 @@
                                     <span class="text-muted small">Nunca usou</span>
                                     {% endif %}
                                 </td>
+                                <td>
+                                    {% set m = u.mcp %}
+                                    {% if m and (m.connected or m.calls_total) %}
+                                    <div class="d-flex flex-column gap-1">
+                                        <div>
+                                            {% if m.connected %}
+                                            <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle"
+                                                  title="Tem autorização válida: o cliente ({{ m.clients|join(', ') }}) consegue chamar o IntellexIA">
+                                                <i class="bi bi-plug-fill me-1"></i>Conectado</span>
+                                            {% else %}
+                                            <span class="badge text-bg-light border" title="Já usou, mas a autorização venceu ou foi revogada">
+                                                <i class="bi bi-plug me-1"></i>Desconectado</span>
+                                            {% endif %}
+                                            {% if m.clients %}<small class="text-muted ms-1">{{ m.clients|join(', ') }}</small>{% endif %}
+                                        </div>
+                                        {% if m.last_use %}
+                                        <small class="text-muted" title="Primeiro uso registrado: {{ m.first_use.strftime('%d/%m/%Y') if m.first_use else '—' }}">
+                                            {{ m.calls_today }} {{ 'chamada' if m.calls_today == 1 else 'chamadas' }} hoje · último uso {{ m.last_use|datetime_sp }}
+                                        </small>
+                                        {% endif %}
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted small">Nunca conectou</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ u.last_activity.strftime('%d/%m/%Y %H:%M') if u.last_activity else '—' }}</td>
                                 <td>
                                     {% if u.last_screen %}
@@ -150,10 +183,19 @@
                                 </td>
                                 <td class="text-center">{{ u.screens_today }}</td>
                                 <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-primary btn-user-screens"
-                                        data-user-id="{{ u.id }}" data-user-name="{{ u.name }}">
-                                        <i class="bi bi-window-stack me-1"></i>Telas
-                                    </button>
+                                    <div class="d-inline-flex gap-1">
+                                        <button class="btn btn-sm btn-outline-primary btn-user-screens"
+                                            data-user-id="{{ u.id }}" data-user-name="{{ u.name }}">
+                                            <i class="bi bi-window-stack me-1"></i>Telas
+                                        </button>
+                                        {% if u.mcp and (u.mcp.connected or u.mcp.calls_total) %}
+                                        <button class="btn btn-sm btn-outline-secondary btn-user-mcp"
+                                            data-user-id="{{ u.id }}" data-user-name="{{ u.name }}"
+                                            title="Funções do MCP que este usuário usou">
+                                            <i class="bi bi-plug me-1"></i>MCP
+                                        </button>
+                                        {% endif %}
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -202,6 +244,46 @@
                             </tr>
                         </thead>
                         <tbody id="screensTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalUserMcp" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plug me-1"></i> Uso do MCP — <span id="mcpUserName"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <small class="text-muted">Últimos <span id="mcpDays">30</span> dias, agregado por função. Os argumentos das chamadas não são registrados.</small>
+                    <select id="mcpDaysSelect" class="form-select form-select-sm" style="width:auto;">
+                        <option value="7">7 dias</option>
+                        <option value="30" selected>30 dias</option>
+                        <option value="90">90 dias</option>
+                    </select>
+                </div>
+                <div id="mcpLoading" class="text-center py-4 d-none">
+                    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
+                </div>
+                <div id="mcpError" class="alert alert-danger d-none mb-0"></div>
+                <div id="mcpEmpty" class="text-muted d-none">Nenhuma chamada ao MCP no período.</div>
+                <div class="table-responsive d-none" id="mcpTableWrap">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Função</th>
+                                <th class="text-center">Chamadas</th>
+                                <th class="text-center">Erros</th>
+                                <th class="text-end">Tempo médio</th>
+                                <th>Último uso</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mcpTableBody"></tbody>
                     </table>
                 </div>
             </div>
@@ -284,6 +366,76 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.getElementById('screensDaysSelect').addEventListener('change', function () {
         if (currentUserId) loadScreens(currentUserId, this.value);
+    });
+
+    // ── Uso do MCP ────────────────────────────────────────────────────
+    var mcpModal = new bootstrap.Modal(document.getElementById('modalUserMcp'));
+    var mcpUserId = null;
+
+    function formatMs(ms) {
+        return ms >= 1000 ? (ms / 1000).toFixed(1).replace('.', ',') + ' s' : ms + ' ms';
+    }
+
+    function loadMcp(userId, days) {
+        var loading = document.getElementById('mcpLoading');
+        var error = document.getElementById('mcpError');
+        var empty = document.getElementById('mcpEmpty');
+        var wrap = document.getElementById('mcpTableWrap');
+        var body = document.getElementById('mcpTableBody');
+        loading.classList.remove('d-none');
+        [error, empty, wrap].forEach(function (el) { el.classList.add('d-none'); });
+        body.innerHTML = '';
+
+        fetch('{{ url_for("access_audit.index") }}users/' + userId + '/mcp?days=' + days, {
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+        })
+            .then(function (resp) {
+                if (!resp.ok) throw new Error('Erro ' + resp.status);
+                return resp.json();
+            })
+            .then(function (data) {
+                loading.classList.add('d-none');
+                document.getElementById('mcpDays').textContent = data.days;
+                if (!data.functions.length) {
+                    empty.classList.remove('d-none');
+                    return;
+                }
+                data.functions.forEach(function (f) {
+                    var tipo = f.kind === 'prompt'
+                        ? '<span class="badge text-bg-light border ms-1">comando</span>' : '';
+                    var erroTitulo = f.last_error ? ' title="Último erro: ' + escapeHtml(f.last_error) + '"' : '';
+                    var tr = document.createElement('tr');
+                    tr.innerHTML =
+                        '<td><code>' + escapeHtml(f.name) + '</code>' + tipo + '</td>' +
+                        '<td class="text-center">' + f.calls + '</td>' +
+                        '<td class="text-center"' + erroTitulo + '>' +
+                            (f.errors ? '<span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">' + f.errors + '</span>' : '0') +
+                        '</td>' +
+                        '<td class="text-end">' + formatMs(f.avg_ms) + '</td>' +
+                        '<td>' + escapeHtml(f.last_called_at || '—') + '</td>';
+                    body.appendChild(tr);
+                });
+                wrap.classList.remove('d-none');
+            })
+            .catch(function (err) {
+                loading.classList.add('d-none');
+                error.textContent = 'Falha ao carregar o uso do MCP: ' + err.message;
+                error.classList.remove('d-none');
+            });
+    }
+
+    document.querySelectorAll('.btn-user-mcp').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            mcpUserId = btn.getAttribute('data-user-id');
+            document.getElementById('mcpUserName').textContent = btn.getAttribute('data-user-name');
+            document.getElementById('mcpDaysSelect').value = '30';
+            mcpModal.show();
+            loadMcp(mcpUserId, 30);
+        });
+    });
+
+    document.getElementById('mcpDaysSelect').addEventListener('change', function () {
+        if (mcpUserId) loadMcp(mcpUserId, this.value);
     });
 });
 </script>

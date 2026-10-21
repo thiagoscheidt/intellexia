@@ -87,3 +87,34 @@ def user_screens(user_id):
             "last_seen_at": _fmt_local(s['last_seen_at']),
         } for s in screens],
     })
+
+
+@access_audit_bp.route('/users/<int:user_id>/mcp', methods=['GET'])
+@require_law_firm
+@require_admin
+def user_mcp(user_id):
+    """Funções do MCP usadas pelo usuário (ferramentas e comandos prontos)."""
+    from app.utils.timezone import format_datetime_sp
+
+    law_firm_id = session.get('law_firm_id')
+    user = User.query.filter_by(id=user_id, law_firm_id=law_firm_id).first()
+    if not user:
+        return jsonify({"error": "Usuário não encontrado"}), 404
+
+    days = request.args.get('days', 30, type=int)
+    days = max(1, min(days, 365))
+    funcoes = access_audit_service.get_user_mcp_functions(law_firm_id, user_id, days=days)
+    return jsonify({
+        "user": {"id": user.id, "name": user.name, "email": user.email},
+        "days": days,
+        "functions": [{
+            "kind": f['kind'],
+            "name": f['name'],
+            "calls": f['calls'],
+            "errors": f['errors'],
+            "avg_ms": f['avg_ms'],
+            # Gravado em UTC; format_datetime_sp converte para São Paulo.
+            "last_called_at": format_datetime_sp(f['last_called_at']),
+            "last_error": f['last_error'],
+        } for f in funcoes],
+    })

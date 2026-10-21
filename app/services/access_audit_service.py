@@ -6,14 +6,19 @@ Responsabilidades:
   no mesmo commit que o middleware já faz para User.last_activity).
 - Estatísticas: usuários online agora, logins/ativos do dia, atividade por
   usuário e telas acessadas por usuário.
+- Uso do MCP: registro por chamada (agregado diário em user_mcp_calls, feito
+  pelo middleware do servidor MCP), conexão do usuário (tokens OAuth do MCP) e
+  funções usadas por usuário.
 """
+import json
 import logging
-from datetime import datetime, timedelta
+import time
+from datetime import datetime, timedelta, timezone
 
 from flask import request
 from sqlalchemy.exc import IntegrityError
 
-from app.models import db, User, UserPageVisit
+from app.models import db, McpOAuthClient, McpOAuthToken, User, UserMcpCall, UserPageVisit
 from app.utils.permissions import MODULE_PERMISSIONS, get_module_from_endpoint
 from app.utils.timezone import now_sp
 
@@ -123,6 +128,7 @@ def get_overview_stats(law_firm_id: int) -> dict:
         'total_users': base.count(),
         'google_users': base.filter(User.google_login_count > 0).count(),
         'google_logins_today': base.filter(User.google_last_login_at >= today_start).count(),
+        **get_mcp_overview(law_firm_id),
     }
 
 
@@ -149,6 +155,8 @@ def get_users_activity(law_firm_id: int) -> list[dict]:
         if current is None or (visit.last_seen_at and visit.last_seen_at > current.last_seen_at):
             last_screen_by_user[visit.user_id] = visit
 
+    mcp_por_usuario = get_users_mcp(law_firm_id)
+
     result = []
     for user in users:
         last_visit = last_screen_by_user.get(user.id)
@@ -172,6 +180,7 @@ def get_users_activity(law_firm_id: int) -> list[dict]:
                 user.google_last_login_at and user.last_login
                 and user.google_last_login_at >= user.last_login
             ),
+            'mcp': mcp_por_usuario.get(user.id),
         })
     return result
 
@@ -197,3 +206,152 @@ def get_user_screens(law_firm_id: int, user_id: int, days: int = 30) -> list[dic
         'hits': int(row.total_hits or 0),
         'last_seen_at': row.last_seen_at,
     } for row in rows]
+
+
+# ── Uso do MCP ────────────────────────────────────────────────────────────────
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def record_mcp_call(user_id: int, law_firm_id: int, kind: str, name: str,
+                    ok: bool, elapsed_ms: int, error: str | None = None) -> None:
+    """Soma uma chamada do MCP no agregado do dia. Comita sozinho; nunca levanta.
+
+    Chamado pelo middleware do servidor MCP, fora de request Flask — por isso
+    o commit é daqui, e qualquer falha só vai para o log: registrar uso nunca
+    pode derrubar a ferramenta que o usuário chamou.
+    """
+    try:
+        today = now_sp().date()
+        agora = _utcnow()
+        erro = (error or '')[:255] or None
+        incremento = {
+            'calls': UserMcpCall.calls + 1,
+            'errors': UserMcpCall.errors + (0 if ok else 1),
+            'total_ms': UserMcpCall.total_ms + max(0, int(elapsed_ms)),
+            'last_called_at': agora,
+        }
+        if not ok:
+            incremento['last_error'] = erro
+        filtro = dict(user_id=user_id, kind=kind, name=name, call_date=today)
+        if UserMcpCall.query.filter_by(**filtro).update(incremento, synchronize_session=False) == 0:
+            try:
+                with db.session.begin_nested():
+                    db.session.add(UserMcpCall(
+                        law_firm_id=law_firm_id, calls=1, errors=0 if ok else 1,
+                        total_ms=max(0, int(elapsed_ms)), last_called_at=agora,
+                        last_error=None if ok else erro, **filtro))
+            except IntegrityError:
+                # Chamada simultânea criou a linha primeiro: só incrementa.
+                UserMcpCall.query.filter_by(**filtro).update(incremento, synchronize_session=False)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception('Falha ao registrar uso do MCP (ignorada)')
+
+
+def _client_names() -> dict[str, str]:
+    nomes = {}
+    for c in McpOAuthClient.query.all():
+        try:
+            nomes[c.client_id] = json.loads(c.client_info_json).get('client_name') or 'Cliente MCP'
+        except (TypeError, ValueError):
+            nomes[c.client_id] = 'Cliente MCP'
+    return nomes
+
+
+def get_users_mcp(law_firm_id: int) -> dict[int, dict]:
+    """Por usuário: conectado ao MCP agora?, clientes, primeiro/último uso, chamadas hoje.
+
+    "Conectado" = tem token de renovação válido (não revogado e não vencido):
+    é o que permite ao cliente continuar chamando sem novo login. Tokens
+    vencidos são apagados com o tempo, então desde quando a pessoa usa o MCP
+    sai do registro de uso, não do token.
+    """
+    agora = int(time.time())
+    nomes = _client_names()
+    por_usuario: dict[int, dict] = {}
+
+    tokens = (McpOAuthToken.query
+              .with_entities(McpOAuthToken.user_id, McpOAuthToken.client_id,
+                             McpOAuthToken.token_type, McpOAuthToken.revoked,
+                             McpOAuthToken.expires_at)
+              .filter(McpOAuthToken.law_firm_id == law_firm_id).all())
+    for user_id, client_id, token_type, revoked, expires_at in tokens:
+        info = por_usuario.setdefault(user_id, {'connected': False, 'clients': set()})
+        info['clients'].add(nomes.get(client_id, 'Cliente MCP'))
+        if token_type == 'refresh' and not revoked and (expires_at is None or expires_at > agora):
+            info['connected'] = True
+
+    today = now_sp().date()
+    uso = (db.session.query(
+               UserMcpCall.user_id,
+               db.func.min(UserMcpCall.call_date),
+               db.func.max(UserMcpCall.last_called_at),
+               db.func.sum(db.case((UserMcpCall.call_date == today, UserMcpCall.calls), else_=0)),
+               db.func.sum(UserMcpCall.calls))
+           .filter(UserMcpCall.law_firm_id == law_firm_id)
+           .group_by(UserMcpCall.user_id).all())
+    for user_id, primeiro, ultimo, hoje, total in uso:
+        info = por_usuario.setdefault(user_id, {'connected': False, 'clients': set()})
+        info.update(first_use=primeiro, last_use=ultimo,
+                    calls_today=int(hoje or 0), calls_total=int(total or 0))
+
+    for info in por_usuario.values():
+        info['clients'] = sorted(info['clients'])
+        info.setdefault('first_use', None)
+        info.setdefault('last_use', None)
+        info.setdefault('calls_today', 0)
+        info.setdefault('calls_total', 0)
+    return por_usuario
+
+
+def get_mcp_overview(law_firm_id: int) -> dict:
+    """Linha do topo: quantos estão conectados e quantos usaram hoje."""
+    por_usuario = get_users_mcp(law_firm_id)
+    ids = {u.id for u in User.query.with_entities(User.id).filter_by(law_firm_id=law_firm_id)}
+    return {
+        'mcp_connected': sum(1 for uid, i in por_usuario.items() if uid in ids and i['connected']),
+        'mcp_active_today': sum(1 for uid, i in por_usuario.items() if uid in ids and i['calls_today']),
+    }
+
+
+def get_user_mcp_functions(law_firm_id: int, user_id: int, days: int = 30) -> list[dict]:
+    """Funções do MCP usadas pelo usuário no período, agregadas por função."""
+    since = now_sp().date() - timedelta(days=days)
+    rows = (db.session.query(
+                UserMcpCall.kind, UserMcpCall.name,
+                db.func.sum(UserMcpCall.calls).label('calls'),
+                db.func.sum(UserMcpCall.errors).label('errors'),
+                db.func.sum(UserMcpCall.total_ms).label('total_ms'),
+                db.func.max(UserMcpCall.last_called_at).label('last_called_at'),
+            )
+            .filter(UserMcpCall.law_firm_id == law_firm_id,
+                    UserMcpCall.user_id == user_id,
+                    UserMcpCall.call_date >= since)
+            .group_by(UserMcpCall.kind, UserMcpCall.name)
+            .order_by(db.func.max(UserMcpCall.last_called_at).desc(), UserMcpCall.name)
+            .all())
+
+    # Último erro de cada função: da linha mais recente que teve erro.
+    ultimos_erros = {}
+    for kind, name, erro in (UserMcpCall.query
+                             .with_entities(UserMcpCall.kind, UserMcpCall.name, UserMcpCall.last_error)
+                             .filter(UserMcpCall.law_firm_id == law_firm_id,
+                                     UserMcpCall.user_id == user_id,
+                                     UserMcpCall.call_date >= since,
+                                     UserMcpCall.errors > 0)
+                             .order_by(UserMcpCall.call_date)):
+        ultimos_erros[(kind, name)] = erro
+
+    return [{
+        'kind': r.kind,
+        'name': r.name,
+        'calls': int(r.calls or 0),
+        'errors': int(r.errors or 0),
+        'avg_ms': int((r.total_ms or 0) / r.calls) if r.calls else 0,
+        'last_called_at': r.last_called_at,
+        'last_error': ultimos_erros.get((r.kind, r.name)),
+    } for r in rows]
