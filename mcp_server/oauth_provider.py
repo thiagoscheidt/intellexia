@@ -61,6 +61,11 @@ class IntellexiaOAuthProvider(OAuthProvider):
 
         # Estado de curta duração (worker único): transações de autorização e auth codes
         self._txns: dict[str, dict] = {}
+        # Transações já respondidas (txn_id → csrf, ação, quando). O formulário
+        # chega duas vezes com duplo clique ou reenvio do navegador: o primeiro
+        # conecta, e o segundo não pode dizer "solicitação inválida" a quem
+        # acabou de conectar.
+        self._respondidas: dict[str, dict] = {}
         self._codes: dict[str, tuple[AuthorizationCode, dict]] = {}
 
     def _get_resource_url(self, path: str | None = None):
@@ -117,7 +122,7 @@ class IntellexiaOAuthProvider(OAuthProvider):
 
     def _prune_expired(self) -> None:
         now = time.time()
-        for store, ttl_key in ((self._txns, "created_at"), ):
+        for store, ttl_key in ((self._txns, "created_at"), (self._respondidas, "created_at")):
             for key in [k for k, v in store.items() if now - v[ttl_key] > TXN_TTL_SECONDS]:
                 store.pop(key, None)
         for code in [c for c, (obj, _) in self._codes.items() if obj.expires_at < now]:
@@ -209,8 +214,19 @@ class IntellexiaOAuthProvider(OAuthProvider):
         self._prune_expired()
         form = await request.form()
         txn_id = str(form.get("txn", ""))
+        csrf = str(form.get("csrf", ""))
         txn = self._txns.get(txn_id)
-        if not txn or not secrets.compare_digest(str(form.get("csrf", "")), txn["csrf"]):
+        respondida = self._respondidas.get(txn_id)
+        if not txn and respondida and secrets.compare_digest(csrf, respondida["csrf"]):
+            # Segundo envio da mesma tela: a primeira resposta já valeu.
+            if respondida["action"] == "approve":
+                return HTMLResponse(self._render_error(
+                    "Conexão autorizada",
+                    "O acesso já foi autorizado. Pode fechar esta aba e voltar ao aplicativo."))
+            return HTMLResponse(self._render_error(
+                "Acesso negado",
+                "Você negou o acesso nesta solicitação. Para conectar, comece de novo no aplicativo."))
+        if not txn or not secrets.compare_digest(csrf, txn["csrf"]):
             return HTMLResponse(self._render_error(
                 "Solicitação inválida",
                 "Sessão de autorização inválida ou expirada. Tente conectar novamente."),
@@ -226,8 +242,12 @@ class IntellexiaOAuthProvider(OAuthProvider):
         params: AuthorizationParams = txn["params"]
         client: OAuthClientInformationFull = txn["client"]
         self._txns.pop(txn_id, None)
+        # Com JavaScript, o botão clicado é desabilitado e a escolha vai num
+        # campo oculto vazio por padrão; sem JavaScript, vale o valor do botão.
+        acao = next((v for v in form.getlist("action") if v), "deny")
+        self._respondidas[txn_id] = {"csrf": txn["csrf"], "action": acao, "created_at": time.time()}
 
-        if form.get("action") != "approve":
+        if acao != "approve":
             return RedirectResponse(
                 construct_redirect_uri(str(params.redirect_uri), error="access_denied", state=params.state),
                 status_code=302,
@@ -493,6 +513,7 @@ class IntellexiaOAuthProvider(OAuthProvider):
   }}
   button:focus-visible {{ outline: none; box-shadow: 0 0 0 4px rgba(99,102,241,.3); }}
   .approve {{ background: #4f46e5; color: #fff; }}
+  .actions button:disabled {{ opacity: .6; cursor: progress; }}
   .approve:hover {{ background: #6366f1; }}
   .deny {{ background: transparent; color: #cbd5e1; border: 1px solid #334155; }}
   .deny:hover {{ background: #1e293b33; }}
@@ -583,15 +604,28 @@ class IntellexiaOAuthProvider(OAuthProvider):
       <li>{check_icon}<span>Acesso restrito aos dados do escritório <strong>{html.escape(law_firm_name)}</strong></span></li>
       <li>{check_icon}<span>Você pode revogar o acesso a qualquer momento desconectando o aplicativo</span></li>
     </ul>
-    <form method="post" action="{html.escape(self.consent_public_path)}">
+    <form method="post" action="{html.escape(self.consent_public_path)}" id="consent-form">
       <input type="hidden" name="txn" value="{html.escape(txn_id)}">
       <input type="hidden" name="csrf" value="{html.escape(csrf)}">
+      <input type="hidden" name="action" value="" id="consent-action">
       <div class="actions">
         <button class="deny" type="submit" name="action" value="deny">Negar</button>
         <button class="approve" type="submit" name="action" value="approve">Autorizar acesso</button>
       </div>
     </form>
-    <p class="foot">Você será redirecionado de volta ao aplicativo.</p>"""
+    <p class="foot">Você será redirecionado de volta ao aplicativo.</p>
+    <script>
+      // Um envio só: duplo clique mandava o formulário duas vezes, e o segundo
+      // envio mostrava "Solicitação inválida" a quem tinha acabado de conectar.
+      document.getElementById('consent-form').addEventListener('submit', function (e) {{
+        if (this.dataset.enviado) {{ e.preventDefault(); return; }}
+        this.dataset.enviado = '1';
+        var botao = e.submitter;
+        document.getElementById('consent-action').value = botao ? botao.value : 'approve';
+        this.querySelectorAll('button').forEach(function (b) {{ b.disabled = true; }});
+        if (botao) botao.textContent = botao.value === 'approve' ? 'Autorizando…' : 'Negando…';
+      }});
+    </script>"""
         return self._page("Autorizar acesso", head, body)
 
     def _render_error(self, title: str, message: str) -> str:

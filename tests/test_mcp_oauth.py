@@ -101,10 +101,22 @@ async def run_oauth_flow(client, session_cookie):
     txn = re.search(r'name="txn" value="([^"]+)"', r.text).group(1)
     csrf = re.search(r'name="csrf" value="([^"]+)"', r.text).group(1)
 
-    r = await client.post("/consent", data={"txn": txn, "csrf": csrf, "action": "approve"},
+    check("tela trava o segundo envio", 'id="consent-form"' in r.text and "Autorizando" in r.text)
+
+    # Como o navegador sem JavaScript envia: campo oculto vazio + valor do botão.
+    r = await client.post("/consent", data={"txn": txn, "csrf": csrf, "action": ["", "approve"]},
                           cookies={"session": session_cookie})
     loc = r.headers.get("location", "")
     check("aprovação redireciona com code", r.status_code == 302 and loc.startswith(REDIRECT_URI) and "code=" in loc, f"{r.status_code} {loc}")
+
+    # Duplo clique / reenvio: a segunda chegada não é "Solicitação inválida".
+    r2 = await client.post("/consent", data={"txn": txn, "csrf": csrf, "action": "approve"},
+                           cookies={"session": session_cookie})
+    check("segundo envio diz que já está autorizado", r2.status_code == 200 and "Conexão autorizada" in r2.text,
+          f"{r2.status_code} {r2.text[:200]}")
+    r3 = await client.post("/consent", data={"txn": txn, "csrf": "outro", "action": "approve"},
+                           cookies={"session": session_cookie})
+    check("csrf errado continua recusado", r3.status_code == 400 and "Solicitação inválida" in r3.text, str(r3.status_code))
     qs = parse_qs(urlparse(loc).query)
     check("state preservado", qs.get("state", [None])[0] == state)
     code = qs["code"][0]
