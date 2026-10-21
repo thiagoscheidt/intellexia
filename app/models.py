@@ -2963,6 +2963,40 @@ class FapCalculoItem(db.Model):
         return f'<FapCalculoItem {self.tipo} {self.identificador} {self.cnpj}/{self.ano_vigencia}>'
 
 
+class SeguradoNome(db.Model):
+    """Nome do segurado obtido por consulta de CPF — o FAP não informa nome.
+
+    Uma linha por (escritório, CPF): o botão "Revelar nome" consulta uma vez e
+    toda tela, o MCP e a próxima pessoa reaproveitam. Guarda só o nome — o
+    fornecedor devolve também sexo e nome da mãe, que não entram (LGPD: o mínimo
+    necessário). CPF não encontrado também fica registrado, para não pagar de
+    novo pela mesma resposta. ``nascimento_diverge`` marca quando a data de
+    nascimento do fornecedor não bate com a do FAP: o nome pode ser de outra
+    pessoa, e a tela avisa.
+    """
+    __tablename__ = 'segurado_nomes'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'cpf', name='uq_segurado_nome_firm_cpf'),
+    )
+
+    STATUS_ENCONTRADO = 'encontrado'
+    STATUS_NAO_ENCONTRADO = 'nao_encontrado'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    cpf = db.Column(db.String(11), nullable=False)
+    nome = db.Column(db.String(255))
+    status = db.Column(db.String(20), nullable=False)
+    nascimento_diverge = db.Column(db.Boolean, nullable=False, default=False)
+    fonte = db.Column(db.String(40), nullable=False)
+    # Usuário apagado não leva o nome junto: o vínculo vira NULL.
+    consultado_por_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
+    consultado_em = db.Column(db.DateTime, nullable=False)  # UTC
+
+    def __repr__(self):
+        return f'<SeguradoNome {self.cpf[:3]}… {self.status}>'
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # FAP REVIEW MODULE — Revisão de Petição Inicial FAP
 # ═══════════════════════════════════════════════════════════════════════════════

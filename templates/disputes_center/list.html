@@ -956,6 +956,7 @@
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <script src="{{ url_for('static', filename='js/fap-protocol-cell.js') }}"></script>
+<script src="{{ url_for('static', filename='js/segurado-nome.js') }}"></script>
 <script>
   // Link do protocolo para o Painel FAP — nulo (só texto) sem o módulo.
   window.fapPanelProtocolUrl = {% if can_view_module('fap_panel') %}"{{ url_for('fap_panel.contestacoes_page') }}?protocolo="{% else %}null{% endif %};
@@ -1157,7 +1158,11 @@
           const birth = row.insured_date_of_birth ? `<small class="text-muted">Nasc.: ${escapeHtml(row.insured_date_of_birth)}</small>` : '';
           return `
               <div class="d-flex flex-column gap-1">
-                <div class="fw-semibold">${escapeHtml(row.insured_name || 'Não informado')}</div>
+                ${row.insured_name
+                  ? `<div class="fw-semibold">${escapeHtml(row.insured_name)}</div>`
+                  : window.renderSeguradoNome(row.nome_revelado, {
+                      cpf: row.insured_cpf, podeRevelar: row.pode_revelar_nome,
+                      url: "{{ url_for('disputes_center.revelar_nome_segurado') }}" })}
                 ${cpf}
                 ${birth}
               </div>`;

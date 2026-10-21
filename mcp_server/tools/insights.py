@@ -163,7 +163,8 @@ def buscar_por_segurado_handler(
 ) -> dict:
     """Reúne benefícios, CATs e (se permitido) processos de um segurado."""
     from app.models import Benefit, FapContestationCat, JudicialProcessBenefit
-    from mcp_server.tools.fap import AVISO_SEM_NOME, _parse_topics, cpf_condicao
+    from app.services import segurado_nome_service
+    from mcp_server.tools.fap import AVISO_SEM_NOME, _parse_topics, cpf_condicao, nome_condicao
 
     if not any([nit, cpf, nome]):
         return {"erro": "Informe ao menos um identificador: nit, cpf ou nome."}
@@ -175,13 +176,17 @@ def buscar_por_segurado_handler(
     if cpf:
         bq = bq.filter(cpf_condicao(Benefit.insured_cpf, cpf))
     if nome:
-        bq = bq.filter(Benefit.insured_name.ilike(f"%{nome}%"))
+        bq = bq.filter(nome_condicao(law_firm_id, nome))
     encontrados = bq.order_by(Benefit.created_at.desc()).limit(50).all()
+    revelados = segurado_nome_service.nomes_conhecidos(
+        law_firm_id, [b.insured_cpf for b in encontrados if not b.insured_name])
     beneficios = [
         {
             "id": b.id,
             "numero_beneficio": b.benefit_number,
             "tipo_beneficio": b.benefit_type,
+            "segurado_nome": b.insured_name or (revelados.get(
+                segurado_nome_service.normalizar_cpf(b.insured_cpf) or '') or {}).get("nome"),
             "segurado_nit": b.insured_nit,
             "segurado_cpf": b.insured_cpf,
             "segurado_data_nascimento": _iso(b.insured_date_of_birth),

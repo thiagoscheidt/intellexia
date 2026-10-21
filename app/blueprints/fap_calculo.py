@@ -12,6 +12,7 @@ from sqlalchemy import func
 from app.models import FapCalculoEstabelecimento, FapCalculoItem, FapCompany, db
 from app.services import fap_calculo_query_service as consulta
 from app.services import fap_group_service
+from app.services import segurado_nome_service
 from app.utils.cnpj import TAMANHO_CNPJ, TAMANHO_CNPJ_RAIZ, apenas_digitos, completar_zeros, formatar_cnpj
 
 fap_calculo_bp = Blueprint('fap_calculo', __name__, url_prefix='/fap-panel/calculo')
@@ -93,7 +94,20 @@ def beneficios_page():
         f=dict(vigencia=vigencia, raiz=raiz, grupo=grupo, cnpj=cnpj, q=q, tipos=tipos,
                situacao=situacao, contestado=contestado_arg),
         filtros=filtros,
+        revelar_nome_disponivel=segurado_nome_service.disponivel(),
     )
+
+
+@fap_calculo_bp.route('/segurado/revelar-nome', methods=['POST'])
+@require_law_firm
+def revelar_nome_segurado():
+    """Botão "Revelar nome" — mesma consulta e mesma base da Central."""
+    from app.services import segurado_nome_service
+
+    payload = request.get_json(silent=True) or {}
+    corpo, status = segurado_nome_service.resposta_revelar(
+        get_current_law_firm_id(), payload.get('cpf'), session.get('user_id'))
+    return jsonify(corpo), status
 
 
 @fap_calculo_bp.route('/estabelecimentos.json')

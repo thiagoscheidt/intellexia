@@ -195,9 +195,10 @@ def _filter_status_instancia(query, primeira: str | None, segunda: str | None):
 # ── Segurado (E02 da R09) ─────────────────────────────────────────────────────
 
 AVISO_SEM_NOME = (
-    "O sistema não tem o nome do segurado: o relatório de julgamento e o portal do FAP "
-    "não trazem nome, então a busca por nome só acha benefícios cadastrados à mão. "
-    "Peça o CPF (ou o NIT) e busque por ele."
+    "O relatório de julgamento e o portal do FAP não trazem o nome do segurado. A busca "
+    "por nome só acha quem teve o nome revelado numa tela de Benefícios (botão "
+    "'Revelar nome', consulta paga por CPF) ou cadastrado à mão. Se não achar, peça o "
+    "CPF (ou o NIT) e busque por ele."
 )
 
 
@@ -213,6 +214,24 @@ def cpf_condicao(coluna, cpf: str):
     if not digitos:
         return coluna == cpf
     return coluna.in_({digitos, formatar_cpf(digitos), str(cpf).strip()})
+
+
+def nome_condicao(law_firm_id: int, termo: str):
+    """Busca por nome do segurado: o nome cadastrado OU o revelado pela consulta de CPF.
+
+    O FAP não informa nome; ele só existe quando alguém clicou em "Revelar nome"
+    numa das telas de Benefícios (``segurado_nomes``).
+    """
+    from app.models import Benefit, db
+    from app.services import segurado_nome_service
+    from app.utils.cnpj import formatar_cpf
+
+    cpfs = segurado_nome_service.cpfs_por_nome(law_firm_id, termo)
+    formas = {f for c in cpfs for f in (c, formatar_cpf(c))}
+    conds = [Benefit.insured_name.ilike(f"%{termo}%")]
+    if formas:
+        conds.append(Benefit.insured_cpf.in_(formas))
+    return db.or_(*conds)
 
 
 def _cnpj_formatado(d: str) -> str:
@@ -556,7 +575,7 @@ def list_fap_benefits_handler(
             Benefit.fap_contestation_topic == fap_contestation_topic,
         ))
     if segurado:
-        query = query.filter(Benefit.insured_name.ilike(f"%{segurado}%"))
+        query = query.filter(nome_condicao(law_firm_id, segurado))
     if nit:
         query = query.filter(Benefit.insured_nit == nit)
     if cpf:
@@ -579,7 +598,16 @@ def list_fap_benefits_handler(
         limit, offset,
     )
 
+    from app.services import segurado_nome_service
+
     names = _company_name_map(law_firm_id)
+    revelados = segurado_nome_service.nomes_conhecidos(
+        law_firm_id, [b.insured_cpf for b in benefits if not b.insured_name])
+
+    def _nome(b):
+        reg = revelados.get(segurado_nome_service.normalizar_cpf(b.insured_cpf) or '')
+        return b.insured_name or (reg or {}).get("nome")
+
     itens = [
         {
             "id": b.id,
@@ -587,7 +615,7 @@ def list_fap_benefits_handler(
             "tipo_beneficio": b.benefit_type,
             "tipo_pedido": b.request_type,
             "status": b.status,
-            "segurado_nome": b.insured_name,
+            "segurado_nome": _nome(b),
             "segurado_nit": b.insured_nit,
             "segurado_cpf": b.insured_cpf,
             "segurado_data_nascimento": _iso(b.insured_date_of_birth),
@@ -633,6 +661,7 @@ def _colunas_listagem_beneficio():
 def get_benefit_detail_handler(benefit_id: int, law_firm_id: int) -> dict:
     """Retorna detalhes completos de um benefício, validando o tenant."""
     from app.models import Benefit
+    from app.services import segurado_nome_service
 
     benefit = Benefit.query.filter_by(id=benefit_id, law_firm_id=law_firm_id).first()
 
@@ -645,8 +674,8 @@ def get_benefit_detail_handler(benefit_id: int, law_firm_id: int) -> dict:
         "tipo_beneficio": benefit.benefit_type,
         "tipo_pedido": benefit.request_type,
         "status": benefit.status,
-        # Segurado
-        "segurado_nome": benefit.insured_name,
+        # Segurado (sem nome cadastrado, o revelado pela consulta de CPF, se houver)
+        "segurado_nome": benefit.insured_name or segurado_nome_service.nome_conhecido(law_firm_id, benefit.insured_cpf),
         "segurado_nit": benefit.insured_nit,
         "segurado_cpf": benefit.insured_cpf,
         "segurado_data_nascimento": _iso(benefit.insured_date_of_birth),

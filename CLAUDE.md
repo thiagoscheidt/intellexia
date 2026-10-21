@@ -259,6 +259,34 @@ O escritório compartilha com `intellexia-drive@intellexia-503416.iam.gserviceac
   uma planilha com os ids desses arquivos os baixaria pela conta.
 - Conferência real sob comando: `uv run python scripts/drive_conferir_acesso.py`.
 
+### Nome do segurado (consulta de CPF)
+
+O FAP não informa nome — relatório e Consulta do FAP trazem CPF, NIT e
+nascimento. As telas de Benefícios (Central e cálculo FAP) têm o botão
+**"Revelar nome"**, que consulta um fornecedor pago por CPF e guarda o
+resultado em `segurado_nomes` (`database/add_segurado_nomes_table.py`).
+Fonte única: `segurado_nome_service`; acesso ao fornecedor isolado em
+`cpf_nome_client` (hoje `api.cpf-brasil.org`, header `X-API-Key`). Trocar de
+fornecedor (ex.: SERPRO) é reescrever só o client.
+
+- **Config só no `.env`**: `CPF_NOME_API_KEY` (em branco esconde o botão) e
+  `CPF_NOME_API_URL`. O token do fornecedor **expira a cada 30 dias**.
+- **Só o nome é guardado.** O fornecedor devolve sexo e nome da mãe; o client
+  descarta tudo menos nome e nascimento (LGPD: mínimo necessário).
+- **Uma consulta por (escritório, CPF)**, inclusive "não encontrado". Falha de
+  token, cota ou rede **não** grava, para a próxima tentativa consultar.
+- **Só CPF da base do escritório** (benefício ou item do cálculo) e com DV
+  válido — sem isso o botão viraria consulta avulsa paga de qualquer CPF.
+- Nascimento do fornecedor diferente do FAP grava `nascimento_diverge` e a tela
+  avisa: pode ser outra pessoa.
+- `consultado_por_id` é `ON DELETE SET NULL`: apagar o usuário não apaga o nome.
+- Nada cruza `segurado_nomes` com `benefits` por JOIN de texto (buscas por lista
+  de CPFs) — sem depender de collation alinhada, a lição do cálculo FAP.
+- **MCP** só lê: `segurado_nome` vem do que já foi revelado e a busca por nome
+  (`segurado`/`nome`) também casa os nomes revelados. O MCP **não** dispara a
+  consulta paga. Ao lado, `consulta_cpf_receita` é o link gratuito da Receita
+  já preenchido (`app/utils/cnpj.link_consulta_cpf_receita`; falta o captcha).
+
 ### Integração INLABS / Diário Oficial da União
 
 Portal de dados abertos da Imprensa Nacional. Todo acesso isolado em
@@ -1008,6 +1036,10 @@ KB_MAX_HISTORY_CHARS=12000
 # Processamento de documentos
 MAX_CHARS_PER_CHUNK=1500
 SUMMARY_MAX_CHARS=50000
+
+# Nome do segurado por CPF (opcional — em branco esconde o botão "Revelar nome")
+CPF_NOME_API_KEY=...                    # token do fornecedor; expira a cada 30 dias
+CPF_NOME_API_URL=https://api.cpf-brasil.org
 
 # INLABS / Diário Oficial da União (opcional — em branco desativa a captura)
 INLABS_EMAIL=...

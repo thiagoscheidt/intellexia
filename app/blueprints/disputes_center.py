@@ -17,7 +17,7 @@ from app.services import fap_protocolo_service
 from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 
 from app.utils.timezone import now_sp
-from app.utils.cnpj import formatar_cnpj, link_consulta_cpf_receita
+from app.utils.cnpj import cpf_valido, formatar_cnpj, link_consulta_cpf_receita
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
 from openpyxl import Workbook
@@ -1907,7 +1907,8 @@ def _apply_benefits_filters(
     return query
 
 
-def _serialize_benefit_row(benefit, client_name, decisions_count=0, fap_protocols=None):
+def _serialize_benefit_row(benefit, client_name, decisions_count=0, fap_protocols=None,
+                           nome_revelado=None, pode_revelar=False):
     topics_text = _benefit_topics_text(benefit)
     return {
         'id': benefit.id,
@@ -1921,6 +1922,11 @@ def _serialize_benefit_row(benefit, client_name, decisions_count=0, fap_protocol
         'insured_nit': benefit.insured_nit or '',
         'insured_date_of_birth': _format_date(benefit.insured_date_of_birth),
         'consulta_cpf_receita': link_consulta_cpf_receita(benefit.insured_cpf, benefit.insured_date_of_birth),
+        # Nome vindo do "Revelar nome" (o FAP não informa); botão só sem nome nenhum.
+        'nome_revelado': nome_revelado,
+        'pode_revelar_nome': bool(
+            pode_revelar and not benefit.insured_name and not nome_revelado
+            and cpf_valido(benefit.insured_cpf)),
         'employer_cnpj': benefit.employer_cnpj or '',
         'employer_name': benefit.employer_name or '',
         'status': benefit.status or '',
@@ -3401,6 +3407,18 @@ def mark_vigencias_first_instance_deferred_batch():
     return redirect(url_for('disputes_center.list_fap_vigencias', **redirect_kwargs))
 
 
+@disputes_center_bp.route('/api/segurado/revelar-nome', methods=['POST'])
+@require_law_firm
+def revelar_nome_segurado():
+    """Botão "Revelar nome" da coluna Segurado — consulta paga, uma vez por CPF."""
+    from app.services import segurado_nome_service
+
+    payload = request.get_json(silent=True) or {}
+    corpo, status = segurado_nome_service.resposta_revelar(
+        get_current_law_firm_id(), payload.get('cpf'), session.get('user_id'))
+    return jsonify(corpo), status
+
+
 @disputes_center_bp.route('/api/list', methods=['GET'])
 @require_law_firm
 def list_disputes_center_api():
@@ -3516,12 +3534,19 @@ def list_disputes_center_api():
         law_firm_id, {benefit.fap_vigencia_cnpj_id for benefit, _ in paged_results}
     )
 
+    from app.services import segurado_nome_service
+    revelados = segurado_nome_service.nomes_conhecidos(
+        law_firm_id, [benefit.insured_cpf for benefit, _ in paged_results if not benefit.insured_name])
+    pode_revelar = segurado_nome_service.disponivel()
+
     data = [
         _serialize_benefit_row(
             benefit,
             client_name,
             decisions_counts.get(benefit.id, 0),
             protocols_by_vigencia.get(benefit.fap_vigencia_cnpj_id, []),
+            nome_revelado=revelados.get(segurado_nome_service.normalizar_cpf(benefit.insured_cpf) or ''),
+            pode_revelar=pode_revelar,
         )
         for benefit, client_name in paged_results
     ]

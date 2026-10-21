@@ -14,7 +14,7 @@ from app.models import (
     FapVigenciaCnpj, db,
 )
 from app.services import fap_group_service
-from app.utils.cnpj import apenas_digitos, completar_zeros, link_consulta_cpf_receita
+from app.utils.cnpj import apenas_digitos, completar_zeros, cpf_valido, link_consulta_cpf_receita
 
 TIPOS = ('B91', 'B92', 'B93', 'B94', 'CAT')
 SITUACOES = ('conta', 'excluido')
@@ -241,12 +241,19 @@ def pagina(query, page, per_page=50, *, law_firm_id=None):
                 Estab.ano_vigencia.in_({linha[0].ano_vigencia for linha in linhas})).all():
             estabs[(e.ano_vigencia, e.cnpj)] = e
 
+    from app.services import segurado_nome_service
+    revelados = segurado_nome_service.nomes_conhecidos(firm_id, [linha[0].cpf for linha in linhas])
+
     itens = []
     for item, contestado, central_id, cat_id in linhas:
         d = {c.name: getattr(item, c.name) for c in Item.__table__.columns
              if c.name != 'raw_json'}
         d['empresa_nome'] = nomes.get(item.cnpj_raiz)
         d['consulta_cpf_receita'] = link_consulta_cpf_receita(item.cpf, item.data_nascimento)
+        # O FAP não informa nome: só existe o que alguém revelou pela consulta de CPF.
+        d['nome_revelado'] = revelados.get(item.cpf or '')
+        d['segurado_nome'] = (d['nome_revelado'] or {}).get('nome')
+        d['cpf_revelavel'] = cpf_valido(item.cpf)
         d['contestado'] = bool(contestado)
         d['beneficio_central_id'] = (
             central_id if contestado and item.tipo != 'CAT' else None)

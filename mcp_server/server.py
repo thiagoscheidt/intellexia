@@ -442,6 +442,8 @@ def listar_beneficios_fap(
     situação cadastral do CPF na Receita Federal, já preenchido — a pessoa só
     resolve o captcha, e é lá que se vê o nome do segurado. Ofereça o link a
     quem perguntar pelo nome; você não consegue abrir nem ler essa página.
+    segurado_nome vem preenchido quando alguém já revelou o nome na tela
+    (botão "Revelar nome", consulta paga por CPF); o MCP não faz essa consulta.
 
     Combine os filtros numa chamada só em vez de listar tudo e separar depois:
     "B91 da Vale indeferidos na 1ª instância" é grupo="Vale",
@@ -457,9 +459,9 @@ def listar_beneficios_fap(
         tipo_beneficio: Ex: B91 (auxílio-acidente), B94 (auxílio-doença acidentário).
         topico_contestacao: Tópico jurídico da contestação (ex: ACIDENTE DE TRAJETO).
         segurado: Nome (ou parte do nome) do segurado. ATENÇÃO: o relatório e o
-            portal do FAP não trazem nome — só acha cadastro manual. Se a pergunta
-            vier com o nome da pessoa, diga que o sistema não tem o nome do
-            segurado e peça o CPF ou o NIT.
+            portal do FAP não trazem nome — só acha quem teve o nome revelado na
+            tela (botão "Revelar nome") ou cadastrado à mão. Se não achar, diga
+            que o sistema não tem o nome desse segurado e peça o CPF ou o NIT.
         nit: NIT do segurado (busca exata).
         cpf: CPF do segurado — com ou sem pontuação.
         numero_beneficio: Número do benefício (busca exata).
@@ -569,14 +571,16 @@ def buscar_por_segurado(
     situação cadastral do CPF na Receita Federal, já preenchido — a pessoa só
     resolve o captcha, e é lá que se vê o nome do segurado. Ofereça o link a
     quem perguntar pelo nome; você não consegue abrir nem ler essa página.
+    segurado_nome vem preenchido quando alguém já revelou o nome na tela
+    (botão "Revelar nome", consulta paga por CPF); o MCP não faz essa consulta.
 
     Args:
         nit: NIT do segurado (identificador mais completo para o cruzamento).
         cpf: CPF do segurado, com ou sem pontuação. Só com o CPF, CATs e
             processos vêm pelos NITs dos benefícios desse CPF.
-        nome: Nome ou parte do nome do segurado. O sistema não tem o nome do
-            segurado (relatório e portal do FAP não trazem): se a pergunta vier
-            com o nome, avise isso e peça o CPF ou o NIT.
+        nome: Nome ou parte do nome do segurado. Relatório e portal do FAP não
+            trazem nome: só acha quem teve o nome revelado na tela (botão "Revelar
+            nome") ou cadastrado à mão. Se não achar, avise e peça o CPF ou o NIT.
     """
     claims = require_module("fap_panel")
     with app.app_context():
@@ -791,6 +795,8 @@ def listar_beneficios_calculo_fap(
     situação cadastral do CPF na Receita Federal, já preenchido — a pessoa só
     resolve o captcha, e é lá que se vê o nome do segurado. Ofereça o link a
     quem perguntar pelo nome; você não consegue abrir nem ler essa página.
+    segurado_nome vem preenchido quando alguém já revelou o nome na tela
+    (botão "Revelar nome", consulta paga por CPF); o MCP não faz essa consulta.
 
     Args:
         vigencia: Ano da vigência FAP (ex: 2023).

@@ -365,7 +365,7 @@
       <table class="table table-hover mb-0 calc-table">
         <thead>
           <tr>
-            <th>Vig.</th><th>Estabelecimento</th><th>Tipo</th><th>NB / nº CAT</th><th>NIT · CPF</th>
+            <th>Vig.</th><th>Estabelecimento</th><th>Tipo</th><th>NB / nº CAT</th><th>Segurado · NIT · CPF</th>
             <th>Nasc.</th><th class="text-end">RMI</th><th class="text-end">Total pago</th><th>Início → Cessação</th>
             <th>No cálculo atual</th><th>Contestado</th><th></th>
           </tr>
@@ -378,7 +378,8 @@
             <td><span class="font-monospace small">{{ i.cnpj|cnpj }}</span>{% if i.empresa_nome %}<br><small class="text-muted">{{ i.empresa_nome }}</small>{% endif %}</td>
             <td><span class="badge tipo-badge" title="{{ cor[2] }}">{{ i.tipo }}</span></td>
             <td><span class="nb-pill">{{ i.identificador }}</span></td>
-            <td>{% if i.nit %}<span class="font-monospace small">{{ i.nit }}</span>{% else %}—{% endif %}{% if i.cpf %}<br><span class="text-nowrap"><small class="text-muted font-monospace">{{ i.cpf|cpf }}</small>{% if i.consulta_cpf_receita %} <a href="{{ i.consulta_cpf_receita }}" target="_blank" rel="noopener noreferrer" class="text-decoration-none ms-1" title="Consultar CPF na Receita Federal (abre preenchido; falta o captcha)"><img src="{{ url_for('static', filename='assets/img/receita-federal.png') }}" alt="Consultar na Receita Federal" width="16" height="16" class="align-text-bottom" style="border-radius:2px"></a>{% endif %}</span>{% endif %}</td>
+            <td>{% if i.tipo != 'CAT' or i.cpf %}<div class="small mb-1" data-segurado-nome data-info="{{ i.nome_revelado|tojson|forceescape }}" data-cpf="{{ i.cpf or '' }}"
+                  data-pode-revelar="{{ '1' if revelar_nome_disponivel and i.cpf_revelavel and not i.nome_revelado else '' }}"></div>{% endif %}{% if i.nit %}<span class="font-monospace small">{{ i.nit }}</span>{% else %}—{% endif %}{% if i.cpf %}<br><span class="text-nowrap"><small class="text-muted font-monospace">{{ i.cpf|cpf }}</small>{% if i.consulta_cpf_receita %} <a href="{{ i.consulta_cpf_receita }}" target="_blank" rel="noopener noreferrer" class="text-decoration-none ms-1" title="Consultar CPF na Receita Federal (abre preenchido; falta o captcha)"><img src="{{ url_for('static', filename='assets/img/receita-federal.png') }}" alt="Consultar na Receita Federal" width="16" height="16" class="align-text-bottom" style="border-radius:2px"></a>{% endif %}</span>{% endif %}</td>
             <td>{{ data(i.data_nascimento) }}</td>
             <td class="valor">{{ dinheiro(i.valor_mensal) if i.tipo != 'CAT' else '—' }}</td>
             <td class="valor fw-semibold">{{ dinheiro(i.total_pago) if i.tipo != 'CAT' else '—' }}</td>
@@ -461,6 +462,18 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/segurado-nome.js') }}"></script>
+<script>
+  // Nome do segurado (revelado ou botão), mesmo desenho da Central.
+  document.querySelectorAll('[data-segurado-nome]').forEach(function (el) {
+    let info = null;
+    try { info = JSON.parse(el.dataset.info || 'null'); } catch (e) { info = null; }
+    el.innerHTML = window.renderSeguradoNome(info, {
+      cpf: el.dataset.cpf, podeRevelar: el.dataset.podeRevelar === '1',
+      url: "{{ url_for('fap_calculo.revelar_nome_segurado') }}",
+    });
+  });
+</script>
 <script>
   // Grupo, empresa e estabelecimento com busca (select2 + cnpjSelect2Matcher),
   // como no Painel de Contestações – Benefícios. O estabelecimento depende da
