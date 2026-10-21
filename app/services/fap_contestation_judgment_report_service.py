@@ -10,6 +10,7 @@ import re
 from time import perf_counter
 
 from rich import print
+from sqlalchemy import or_
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app.agents.fap.fap_contestation_judgment_metadata_agent import (
@@ -49,38 +50,28 @@ class FapContestationJudgmentReportService:
         self.open_cnpj_service = OpenCNPJService()
 
     @staticmethod
-    def _build_benefit_classification_text(benefit: Benefit) -> str:
-        """Monta o texto base para classificação do benefício."""
-        primary_fields = [
-            benefit.second_instance_justification,
-            benefit.first_instance_justification,
-            benefit.justification,
-        ]
-        fallback_fields = [
-            benefit.second_instance_opinion,
-            benefit.first_instance_opinion,
-            benefit.opinion,
-            benefit.notes,
-        ]
-        # Usa apenas a melhor fonte primária disponível para evitar repetições
-        # entre 2a instância, 1a instância e justificativa geral.
-        selected_value = None
-        for value in primary_fields:
+    def _justificativa_para_categoria(benefit: Benefit) -> str:
+        """Texto de onde sai a Categoria FAP: o argumento da empresa.
+
+        A justificativa da 1ª instância; a da 2ª só se não houver a da 1ª; por
+        último a justificativa geral. Nunca o parecer do analista nem as notas —
+        a categoria é o argumento da empresa, não a decisão (E04 da R09). Na
+        maioria dos recursos a 2ª instância só reitera a 1ª ("Reiteramos os
+        motivos…"); medido na homologação: 19.377 de 43.091 diferem no texto.
+        """
+        for value in (benefit.first_instance_justification,
+                      benefit.second_instance_justification,
+                      benefit.justification):
             if value and str(value).strip():
-                selected_value = value
-                break
+                return FapContestationJudgmentReportService._clean_classification_text_block(str(value))
+        return ""
 
-        # Fallback para opinião/notas somente se não houver justificativa.
-        if selected_value is None:
-            for value in fallback_fields:
-                if value and str(value).strip():
-                    selected_value = value
-                    break
-
-        if selected_value is None:
+    @staticmethod
+    def _build_benefit_classification_text(benefit: Benefit) -> str:
+        """Texto para classificar um benefício: justificativa + cabeçalho de contexto."""
+        justification_text = FapContestationJudgmentReportService._justificativa_para_categoria(benefit)
+        if not justification_text:
             return ""
-
-        justification_text = FapContestationJudgmentReportService._clean_classification_text_block(str(selected_value))
         context_lines = FapContestationJudgmentReportService._build_benefit_context_lines(benefit)
 
         if context_lines:
@@ -362,6 +353,8 @@ class FapContestationJudgmentReportService:
             return existing_topics[0]
 
         text = self._build_benefit_classification_text(benefit)
+        if not text:
+            raise ValueError('O benefício não tem justificativa da empresa — não há o que classificar.')
         result = self.classifier_agent.classify(
             text,
             law_firm_id=law_firm_id if law_firm_id is not None else benefit.law_firm_id,
@@ -378,6 +371,108 @@ class FapContestationJudgmentReportService:
             self._persist_benefit_topics(benefit, merged_topics)
 
         return classified_topics[0]
+
+    def classify_benefits_by_justification(
+        self,
+        law_firm_id: int,
+        *,
+        aplicar: bool = False,
+        forcar: bool = False,
+        parallel_workers: int = 5,
+        limite_textos: int | None = None,
+        log=print,
+    ) -> dict:
+        """Categoria FAP de cada benefício, uma chamada por justificativa distinta.
+
+        O caminho por decisão (``classify_benefits_contestation_topics``) chama a
+        IA uma vez por decisão — 119.906 na homologação, US$ 326 — e usa o
+        parecer quando falta justificativa. Aqui a unidade é o benefício, o
+        texto é ``_justificativa_para_categoria`` e textos iguais (modelos do
+        escritório; 1ª e 2ª instância repetidas) vão à IA uma vez só: 30.905
+        textos na homologação. Sem o cabeçalho de contexto do benefício, senão
+        nenhum texto se repetiria.
+
+        ``aplicar=False`` classifica e não grava (para conferir numa amostra com
+        ``limite_textos``); ``forcar`` inclui quem já tem categoria.
+        """
+        with self.app.app_context():
+            query = Benefit.query.filter(Benefit.law_firm_id == law_firm_id)
+            if not forcar:
+                query = query.filter(
+                    or_(Benefit.fap_contestation_topics_json.is_(None),
+                        Benefit.fap_contestation_topics_json.in_(['', '[]'])),
+                    or_(Benefit.fap_contestation_topic.is_(None), Benefit.fap_contestation_topic == ''),
+                )
+            grupos: dict[str, list[int]] = {}
+            textos: dict[str, str] = {}
+            sem_justificativa = 0
+            for benefit in query.order_by(Benefit.id).yield_per(500):
+                texto = self._justificativa_para_categoria(benefit)
+                if not texto:
+                    sem_justificativa += 1
+                    continue
+                chave = ' '.join(texto.split())
+                grupos.setdefault(chave, []).append(benefit.id)
+                textos.setdefault(chave, texto)
+
+            chaves = list(grupos)
+            if limite_textos:
+                chaves = chaves[:max(int(limite_textos), 0)]
+            n_beneficios = sum(len(grupos[c]) for c in grupos)
+            log(f'{n_beneficios} benefício(s) com justificativa, {len(grupos)} texto(s) distinto(s), '
+                f'{sem_justificativa} sem justificativa · classificando {len(chaves)} texto(s)'
+                + ('' if aplicar else ' · SIMULAÇÃO (nada é gravado)'))
+
+            def _classificar(texto: str) -> list[str]:
+                with self.app.app_context():
+                    return self._extract_topics_from_classifier_result(
+                        self.classifier_agent.classify(texto, law_firm_id=law_firm_id))
+
+            resultado: dict[str, list[str]] = {}
+            erros = gravados = 0
+            with ThreadPoolExecutor(max_workers=max(1, int(parallel_workers))) as executor:
+                futuros = {executor.submit(_classificar, textos[c]): c for c in chaves}
+                for n, futuro in enumerate(as_completed(futuros), 1):
+                    chave = futuros[futuro]
+                    try:
+                        resultado[chave] = futuro.result()
+                    except Exception as exc:
+                        erros += 1
+                        log(f'  erro ao classificar um texto ({len(grupos[chave])} benefício(s)): '
+                            f'{type(exc).__name__}: {str(exc)[:150]}')
+                        continue
+                    if aplicar:
+                        for benefit_id in grupos[chave]:
+                            benefit = db.session.get(Benefit, benefit_id)
+                            if benefit is not None and self._persist_benefit_topics(benefit, resultado[chave]):
+                                gravados += 1
+                        if n % 200 == 0:
+                            db.session.commit()
+                    if n % 200 == 0:
+                        log(f'  {n}/{len(chaves)} textos · erros {erros}')
+            if aplicar:
+                db.session.commit()
+            else:
+                db.session.rollback()
+
+            por_categoria: dict[str, int] = {}
+            for chave, topicos in resultado.items():
+                principal = topicos[0] if topicos else '(nenhuma)'
+                por_categoria[principal] = por_categoria.get(principal, 0) + len(grupos[chave])
+            return {
+                'beneficios': n_beneficios,
+                'textos': len(chaves),
+                'textos_total': len(grupos),
+                'sem_justificativa': sem_justificativa,
+                'classificados': len(resultado),
+                'erros': erros,
+                'gravados': gravados,
+                'por_categoria': dict(sorted(por_categoria.items(), key=lambda kv: -kv[1])),
+                'amostra': [
+                    {'beneficios': len(grupos[c]), 'categorias': resultado[c], 'texto': textos[c][:300]}
+                    for c in list(resultado)[:50]
+                ],
+            }
 
     def classify_benefits_contestation_topics(
         self,

@@ -3578,6 +3578,9 @@ def classify_single_benefit_topic_api(benefit_id):
             force_reclassify=force_reclassify,
         )
         db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({'ok': False, 'message': str(exc)}), 400
     except Exception as exc:
         db.session.rollback()
         current_app.logger.exception('Erro ao classificar tópico FAP do benefício %s', benefit_id)
