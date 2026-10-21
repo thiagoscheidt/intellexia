@@ -5,9 +5,18 @@ Avalia o Jev (TypeSafe, via OpenRouter Decisions API) na Categoria FAP dos benef
 Só lê — não grava nada no banco. Pega benefícios que JÁ têm Categoria FAP
 (``fap_contestation_topics_json`` / ``fap_contestation_topic``) e justificativa,
 pergunta ao Jev qual é a categoria e compara. A pergunta é *choice* entre os 20
-tópicos do ``FAPContestationClassifierAgent``; a descrição de cada tópico sai da
-**referência ativa do escritório** (``fap_contestation_classifier_reference_versions``),
-com a referência padrão do código quando o escritório não tem versão.
+tópicos do ``FAPContestationClassifierAgent``. A descrição de cada tópico é o
+início da justificativa-modelo da **referência ativa do escritório**
+(``fap_contestation_classifier_reference_versions``, ou a padrão do código).
+
+O prompt do classificador atual também pode entrar, para comparação:
+``--com-sinais`` põe o "sinal jurídico forte" de cada categoria na descrição da
+opção, e ``--com-regras`` põe as regras gerais nas instruções. Na base local
+(20/10/2026, 60 benefícios) os dois **pioraram**: concordância de 88% → 77%, e
+erros com confiança alta que antes não havia ("outra empresa – CAT vinculada"
+virando "erro de estabelecimento", cujos sinais quase coincidem). O Jev é um
+modelo de decisão, não de instrução: compara melhor com exemplos do que segue
+regras. Nada é alterado no prompt nem na referência — só lidos.
 
 Serve para decidir se vale usar o Jev em cascata com o classificador atual: o Jev
 decide quando a confiança passa do limiar, o resto segue para o classificador.
@@ -22,7 +31,8 @@ que é sempre exclusão (79 de 80 na base local; o único "revisão" com confian
 Uso:
   uv run python scripts/jev_avaliar_categoria_fap.py                     # 200 benefícios
   uv run python scripts/jev_avaliar_categoria_fap.py --amostra 500 --workers 8
-  uv run python scripts/jev_avaliar_categoria_fap.py --referencia-padrao  # ignora a do escritório
+  uv run python scripts/jev_avaliar_categoria_fap.py --referencia-padrao  # prompt e referência do código
+  uv run python scripts/jev_avaliar_categoria_fap.py --com-sinais --com-regras  # com o prompt do classificador
 
 Variáveis (.env): OPENAI_API_KEY e OPENAI_BASE_URL do OpenRouter (as mesmas do
 resto do app); FAP_SYNC_LAW_FIRM_ID ou --escritorio.
@@ -92,18 +102,38 @@ def _secoes(md: str) -> dict[str, str]:
     return secoes
 
 
-def criterios(md: str, slug_to_topic: dict[str, str]) -> tuple[dict[str, str], list[str]]:
+_LINHA_SINAL = re.compile(r'^\s*[-*]?\s*([a-z0-9_]+)\s*:\s*(.+?)\s*$')
+
+
+def sinais_e_regras(prompt_md: str, slugs: set[str]) -> tuple[dict[str, str], str]:
+    """Prompt do classificador → ({slug: sinal forte}, regras gerais em texto).
+
+    As linhas "slug: sinal" viram a descrição de cada opção; o resto do prompt
+    (regras, exemplos de sinal forte, estruturação) vai inteiro nas instruções.
+    """
+    sinais, regras = {}, []
+    for linha in (prompt_md or '').splitlines():
+        m = _LINHA_SINAL.match(linha)
+        if m and m.group(1) in slugs:
+            sinais[m.group(1)] = m.group(2)
+        elif linha.strip() and 'sinais juridicos fortes' not in _chave(linha).lower():
+            regras.append(linha.rstrip())
+    return sinais, '\n'.join(regras)
+
+
+def criterios(md: str, slug_to_topic: dict[str, str], sinais: dict[str, str]) -> tuple[dict[str, str], list[str]]:
     secoes = _secoes(md)
     crit, faltou = {}, []
     for slug, nome in slug_to_topic.items():
         corpo = secoes.get(_chave(nome))
-        if slug in CATCH_ALL:
-            crit[slug] = CATCH_ALL[slug] + (f' Exemplo: {corpo[:400]}' if corpo else '')
-        elif corpo:
-            crit[slug] = f'{nome}. Exemplo de justificativa: {corpo[:700]}'
-        else:
-            crit[slug] = nome
+        partes = [CATCH_ALL.get(slug, nome)]
+        if sinais.get(slug):
+            partes.append(f'Sinal jurídico forte: {sinais[slug]}.')
+        if corpo:
+            partes.append(f'Exemplo de justificativa: {corpo[:400 if slug in CATCH_ALL else 600]}')
+        if not corpo and not sinais.get(slug) and slug not in CATCH_ALL:
             faltou.append(nome)
+        crit[slug] = ' '.join(partes)
     return crit, faltou
 
 
@@ -137,8 +167,12 @@ def main(argv=None) -> int:
     ap.add_argument('--workers', type=int, default=6, help='chamadas em paralelo (padrão 6)')
     ap.add_argument('--escritorio', type=int, default=None, help='law_firm_id (padrão: FAP_SYNC_LAW_FIRM_ID)')
     ap.add_argument('--modelo', default=MODELO_PADRAO)
-    ap.add_argument('--referencia-padrao', action='store_true', help='usa a referência do código, não a do escritório')
+    ap.add_argument('--referencia-padrao', action='store_true', help='usa prompt e referência do código, não os do escritório')
     ap.add_argument('--semente', type=int, default=7)
+    ap.add_argument('--com-sinais', action='store_true',
+                    help='põe o sinal jurídico forte do prompt em cada categoria (na base local piorou)')
+    ap.add_argument('--com-regras', action='store_true',
+                    help='põe também as regras gerais do prompt nas instruções (na base local piorou: 77%% contra 88%%)')
     args = ap.parse_args(argv)
 
     chave = os.environ.get('OPENAI_API_KEY', '').strip()
@@ -163,7 +197,15 @@ def main(argv=None) -> int:
             Ref.query.filter_by(law_firm_id=law_firm_id, is_active=True).order_by(Ref.version.desc()).first())
         md = ref.reference_markdown if ref else Cls.get_default_reference_markdown()
         origem = f'do escritório (versão {ref.version})' if ref else 'padrão do código'
-        crit, faltou = criterios(md, slug_to_topic)
+        prompt_md = (Cls.get_default_user_prompt_markdown() if args.referencia_padrao
+                     else Cls._load_user_prompt_markdown(law_firm_id))
+        prompt_escritorio = prompt_md.strip() != Cls.get_default_user_prompt_markdown().strip()
+        sinais, regras = sinais_e_regras(prompt_md, set(slug_to_topic))
+        crit, faltou = criterios(md, slug_to_topic, sinais if args.com_sinais else {})
+        instrucoes = ('Qual é a categoria (tópico jurídico) principal da contestação deste benefício? '
+                      'Compare a justificativa da empresa com o exemplo de justificativa de cada categoria.')
+        if args.com_regras:
+            instrucoes += ' Siga estas regras do escritório (as opções são os slugs citados nelas):\n' + regras[:4000]
 
         candidatos = (
             Benefit.query.filter(
@@ -177,9 +219,14 @@ def main(argv=None) -> int:
     random.seed(args.semente)
     casos = random.sample(casos, min(args.amostra, len(casos)))
 
-    _log(f'Escritório {law_firm_id} · referência {origem} · {len(casos)} benefícios com categoria · modelo {args.modelo}')
+    usa_prompt = args.com_sinais or args.com_regras
+    _log(f'Escritório {law_firm_id} · referência {origem}'
+         + (f' · prompt {"do escritório" if prompt_escritorio else "padrão do código"}'
+            f' ({"sinais" if args.com_sinais else ""}{" + " if args.com_sinais and args.com_regras else ""}'
+            f'{"regras" if args.com_regras else ""})' if usa_prompt else '')
+         + f' · {len(casos)} benefícios com categoria · modelo {args.modelo}')
     if faltou:
-        _log(f'  tópicos sem seção na referência (vão só com o nome): {", ".join(faltou)}')
+        _log(f'  tópicos sem sinal nem exemplo (vão só com o nome): {", ".join(faltou)}')
     if not casos:
         _log('Nenhum benefício com categoria e justificativa para comparar.')
         return 0
@@ -192,9 +239,7 @@ def main(argv=None) -> int:
             'model': args.modelo,
             'state': {'beneficio_fap': estado},
             'questions': {
-                'categoria': {'type': 'choice', 'criteria': crit,
-                              'instructions': 'Qual é a categoria (tópico jurídico) principal da contestação deste '
-                                              'benefício? Compare a justificativa da empresa com os exemplos de cada tópico.'},
+                'categoria': {'type': 'choice', 'criteria': crit, 'instructions': instrucoes},
                 'tipo_pedido': {'type': 'choice', 'criteria': TIPO_PEDIDO,
                                 'instructions': 'Qual é o pedido da empresa para este benefício na contestação do FAP?'},
             },
