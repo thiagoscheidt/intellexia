@@ -283,7 +283,8 @@ def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
     t0 = time.time()
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         for ano in anos:
-            for raiz in raizes:
+            log(f'Vigência {ano}: {len(raizes)} empresa(s)')
+            for posicao, raiz in enumerate(raizes, 1):
                 resp = client.listar_estabelecimentos(svc, ano, raiz)
                 if not resp.ok:
                     if resp.expired:
@@ -311,9 +312,12 @@ def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
                         FapCalculoEstabelecimento.ano_vigencia == ano,
                         FapCalculoEstabelecimento.cnpj.in_(estabs))
                 }
+                total_raiz = len(estabs)
                 if somente_novos:
                     estabs = [c for c in estabs
                               if gravados.get(c, (None, None))[1] not in SITUACOES_QUE_GRAVAM_ITENS]
+                log(f'  {ano} · empresa {posicao}/{len(raizes)} {raiz}: '
+                    f'{len(estabs)} de {total_raiz} estabelecimento(s) a buscar')
 
                 futuros = {pool.submit(buscar_estabelecimento, svc, ano, c,
                                        gravados.get(c, (None, None))[0]): c for c in estabs}
