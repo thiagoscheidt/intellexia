@@ -352,7 +352,14 @@
     <i class="bi bi-table text-primary"></i>
     <span class="fw-semibold">Resultado</span>
     <span class="badge rounded-pill text-bg-primary">{{ numero(total) }}</span>
-    {% if total_pages > 1 %}<small class="text-muted ms-auto">Página {{ page }} de {{ total_pages }} · {{ per_page }} por página</small>{% endif %}
+    <div class="ms-auto d-flex align-items-center gap-2">
+      {% if total_pages > 1 %}<small class="text-muted">Página {{ page }} de {{ total_pages }} · {{ per_page }} por página</small>{% endif %}
+      {% if total %}
+      <a href="{{ url_for('fap_calculo.exportar_excel', **filtros) }}" class="btn btn-outline-success btn-sm"
+         title="Planilha com todos os {{ numero(total) }} itens filtrados (todas as páginas)">
+        <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel</a>
+      {% endif %}
+    </div>
   </div>
   <div class="card-body p-0">
     {% if not itens %}

@@ -195,6 +195,10 @@ Lista **todos os benefícios (B91, B92, B93 e B94) e CATs que o portal usou nos 
 
 Total de itens do filtro, quantidade por espécie de benefício, CATs, **excluídos no recálculo** e **não contestados**. Os cartões acompanham os filtros escolhidos.
 
+### Exportar Excel
+
+:btn-outline-success[Exportar Excel], no cabeçalho do resultado, baixa a planilha com **todos os itens do filtro** — todas as páginas, na mesma ordem da tela. No topo vêm os filtros aplicados e os totais (itens por espécie, excluídos e não contestados); depois uma linha por item com estabelecimento, segurado (nome, quando já revelado), NIT, CPF, nascimento, RMI, total pago, datas de início, cessação, despacho e contabilização, situação **no cálculo atual** (Conta, Excluído ou Ausente), **contestado** e protocolo.
+
 ### Colunas
 
 | Coluna | O que significa |

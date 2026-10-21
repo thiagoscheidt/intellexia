@@ -208,12 +208,8 @@ def contadores(query, *, law_firm_id=None):
             'total_pago_excluido': pago_excluido, 'cruzamento': cruzamento}
 
 
-def pagina(query, page, per_page=50, *, law_firm_id=None):
-    """Uma página de itens (dicts). ``per_page`` é limitado a 200."""
-    firm_id = _firm_id(query, law_firm_id)
-    per_page = max(1, min(int(per_page), 200))
-    total = query.order_by(None).count()
-    linhas = (
+def _linhas(query, firm_id, offset, limite):
+    return (
         query.order_by(None)
         .with_entities(
             Item,
@@ -223,9 +219,38 @@ def pagina(query, page, per_page=50, *, law_firm_id=None):
         )
         .order_by(Item.ano_vigencia.desc(), Item.cnpj, Item.tipo,
                   Item.identificador, Item.id)
-        .offset(max(page - 1, 0) * per_page).limit(per_page).all()
+        .offset(offset).limit(limite).all()
     )
 
+
+def pagina(query, page, per_page=50, *, law_firm_id=None):
+    """Uma página de itens (dicts). ``per_page`` é limitado a 200."""
+    firm_id = _firm_id(query, law_firm_id)
+    per_page = max(1, min(int(per_page), 200))
+    total = query.order_by(None).count()
+    linhas = _linhas(query, firm_id, max(page - 1, 0) * per_page, per_page)
+    return _montar(linhas, firm_id), total
+
+
+def todos(query, *, law_firm_id=None, lote=1000):
+    """Todos os itens do filtro, na ordem da tela, em lotes — para a planilha.
+
+    Mesma montagem da ``pagina`` (nome revelado, contestado, cálculo atual),
+    então a planilha nunca diverge do que a tela mostra.
+    """
+    firm_id = _firm_id(query, law_firm_id)
+    offset = 0
+    while True:
+        linhas = _linhas(query, firm_id, offset, lote)
+        if not linhas:
+            return
+        yield from _montar(linhas, firm_id)
+        if len(linhas) < lote:
+            return
+        offset += lote
+
+
+def _montar(linhas, firm_id):
     raizes = {linha[0].cnpj_raiz for linha in linhas}
     nomes = {}
     if raizes:
@@ -267,4 +292,4 @@ def pagina(query, page, per_page=50, *, law_firm_id=None):
             e and e.calculo_atual_id and item.calculo_id
             and item.calculo_id != e.calculo_atual_id)
         itens.append(d)
-    return itens, total
+    return itens

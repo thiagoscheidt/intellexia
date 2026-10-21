@@ -34,12 +34,8 @@ def require_law_firm(f):
     return decorated_function
 
 
-@fap_calculo_bp.route('/')
-@require_law_firm
-def beneficios_page():
-    law_firm_id = get_current_law_firm_id()
-    args = request.args
-
+def _filtros_da_requisicao(args):
+    """Filtros da tela a partir da URL — os mesmos para a lista e para a planilha."""
     vigencia = args.get('vigencia', '').strip()
     vigencia = int(vigencia) if vigencia.isdigit() else None
     raiz = args.get('raiz', '').strip()
@@ -57,15 +53,32 @@ def beneficios_page():
     contestado = {'sim': True, 'nao': False}.get(contestado_arg)
     if contestado is None:
         contestado_arg = ''
+    return dict(vigencia=vigencia, raiz=raiz, grupo=grupo, cnpj=cnpj, q=q, tipos=tipos,
+                situacao=situacao, contestado=contestado, contestado_arg=contestado_arg)
+
+
+def _consulta_filtrada(law_firm_id, f):
+    return consulta.filtrar(
+        law_firm_id, vigencia=f['vigencia'], raizes=[f['raiz']] if f['raiz'] else None,
+        grupo=f['grupo'] or None, cnpj=f['cnpj'] or None, identificador=f['q'] or None,
+        tipos=f['tipos'] or None, situacao=f['situacao'] or None, contestado=f['contestado'])
+
+
+@fap_calculo_bp.route('/')
+@require_law_firm
+def beneficios_page():
+    law_firm_id = get_current_law_firm_id()
+    args = request.args
+    fr = _filtros_da_requisicao(args)
+    vigencia, raiz, grupo, cnpj, q, tipos, situacao, contestado_arg = (
+        fr['vigencia'], fr['raiz'], fr['grupo'], fr['cnpj'], fr['q'], fr['tipos'],
+        fr['situacao'], fr['contestado_arg'])
     try:
         page = max(1, int(args.get('page', 1)))
     except (TypeError, ValueError):
         page = 1
 
-    query = consulta.filtrar(
-        law_firm_id, vigencia=vigencia, raizes=[raiz] if raiz else None,
-        grupo=grupo or None, cnpj=cnpj or None, identificador=q or None,
-        tipos=tipos or None, situacao=situacao or None, contestado=contestado)
+    query = _consulta_filtrada(law_firm_id, fr)
     contadores = consulta.contadores(query, law_firm_id=law_firm_id)
     total = contadores['total']
     total_pages = max(1, -(-total // PER_PAGE))
@@ -95,6 +108,36 @@ def beneficios_page():
                situacao=situacao, contestado=contestado_arg),
         filtros=filtros,
         revelar_nome_disponivel=segurado_nome_service.disponivel(),
+    )
+
+
+@fap_calculo_bp.route('/exportar.xlsx')
+@require_law_firm
+def exportar_excel():
+    """Planilha do que está filtrado na tela — mesmos filtros, mesma ordem."""
+    from io import BytesIO
+    from datetime import datetime
+
+    from flask import send_file
+
+    from app.services import fap_calculo_export_service
+
+    law_firm_id = get_current_law_firm_id()
+    fr = _filtros_da_requisicao(request.args)
+    query = _consulta_filtrada(law_firm_id, fr)
+    contadores = consulta.contadores(query, law_firm_id=law_firm_id)
+
+    rotulos = fap_calculo_export_service.rotulos_dos_filtros(law_firm_id, fr)
+    workbook = fap_calculo_export_service.montar_planilha(
+        consulta.todos(query, law_firm_id=law_firm_id), rotulos, contadores)
+
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+    return send_file(
+        stream, as_attachment=True,
+        download_name=f'beneficios_calculo_fap_{datetime.now():%Y%m%d_%H%M%S}.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
 
 
