@@ -10,11 +10,17 @@ daquela vigência recebem os dados pelo NB. Regras e detalhes em
 
 **Só simula por padrão.** Grava apenas com ``--aplicar``.
 
+Só vai ao portal nas vigências que ainda têm benefício **sem CPF** — o CPF é o
+que o portal sempre traz quando acha o NB, então rodar de novo só busca o que
+faltou. ``--todos`` revisita a base inteira (para trocar CPF divergente pelo do
+portal, por exemplo).
+
 Uso:
   uv run python scripts/fap_completar_beneficios.py                          # simula tudo
   uv run python scripts/fap_completar_beneficios.py --empresa 07718633       # simula uma empresa
   uv run python scripts/fap_completar_beneficios.py --vigencia 2026 --aplicar
   uv run python scripts/fap_completar_beneficios.py --aplicar --workers 12
+  uv run python scripts/fap_completar_beneficios.py --aplicar --todos        # base inteira
 
 Variáveis (.env):
   FAP_AUTH_JSON           — sessão do portal (a mesma do fap_sync_cron)
@@ -60,8 +66,13 @@ def _workers(valor: int | None) -> int:
         return WORKERS_PADRAO
 
 
-def _vigencias(law_firm_id: int, anos: list[int], raizes: list[str]):
-    """[(vigencia_id, ano, cnpj14, {nb, ...})] das vigências que têm benefício."""
+def _vigencias(law_firm_id: int, anos: list[int], raizes: list[str], todos: bool = False):
+    """[(vigencia_id, ano, cnpj14, {nb, ...})] das vigências que têm benefício.
+
+    Sem ``todos``, só as vigências com algum benefício sem CPF.
+    """
+    from sqlalchemy import func, or_
+
     from app.models import Benefit, FapVigenciaCnpj, db
     from app.utils.cnpj import TAMANHO_CNPJ, TAMANHO_CNPJ_RAIZ, completar_zeros
 
@@ -71,6 +82,12 @@ def _vigencias(law_firm_id: int, anos: list[int], raizes: list[str]):
          .filter(FapVigenciaCnpj.law_firm_id == law_firm_id, Benefit.law_firm_id == law_firm_id))
     if anos:
         q = q.filter(FapVigenciaCnpj.vigencia_year.in_([str(a) for a in anos]))
+    if not todos:
+        pendentes = (db.session.query(Benefit.fap_vigencia_cnpj_id)
+                     .filter(Benefit.law_firm_id == law_firm_id,
+                             or_(Benefit.insured_cpf.is_(None), func.trim(Benefit.insured_cpf) == ''))
+                     .distinct())
+        q = q.filter(FapVigenciaCnpj.id.in_(pendentes))
 
     raizes8 = {completar_zeros(r, TAMANHO_CNPJ_RAIZ) for r in raizes}
     por_vigencia: dict[int, tuple[int, str, set]] = {}
@@ -85,13 +102,16 @@ def _vigencias(law_firm_id: int, anos: list[int], raizes: list[str]):
                                                                       key=lambda kv: (-kv[1][0], kv[1][1]))]
 
 
-def executar(law_firm_id: int, svc, anos: list[int], raizes: list[str], workers: int, aplicar: bool) -> int:
+def executar(law_firm_id: int, svc, anos: list[int], raizes: list[str], workers: int, aplicar: bool,
+             todos: bool = False) -> int:
     from app.models import db
     from app.services.fap_beneficio_portal_service import aplicar as aplicar_vigencia, buscar_vigencia
 
-    vigencias = _vigencias(law_firm_id, anos, raizes)
+    vigencias = _vigencias(law_firm_id, anos, raizes, todos)
     total_ben = sum(len(n) for *_, n in vigencias)
-    _log(f"{len(vigencias)} vigência(s) com {total_ben} benefício(s) — {workers} consulta(s) em paralelo"
+    _log(f"{len(vigencias)} vigência(s) com {total_ben} benefício(s)"
+         f"{'' if todos else ' (só as que têm benefício sem CPF; --todos para a base inteira)'}"
+         f" — {workers} consulta(s) em paralelo"
          f" — {'GRAVANDO' if aplicar else 'SIMULAÇÃO (use --aplicar para gravar)'}")
 
     situacoes: dict[str, int] = {}
@@ -155,6 +175,7 @@ def main(argv=None) -> int:
     ap.add_argument('--empresa', action='append', default=[], help='CNPJ raiz, 8 dígitos (repetível)')
     ap.add_argument('--escritorio', type=int, default=None, help='law_firm_id (padrão: FAP_SYNC_LAW_FIRM_ID)')
     ap.add_argument('--workers', type=int, default=None, help='consultas em paralelo (padrão 8, máx 20)')
+    ap.add_argument('--todos', action='store_true', help='inclui as vigências em que todo benefício já tem CPF')
     args = ap.parse_args(argv)
 
     law_firm_id = args.escritorio or int(os.environ.get('FAP_SYNC_LAW_FIRM_ID') or 0)
@@ -174,7 +195,7 @@ def main(argv=None) -> int:
 
     with app.app_context():
         return executar(law_firm_id, FapWebService(auth), args.vigencia, args.empresa,
-                        _workers(args.workers), args.aplicar)
+                        _workers(args.workers), args.aplicar, args.todos)
 
 
 if __name__ == '__main__':

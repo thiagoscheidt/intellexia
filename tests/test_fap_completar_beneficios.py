@@ -183,6 +183,21 @@ def test_completar():
         check('rodar de novo não muda nada', res2['cpf'] == 0 and res2['rmi'] == 0 and res2['total_pago'] == 0,
               str(res2))
 
+        print('\n4. Rodar de novo só busca vigência com benefício sem CPF')
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            'fap_completar_beneficios', Path(__file__).resolve().parent.parent / 'scripts' / 'fap_completar_beneficios.py')
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        check('vigência com benefício sem CPF entra', [v[0] for v in script._vigencias(firm.id, [], [])] == [vig.id])
+        db.session.get(Benefit, id_fora).insured_cpf = '22222222222'
+        db.session.commit()
+        check('todos com CPF → vigência fica de fora', script._vigencias(firm.id, [], []) == [])
+        check('--todos inclui de novo', [v[0] for v in script._vigencias(firm.id, [], [], todos=True)] == [vig.id])
+        db.session.get(Benefit, id_fora).insured_cpf = '  '
+        db.session.commit()
+        check('CPF em branco conta como sem CPF', [v[0] for v in script._vigencias(firm.id, [], [])] == [vig.id])
+
         sem = portal.buscar_vigencia(Svc({'/calculos': 403}), 2026, ESTAB, {'6505977833'})
         check('403 vira sem acesso, sem itens', sem.situacao == 'sem_acesso' and not sem.itens)
         exp = portal.buscar_vigencia(Svc({'/calculos': 401}), 2026, ESTAB, {'6505977833'})
