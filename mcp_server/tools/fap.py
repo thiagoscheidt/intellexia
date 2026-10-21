@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 
+from app.utils.cnpj import link_consulta_cpf_receita
 from mcp_server.tools.pagination import clamp_limit, clamp_offset, fetch_page, page_envelope
 
 
@@ -590,6 +591,7 @@ def list_fap_benefits_handler(
             "segurado_nit": b.insured_nit,
             "segurado_cpf": b.insured_cpf,
             "segurado_data_nascimento": _iso(b.insured_date_of_birth),
+            "consulta_cpf_receita": link_consulta_cpf_receita(b.insured_cpf, b.insured_date_of_birth),
             "empregador_cnpj": b.employer_cnpj,
             "empregador_nome": b.employer_name or _empresa_por_cnpj(b.employer_cnpj, names),
             "data_inicio_beneficio": _iso(b.benefit_start_date),
@@ -648,6 +650,7 @@ def get_benefit_detail_handler(benefit_id: int, law_firm_id: int) -> dict:
         "segurado_nit": benefit.insured_nit,
         "segurado_cpf": benefit.insured_cpf,
         "segurado_data_nascimento": _iso(benefit.insured_date_of_birth),
+        "consulta_cpf_receita": link_consulta_cpf_receita(benefit.insured_cpf, benefit.insured_date_of_birth),
         # Empregador
         "empregador_cnpj": benefit.employer_cnpj,
         "empregador_nome": benefit.employer_name,

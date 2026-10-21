@@ -97,3 +97,52 @@ def raiz_contestacao_fap(item: dict, fallback_raiz=None) -> str:
     if cnpj and len(cnpj) == TAMANHO_CNPJ and len(cnpj.lstrip('0')) > TAMANHO_CNPJ_RAIZ:
         return cnpj[:TAMANHO_CNPJ_RAIZ]
     return completar_zeros(fallback_raiz, TAMANHO_CNPJ_RAIZ) or ''
+
+
+def cpf_valido(valor) -> bool:
+    """Dígitos verificadores do CPF (mod 11). Repetidos ("111.111.111-11") não valem."""
+    digitos = completar_zeros(valor, TAMANHO_CPF)
+    if not digitos or len(digitos) != TAMANHO_CPF or len(set(digitos)) == 1:
+        return False
+    for tamanho in (9, 10):
+        soma = sum(int(d) * peso for d, peso in zip(digitos[:tamanho], range(tamanho + 1, 1, -1)))
+        dv = (soma * 10) % 11 % 10
+        if dv != int(digitos[tamanho]):
+            return False
+    return True
+
+
+# A página da Receita aceita CPF e nascimento pela URL e abre com os campos
+# preenchidos (conferido em 21/10/2026); o captcha continua com a pessoa.
+# É de lá que sai o nome do segurado, que nem o relatório nem a Consulta do
+# FAP trazem.
+URL_CONSULTA_CPF_RECEITA = (
+    'https://servicos.receita.fazenda.gov.br/Servicos/CPF/ConsultaSituacao/ConsultaPublica.asp'
+)
+
+
+def link_consulta_cpf_receita(cpf, nascimento) -> str | None:
+    """Link da situação cadastral do CPF na Receita, já preenchido.
+
+    ``nascimento`` aceita ``date``/``datetime``, ``'dd/mm/aaaa'`` ou ISO.
+    Sem um dos dois, ou com CPF de DV inválido, devolve ``None`` — a página
+    recusaria a consulta e o link só faria a pessoa perder o captcha.
+    """
+    from datetime import date, datetime
+
+    if not cpf_valido(cpf) or not nascimento:
+        return None
+    if isinstance(nascimento, datetime):
+        nascimento = nascimento.date()
+    if not isinstance(nascimento, date):
+        texto = str(nascimento).strip()[:10]
+        for formato in ('%d/%m/%Y', '%Y-%m-%d'):
+            try:
+                nascimento = datetime.strptime(texto, formato).date()
+                break
+            except ValueError:
+                continue
+        else:
+            return None
+    return (f'{URL_CONSULTA_CPF_RECEITA}?CPF={completar_zeros(cpf, TAMANHO_CPF)}'
+            f'&NASCIMENTO={nascimento:%d%m%Y}')

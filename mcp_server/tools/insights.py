@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from app.utils.cnpj import link_consulta_cpf_receita
+
 
 def _iso(value):
     return value.isoformat() if value else None
@@ -183,6 +185,7 @@ def buscar_por_segurado_handler(
             "segurado_nit": b.insured_nit,
             "segurado_cpf": b.insured_cpf,
             "segurado_data_nascimento": _iso(b.insured_date_of_birth),
+            "consulta_cpf_receita": link_consulta_cpf_receita(b.insured_cpf, b.insured_date_of_birth),
             "empregador_nome": b.employer_name,
             "empregador_cnpj": b.employer_cnpj,
             "vigencias_fap": b.fap_vigencia_years,

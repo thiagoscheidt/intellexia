@@ -17,7 +17,7 @@ from app.services import fap_protocolo_service
 from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 
 from app.utils.timezone import now_sp
-from app.utils.cnpj import formatar_cnpj
+from app.utils.cnpj import formatar_cnpj, link_consulta_cpf_receita
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
 from openpyxl import Workbook
@@ -1920,6 +1920,7 @@ def _serialize_benefit_row(benefit, client_name, decisions_count=0, fap_protocol
         'insured_cpf': benefit.insured_cpf or '',
         'insured_nit': benefit.insured_nit or '',
         'insured_date_of_birth': _format_date(benefit.insured_date_of_birth),
+        'consulta_cpf_receita': link_consulta_cpf_receita(benefit.insured_cpf, benefit.insured_date_of_birth),
         'employer_cnpj': benefit.employer_cnpj or '',
         'employer_name': benefit.employer_name or '',
         'status': benefit.status or '',

@@ -1147,7 +1147,13 @@
       {
         data: null,
         render: function (_, __, row) {
-          const cpf = row.insured_cpf ? `<span class="font-monospace small">CPF: ${escapeHtml(row.insured_cpf)}</span>` : '';
+          // Com CPF e nascimento, o CPF abre a consulta da Receita já preenchida
+          // (falta só o captcha) — é de lá que sai o nome do segurado.
+          const receita = row.consulta_cpf_receita
+            ? ` <a href="${escapeHtml(row.consulta_cpf_receita)}" target="_blank" rel="noopener noreferrer"
+                 class="text-decoration-none" title="Consultar CPF na Receita Federal (abre preenchido; falta o captcha)"><i class="bi bi-box-arrow-up-right"></i> Receita</a>`
+            : '';
+          const cpf = row.insured_cpf ? `<span class="font-monospace small">CPF: ${escapeHtml(row.insured_cpf)}${receita}</span>` : '';
           const birth = row.insured_date_of_birth ? `<small class="text-muted">Nasc.: ${escapeHtml(row.insured_date_of_birth)}</small>` : '';
           return `
               <div class="d-flex flex-column gap-1">

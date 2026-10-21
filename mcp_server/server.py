@@ -438,6 +438,11 @@ def listar_beneficios_fap(
     "quantos B91 da Vale foram indeferidos na 1ª instância?"), prefira
     resumo_fap — responde em uma única chamada, sem listar registros.
 
+    Cada item traz consulta_cpf_receita (quando há CPF e nascimento) é o link da
+    situação cadastral do CPF na Receita Federal, já preenchido — a pessoa só
+    resolve o captcha, e é lá que se vê o nome do segurado. Ofereça o link a
+    quem perguntar pelo nome; você não consegue abrir nem ler essa página.
+
     Combine os filtros numa chamada só em vez de listar tudo e separar depois:
     "B91 da Vale indeferidos na 1ª instância" é grupo="Vale",
     tipo_beneficio="B91", status_1a_instancia="indeferido".
@@ -496,6 +501,8 @@ def detalhar_beneficio(beneficio_id: int) -> dict:
 
     Inclui dados do segurado, empregador, acidente (CAT/BO), valores pagos,
     tópicos de contestação e justificativas/pareceres por instância.
+    consulta_cpf_receita abre a situação cadastral do CPF na Receita já
+    preenchida (falta o captcha) — é onde se vê o nome do segurado.
 
     Args:
         beneficio_id: ID interno do benefício (obtido em listar_beneficios_fap).
@@ -557,6 +564,11 @@ def buscar_por_segurado(
     CATs e processos só entram se você tiver acesso aos respectivos módulos.
     Com CPF ou NIT, traz também 'beneficios_calculo_fap': os benefícios e CATs do
     cálculo FAP (base da Consulta do portal), que existem mesmo sem contestação.
+
+    Cada benefício traz consulta_cpf_receita (quando há CPF e nascimento) é o link da
+    situação cadastral do CPF na Receita Federal, já preenchido — a pessoa só
+    resolve o captcha, e é lá que se vê o nome do segurado. Ofereça o link a
+    quem perguntar pelo nome; você não consegue abrir nem ler essa página.
 
     Args:
         nit: NIT do segurado (identificador mais completo para o cruzamento).
@@ -774,6 +786,11 @@ def listar_beneficios_calculo_fap(
     que o portal usou no cálculo, tenha o escritório contestado ou não. Para
     benefícios JÁ contestados (status por instância, justificativas) use
     listar_beneficios_fap. Para apenas contar, use resumo_beneficios_calculo_fap.
+
+    Cada item traz consulta_cpf_receita (quando há CPF e nascimento) é o link da
+    situação cadastral do CPF na Receita Federal, já preenchido — a pessoa só
+    resolve o captcha, e é lá que se vê o nome do segurado. Ofereça o link a
+    quem perguntar pelo nome; você não consegue abrir nem ler essa página.
 
     Args:
         vigencia: Ano da vigência FAP (ex: 2023).
