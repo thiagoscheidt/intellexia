@@ -258,6 +258,25 @@ O escritório compartilha com `intellexia-drive@intellexia-503416.iam.gserviceac
   para o escritório configurado**: sem a trava, outro escritório que importasse
   uma planilha com os ids desses arquivos os baixaria pela conta.
 - Conferência real sob comando: `uv run python scripts/drive_conferir_acesso.py`.
+- **Importação automática das petições** (`drive_peticao_service` +
+  `scripts/importar_peticoes_drive.py --gravar`, de hora em hora no cron, com
+  trava contra rodada simultânea): o escritório autorizou importar tudo o que
+  compartilhar. O Drive **não entrega caminho** (`parents` vazio) **nem nº do
+  processo no nome** (medido em 21/10/2026, 0 de 34): a ficha sai do nome
+  (`TIPO - EMPRESA _ PROTOCOLO.pdf`) e do texto, pelo `PeticaoProtocoladaAgent`
+  (modelo em Configurações de IA, `drive_peticao_extractor`), **com as mesmas
+  chaves de `dados` do lote .md** — e grava pelas mesmas funções do lote
+  (`_criar_na_base`: "Petições protocoladas", Qdrant + Meilisearch, link do
+  Drive em `source_url`; impugnação também em `_criar_peca`). O nº do processo
+  vem de `lote.processo_do_texto` (o rotulado após o endereçamento — a peça
+  cita precedentes); o da IA só vale se a regra não achar e o número estiver
+  no texto. O que já veio pelo lote (mesmo id do Drive no link) só é
+  **registrado** em `drive_ingestions`, sem IA. Documento que a IA diz não ser
+  petição e PDF sem texto ficam com erro na tela, para escolha manual. Falha
+  **passageira** (Drive fora, limite do provedor, Qdrant/Meilisearch sem
+  conexão) não é registrada: a próxima rodada tenta de novo e **retoma o mesmo
+  registro** da Base. Na tela, o envio aparece como "importação automática"
+  (`created_by` vazio).
 
 ### Nome do segurado (consulta de CPF)
 
@@ -969,6 +988,7 @@ FapReview.revision [POST]
 | `communication_monitor_service`        | Monitoramento de Processos: sincronização por OAB e por caderno (dedup por hash da API), descoberta de processos (`origin='comunica_auto'` + triagem), explicação IA com cache (`explain_communication`), queries da tela e das tools MCP — fonte única |
 | `google_drive_client`                  | Google Drive pela conta de serviço — todo acesso autenticado isolado aqui: token JWT, listagem, metadados, download/exportação conferidos (ver seção "Integração Google Drive") |
 | `drive_ingestion_service`              | Tela do Google Drive: lista ao vivo do que foi compartilhado + envio a peça-modelo, decisão ou Base de Conhecimento pelas portas que cada base já usa |
+| `drive_peticao_service`                | Importação automática das petições protocoladas do Drive: ficha pelo `PeticaoProtocoladaAgent` no formato do lote .md, gravação pelas funções do lote, registro em `drive_ingestions` — ver seção "Integração Google Drive" |
 | `lote_md_import_service`               | Lote de Markdown do escritório (`decisoes/` + `peticoes_protocoladas/`, cada uma com `_INDICE_*.csv`) → Jurisprudência, Peças-modelo e Base de Conhecimento pelas portas de cada base. Arquivo entra **como veio** (cópia byte a byte, nome original); a ligação sai do CSV — "PDF de origem" = `nome_arquivo` do Banco Mestre, "Link" = `source_drive_file_id`. Impugnação vai às Peças-modelo **e** à Base. A Base é indexada pelo próprio lote e já entra concluída, com categoria e tags do CSV — **não passa pelo `process_knowledge_base`**, que pediria extração à IA e ligaria petição protocolada a processo judicial (criando processo/cliente). O "Link" do CSV vai para `knowledge_base.source_url` (`database/add_knowledge_base_source_url_column.py`): botão "Abrir original no Drive" no detalhe e `url_original` nas tools MCP da Base. `planejar` só lê, `executar` grava; rodar de novo pula o que já entrou, retoma peça/arquivo interrompido no meio e só completa o link do que entrou sem ele. Script: `scripts/importar_lote_md.py` (pasta padrão `instance/importacao/lote_md/`) |
 | `inlabs_client`                        | Cliente HTTP do INLABS (Imprensa Nacional) — todo acesso isolado aqui: login, cookie de sessão, montagem de URL, retry com teto, timeout e relogin transparente |
 | `dou_xml_parser`                       | XML do DOU → dicts. Função pura, sem rede/banco/Flask — a peça que muda se a Imprensa Nacional alterar o schema |

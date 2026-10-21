@@ -139,7 +139,8 @@ def _situacoes(law_firm_id: int, registros: list[DriveIngestion]) -> dict[int, d
         saida[r.id] = {
             'id': r.id, 'destino': r.destination, 'destino_rotulo': DESTINOS.get(r.destination, r.destination),
             'situacao': situacao, 'situacao_rotulo': rotulo, 'cor': cor, 'erro': erro, 'link': link,
-            'enviado_em': r.created_at, 'quem': r.created_by.name if r.created_by else None,
+            # Sem pessoa: quem enviou foi a importação automática (drive_peticao_service).
+            'enviado_em': r.created_at, 'quem': r.created_by.name if r.created_by else 'importação automática',
         }
     return saida
 

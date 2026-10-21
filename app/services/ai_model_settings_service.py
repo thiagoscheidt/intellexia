@@ -54,6 +54,15 @@ AGENT_REGISTRY = [
         'default': lambda: os.getenv('JURISPRUDENCE_THESIS_MAPPER_MODEL') or agents_config.DEFAULT_MODEL_ROBUST,
     },
     {
+        'key': 'drive_peticao_extractor',
+        'group': GROUP_READING,
+        'label': 'Petições do Google Drive',
+        'description': 'Lê cada petição protocolada compartilhada pelo Drive e preenche a ficha do '
+                       'índice (peça, autora, tribunal, vara, protocolo e teses) para a Base de '
+                       'Conhecimento.',
+        'default': lambda: os.getenv('DRIVE_PETICAO_EXTRACTOR_MODEL') or agents_config.DEFAULT_MODEL_ROBUST,
+    },
+    {
         'key': 'generated_document',
         'group': GROUP_GENERATION,
         'label': 'Gerador de documentos',

@@ -479,6 +479,11 @@ def resumo(itens: list[Item]) -> dict[str, int]:
 
 # ── Execução ──────────────────────────────────────────────────────────
 
+def _extensao(nome: str) -> str:
+    """'md' no lote; 'pdf' quando a petição vem do Google Drive (drive_peticao_service)."""
+    return (os.path.splitext(nome or '')[1].lstrip('.') or 'md').lower()
+
+
 def _copiar(item: Item, pasta: str, carimbo_no_fim: bool = False) -> str:
     """Cópia byte a byte para a pasta da base; a origem fica intacta."""
     os.makedirs(pasta, exist_ok=True)
@@ -560,7 +565,7 @@ def _criar_peca(item: Item, law_firm_id: int, user_id: int, processar: bool) -> 
         case_name=autora[:255] or None, trf_region=normalize_tribunal(dados.get('tribunal')),
         orgao_julgador=(dados.get('orgao') or '')[:255] or None,
         original_filename=item.arquivo[:255], file_path=destino,
-        file_size=os.path.getsize(destino), file_type='md', file_hash=item.sha,
+        file_size=os.path.getsize(destino), file_type=_extensao(item.arquivo), file_hash=item.sha,
         source_drive_file_id=dados.get('drive_id'),
         source_theses_json=[dados['teses']] if dados.get('teses') else None,
         status='active', ingestion_status='processing',
@@ -612,7 +617,8 @@ def _criar_na_base(item: Item, law_firm_id: int, user_id: int) -> str:
                           carimbo_no_fim=True)
         arquivo = KnowledgeBase(
             user_id=user_id, law_firm_id=law_firm_id, original_filename=item.arquivo[:255],
-            file_path=destino, file_size=os.path.getsize(destino), file_type='MD', file_hash=item.sha,
+            file_path=destino, file_size=os.path.getsize(destino), file_type=_extensao(item.arquivo).upper(),
+            file_hash=item.sha,
         )
         db.session.add(arquivo)
     arquivo.description = _descricao(item.dados)
