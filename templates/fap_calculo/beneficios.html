@@ -378,7 +378,7 @@
             <td><span class="font-monospace small">{{ i.cnpj|cnpj }}</span>{% if i.empresa_nome %}<br><small class="text-muted">{{ i.empresa_nome }}</small>{% endif %}</td>
             <td><span class="badge tipo-badge" title="{{ cor[2] }}">{{ i.tipo }}</span></td>
             <td><span class="nb-pill">{{ i.identificador }}</span></td>
-            <td>{% if i.nit %}<span class="font-monospace small">{{ i.nit }}</span>{% else %}—{% endif %}{% if i.cpf %}<br><small class="text-muted font-monospace">{{ i.cpf|cpf }}</small>{% if i.consulta_cpf_receita %} <a href="{{ i.consulta_cpf_receita }}" target="_blank" rel="noopener noreferrer" class="small text-decoration-none" title="Consultar CPF na Receita Federal (abre preenchido; falta o captcha)"><i class="bi bi-box-arrow-up-right"></i> Receita</a>{% endif %}{% endif %}</td>
+            <td>{% if i.nit %}<span class="font-monospace small">{{ i.nit }}</span>{% else %}—{% endif %}{% if i.cpf %}<br><span class="text-nowrap"><small class="text-muted font-monospace">{{ i.cpf|cpf }}</small>{% if i.consulta_cpf_receita %} <a href="{{ i.consulta_cpf_receita }}" target="_blank" rel="noopener noreferrer" class="text-decoration-none ms-1" title="Consultar CPF na Receita Federal (abre preenchido; falta o captcha)"><img src="{{ url_for('static', filename='assets/img/receita-federal.png') }}" alt="Consultar na Receita Federal" width="16" height="16" class="align-text-bottom" style="border-radius:2px"></a>{% endif %}</span>{% endif %}</td>
             <td>{{ data(i.data_nascimento) }}</td>
             <td class="valor">{{ dinheiro(i.valor_mensal) if i.tipo != 'CAT' else '—' }}</td>
             <td class="valor fw-semibold">{{ dinheiro(i.total_pago) if i.tipo != 'CAT' else '—' }}</td>

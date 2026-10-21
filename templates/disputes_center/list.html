@@ -1151,9 +1151,9 @@
           // (falta só o captcha) — é de lá que sai o nome do segurado.
           const receita = row.consulta_cpf_receita
             ? ` <a href="${escapeHtml(row.consulta_cpf_receita)}" target="_blank" rel="noopener noreferrer"
-                 class="text-decoration-none" title="Consultar CPF na Receita Federal (abre preenchido; falta o captcha)"><i class="bi bi-box-arrow-up-right"></i> Receita</a>`
+                 class="text-decoration-none ms-1" title="Consultar CPF na Receita Federal (abre preenchido; falta o captcha)"><img src="{{ url_for('static', filename='assets/img/receita-federal.png') }}" alt="Consultar na Receita Federal" width="16" height="16" class="align-text-bottom" style="border-radius:2px"></a>`
             : '';
-          const cpf = row.insured_cpf ? `<span class="font-monospace small">CPF: ${escapeHtml(row.insured_cpf)}${receita}</span>` : '';
+          const cpf = row.insured_cpf ? `<span class="font-monospace small text-nowrap">CPF: ${escapeHtml(row.insured_cpf)}${receita}</span>` : '';
           const birth = row.insured_date_of_birth ? `<small class="text-muted">Nasc.: ${escapeHtml(row.insured_date_of_birth)}</small>` : '';
           return `
               <div class="d-flex flex-column gap-1">
