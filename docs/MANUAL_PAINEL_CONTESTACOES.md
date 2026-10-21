@@ -49,7 +49,7 @@ Em ambos: Total, Deferidos, Indeferidos, Em análise, Pendentes, Categorizados e
 |---|---|---|
 | **ID** | Identificador interno do benefício. | Sistema |
 | **Número / NIT / Tipo** | Nº do benefício, **NIT** do segurado e **tipo** (B91, B94 etc.). | Relatório |
-| **Segurado** | Nome, CPF e data de nascimento do segurado. | Relatório |
+| **Segurado** | Nome, CPF e data de nascimento do segurado. O FAP não informa o nome: sem ele, :btn-outline-primary[Revelar nome] consulta pelo CPF (uma vez por CPF; fica salvo para todos). O ícone da Receita ao lado do CPF abre a consulta gratuita da Receita Federal já preenchida — falta só o captcha. | Relatório, Sistema |
 | **CNPJ Empregador** | CNPJ e nome da empresa empregadora. | Relatório |
 | **Status 1ª instância** | Deferido/Indeferido/Em análise/Pendente + texto original abaixo. | Relatório |
 | **Status 2ª instância** | Mesmo esquema, para o recurso. | Relatório |

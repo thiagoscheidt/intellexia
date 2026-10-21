@@ -203,7 +203,7 @@ Total de itens do filtro, quantidade por espécie de benefício, CATs, **excluí
 | **Estabelecimento** | CNPJ de 14 dígitos e nome da empresa. |
 | **Tipo** | B91, B92, B93, B94 ou CAT. |
 | **NB / nº CAT** | Número do benefício ou da CAT. |
-| **NIT · CPF** | Identificação do segurado, mostrada inteira. |
+| **Segurado · NIT · CPF** | Identificação do segurado, mostrada inteira. O FAP não informa o nome: :btn-outline-primary[Revelar nome] consulta pelo CPF (uma vez por CPF; fica salvo para todos, também na Central e na IA). O ícone da Receita ao lado do CPF abre a consulta gratuita da Receita Federal já preenchida — falta só o captcha. |
 | **Nasc., RMI, Total pago** | Nascimento, renda mensal inicial e total pago no benefício (nas CATs não se aplicam). |
 | **Início → Cessação** | Período do benefício; na CAT, a data do acidente. |
 | **No cálculo atual** | **Conta** (o portal usa o item no cálculo) ou **Excluído** (veja abaixo). |

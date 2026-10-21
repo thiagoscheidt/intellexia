@@ -282,10 +282,15 @@ fornecedor (ex.: SERPRO) é reescrever só o client.
 - `consultado_por_id` é `ON DELETE SET NULL`: apagar o usuário não apaga o nome.
 - Nada cruza `segurado_nomes` com `benefits` por JOIN de texto (buscas por lista
   de CPFs) — sem depender de collation alinhada, a lição do cálculo FAP.
-- **MCP** só lê: `segurado_nome` vem do que já foi revelado e a busca por nome
-  (`segurado`/`nome`) também casa os nomes revelados. O MCP **não** dispara a
-  consulta paga. Ao lado, `consulta_cpf_receita` é o link gratuito da Receita
-  já preenchido (`app/utils/cnpj.link_consulta_cpf_receita`; falta o captcha).
+- **MCP**: `segurado_nome` vem do que já foi revelado e a busca por nome
+  (`segurado`/`nome`) também casa os nomes revelados. `revelar_nome_segurado`
+  faz a consulta paga **de um CPF**, só quando o usuário pede explicitamente o
+  nome de uma pessoa (a docstring proíbe lote e iniciativa própria), com
+  **limite diário por usuário** (`CPF_NOME_LIMITE_DIARIO_MCP`, padrão 30, dia de
+  São Paulo). O limite conta só `origem='mcp'` — a coluna `origem` separa o
+  clique na tela da chamada do Claude — e nome já salvo não conta. Ao lado,
+  `consulta_cpf_receita` é o link gratuito da Receita já preenchido
+  (`app/utils/cnpj.link_consulta_cpf_receita`; falta o captcha).
 
 ### Integração INLABS / Diário Oficial da União
 
@@ -1040,6 +1045,7 @@ SUMMARY_MAX_CHARS=50000
 # Nome do segurado por CPF (opcional — em branco esconde o botão "Revelar nome")
 CPF_NOME_API_KEY=...                    # token do fornecedor; expira a cada 30 dias
 CPF_NOME_API_URL=https://api.cpf-brasil.org
+CPF_NOME_LIMITE_DIARIO_MCP=30           # consultas pagas por usuário/dia pelo MCP
 
 # INLABS / Diário Oficial da União (opcional — em branco desativa a captura)
 INLABS_EMAIL=...

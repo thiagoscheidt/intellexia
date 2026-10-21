@@ -1081,3 +1081,43 @@ def fap_filter_values_handler(law_firm_id: int) -> dict:
         },
         "motivos_fap_catalogo": motivos,
     }
+
+
+# ── Revelar nome do segurado (consulta paga por CPF) ──────────────────────────
+
+
+def revelar_nome_segurado_handler(law_firm_id: int, user_id: int | None, cpf: str) -> dict:
+    """Mesma consulta do botão "Revelar nome" das telas, com limite diário por usuário."""
+    from fastmcp.exceptions import ToolError
+
+    from app.services import cpf_nome_client
+    from app.services import segurado_nome_service as svc
+
+    if not svc.disponivel():
+        raise ToolError(
+            "A consulta de nome por CPF não está configurada nesta instalação. "
+            "Ofereça o link consulta_cpf_receita do benefício (consulta gratuita da Receita)."
+        )
+    try:
+        r = svc.revelar(law_firm_id, cpf, user_id, origem=svc.ORIGEM_MCP)
+    except svc.NomeNaoRevelavel as e:
+        raise ToolError(e.mensagem)
+    except cpf_nome_client.CpfNomeIndisponivel as e:
+        raise ToolError(e.mensagem)
+
+    resultado = {
+        "cpf": r["cpf"],
+        "encontrado": r["status"] == "encontrado",
+        "nome": r["nome"],
+        "ja_estava_salvo": r["ja_revelado"],
+        "consultas_restantes_hoje": max(
+            0, svc.limite_diario_mcp() - svc.consultas_mcp_hoje(law_firm_id, user_id)),
+    }
+    if r["nascimento_diverge"]:
+        resultado["aviso"] = (
+            "A data de nascimento da consulta não bate com a do FAP: o nome pode ser de "
+            "outra pessoa. Diga isso ao usuário junto com o nome."
+        )
+    if not resultado["encontrado"]:
+        resultado["aviso"] = "A consulta não encontrou nome para este CPF."
+    return resultado

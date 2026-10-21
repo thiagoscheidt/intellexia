@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **58 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **59 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -108,6 +108,9 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `prazos_e_alertas` | O que pede atenção: contestações aguardando resultado, decisões recentes (janela de recurso) e processos por fase | Cálculo |
 | `comparar_vigencias` | Compara resultados entre vigências (ex: 2023 vs 2024): deferidos/indeferidos, tópicos e financeiro | Cálculo |
 | `buscar_por_segurado` | Visão 360º de uma pessoa: benefícios + CATs + processos (por NIT, CPF ou nome) | Sistema |
+| `revelar_nome_segurado` | Revela o **nome** de um segurado pelo CPF (o FAP não informa nome) — a mesma consulta paga do botão **Revelar nome** das telas. Só quando você pede o nome de uma pessoa específica, com limite diário por usuário; o nome fica salvo para todos | Sistema |
+
+> [!INFO] **Nome do segurado.** O relatório e o portal do FAP **não informam o nome** — só CPF, NIT e nascimento. O nome aparece nas respostas quando alguém já o revelou (botão :btn-outline-primary[Revelar nome] nas telas de Benefícios, ou pedindo à IA), e a busca por nome acha esses segurados. Para revelar um nome novo, peça explicitamente ("qual o nome do segurado do CPF …?"): é uma consulta paga, feita uma vez por CPF, com limite diário por usuário — a IA não revela nomes em lote nem por conta própria. Cada benefício traz também o link gratuito da **consulta de CPF na Receita**, já preenchido (falta só o captcha).
 
 > [!INFO] **Empresa ou grupo?** O filtro por **empresa** procura pelo nome, e um pedaço de nome pode pegar mais de uma empresa — "vale" também encontra a "Cooperativa Vale do Itajaí". Quando isso acontece, a resposta lista as empresas que entraram na conta e a IA avisa antes de dar o número. Para um grupo econômico inteiro, e só ele, peça pelo **grupo** ("do grupo Vale"): é o mesmo cadastro de grupos das telas do Painel FAP.
 

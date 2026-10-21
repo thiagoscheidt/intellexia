@@ -21,6 +21,7 @@ Regras:
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 
 from sqlalchemy.exc import IntegrityError
@@ -108,10 +109,45 @@ class NomeNaoRevelavel(Exception):
         self.status_http = status_http
 
 
-def revelar(law_firm_id: int, cpf, user_id: int | None) -> dict:
+ORIGEM_TELA = 'tela'
+ORIGEM_MCP = 'mcp'
+
+
+def limite_diario_mcp() -> int:
+    """Consultas pagas por usuário por dia (de São Paulo) pelo Claude/MCP."""
+    try:
+        return max(0, int(os.getenv('CPF_NOME_LIMITE_DIARIO_MCP', '30')))
+    except ValueError:
+        return 30
+
+
+def _inicio_do_dia_utc():
+    from app.utils.timezone import now_sp
+
+    inicio = now_sp().replace(hour=0, minute=0, second=0, microsecond=0)
+    return inicio.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def consultas_mcp_hoje(law_firm_id: int, user_id: int | None) -> int:
+    """Consultas pagas que o usuário fez hoje pelo MCP — o que já estava salvo não conta."""
+    if not user_id:
+        return 0
+    return SeguradoNome.query.filter(
+        SeguradoNome.law_firm_id == law_firm_id,
+        SeguradoNome.consultado_por_id == user_id,
+        SeguradoNome.origem == ORIGEM_MCP,
+        SeguradoNome.consultado_em >= _inicio_do_dia_utc(),
+    ).count()
+
+
+def revelar(law_firm_id: int, cpf, user_id: int | None, origem: str = ORIGEM_TELA) -> dict:
     """Devolve o nome do CPF, consultando o fornecedor só se ainda não foi revelado.
 
-    Levanta ``NomeNaoRevelavel`` (pedido inválido) ou
+    Pelo MCP (``origem='mcp'``) vale o limite diário por usuário
+    (``CPF_NOME_LIMITE_DIARIO_MCP``): uma pergunta mal entendida não pode virar
+    centenas de consultas pagas. Nome já salvo não conta no limite.
+
+    Levanta ``NomeNaoRevelavel`` (pedido inválido ou limite) ou
     ``cpf_nome_client.CpfNomeIndisponivel`` (fornecedor/token/cota).
     """
     chave = normalizar_cpf(cpf)
@@ -126,6 +162,12 @@ def revelar(law_firm_id: int, cpf, user_id: int | None) -> dict:
     if not eh_do_escritorio:
         raise NomeNaoRevelavel('Este CPF não está entre os segurados do escritório.', 404)
 
+    if origem == ORIGEM_MCP and consultas_mcp_hoje(law_firm_id, user_id) >= limite_diario_mcp():
+        raise NomeNaoRevelavel(
+            f'Limite diário de {limite_diario_mcp()} consultas de nome pelo Claude atingido para '
+            'este usuário. Amanhã libera de novo; pela tela de Benefícios (botão "Revelar nome") '
+            'continua disponível.', 429)
+
     resultado = cpf_nome_client.consultar_nome(chave)
     reg = SeguradoNome(
         law_firm_id=law_firm_id,
@@ -137,6 +179,7 @@ def revelar(law_firm_id: int, cpf, user_id: int | None) -> dict:
             resultado.encontrado and nascimento_fap and resultado.nascimento
             and resultado.nascimento != nascimento_fap),
         fonte=cpf_nome_client.FONTE,
+        origem=origem,
         consultado_por_id=user_id,
         consultado_em=_utcnow(),
     )

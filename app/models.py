@@ -2989,6 +2989,8 @@ class SeguradoNome(db.Model):
     status = db.Column(db.String(20), nullable=False)
     nascimento_diverge = db.Column(db.Boolean, nullable=False, default=False)
     fonte = db.Column(db.String(40), nullable=False)
+    # 'tela' (botão) ou 'mcp' (Claude) — o limite diário por usuário vale só para o MCP.
+    origem = db.Column(db.String(10), nullable=False, default='tela', server_default='tela')
     # Usuário apagado não leva o nome junto: o vínculo vira NULL.
     consultado_por_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'))
     consultado_em = db.Column(db.DateTime, nullable=False)  # UTC

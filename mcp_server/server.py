@@ -63,6 +63,7 @@ from mcp_server.tools.fap import (
     fap_changes_handler,
     list_fap_procuracoes_handler,
     fap_filter_values_handler,
+    revelar_nome_segurado_handler,
 )
 from mcp_server.tools.fap_calculo import (
     listar_beneficios_calculo_fap_handler,
@@ -495,6 +496,34 @@ def listar_beneficios_fap(
             empresa, limite, deslocamento, protocolo=protocolo, grupo=grupo,
             status_1a_instancia=status_1a_instancia, status_2a_instancia=status_2a_instancia,
         )
+
+
+@mcp.tool()
+def revelar_nome_segurado(cpf: str) -> dict:
+    """Revela o NOME de UM segurado pelo CPF — consulta PAGA a um serviço externo.
+
+    O FAP não informa nome; esta é a mesma consulta do botão "Revelar nome" das
+    telas de Benefícios, e o nome fica salvo para o escritório (telas e MCP).
+
+    USE SOMENTE quando o usuário pedir EXPLICITAMENTE o nome de uma pessoa
+    específica ("qual o nome do segurado do CPF X?", "revele o nome deste
+    segurado"). NUNCA chame por iniciativa própria, para enriquecer listagens,
+    em lote, em sequência para vários CPFs, nem para "completar" uma tabela —
+    se pedirem nomes de muitos segurados, explique que cada nome é uma consulta
+    paga e peça que escolham quais. Antes, confira em segurado_nome dos
+    benefícios se o nome já não foi revelado (aí não precisa chamar).
+
+    Há limite diário de consultas por usuário (consultas_restantes_hoje na
+    resposta); nome já salvo não conta. Se vier 'aviso' de nascimento
+    divergente, repasse ao usuário: o nome pode ser de outra pessoa.
+
+    Args:
+        cpf: CPF do segurado (com ou sem pontuação). Precisa estar na base do
+            escritório (benefício da Central ou do cálculo FAP).
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return revelar_nome_segurado_handler(claims["law_firm_id"], claims.get("user_id"), cpf)
 
 
 @mcp.tool()

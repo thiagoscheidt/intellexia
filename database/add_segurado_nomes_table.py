@@ -9,6 +9,9 @@ Cria pelo metadata do SQLAlchemy (SQLite e MySQL), com índice e unicidade dos
 modelos. Idempotente. Nenhuma consulta cruza esta tabela com ``benefits`` por
 JOIN de texto — então a collation não precisa ser alinhada como a do cálculo.
 
+Rodar de novo numa base que já tem a tabela acrescenta o que faltar: a coluna
+``origem`` (tela/mcp) veio depois da primeira versão.
+
 Executar:
     uv run python database/add_segurado_nomes_table.py
 """
@@ -18,7 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 from main import app
 from app.models import db, SeguradoNome
@@ -28,7 +31,18 @@ def run():
     with app.app_context():
         table = SeguradoNome.__table__
         if inspect(db.engine).has_table(table.name):
-            print(f'[OK] Tabela {table.name} já existe — nada a fazer.')
+            colunas = {c['name'] for c in inspect(db.engine).get_columns(table.name)}
+            if 'origem' in colunas:
+                print(f'[OK] Tabela {table.name} já existe e está completa — nada a fazer.')
+                return
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE {table.name} ADD COLUMN origem VARCHAR(10) NOT NULL DEFAULT 'tela'"))
+            except Exception as e:
+                print(f'[ERRO] Falha ao acrescentar a coluna origem: {e}')
+                raise
+            print(f'[OK] Coluna origem acrescentada em {table.name}.')
             return
         try:
             table.create(db.engine)

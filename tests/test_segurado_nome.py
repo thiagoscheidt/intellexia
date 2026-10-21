@@ -30,6 +30,9 @@ CPF_BEN = '12345678909'        # benefício da Central
 CPF_CALC = '11144477735'       # item do cálculo FAP
 CPF_SUMIDO = '52998224725'     # não encontrado no fornecedor
 CPF_ALHEIO = '39053344705'     # não está na base do escritório
+CPF_MCP_1 = '86288366757'      # para o limite diário do MCP
+CPF_MCP_2 = '71428793860'
+CPF_MCP_3 = '26541728054'
 
 _falhas = []
 
@@ -60,6 +63,8 @@ FORNECEDOR = {
         'CPF': CPF_CALC, 'NOME': 'JOAO DE TESTE', 'SEXO': 'Masculino',
         'NASC': '05/05/1985', 'NOME_MAE': 'OUTRA MAE'}}),
     CPF_SUMIDO: Resp(404, {'error': 'CPF não encontrado', 'code': 'CPF_NOT_FOUND'}),
+    **{c: Resp(200, {'success': True, 'data': {'CPF': c, 'NOME': f'PESSOA {c[:3]}', 'NASC': '01/01/1980'}})
+       for c in (CPF_MCP_1, CPF_MCP_2, CPF_MCP_3)},
 }
 
 
@@ -90,6 +95,9 @@ def _setup():
                        cpf=CPF_CALC, data_nascimento=date(1985, 6, 6)),  # nasc. diverge
         Benefit(law_firm_id=b.id, benefit_number='9922000004', benefit_type='B91',
                 insured_cpf=CPF_BEN, insured_date_of_birth=date(1990, 1, 1)),
+        *[Benefit(law_firm_id=a.id, benefit_number=f'99220001{i}', benefit_type='B91',
+                  insured_cpf=c, insured_date_of_birth=date(1980, 1, 1))
+          for i, c in enumerate((CPF_MCP_1, CPF_MCP_2, CPF_MCP_3))],
     ])
     user = User(law_firm_id=a.id, name='teste', email='user__test_nome@example.com', role='admin', is_active=True)
     user.set_password('x')
@@ -202,6 +210,46 @@ def test_telas_e_mcp(a, user):
     check('MCP: cálculo FAP traz segurado_nome', calc and calc[0]['segurado_nome'] == 'JOAO DE TESTE')
 
 
+def test_mcp_revelar(a, user):
+    print('\n5. MCP revelar_nome_segurado: limite diário por usuário')
+    from fastmcp.exceptions import ToolError
+    from mcp_server.tools.fap import revelar_nome_segurado_handler
+
+    outro = User(law_firm_id=a.id, name='outro', email='outro__test_nome@example.com', role='lawyer', is_active=True)
+    outro.set_password('x')
+    db.session.add(outro)
+    db.session.commit()
+    os.environ['CPF_NOME_LIMITE_DIARIO_MCP'] = '2'
+    try:
+        r = revelar_nome_segurado_handler(a.id, user.id, CPF_BEN)
+        check('nome já salvo (pela tela) volta sem gastar', r['ja_estava_salvo'] and r['consultas_restantes_hoje'] == 2,
+              str(r))
+        r = revelar_nome_segurado_handler(a.id, user.id, CPF_MCP_1)
+        check('1ª consulta pelo MCP', r['nome'] == 'PESSOA 862' and r['consultas_restantes_hoje'] == 1, str(r))
+        check('origem gravada como mcp',
+              SeguradoNome.query.filter_by(law_firm_id=a.id, cpf=CPF_MCP_1).one().origem == 'mcp')
+        revelar_nome_segurado_handler(a.id, user.id, CPF_MCP_2)
+        try:
+            revelar_nome_segurado_handler(a.id, user.id, CPF_MCP_3)
+            check('3ª consulta passa do limite', False)
+        except ToolError as e:
+            check('3ª consulta passa do limite e explica', 'Limite diário de 2' in str(e), str(e))
+        check('… sem chamar o fornecedor', CPF_MCP_3 not in chamadas)
+        r = revelar_nome_segurado_handler(a.id, user.id, CPF_MCP_1)
+        check('o que já foi revelado continua saindo depois do limite', r['ja_estava_salvo'])
+        r = revelar_nome_segurado_handler(a.id, outro.id, CPF_MCP_3)
+        check('outro usuário tem o próprio limite', r['nome'] == 'PESSOA 265')
+        corpo, status = svc.resposta_revelar(a.id, CPF_SUMIDO, user.id)
+        check('tela não entra no limite do MCP', status == 200)
+        try:
+            revelar_nome_segurado_handler(a.id, user.id, CPF_ALHEIO)
+            check('CPF de fora recusado', False)
+        except ToolError as e:
+            check('CPF de fora recusado', 'não está entre os segurados' in str(e))
+    finally:
+        os.environ.pop('CPF_NOME_LIMITE_DIARIO_MCP', None)
+
+
 def main() -> int:
     os.environ['CPF_NOME_API_KEY'] = 'teste'
     original = requests.get
@@ -214,6 +262,7 @@ def main() -> int:
                 test_servico(a, b, user)
                 test_falha_nao_grava(a, user)
                 test_telas_e_mcp(a, user)
+                test_mcp_revelar(a, user)
             finally:
                 db.session.rollback()
                 _cleanup(a)
