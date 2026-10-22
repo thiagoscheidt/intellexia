@@ -122,7 +122,7 @@ intellexia/
 
 ### Blueprints Registrados
 
-`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `access_audit`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`, `docs`, `communications`, `dou`, `jurisprudence`, `process_knowledge`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
+`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `access_audit`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`, `docs`, `communications`, `dou`, `jurisprudence`, `process_knowledge`, `public_api`, `minha_api`, `prompt_library`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
 
 **Função de cada blueprint:**
 
@@ -147,11 +147,14 @@ intellexia/
 | `case_comments` | — | Threads de comentários em casos |
 | `settings` | `/settings` | Perfil do usuário, dados do escritório, **Notificações** por e-mail e **Google Drive** (arquivos compartilhados com a conta de serviço; admin) |
 | `admin_users` | — | Gerenciamento de usuários (admin-only) |
-| `access_audit` | `/admin/access-audit` | Atividade de usuários (admin-only): último login, telas acessadas, online agora. Visitas de tela agregadas por dia em `user_page_visits`, gravadas pelo middleware no mesmo commit de `last_activity`. Coluna **MCP** (conectado = token de renovação válido em `mcp_oauth_tokens`; cliente; uso de hoje) e botão **MCP** com as funções usadas — `user_mcp_calls`, agregado por (usuário, ferramenta ou comando, dia), gravado pelo `UsoMcpMiddleware` (`mcp_server/usage_log.py`) a cada `tools/call` e `prompts/get`, **sem os argumentos** (CPF, texto de petição); falha no registro só vai para o log |
+| `access_audit` | `/admin/access-audit` | Atividade de usuários (admin-only): último login, telas acessadas, online agora. Visitas de tela agregadas por dia em `user_page_visits`, gravadas pelo middleware no mesmo commit de `last_activity`. O uso da **API** (`kind='api'` em `user_mcp_calls`) aparece na coluna MCP como linha à parte e no modal, sem somar nas chamadas do MCP. Coluna **MCP** (conectado = token de renovação válido em `mcp_oauth_tokens`; cliente; uso de hoje) e botão **MCP** com as funções usadas — `user_mcp_calls`, agregado por (usuário, ferramenta ou comando, dia), gravado pelo `UsoMcpMiddleware` (`mcp_server/usage_log.py`) a cada `tools/call` e `prompts/get`, **sem os argumentos** (CPF, texto de petição); falha no registro só vai para o log |
 | `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
 | `dou` | `/dou` | **Diário Oficial**: acervo do DOU capturado do INLABS (Imprensa Nacional). Captura diária dos ZIPs de XML das seções `DO1 DO2 DO3 DO1E DO2E DO3E` mais os PDFs assinados, quebrando cada edição matéria a matéria. Acervo em três níveis — edições por data (espelha a listagem do INLABS, com o PDF assinado) → edição do dia (aba por seção, salto para o dia vizinho **do acervo**, busca em título/ementa, filtro por órgão-raiz e tipo, atalho por linha para a **folha** daquela página) → matéria (o inteiro teor, em texto) — mais o **leitor** e a tela de captura (cobertura, falhas, reprocesso). O **leitor** (`/dou/edicao/<data>/pagina/<n>?secao=DO1`) é a folha assinada em tela cheia, no modelo do visualizador da Imprensa Nacional: aba por caderno, `‹ ›`, "ir para a página" e **Sumário da edição** (`_sumario_da_edicao`: órgão-raiz → primeira página, conferido linha a linha contra o `<select>` do portal oficial). **O texto do ato não entra no leitor** — a folha é A3 e qualquer coisa dividindo espaço com ela fica ilegível; a ponte de volta é a lista de matérias da página, no rodapé. O "ir para" é GET sem JavaScript e **redireciona para o endereço canônico** `/pagina/<n>`, para o que fica na barra do navegador ser copiável. A folha do leitor vem de `/dou/edicao/<id>/pagina/<n>.pdf`, **uma página por vez** (`_entregar_recorte(..., vizinhas=False)`) — no leitor o `›` já leva à seguinte, e mandar três fazia a folha escolhida dividir a tela com duas que ninguém pediu; a tela da matéria continua com as vizinhas (`/dou/materia/<id>/pagina.pdf`), porque um edital começa numa página e termina na outra. `_total_paginas` lê o `page_count` do PDF a cada requisição (1–4 ms mesmo nos 44 MB da Seção 3 — não vale coluna no banco). Órgão é sempre recortado na **raiz** da hierarquia (`dou_search_service.orgao_raiz`), no filtro, no agrupamento e no sumário: a hierarquia completa tem ~104 valores por seção contra ~27 raízes, e agrupar por ela dava 36 grupos para 50 linhas. **Alertas** (`/dou/alertas`) têm duas origens no mesmo registro: os CNPJs da carteira cruzados com cada matéria capturada (seção "Alertas de cliente no DOU") e as **regras de palavra-chave** configuradas em `/dou/regras` (seção "Alertas por palavra-chave no DOU"). A matéria que casa as duas é **um** alerta com dois motivos |
 | `communications` | `/comunicacoes` | **Monitoramento de Processos**: comunicações processuais por fonte de informação (`ProcessCommunication.source` — hoje só `comunica_pje`; novas fontes = nova constante `SOURCE_*` + rótulo em `SOURCE_LABELS`). Radar por OAB, inteiro teor, controle de lidas, descoberta automática de processos. O nome de exibição é "Monitoramento de Processos"; endpoint/URL/módulo permanecem `communications` |
 | `jurisprudence` | `/process-panel/jurisprudencia` | **Base de Jurisprudência** (submódulo do Painel de Processos, permissão `process_panel`): decisões FAP (sentença, acórdão, embargos) classificadas por tese e resultado — importadas da planilha do escritório (formato Banco Mestre FAP) ou lidas de PDF pela IA — com pesquisa por processo, correspondência de teses com o catálogo e uso na geração da impugnação. Ver a seção "Base de Jurisprudência" |
+| `public_api` | `/api/v1` | **API do IntellexIA**: os dados do escritório em JSON para telas e automações do usuário (Claude Code, scripts). Autenticação **só** por `Authorization: Bearer` (token pessoal); cookie de sessão não vale e o `check_session` desvia o prefixo inteiro. CORS aberto (`*`, sem credenciais). Ver a seção "API do IntellexIA" |
+| `minha_api` | `/minha-api` | Tela **Minha API** (módulo `api`): criar/revogar tokens, aba "Tokens do escritório" (admin) e a **documentação** gerada do registro de rotas. Botão **{ }** no cabeçalho, ao lado do Claude, abre `partials/api_modal.html` (mini documentação + tokens por `fetch` em `/minha-api/tokens.json`, criar e `revogar.json`); nome de token entra por `textContent`, nunca `innerHTML` |
+| `prompt_library` | `/prompts` | **Biblioteca de IA**: prompts, agentes e skills de cada pessoa e do escritório, em cards com cópia rápida, e os mesmos itens como comando no Claude. Qualquer usuário logado (não é módulo). Ver a seção "Biblioteca de IA" |
 | `process_knowledge` | `/process-panel/base-conhecimento` | **Base de Conhecimento do Painel de Processos** (permissão `process_panel`): item único do menu que junta a Jurisprudência e as Peças-modelo em abas, com Visão geral (pendências das duas bases e cobertura por tese) e busca nas duas. Ver a seção "Base de Conhecimento do Painel de Processos" |
 
 ### Documentação do usuário (Manual + Assistente "pergunte ao manual")
@@ -212,6 +215,144 @@ SMTP configurado **só via `.env`** (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMT
 - **Resumo do Radar**: reusa `process_radar_service` (fonte única do widget Radar do Painel de Processos). O e-mail mostra o **estado atual** do Radar (pendências abertas), mas só dispara quando há item novo desde o último envio (`has_novidades = novos > 0`). Decisões/sentenças aparecem destacadas — critério via `datajud_snapshot_service.DECISION_WORDS`, o mesmo do radar da tela. O digest de Comunicações também marca `is_decision`/`decisoes` com essa lista.
 - **Disparo**: `scripts/send_notifications.py` roda de hora em hora no cron e envia o que está no horário (`is_due`). Sem novidades no período não envia e-mail (só avança `last_sent_at`); falha de envio **não** avança a janela, para a próxima execução tentar de novo.
 - **Resumo FAP**: reusa `fap_digest_service`, o mesmo código do widget do dashboard — nunca duplique essas queries. Templates de e-mail em `templates/emails/` usam tabelas + CSS inline (cliente de e-mail não roda Bootstrap); links absolutos via `APP_PUBLIC_URL` + `test_request_context`.
+
+### API do IntellexIA (`/api/v1`)
+
+Resposta ao "não faz sentido construir tela se o usuário monta a dele": a base
+do escritório como API, para o usuário pedir ao Claude Code a tela que quiser.
+Design em `docs/superpowers/specs/2026-10-22-api-publica-e-biblioteca-de-prompts-design.md`;
+manual em `docs/MANUAL_API.md`.
+
+- **Ferramenta nova vai aos três lugares**: a tool no `server.py`, a rota na
+  API (`ROTAS` + campos em `public_api_campos`) e a linha no `MANUAL_MCP.md`
+  **com a coluna Nome** — é dela que saem os cards de "Ferramentas do IntellexIA"
+  da Biblioteca de IA, e `test_mcp_catalogo.py` cobra.
+- **Rota nova = uma linha em `public_api_catalogo.ROTAS`**, chamando o
+  **handler da ferramenta MCP** equivalente, com os **mesmos nomes de
+  parâmetro** da ferramenta. O blueprint monta a view, e o OpenAPI
+  (`/api/v1/openapi.json`), a página de documentação e a ferramenta
+  `documentacao_api` saem do mesmo registro. Nunca reescrever a query na API:
+  os números da tela, do Claude e da API não podem divergir.
+- **Token** (`api_tokens`, `api_token_service`): `itx_` + aleatório, mostrado
+  uma vez; o banco guarda o SHA-256 e os 4 últimos caracteres. Validade 30, 90
+  (padrão), 180 dias ou sem. **Permissões lidas do usuário a cada requisição**
+  (diferente do MCP, que guarda retrato no token): desativar o usuário ou
+  tirar o módulo vale na chamada seguinte.
+- **Módulo `api`** entra nos padrões de todos os papéis, mas padrão só vale para
+  `module_permissions` vazio: `database/add_api_tokens_table.py` acrescenta
+  `api` a quem tem lista gravada.
+- **`executar`** (`public_api.py`) é o funil de toda rota: autentica, confere o
+  módulo, limite por minuto, converte erro para `{"erro": ...}` (400 parâmetro,
+  401 token, 403 módulo — inclusive `ToolError` "Acesso negado" —, 404, 429,
+  500 sem traceback) e registra o uso em `user_mcp_calls` com `kind='api'` e
+  `name='GET /fap/beneficios'`, **sem argumentos**. Resposta de handler que é só
+  `{"erro"}` vira 400 (404 em rota de detalhe com "não encontrado").
+- **Consulta compartilhada, apresentação da API.** O handler do MCP é dono de
+  filtros, escritório, ordenação e total; a API só muda o canal: **teto de
+  página** (`TETO_PAGINA` = 1000; o MCP para em 200 porque enche o contexto do
+  agente) aplicado por `pagination.teto_da_pagina` em volta do handler — sem
+  mudar assinatura —, com `limite` acima do teto da rota = 400 (a Base de
+  Conhecimento vai a 50, decisões parecidas a 20); e `para_api` tira `dica` e
+  `proximo_passo`, que mandam chamar ferramentas do MCP. Ajuste de texto de uma
+  rota (ex.: `ver_todos` da contestação apontando para a rota da API) fica no
+  adaptador dela no registro, nunca no handler.
+- **Campos de resposta declarados** em `public_api_campos` (`Rota.resposta`):
+  deles saem a tabela "Resposta" e o exemplo de JSON da página, o schema 200 do
+  OpenAPI e o "Devolve:" da `documentacao_api`. `tests/test_api_campos.py`
+  confere a resposta real contra a declaração (campo novo não declarado, campo
+  sumido, tipo trocado) na amostra do teste e no escritório com mais dados do
+  banco local — mexeu no handler do MCP, a API acusa. `null` é sempre aceito.
+- **Handler que pagina por página inteira não serve à API**: a lista do cálculo
+  FAP montava a janela com duas `svc.pagina`, cortada em 200 pela tela — com
+  `limite` maior devolvia linhas de outra posição sem erro. Usa
+  `fap_calculo_query_service.janela(query, deslocamento, limite)`.
+- **Parâmetro desconhecido é 400**, nunca ignorado: `?tipo_benefico=B91`
+  devolveria a base inteira. Tipo inválido e parâmetro simples repetido também.
+- **Limites**: `API_LIMITE_POR_MINUTO` (120, por token, em memória por worker
+  — o teto real vai até N workers × o limite) e a cota de revelar nome
+  **somada com o MCP** (`origem` `mcp` + `api`). Status HTTP do `ToolError` sai
+  da causa (`raise ToolError(...) from e`): `status_http` de
+  `NomeNaoRevelavel` (404, 429 com `Retry-After` até a meia-noite) e 503 para
+  fornecedor indisponível.
+- **`POST /base-conhecimento/perguntar` fica fora da API**: a busca do
+  `KnowledgeQueryAgent` não filtra escritório (pendência da coleção
+  `knowledge_base`), e a API a tornaria scriptável. A pesquisa
+  (`kb_search_handler`) filtra pelos arquivos do escritório e está na API.
+- **Escritório desativado** derruba o token, como no login e no OAuth do MCP.
+- A migration libera o módulo `api` **só quando cria a tabela** (ou com
+  `--aplicar-modulo`): rodar de novo não desfaz o módulo tirado por um admin.
+- Testes: `tests/test_api_tokens.py`, `test_api_nucleo.py`, `test_api_rotas.py`
+  (paridade com o handler do MCP), `test_api_campos.py`, `test_api_documentacao.py`,
+  `test_minha_api_tela.py`, `test_mcp_api_tokens.py`.
+
+### Biblioteca de IA (`/prompts`)
+
+Nome de exibição "Biblioteca de IA" (prompt é só um dos três tipos); endpoint,
+URL, tabelas e as ferramentas do MCP (`biblioteca_prompts`, `usar_prompt`,
+`salvar_prompt`) continuam `prompt`.
+
+Cada colaborador tinha os próprios prompts, "agentes" e skills na conta do
+Claude; a biblioteca os guarda no IntellexIA — independe do plano do Claude — e
+os entrega pelo conector MCP. Design na Parte 2 de
+`docs/superpowers/specs/2026-10-22-api-publica-e-biblioteca-de-prompts-design.md`;
+manual em `docs/MANUAL_BIBLIOTECA_IA.md`. Tabelas `prompt_library_items`,
+`prompt_library_versions` e `prompt_library_favorites`
+(`database/add_prompt_library_tables.py`); regras em `prompt_library_service`,
+fonte única da tela e do MCP.
+
+- **Um tipo só por baixo**: prompt, agente e skill são etiquetas. Campos
+  `{{campo}}` são lidos do corpo (nunca guardados à parte); a regex do JS
+  (`\p{L}`) e a do Python (`[^\W\d]\w`) aceitam acento — mexeu numa, mexa na outra.
+- **Pessoal é só do dono, nem o admin vê** (como no Claude). Do escritório:
+  editar é do dono ou de admin; recomendar só admin; tornar pessoal tira o selo.
+- **Compartilhar confere CPF/CNPJ válido (DV)** no texto e nos anexos e pede
+  confirmação; o `salvar_prompt` do MCP recusa e manda salvar pessoal.
+- **Toda mudança de título, descrição, texto ou anexos vira versão**; restaurar
+  cria uma versão nova.
+- **O `slug` é o nome do comando, escolhido no editor** (campo "Comando no
+  Claude", preenchido do título enquanto a pessoa não mexe); o prefixo de escopo
+  e tipo é calculado (`prefixo_comando`), não gravado. Renomear o título
+  **não** troca o comando — é o que as pessoas decoram; trocar tipo ou quem vê
+  troca o prefixo. Escolhido e ocupado é
+  erro; automático ganha sufixo; arquivar libera o nome.
+- **Comandos no Claude**: `mcp_server/prompt_library.py`
+  (`BibliotecaPromptsMiddleware`, **depois** do `UsoMcpMiddleware`, que os conta)
+  acrescenta `meu_<tipo>_<slug>`/`escritorio_<tipo>_<slug>` (ex.: `escritorio_agente_triagem`) ao `prompts/list` de cada usuário e
+  responde esses nomes no `prompts/get`. Como cliente nem sempre relê a lista,
+  há também `biblioteca_prompts`, `usar_prompt` e `salvar_prompt`.
+- **Aba "Do IntellexIA"**: os `@mcp.prompt` do `server.py` lidos por AST e
+  executados isolados (só montam texto) com cada argumento como `{{argumento}}` —
+  não importar o `server.py` no Flask, que monta o FastMCP e o OAuth.
+- **Ferramentas do conector na tela**: modal em cards (`templates/prompt_library/_ferramentas.html`,
+  macro `modal_ferramentas(id, modo, dados)` + `static/js/prompt_library_ferramentas.js`),
+  aberto por "Ferramentas do IntellexIA" no topo (modo `ver`, "Usar num agente") e por
+  "Inserir ferramenta" no editor (modo `inserir`, evento `plb:inserir-ferramenta`).
+  Área, descrição e o **nome curto** do card vêm do `MANUAL_MCP.md` — coluna "Nome"
+  das tabelas de ferramentas, cobrada pelo `test_mcp_catalogo.py` —, via
+  `mcp_catalog_service`; módulo e "só admin" lidos do `require_module`/`require_admin`
+  de cada tool no `server.py`, por AST (`_modulos_das_ferramentas`). Com acesso
+  primeiro; sem o módulo, cinza no fim com o motivo. O editor insere a linha
+  "Chame a ferramenta X do IntellexIA para "
+  e mostra as citadas (`ferramentas_citadas`, palavra inteira — todo nome de tool
+  tem "_") com os módulos que exigem; citar uma marca `usa_intellexia`. Ao fechar o
+  modal, o foco volta ao texto num `setTimeout` depois do `hidden.bs.modal`: o
+  Bootstrap devolve o foco ao botão num ouvinte que roda depois, e o espaço digitado
+  reabria o modal.
+- **Janela rápida na header** (botão "Biblioteca" ao lado de Claude e API, e
+  **Ctrl/Cmd+K** de qualquer tela): `templates/partials/biblioteca_modal.html` +
+  `static/js/biblioteca_rapida.js`; os itens vêm de `/prompts/rapido.json` só na
+  primeira abertura (a header não carrega nada). Favoritos, recomendados e mais
+  usados; busca, ↑ ↓ e Enter copia ou abre o preenchimento.
+- **Foco em modal: `setTimeout` no `shown.bs.modal`.** O AdminLTE escuta
+  `shown.bs.modal` no `document` e foca o 1º elemento da janela (o X) — depois do
+  ouvinte do próprio modal, que perde o foco. Sem o `setTimeout`, a busca abre sem
+  cursor e o que se digita some.
+- **Skill do Claude** entra (`.zip`/`SKILL.md`) e sai (`<nome>/SKILL.md` + anexos)
+  no formato dele, **só com arquivos de texto**: script compartilhado rodaria na
+  máquina dos colegas. Nada do upload vai a disco.
+- **"Abrir no Claude" copia e abre `claude.ai/new?q=`**: o `q` não é documentado
+  na web e já parou de preencher (2025) — a cópia é a garantia.
+- Teste: `tests/test_prompt_library.py`.
 
 ### Integração Comunica PJe (DJEN)
 
@@ -306,8 +447,24 @@ fornecedor (ex.: SERPRO) é reescrever só o client.
   faz a consulta paga **de um CPF**, só quando o usuário pede explicitamente o
   nome de uma pessoa (a docstring proíbe lote e iniciativa própria), com
   **limite diário por usuário** (`CPF_NOME_LIMITE_DIARIO_MCP`, padrão 30, dia de
-  São Paulo). O limite conta só `origem='mcp'` — a coluna `origem` separa o
-  clique na tela da chamada do Claude — e nome já salvo não conta. Ao lado,
+  São Paulo). O limite conta `origem` `mcp` **e** `api` juntas
+  (`consultas_automatizadas_hoje`; a rota `POST /api/v1/segurados/revelar-nome`
+  usa o mesmo handler) — a coluna `origem` separa o clique na tela, que fica
+  fora da cota — e nome já salvo não conta.
+- **Consulta completa de CPF** (`consultar_cpf` no MCP, `POST /api/v1/segurados/consultar-cpf`,
+  `segurado_nome_service.consultar_completo` → `cpf_nome_client.consultar_completo`):
+  exceção às duas regras acima, decidida pelo Thiago em 22/10/2026 — **qualquer CPF
+  válido** (mesmo fora da base) e a **resposta inteira** do fornecedor (nome,
+  nascimento, sexo, nome da mãe), para quem tem `fap_panel`. **Nada é gravado**
+  (nem em `segurado_nomes`), então cada pedido é pago; entra no **mesmo limite
+  diário** do revelar nome (`consultas_usadas_hoje` = nomes revelados + consultas
+  completas), contado pelo `user_mcp_calls` (chamadas sem erro de
+  `consultar_cpf` e `POST /segurados/consultar-cpf`), já que não há linha própria.
+  Em tela: **Ferramentas → Consulta de CPF** (`/tools/consulta-cpf`, exige também
+  `fap_panel` — a tela não é porta lateral), **fora do limite** como o botão
+  "Revelar nome" (o limite é contra o Claude/script em loop, não contra quem
+  clica). Os três canais dizem se o CPF é `segurado_da_base` e se o nascimento
+  diverge do FAP. Ao lado,
   `consulta_cpf_receita` é o link gratuito da Receita já preenchido
   (`app/utils/cnpj.link_consulta_cpf_receita`; falta o captcha).
 
@@ -828,7 +985,7 @@ A Consulta do FAP do portal traz, por estabelecimento e vigência, os benefício
 - **`EXCLUIDO` = o portal tirou o item do cálculo no recálculo — a contestação ganhou.** O item aparece com `estado_original` `ORIGINAL` (estava no cálculo original) e `estado_atual` `EXCLUIDO`. É por essa diferença que se enxerga o que foi ganho; o estado original sai do cálculo original, buscado só quando o cálculo atual mudou (`calculo_atual_id` gravado).
 - **"Contestado" = mesmo número e mesma vigência na Central** (`benefits` pela vigência da FK `fap_vigencia_cnpj_id`; `fap_contestation_cats.cat_number` + `vigencia_year`). O mesmo NB em vigências diferentes são situações diferentes.
 - **Nunca apagar por ausência.** Item que não veio numa execução fica com o `last_seen_at` antigo; 401/403/404 de uma empresa ou estabelecimento não apaga nada.
-- **Escala medida**: 874 raízes e 20.320 estabelecimentos em 2026; ~1 h por vigência com 8 workers, 15–20 h para todas. A busca é paralela (`FAP_CALCULO_SYNC_WORKERS`, padrão 8, máx 20) e o banco só é tocado no fluxo principal, com commit por estabelecimento; falha ao gravar um estabelecimento faz rollback, entra em `erros` e a execução segue.
+- **Escala medida**: 874 raízes e 20.320 estabelecimentos em 2026. A estimativa antiga (~1 h por vigência, 15–20 h para todas) não se confirmou: na carga de 21–22/10/2026 foram 44.600 estabelecimentos em ~25 h com `--workers 16`, porque o pool só recebia uma empresa por vez — a maioria das raízes tem 1 a 3 estabelecimentos e cada um leva 20–40 s (`/calculos` + benefícios + CATs), então os workers ficavam parados. Agora a fila é contínua entre empresas (até 2 × workers na fila, listagens adiantadas num pool à parte). Erro de estabelecimento vai ao log com o motivo (os 50 primeiros) e o resumo conta por motivo. A busca é paralela (`FAP_CALCULO_SYNC_WORKERS`, padrão 8, máx 20) e o banco só é tocado no fluxo principal, com commit por estabelecimento; falha ao gravar um estabelecimento faz rollback, entra em `erros` e a execução segue.
 - **Carga inicial**: `uv run python scripts/fap_calculo_sync.py --somente-novos` — **retomável** (pula o que já tem situação `ok` ou `sem_calculo` na vigência), então sessão expirada no meio (saída 2) se resolve com login novo e o mesmo comando. Filtros `--vigencia`, `--empresa`, `--estabelecimento`; ao fim completa CPF, nascimento, RMI e total pago da Central (`completar_central`), salvo `--sem-completar`.
 - **Política incremental**: diária com `--vigencia <ano atual> --vigencia <ano atual + 1>` (as vigências em contestação; ~20 mil chamadas a `/calculos` cada, da ordem de 45–90 min com 8 workers) e completa mensal, sem `--vigencia`. O repositório não traz entrada de crontab — os crons de produção são mantidos à parte.
 - **Códigos de saída**: 0 ok, 1 configuração, 2 sessão expirada, **3 incompleta** (`incompleta` no resultado: `erros` > 0, ou a lista de vigências ou a de estabelecimentos de uma raiz falhou; o motivo vai para o log). Se a lista de vigências falha, o script sai com 3 sem completar a Central. 403 e 404 não tornam a execução incompleta.
@@ -983,6 +1140,10 @@ FapReview.revision [POST]
 | `fap_beneficio_portal_service`         | Completa CPF, nascimento, RMI e total pago dos benefícios da Central pela Consulta do FAP (E02/E04 da R09): duas chamadas por vigência (CNPJ + ano da `fap_vigencia_cnpjs`), casa pelo NB; CPF e nascimento o portal sobrescreve, RMI e total pago só preenchem vazio. Script `scripts/fap_completar_beneficios.py` — **simula por padrão**, grava com `--aplicar`. Na base local: 2.899 de 2.899 benefícios achados, 527 vigências em 144 s com 8 workers |
 | `fap_review_service`                   | Regras do Revisor (status da petição, auditoria, fingerprint de achado, estatísticas por advogado) — fonte única da tela e do MCP; `record_text_review` registra a revisão vinda do MCP |
 | `notification_service`                 | Agendamento e envio das notificações (hoje: Resumo FAP)   |
+| `api_token_service`                    | Tokens pessoais da API: criar (texto só na resposta), listar, revogar (dono ou admin do escritório), autenticar com as permissões atuais do usuário — fonte única da tela Minha API, do MCP e do `public_api` |
+| `public_api_catalogo`                  | Registro das rotas da API (`Rota`/`Param` → handler do MCP), leitura e validação de parâmetros, teto de página, OpenAPI, resumo por linha e exemplo `curl` — fonte única das rotas e da documentação |
+| `prompt_library_service`               | Biblioteca de IA: visibilidade, edição, versões, favoritos, recomendado, aviso de CPF/CNPJ, campos `{{...}}`, importar/baixar skill do Claude e os comandos do IntellexIA lidos por AST — fonte única da tela `/prompts` e do MCP |
+| `public_api_campos`                    | Campos de resposta de cada rota da API (`Campo`): conferência contra a resposta real, schema do OpenAPI, tabela e exemplo de JSON da documentação |
 | `access_audit_service`                 | Auditoria de acesso: registro de visitas de tela, estatísticas de atividade/online e uso do MCP (`record_mcp_call`, conexão por usuário, funções usadas) — fonte única do dashboard admin |
 | `comunica_pje_client`                  | Cliente HTTP da API pública do Comunica PJe/DJEN — todo acesso isolado aqui; pacing global + regras de rate limit (ver seção "Integração Comunica PJe") |
 | `communication_monitor_service`        | Monitoramento de Processos: sincronização por OAB e por caderno (dedup por hash da API), descoberta de processos (`origin='comunica_auto'` + triagem), explicação IA com cache (`explain_communication`), queries da tela e das tools MCP — fonte única |
@@ -1065,7 +1226,10 @@ SUMMARY_MAX_CHARS=50000
 # Nome do segurado por CPF (opcional — em branco esconde o botão "Revelar nome")
 CPF_NOME_API_KEY=...                    # token do fornecedor; expira a cada 30 dias
 CPF_NOME_API_URL=https://api.cpf-brasil.org
-CPF_NOME_LIMITE_DIARIO_MCP=30           # consultas pagas por usuário/dia pelo MCP
+CPF_NOME_LIMITE_DIARIO_MCP=30           # consultas pagas por usuário/dia pelo MCP + API, somados
+
+# API do IntellexIA (/api/v1)
+API_LIMITE_POR_MINUTO=120               # por token, em memória por worker
 
 # INLABS / Diário Oficial da União (opcional — em branco desativa a captura)
 INLABS_EMAIL=...
@@ -1108,6 +1272,7 @@ DOU_MEILI_INDEX=dou_articles            # índice da busca
 - **Painel de notificações (header)**: os contadores de pendência por módulo ficam **agrupados no lado esquerdo** da header (`templates/partials/header.html`, container `.module-counters`), um chip por módulo com nome + badges coloridos por fila (cores dos status em tela; badge some quando zerado). É o padrão para qualquer novo contador de módulo — **não criar ícones soltos no lado direito**. Receita: (1) função de contagem na camada de serviço (um `COUNT` barato, filtrado por `law_firm_id`); (2) `app_context_processor` no blueprint do módulo injetando os números (sensível a papel quando aplicável — ex.: fila de aprovação do Revisor só para admin); (3) chip no header gated por `can_view_module('<módulo>')`. Exemplos: `communications` (não lidas), `fap_review` (filas aguardando ajustes/aprovação) e `dou` (saúde da captura).
   **Badge é pendência, nunca volume.** O chip do `dou` fica sempre visível (atalho para o módulo), mas **não mostra contagem de matérias**: o acervo só cresce, e um número que nunca desce ao lado de badges de pendência ensina a ignorar a área. Os badges dele são captura falhada (âmbar) e captura parada (vermelho), e o destino do clique muda com o estado — Captura quando há pendência, acervo quando não há. A tolerância de "parada" é em **dias úteis** (2), porque o DOU não sai no fim de semana e uma contagem em dias corridos alarmaria toda segunda-feira.
 - **Componentes compartilhados**: reutilizar o que existe em `templates/partials/` antes de criar novo.
+- **CSS/JS sem versão no endereço ficam velhos no navegador**: o modal da Biblioteca de IA chegou ao usuário com o HTML novo e o CSS antigo (sem estilo nenhum nos cards). `static_versionado('css/x.css')` (global Jinja, em `prompt_library.py`) acrescenta `?v=<mtime>` — usar em estático novo ou que muda junto com o template.
 - **`page_hero`**: se a tela já usa esse padrão, mantê-lo. Preservar breadcrumbs, mensagens flash e estados de carregamento/erro.
 - **Responsividade**: garantir funcionamento em desktop e mobile sem quebrar o layout existente.
 - **JavaScript**: evitar frameworks novos; priorizar JS nativo no padrão atual do projeto. Reutilizar helpers existentes antes de criar utilitários paralelos. Tratar estados vazios e falhas de API com mensagens claras ao usuário.

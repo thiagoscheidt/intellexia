@@ -53,6 +53,7 @@ from main import app  # noqa: E402 — importa o app Flask com DB e configs
 from mcp_server.identity import get_identity, require_admin, require_module
 from mcp_server.oauth_provider import IntellexiaOAuthProvider
 from mcp_server.usage_log import UsoMcpMiddleware
+from mcp_server.prompt_library import BibliotecaPromptsMiddleware
 from mcp_server.tools.knowledge import kb_search_handler, query_knowledge_base_handler, read_kb_file_handler
 from mcp_server.tools.fap import (
     list_fap_companies_handler,
@@ -65,6 +66,7 @@ from mcp_server.tools.fap import (
     list_fap_procuracoes_handler,
     fap_filter_values_handler,
     revelar_nome_segurado_handler,
+    consultar_cpf_handler,
 )
 from mcp_server.tools.fap_calculo import (
     listar_beneficios_calculo_fap_handler,
@@ -106,6 +108,17 @@ from mcp_server.tools.petition_review_read import (
     review_audit_log_handler,
 )
 from mcp_server.tools.utilities import consultar_cnpj_handler
+from mcp_server.tools.api_tokens import (
+    criar_token_api_handler,
+    documentacao_api_handler,
+    minha_api_handler,
+    revogar_token_api_handler,
+)
+from mcp_server.tools.prompt_library import (
+    biblioteca_prompts_handler,
+    salvar_prompt_handler,
+    usar_prompt_handler,
+)
 from mcp_server.tools.numero_processo import search_by_process_number_handler
 from mcp_server.tools.jurisprudence import (
     decision_detail_handler,
@@ -216,6 +229,8 @@ mcp = FastMCP(
 )
 # Uso por usuário (ferramenta, dia, erros, tempo) para a tela de Atividade de Usuários.
 mcp.add_middleware(UsoMcpMiddleware(app))
+# Prompts da Biblioteca de cada usuário como comandos prontos (depois do uso, que os conta).
+mcp.add_middleware(BibliotecaPromptsMiddleware(app))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -527,6 +542,33 @@ def revelar_nome_segurado(cpf: str) -> dict:
     claims = require_module("fap_panel")
     with app.app_context():
         return revelar_nome_segurado_handler(claims["law_firm_id"], claims.get("user_id"), cpf)
+
+
+@mcp.tool()
+def consultar_cpf(cpf: str) -> dict:
+    """Consulta COMPLETA de um CPF no serviço externo — PAGA — e devolve tudo o que ele traz.
+
+    Diferente de revelar_nome_segurado: vale para qualquer CPF válido (mesmo
+    fora da base do escritório) e a resposta vem inteira em "dados", como o
+    fornecedor manda (ex.: NOME, NASC, SEXO, NOME_MAE). Nada fica salvo.
+
+    USE SOMENTE quando o usuário pedir explicitamente os dados de UM CPF
+    ("consulte o CPF X", "quem é o titular deste CPF?"). NUNCA por iniciativa
+    própria, em lote, em sequência para vários CPFs nem para completar tabela —
+    cada chamada é uma consulta paga. Só para saber o NOME de um segurado da
+    base, prefira revelar_nome_segurado (o nome fica salvo e não paga de novo).
+    Os dados são pessoais (inclusive nome da mãe): mostre ao usuário, sem
+    repetir em outros textos ou documentos que ele não pediu.
+
+    Entra no mesmo limite diário do revelar nome (consultas_restantes_hoje na
+    resposta).
+
+    Args:
+        cpf: CPF com ou sem pontuação (11 dígitos, dígito verificador válido).
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return consultar_cpf_handler(claims["law_firm_id"], claims.get("user_id"), cpf)
 
 
 @mcp.tool()
@@ -1769,6 +1811,151 @@ def consultar_cnpj(cnpj: str) -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 # REVISOR DE PETIÇÕES INICIAIS
 # ──────────────────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def minha_api() -> dict:
+    """Endereço da API do IntellexIA, link da documentação e os tokens de API do usuário.
+
+    A API entrega os mesmos dados destas ferramentas em JSON, para o usuário
+    montar telas, planilhas e scripts (ex.: no Claude Code). Os tokens vêm sem
+    o segredo (só o final), com situação, validade e último uso.
+    """
+    claims = require_module("api")
+    with app.app_context():
+        return minha_api_handler(claims["law_firm_id"], claims.get("user_id"), APP_PUBLIC_URL,
+                                 claims.get("modules") or [])
+
+
+@mcp.tool()
+def criar_token_api(nome: str, validade_dias: int | None = 90) -> dict:
+    """Cria um token pessoal da API do IntellexIA para o usuário.
+
+    Use SOMENTE quando o usuário pedir um token (ex.: para configurar o Claude
+    Code ou um script). Mostre o token UMA vez, avisando que ele não aparece de
+    novo, e sugira guardá-lo numa variável de ambiente (INTELLEXIA_TOKEN) ou num
+    .env fora do git. NUNCA repita o token depois, nunca o grave em arquivo
+    versionado nem em página que vá ser publicada. Se o usuário já tem token
+    ativo (veja minha_api), pergunte antes se quer outro.
+
+    Args:
+        nome: Para o usuário reconhecer onde o token é usado (ex.: "Claude Code do notebook").
+        validade_dias: 30, 90 (padrão) ou 180; null = sem validade.
+    """
+    claims = require_module("api")
+    with app.app_context():
+        return criar_token_api_handler(claims["law_firm_id"], claims.get("user_id"), nome, validade_dias)
+
+
+@mcp.tool()
+def revogar_token_api(token_id: int) -> dict:
+    """Revoga um token de API do próprio usuário: ele para de funcionar na hora.
+
+    Args:
+        token_id: id do token (em minha_api). Tokens de outros usuários só o
+            administrador revoga, pela tela Minha API.
+    """
+    claims = require_module("api")
+    with app.app_context():
+        return revogar_token_api_handler(claims["law_firm_id"], claims.get("user_id"), token_id)
+
+
+@mcp.tool()
+def documentacao_api(grupo: str | None = None) -> dict:
+    """Rotas da API do IntellexIA (uma por linha, com parâmetros e os campos que
+    cada uma devolve) e o endereço do OpenAPI, que traz o schema completo.
+
+    Use para montar integrações com a API (telas, scripts, planilhas): os
+    nomes de parâmetro e os números são os mesmos destas ferramentas. Na API as
+    listas vão até 1000 por página e a resposta não traz a "dica" (paginação só
+    por tem_mais/proximo_deslocamento). Autenticação: header
+    "Authorization: Bearer <token>".
+
+    Args:
+        grupo: Restringe a um grupo: conta, fap, segurados, base-conhecimento,
+            jurisprudencia ou processos.
+    """
+    require_module("api")
+    with app.app_context():
+        return documentacao_api_handler(APP_PUBLIC_URL, grupo)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# BIBLIOTECA DE PROMPTS
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def biblioteca_prompts(busca: str | None = None, incluir_sistema: bool = False) -> dict:
+    """Prompts, agentes e skills da Biblioteca de IA do usuário: os dele e os do escritório.
+
+    Use quando o usuário pedir "aquele prompt de...", "o que tem na biblioteca",
+    ou antes de montar do zero algo que o escritório já pode ter pronto. Os
+    recomendados pelo escritório vêm primeiro. Para usar um item, chame
+    usar_prompt com o "nome" devolvido aqui.
+
+    Args:
+        busca: Palavras para filtrar por título, texto ou área (ex.: "sentença").
+        incluir_sistema: True para incluir os comandos prontos do IntellexIA.
+    """
+    claims = get_identity()
+    with app.app_context():
+        return biblioteca_prompts_handler(claims["law_firm_id"], claims.get("user_id"), busca, incluir_sistema)
+
+
+@mcp.tool()
+def usar_prompt(nome: str, campos: dict[str, str] | None = None) -> dict:
+    """Entrega o texto pronto de um item da Biblioteca de IA, com os campos preenchidos.
+
+    Depois de chamar, SIGA o "texto" devolvido como se o usuário o tivesse
+    escrito (é o roteiro que ele guardou). Campo que faltar vem indicado no
+    próprio texto: pergunte ao usuário antes de seguir.
+
+    Args:
+        nome: O "nome" do item em biblioteca_prompts (ex.: "escritorio_prompt_resumo_sentenca").
+        campos: Valores dos campos do item, ex.: {"empresa": "Vale", "vigencia": "2025"}.
+    """
+    claims = get_identity()
+    with app.app_context():
+        return usar_prompt_handler(claims["law_firm_id"], claims.get("user_id"), nome, campos)
+
+
+@mcp.tool()
+def salvar_prompt(
+    titulo: str,
+    texto: str,
+    quando_usar: str | None = None,
+    tipo: str = "prompt",
+    area: str = "geral",
+    compartilhar: bool = False,
+    usa_intellexia: bool = False,
+    comando: str | None = None,
+) -> dict:
+    """Guarda um prompt na Biblioteca de IA do usuário.
+
+    Use SOMENTE quando o usuário pedir para salvar ("guarda esse prompt", "salva
+    isso na minha biblioteca"). Escreva o texto como instrução reutilizável, sem
+    dados do caso da conversa (nada de CPF, CNPJ, nome de segurado ou de
+    cliente): o que varia de uma vez para outra vira campo entre chaves duplas,
+    como {{empresa}} ou {{vigencia}}. Mostre o texto ao usuário antes de salvar.
+    Por padrão fica só para ele; compartilhar=True só se ele pedir.
+
+    Args:
+        titulo: Nome curto para achar depois (ex.: "Resumo de sentença FAP").
+        texto: O prompt, com {{campos}} no que muda a cada uso.
+        quando_usar: Uma frase dizendo para que serve.
+        tipo: prompt, agente (roteiro que usa as ferramentas do IntellexIA) ou skill.
+        area: fap, jurisprudencia, processos, comunicacao, base_conhecimento, dou ou geral.
+        compartilhar: True para todo o escritório ver; False (padrão) = só o usuário.
+        usa_intellexia: True quando o texto manda consultar dados pelo conector.
+        comando: Nome curto do comando no Claude (ex.: "resumo_sentenca"), se o
+            usuário escolher um; sem ele, sai do título. Vira meu_<tipo>_<comando>
+            ou escritorio_<tipo>_<comando> (ex.: escritorio_agente_resumo_sentenca).
+    """
+    claims = get_identity()
+    with app.app_context():
+        return salvar_prompt_handler(claims["law_firm_id"], claims.get("user_id"), APP_PUBLIC_URL, titulo, texto,
+                                     quando_usar, tipo, area, compartilhar, usa_intellexia, comando)
 
 
 @mcp.tool()

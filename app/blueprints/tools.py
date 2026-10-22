@@ -810,3 +810,52 @@ def appeal_download(appeal_id):
         as_attachment=True,
         download_name=filename
     )
+
+
+# ── Consulta de CPF (consulta completa no serviço pago) ──────────────────────
+# A mesma consulta da ferramenta consultar_cpf (MCP) e de POST /api/v1/segurados/
+# consultar-cpf, em tela. Exige também o Painel FAP — a regra do MCP e da API:
+# a tela não pode ser porta lateral. Feita por quem clica, fica fora do limite
+# diário (como o botão "Revelar nome"); ver segurado_nome_service.consultar_completo.
+
+def _usuario_com_fap():
+    from app.models import User
+
+    user = db.session.get(User, session.get('user_id')) if session.get('user_id') else None
+    if not user or 'fap_panel' not in user.get_module_permissions():
+        return None
+    return user
+
+
+@tools_bp.route('/consulta-cpf')
+@require_law_firm
+def consulta_cpf():
+    from app.services import segurado_nome_service
+
+    if _usuario_com_fap() is None:
+        flash('A consulta de CPF exige o módulo Painel FAP. Solicite acesso a um administrador.', 'warning')
+        return redirect(url_for('dashboard.dashboard'))
+    return render_template('tools/consulta_cpf.html', disponivel=segurado_nome_service.disponivel())
+
+
+@tools_bp.route('/consulta-cpf/consultar', methods=['POST'])
+@require_law_firm
+def consulta_cpf_consultar():
+    from app.services import cpf_nome_client
+    from app.services import segurado_nome_service as svc
+
+    user = _usuario_com_fap()
+    if user is None:
+        return jsonify({'ok': False, 'message': 'A consulta de CPF exige o módulo Painel FAP.'}), 403
+    if not svc.disponivel():
+        return jsonify({'ok': False, 'message': 'A consulta de CPF não está configurada nesta instalação.'}), 503
+    cpf = str((request.get_json(silent=True) or {}).get('cpf') or '')
+    try:
+        r = svc.consultar_completo(user.law_firm_id, cpf, user.id, origem=svc.ORIGEM_TELA)
+    except svc.NomeNaoRevelavel as e:
+        return jsonify({'ok': False, 'message': e.mensagem}), e.status_http
+    except cpf_nome_client.CpfNomeIndisponivel as e:
+        return jsonify({'ok': False, 'message': e.mensagem}), 503
+    resp = jsonify({'ok': True, **r})
+    resp.headers['Cache-Control'] = 'no-store'  # dado pessoal: nada de cache
+    return resp

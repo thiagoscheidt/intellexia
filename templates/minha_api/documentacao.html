@@ -1,0 +1,163 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Documentação da API{% endblock %}
+
+{% block extra_css %}
+<style>
+  .api-doc .metodo { display: inline-block; min-width: 3.4rem; text-align: center; font-weight: 600;
+    font-size: .75rem; border-radius: .25rem; padding: .15rem .4rem; }
+  .api-doc .metodo-get { background: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); }
+  .api-doc .metodo-post { background: var(--bs-primary-bg-subtle); color: var(--bs-primary-text-emphasis); }
+  .api-doc .caminho { font-family: var(--bs-font-monospace); font-size: .95rem; word-break: break-all; }
+  .api-doc pre { background: var(--bs-tertiary-bg); border: 1px solid var(--bs-border-color);
+    border-radius: .375rem; padding: .6rem .8rem; font-size: .8rem; white-space: pre-wrap; word-break: break-all; margin: 0; }
+  .api-doc .rota + .rota { border-top: 1px solid var(--bs-border-color); }
+  .api-doc .table td, .api-doc .table th { font-size: .85rem; }
+  .api-doc details > summary { cursor: pointer; font-size: .875rem; color: var(--bs-link-color); margin: .5rem 0 .25rem; }
+  .api-doc details > summary:hover { color: var(--bs-link-hover-color); }
+  .api-doc .campo { font-family: var(--bs-font-monospace); font-size: .8rem; overflow-wrap: anywhere; }
+  .api-doc .campo .desc-celular { font-family: var(--bs-body-font-family); }
+  .api-doc .campo .pai { color: var(--bs-secondary-color); }
+  .api-doc .resposta-tabela { max-height: 28rem; overflow-y: auto; }
+  .api-doc .resposta-tabela thead th { position: sticky; top: 0; background: var(--bs-body-bg); }
+</style>
+{% endblock %}
+
+{% macro resposta(item) %}
+<details>
+  <summary>Resposta: {{ item.campos|length }} campos</summary>
+  <div class="table-responsive resposta-tabela border rounded mb-2">
+    <table class="table table-sm align-middle mb-0">
+      <thead><tr><th>Campo</th><th class="d-none d-sm-table-cell">Tipo</th><th class="d-none d-sm-table-cell">Descrição</th></tr></thead>
+      <tbody>
+        {% for nome, tipo, descricao, opcional in item.campos %}
+        {% set partes = nome.rsplit('.', 1) %}
+        <tr>
+          <td class="campo">{% if partes|length == 2 %}<span class="pai">{{ partes[0] }}.</span>{{ partes[1] }}{% else %}{{ nome }}{% endif %}
+            <div class="d-sm-none small text-body-secondary desc-celular">{{ tipo }} — {{ descricao }}{% if opcional %} (nem sempre vem){% endif %}</div></td>
+          <td class="text-nowrap d-none d-sm-table-cell">{{ tipo }}</td>
+          <td class="d-none d-sm-table-cell">{{ descricao }}{% if opcional %} <span class="badge text-bg-light border">nem sempre vem</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+<details>
+  <summary>Exemplo de resposta</summary>
+  <pre>{{ item.exemplo }}</pre>
+</details>
+{% endmacro %}
+
+{% block content %}
+{% call page_hero(title='Documentação da API', subtitle='Os dados do escritório para as suas telas e automações', icon='bi bi-braces') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Documentação da API</li></ol></nav>
+{% endcall %}
+
+<div class="app-content api-doc">
+  <div class="container-fluid">
+    <div class="row g-3">
+      <div class="col-xl-9">
+
+        <div class="card card-primary card-outline mb-3">
+          <div class="card-body">
+            <p class="mb-2">Endereço base:</p>
+            <pre>{{ base_api }}</pre>
+            <p class="mt-3 mb-2">Toda chamada leva o seu token no cabeçalho (crie o seu em <a href="{{ url_for('minha_api.index') }}">Minha API</a>):</p>
+            <pre>Authorization: Bearer $INTELLEXIA_TOKEN</pre>
+            <p class="mt-3 mb-0 small text-body-secondary">
+              Respostas em JSON, com os mesmos números das ferramentas do conector do Claude. Cada rota
+              abaixo lista os campos que devolve; campo sem valor vem <code>null</code>.
+              Listas paginam por <code>limite</code> (até {{ teto_pagina }} por página) e <code>deslocamento</code>
+              (a resposta traz <code>tem_mais</code> e <code>proximo_deslocamento</code>). Erros vêm como
+              <code>{"erro": "..."}</code>; parâmetro desconhecido ou fora do limite é recusado, nunca ignorado.
+              A descrição completa, para ferramentas e IA, está em <code>{{ base_api }}/openapi.json</code> (também pede o token).
+            </p>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-header"><h3 class="card-title mb-0"><i class="bi bi-terminal me-2"></i>Usar no Claude Code</h3></div>
+          <div class="card-body">
+            <p class="mb-2">Guarde o token numa variável de ambiente (nunca dentro de um arquivo que vai para o git) e comece pedindo algo assim:</p>
+            <pre>Use a API do IntellexIA (documentação em {{ base_api }}/openapi.json, token na variável INTELLEXIA_TOKEN) para montar uma tela que lista os benefícios B91 indeferidos na 1ª instância de uma empresa, com filtro por vigência.</pre>
+            <p class="mt-2 mb-0 small text-body-secondary">Pelo conector do Claude também dá: peça "me mostre a documentação da API" ou "crie um token de API para mim".</p>
+          </div>
+        </div>
+
+        <div class="card mb-3">
+          <div class="card-header"><h3 class="card-title mb-0">Conta</h3></div>
+          <div class="card-body py-0">
+            {% for item in rotas_proprias %}
+            <div class="rota py-3">
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <span class="metodo metodo-{{ item.metodo|lower }}">{{ item.metodo }}</span>
+                <span class="caminho">{{ item.caminho }}</span>
+              </div>
+              <div class="mb-2">{{ item.resumo }}</div>
+              <pre>curl -H "Authorization: Bearer $INTELLEXIA_TOKEN" "{{ base_api }}{{ item.caminho }}"</pre>
+              {{ resposta(item) }}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        {% for grupo in grupos %}
+        <div class="card mb-3" id="grupo-{{ grupo.chave }}">
+          <div class="card-header"><h3 class="card-title mb-0">{{ grupo.rotulo }}</h3></div>
+          <div class="card-body py-0">
+            {% for item in grupo.rotas %}{% set r = item.rota %}
+            <div class="rota py-3">
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                <span class="metodo metodo-{{ r.metodo|lower }}">{{ r.metodo }}</span>
+                <span class="caminho">{{ r.caminho }}</span>
+              </div>
+              <div class="mb-2">{{ r.resumo }}</div>
+              {% if r.params %}
+              <div class="table-responsive">
+                <table class="table table-sm align-middle mb-2">
+                  <thead><tr><th>Parâmetro</th><th>Onde</th><th>Tipo</th><th>Descrição</th></tr></thead>
+                  <tbody>
+                    {% for p in r.params %}
+                    <tr>
+                      <td><code>{{ p.nome }}</code>{% if p.obrigatorio %} <span class="text-danger" title="obrigatório">*</span>{% endif %}</td>
+                      <td class="text-nowrap">{{ {'query': 'URL', 'path': 'caminho', 'body': 'corpo JSON'}[p.local] }}</td>
+                      <td class="text-nowrap">{{ {'string': 'texto', 'integer': 'inteiro', 'boolean': 'true/false', 'lista': 'lista (a,b)'}[p.tipo] }}</td>
+                      <td>{{ p.descricao }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              {% endif %}
+              <pre>{{ item.curl }}</pre>
+              {{ resposta(item) }}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="col-xl-3">
+        <div class="card position-sticky" style="top: 1rem;">
+          <div class="card-header"><h3 class="card-title mb-0">Nesta página</h3></div>
+          <div class="list-group list-group-flush">
+            {% for grupo in grupos %}
+            <a class="list-group-item list-group-item-action" href="#grupo-{{ grupo.chave }}">{{ grupo.rotulo }}
+              <span class="badge text-bg-secondary float-end">{{ grupo.rotas|length }}</span></a>
+            {% endfor %}
+          </div>
+          <div class="card-body small text-body-secondary">
+            Limites: 120 chamadas por minuto por token; a revelação de nome tem cota diária
+            por usuário, somada à do Claude.
+            <a href="{{ url_for('docs.manuais') }}">Manual da API</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

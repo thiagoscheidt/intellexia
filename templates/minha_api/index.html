@@ -1,0 +1,189 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Minha API{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Minha API', subtitle='Tokens para usar os dados do escritório nas suas telas e automações', icon='bi bi-key') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Minha API</li></ol></nav>
+{% endcall %}
+
+<div class="app-content">
+  <div class="container-fluid">
+
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+      <ul class="nav nav-pills">
+        <li class="nav-item"><a class="nav-link {% if aba == 'meus' %}active{% endif %}" href="{{ url_for('minha_api.index') }}">Meus tokens</a></li>
+        {% if eh_admin %}
+        <li class="nav-item"><a class="nav-link {% if aba == 'escritorio' %}active{% endif %}" href="{{ url_for('minha_api.escritorio') }}">Tokens do escritório</a></li>
+        {% endif %}
+      </ul>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{{ url_for('minha_api.documentacao') }}"><i class="bi bi-braces me-1"></i>Documentação</a>
+        <a class="btn btn-outline-secondary" href="{{ url_for('docs.manuais') }}"><i class="bi bi-book me-1"></i>Manual</a>
+        {% if aba == 'meus' %}
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCriarToken"><i class="bi bi-plus-lg me-1"></i>Criar token</button>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body p-0">
+        {% if tokens %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                {% if aba == 'escritorio' %}<th>Usuário</th>{% endif %}
+                <th>Final</th>
+                <th>Criado em</th>
+                <th>Validade</th>
+                <th>Último uso</th>
+                <th>Situação</th>
+                <th class="text-end"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in tokens %}{% set r = t.registro %}
+              <tr>
+                <td>{{ t.nome }}</td>
+                {% if aba == 'escritorio' %}<td>{{ t.dono }}</td>{% endif %}
+                <td><code>…{{ t.final }}</code></td>
+                <td class="text-nowrap">{{ r.created_at|datetime_sp }}</td>
+                <td class="text-nowrap">{{ r.expires_at|datetime_sp if r.expires_at else 'Sem validade' }}</td>
+                <td class="text-nowrap">{{ r.last_used_at|datetime_sp if r.last_used_at else 'Nunca usado' }}</td>
+                <td>
+                  {% if t.situacao == 'ativo' %}<span class="badge text-bg-success">Ativo</span>
+                  {% elif t.situacao == 'vencido' %}<span class="badge text-bg-warning">Vencido</span>
+                  {% else %}<span class="badge text-bg-secondary">Revogado</span>{% endif %}
+                </td>
+                <td class="text-end">
+                  {% if t.situacao == 'ativo' %}
+                  <form method="post" action="{{ url_for('minha_api.revogar_token', token_id=t.id) }}"
+                        class="d-inline form-revogar" data-nome="{{ t.nome }}">
+                    {% if aba == 'escritorio' %}<input type="hidden" name="voltar" value="escritorio">{% endif %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Revogar</button>
+                  </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="p-4 text-center text-body-secondary">
+          {% if aba == 'meus' %}
+          Você ainda não tem token. Crie um para usar a API no Claude Code, numa planilha ou num script.
+          {% else %}
+          Ninguém do escritório criou token ainda.
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <p class="small text-body-secondary mt-3 mb-0">
+      Endereço da API: <code>{{ base_api }}</code>. Cada token age em nome de quem o criou, com as
+      permissões que a pessoa tiver no momento da chamada.
+    </p>
+  </div>
+</div>
+
+<div class="modal fade" id="modalCriarToken" tabindex="-1" aria-labelledby="modalCriarTokenTitulo" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" method="post" action="{{ url_for('minha_api.criar_token') }}">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalCriarTokenTitulo">Criar token</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label" for="tokenNome">Nome</label>
+          <input class="form-control" id="tokenNome" name="nome" maxlength="100" required
+                 placeholder="Ex.: Claude Code do notebook">
+          <div class="form-text">Para você reconhecer depois onde ele está sendo usado.</div>
+        </div>
+        <div>
+          <label class="form-label" for="tokenValidade">Validade</label>
+          <select class="form-select" id="tokenValidade" name="validade">
+            {% for dias, rotulo in validades %}
+            <option value="{{ dias or '' }}" {% if dias == 90 %}selected{% endif %}>{{ rotulo }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Criar token</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if novo_token %}
+<div class="modal fade" id="modalTokenCriado" tabindex="-1" aria-labelledby="modalTokenCriadoTitulo" aria-hidden="true"
+     data-bs-backdrop="static">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTokenCriadoTitulo"><i class="bi bi-check-circle text-success me-2"></i>Token “{{ novo_registro.nome }}” criado</h5>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">Copie agora: <strong>ele não aparece de novo.</strong></p>
+        <div class="input-group">
+          <input type="text" class="form-control font-monospace" id="tokenCriado" value="{{ novo_token }}" readonly>
+          <button class="btn btn-outline-primary" type="button" id="copiarToken"><i class="bi bi-clipboard me-1"></i>Copiar</button>
+        </div>
+        <p class="small text-body-secondary mt-3 mb-0">
+          Guarde numa variável de ambiente (ex.: <code>INTELLEXIA_TOKEN</code>) ou num <code>.env</code> fora do git.
+          Se perder, revogue e crie outro.
+        </p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Já copiei</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // O nome do token é texto do usuário: vai por data-*, nunca dentro de JS inline.
+  document.querySelectorAll('.form-revogar').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      if (!confirm('Revogar o token “' + form.dataset.nome + '”? Ele para de funcionar na hora.')) {
+        e.preventDefault();
+      }
+    });
+  });
+</script>
+{% if novo_token %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var modal = new bootstrap.Modal(document.getElementById('modalTokenCriado'));
+    modal.show();
+    var campo = document.getElementById('tokenCriado');
+    document.getElementById('copiarToken').addEventListener('click', function () {
+      var botao = this;
+      var pronto = function () { botao.innerHTML = '<i class="bi bi-check2 me-1"></i>Copiado'; };
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(campo.value).then(pronto);
+      } else {
+        campo.select();
+        document.execCommand('copy');
+        pronto();
+      }
+    });
+    // A página de resposta do POST não deve ser reenviada nem reaberta pelo histórico com o token.
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', '{{ url_for('minha_api.index') }}');
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

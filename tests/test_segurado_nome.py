@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from main import app
 from app.models import (
-    db, Benefit, FapCalculoItem, LawFirm, SeguradoNome, User, UserPageVisit,
+    db, Benefit, FapCalculoItem, LawFirm, SeguradoNome, User, UserMcpCall, UserPageVisit,
 )
 from app.services import cpf_nome_client, segurado_nome_service as svc
 
@@ -33,6 +33,11 @@ CPF_ALHEIO = '39053344705'     # não está na base do escritório
 CPF_MCP_1 = '86288366757'      # para o limite diário do MCP
 CPF_MCP_2 = '71428793860'
 CPF_MCP_3 = '26541728054'
+CPF_API_1 = '71428793194'     # cota compartilhada MCP + API
+CPF_API_2 = '26541728135'
+CPF_API_3 = '12398745619'
+CPF_COMP_1 = '48151623446'     # consulta completa: revelar entra na mesma conta
+CPF_COMP_2 = '27182818205'
 
 _falhas = []
 
@@ -63,8 +68,11 @@ FORNECEDOR = {
         'CPF': CPF_CALC, 'NOME': 'JOAO DE TESTE', 'SEXO': 'Masculino',
         'NASC': '05/05/1985', 'NOME_MAE': 'OUTRA MAE'}}),
     CPF_SUMIDO: Resp(404, {'error': 'CPF não encontrado', 'code': 'CPF_NOT_FOUND'}),
+    CPF_ALHEIO: Resp(200, {'success': True, 'data': {
+        'CPF': CPF_ALHEIO, 'NOME': 'FULANO DE FORA', 'SEXO': 'Masculino',
+        'NASC': '10/10/1975', 'NOME_MAE': 'MAE DE FORA', 'CAMPO_NOVO': 'qualquer'}}),
     **{c: Resp(200, {'success': True, 'data': {'CPF': c, 'NOME': f'PESSOA {c[:3]}', 'NASC': '01/01/1980'}})
-       for c in (CPF_MCP_1, CPF_MCP_2, CPF_MCP_3)},
+       for c in (CPF_MCP_1, CPF_MCP_2, CPF_MCP_3, CPF_API_1, CPF_API_2, CPF_API_3, CPF_COMP_1, CPF_COMP_2)},
 }
 
 
@@ -97,7 +105,8 @@ def _setup():
                 insured_cpf=CPF_BEN, insured_date_of_birth=date(1990, 1, 1)),
         *[Benefit(law_firm_id=a.id, benefit_number=f'99220001{i}', benefit_type='B91',
                   insured_cpf=c, insured_date_of_birth=date(1980, 1, 1))
-          for i, c in enumerate((CPF_MCP_1, CPF_MCP_2, CPF_MCP_3))],
+          for i, c in enumerate((CPF_MCP_1, CPF_MCP_2, CPF_MCP_3, CPF_API_1, CPF_API_2, CPF_API_3,
+                                 CPF_COMP_1, CPF_COMP_2))],
     ])
     user = User(law_firm_id=a.id, name='teste', email='user__test_nome@example.com', role='admin', is_active=True)
     user.set_password('x')
@@ -110,6 +119,7 @@ def _cleanup(firm):
     SeguradoNome.query.filter_by(law_firm_id=firm.id).delete()
     for u in User.query.filter_by(law_firm_id=firm.id).all():
         UserPageVisit.query.filter_by(user_id=u.id).delete()
+        UserMcpCall.query.filter_by(user_id=u.id).delete()
         db.session.delete(u)
     FapCalculoItem.query.filter_by(law_firm_id=firm.id).delete()
     Benefit.query.filter_by(law_firm_id=firm.id).delete()
@@ -250,6 +260,129 @@ def test_mcp_revelar(a, user):
         os.environ.pop('CPF_NOME_LIMITE_DIARIO_MCP', None)
 
 
+def test_cota_mcp_e_api(a):
+    print('\n6. Cota diária compartilhada entre MCP e API')
+    from fastmcp.exceptions import ToolError
+    from mcp_server.tools.fap import revelar_nome_segurado_handler
+
+    u = User(law_firm_id=a.id, name='cota', email='cota__test_nome@example.com', role='lawyer', is_active=True)
+    u.set_password('x')
+    db.session.add(u)
+    db.session.commit()
+    os.environ['CPF_NOME_LIMITE_DIARIO_MCP'] = '2'
+    try:
+        revelar_nome_segurado_handler(a.id, u.id, CPF_API_1)
+        r = revelar_nome_segurado_handler(a.id, u.id, CPF_API_2, origem=svc.ORIGEM_API)
+        check('origem gravada como api',
+              SeguradoNome.query.filter_by(law_firm_id=a.id, cpf=CPF_API_2).one().origem == 'api')
+        check('MCP + API somam na cota', r['consultas_restantes_hoje'] == 0, str(r))
+        check('consultas_automatizadas_hoje conta as duas', svc.consultas_automatizadas_hoje(a.id, u.id) == 2)
+        for origem in (svc.ORIGEM_API, svc.ORIGEM_MCP):
+            try:
+                revelar_nome_segurado_handler(a.id, u.id, CPF_API_3, origem=origem)
+                check(f'3ª consulta ({origem}) passa do limite', False)
+            except ToolError as e:
+                check(f'3ª consulta ({origem}) passa do limite e cita a API',
+                      'Limite diário de 2' in str(e) and 'API' in str(e), str(e))
+        corpo, status = svc.resposta_revelar(a.id, CPF_API_3, u.id)
+        check('tela continua fora da cota', status == 200, str(corpo))
+    finally:
+        os.environ.pop('CPF_NOME_LIMITE_DIARIO_MCP', None)
+
+
+def test_consulta_completa(a):
+    print('\n7. Consulta completa de CPF (consultar_cpf / POST /segurados/consultar-cpf)')
+    from fastmcp.exceptions import ToolError
+    from app.services import access_audit_service
+    from mcp_server.tools.fap import consultar_cpf_handler
+
+    u = User(law_firm_id=a.id, name='completa', email='completa__test_nome@example.com', role='lawyer', is_active=True)
+    u.set_password('x')
+    db.session.add(u)
+    db.session.commit()
+    r = cpf_nome_client.consultar_completo(CPF_ALHEIO)
+    check('cliente: a resposta inteira, sem filtrar campo', r.encontrado and r.dados.get('NOME_MAE') == 'MAE DE FORA'
+          and r.dados.get('SEXO') == 'Masculino' and r.dados.get('CAMPO_NOVO') == 'qualquer', str(r))
+    check('cliente: 404 = não encontrado, dados vazios', cpf_nome_client.consultar_completo(CPF_SUMIDO).dados == {})
+
+    os.environ['CPF_NOME_LIMITE_DIARIO_MCP'] = '3'
+    try:
+        r = consultar_cpf_handler(a.id, u.id, '390.533.447-05')
+        check('CPF de fora da base, com pontuação: consulta', r['encontrado'] and r['cpf'] == CPF_ALHEIO
+              and r['cpf_formatado'] == '390.533.447-05' and r['dados']['NOME'] == 'FULANO DE FORA', str(r))
+        check('devolve nome da mãe e sexo', r['dados']['NOME_MAE'] == 'MAE DE FORA' and r['dados']['SEXO'] == 'Masculino')
+        check('nada fica salvo', SeguradoNome.query.filter_by(law_firm_id=a.id, cpf=CPF_ALHEIO).count() == 0)
+        check('já desconta esta consulta', r['consultas_restantes_hoje'] == 2, str(r))
+        r = consultar_cpf_handler(a.id, u.id, CPF_SUMIDO)
+        check('não encontrado: aviso, sem dados', not r['encontrado'] and r['dados'] == {} and 'aviso' in r)
+        try:
+            consultar_cpf_handler(a.id, u.id, '123.456.789-00')
+            check('DV inválido recusado sem ir ao fornecedor', False)
+        except ToolError as e:
+            check('DV inválido recusado sem ir ao fornecedor', 'CPF inválido' in str(e) and '12345678900' not in chamadas)
+
+        # O uso é contado pelo registro (o middleware do MCP / a API gravam depois da chamada).
+        access_audit_service.record_mcp_call(u.id, a.id, 'tool', svc.FERRAMENTA_CONSULTA_COMPLETA, True, 10, None)
+        access_audit_service.record_mcp_call(u.id, a.id, 'api', svc.ROTA_CONSULTA_COMPLETA, True, 10, None)
+        access_audit_service.record_mcp_call(u.id, a.id, 'tool', svc.FERRAMENTA_CONSULTA_COMPLETA, False, 10, 'erro')
+        check('conta MCP + API, sem as que deram erro', svc.consultas_completas_hoje(a.id, u.id) == 2,
+              str(svc.consultas_completas_hoje(a.id, u.id)))
+        revelar_nome_segurado_handler = __import__('mcp_server.tools.fap', fromlist=['x']).revelar_nome_segurado_handler
+        revelar_nome_segurado_handler(a.id, u.id, CPF_COMP_1)
+        check('revelar nome entra na mesma conta', svc.consultas_usadas_hoje(a.id, u.id) == 3)
+        for nome, chamar in (('consulta completa', lambda: consultar_cpf_handler(a.id, u.id, CPF_ALHEIO)),
+                             ('revelar nome', lambda: revelar_nome_segurado_handler(a.id, u.id, CPF_COMP_2))):
+            try:
+                chamar()
+                check(f'limite somado barra a {nome}', False)
+            except ToolError as e:
+                check(f'limite somado barra a {nome}', 'Limite diário de 3' in str(e), str(e))
+    finally:
+        os.environ.pop('CPF_NOME_LIMITE_DIARIO_MCP', None)
+
+
+def test_tela_consulta_cpf(a, user):
+    print('\n8. Tela Ferramentas → Consulta de CPF')
+    c = app.test_client()
+
+    def logar(u):
+        with c.session_transaction() as sess:
+            sess.clear()
+            sess['user_id'] = u.id
+            sess['law_firm_id'] = u.law_firm_id
+            sess['user_role'] = u.role
+
+    logar(user)
+    r = c.get('/tools/consulta-cpf')
+    check('tela abre', r.status_code == 200 and 'Consulta de CPF' in r.get_data(as_text=True), str(r.status_code))
+    check('menu Ferramentas mostra o item', 'Consulta de CPF</p>' in r.get_data(as_text=True))
+    os.environ['CPF_NOME_LIMITE_DIARIO_MCP'] = '0'  # a tela fica fora do limite
+    try:
+        r = c.post('/tools/consulta-cpf/consultar', json={'cpf': '390.533.447-05'})
+        j = r.get_json()
+        check('consulta pela tela: tudo do serviço, mesmo com o limite zerado', r.status_code == 200 and j['ok']
+              and j['dados']['NOME_MAE'] == 'MAE DE FORA' and not j['segurado_da_base'], str(j)[:200])
+        check('resposta sem cache', 'no-store' in (r.headers.get('Cache-Control') or ''))
+        j = c.post('/tools/consulta-cpf/consultar', json={'cpf': CPF_CALC}).get_json()
+        check('segurado da base com nascimento divergente do FAP', j['segurado_da_base'] and j['nascimento_diverge'],
+              str(j)[:200])
+        r = c.post('/tools/consulta-cpf/consultar', json={'cpf': '11111111111'})
+        check('CPF inválido: 400 com mensagem', r.status_code == 400 and 'inválido' in r.get_json()['message'])
+        check('nada fica salvo', SeguradoNome.query.filter_by(law_firm_id=a.id, cpf=CPF_ALHEIO).count() == 0)
+    finally:
+        os.environ.pop('CPF_NOME_LIMITE_DIARIO_MCP', None)
+
+    sem = User(law_firm_id=a.id, name='sem fap', email='semfap__test_nome@example.com', role='lawyer', is_active=True)
+    sem.set_password('x')
+    sem.set_module_permissions(['tools'])
+    db.session.add(sem)
+    db.session.commit()
+    logar(sem)
+    check('sem o Painel FAP: a tela não abre', c.get('/tools/consulta-cpf').status_code == 302)
+    check('sem o Painel FAP: a consulta é recusada',
+          c.post('/tools/consulta-cpf/consultar', json={'cpf': CPF_ALHEIO}).status_code == 403)
+
+
 def main() -> int:
     os.environ['CPF_NOME_API_KEY'] = 'teste'
     original = requests.get
@@ -263,6 +396,9 @@ def main() -> int:
                 test_falha_nao_grava(a, user)
                 test_telas_e_mcp(a, user)
                 test_mcp_revelar(a, user)
+                test_cota_mcp_e_api(a)
+                test_consulta_completa(a)
+                test_tela_consulta_cpf(a, user)
             finally:
                 db.session.rollback()
                 _cleanup(a)

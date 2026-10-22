@@ -28,6 +28,8 @@ _MANUAL_FILES = (
     ("Base de Conhecimento do Painel de Processos", "MANUAL_BASE_CONHECIMENTO.md"),
     ("Diário Oficial", "MANUAL_DIARIO_OFICIAL.md"),
     ("Notificações por E-mail", "MANUAL_NOTIFICACOES.md"),
+    ("API do IntellexIA", "MANUAL_API.md"),
+    ("Biblioteca de IA", "MANUAL_BIBLIOTECA_IA.md"),
 )
 
 MAX_QUESTION_CHARS = 1000

@@ -10,22 +10,43 @@ empates no critério de ordenação são a regra, não a exceção (ex.: centena
 benefícios com o mesmo ``created_at``). Sem um desempate único, o banco não
 garante ordem entre iguais e a mesma linha pode aparecer em duas páginas enquanto
 outra some. Por isso todo ``order_by`` paginado termina no ``id``.
-"""
 
-# Teto por página: acima disso a resposta enche o contexto do agente sem ajudar.
-# Para volume, o caminho é exportar_*_excel (até 50 mil linhas).
+**O teto da página depende de quem chama.** Para o agente, 200 já enche o
+contexto sem ajudar (o volume sai pelo ``exportar_*_excel``). A API
+(``/api/v1``) chama os mesmos handlers para uma tela ou um script, onde página
+maior é só menos requisições: ela roda o handler dentro de ``teto_da_pagina``
+com o teto da rota, e o ``clamp_limit`` respeita esse teto sem nenhum handler
+mudar de assinatura.
+"""
+from contextlib import contextmanager
+from contextvars import ContextVar
+
+# Teto por página do MCP: acima disso a resposta enche o contexto do agente sem
+# ajudar. Para volume, o caminho é exportar_*_excel (até 50 mil linhas).
 MAX_LIMIT = 200
+
+_teto: ContextVar[int] = ContextVar("teto_da_pagina", default=MAX_LIMIT)
+
+
+@contextmanager
+def teto_da_pagina(teto: int):
+    """Troca o teto do ``clamp_limit`` durante o bloco (usado pela API)."""
+    token = _teto.set(max(1, int(teto)))
+    try:
+        yield
+    finally:
+        _teto.reset(token)
 
 
 def clamp_limit(limit, default: int) -> int:
-    """Limite válido: inteiro entre 1 e MAX_LIMIT."""
+    """Limite válido: inteiro entre 1 e o teto atual (MAX_LIMIT no MCP)."""
     try:
         value = int(limit)
     except (TypeError, ValueError):
         return default
     if value < 1:
         return default
-    return min(value, MAX_LIMIT)
+    return min(value, _teto.get())
 
 
 def clamp_offset(offset) -> int:

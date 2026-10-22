@@ -17,6 +17,7 @@ MODULE_PERMISSIONS = {
     'courts': 'Varas Judiciais',
     'settings': 'Configuracoes',
     'admin_users': 'Administracao de Usuarios',
+    'api': 'API e integracoes',
 }
 
 ALL_MODULE_PERMISSION_KEYS = tuple(MODULE_PERMISSIONS.keys())
@@ -64,6 +65,7 @@ ENDPOINT_MODULE_MAP = {
     'settings.': 'settings',
     'admin_users.': 'admin_users',
     'access_audit.': 'admin_users',
+    'minha_api.': 'api',
 }
 
 EXACT_ENDPOINT_MODULE_MAP = {

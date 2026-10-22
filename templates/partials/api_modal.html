@@ -1,0 +1,233 @@
+{# Modal "API do IntellexIA" do cabeçalho: mini documentação + tokens do usuário.
+   Tokens por fetch nas rotas JSON de minha_api; rotas lidas do registro
+   (public_api_catalogo) via api_catalogo(). Nome de token é texto do usuário:
+   entra sempre por textContent, nunca por innerHTML. #}
+{% set api_cat = api_catalogo() %}
+<div class="modal fade" id="apiModal" tabindex="-1" aria-labelledby="apiModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title d-flex align-items-center gap-2" id="apiModalLabel">
+          <i class="bi bi-braces text-primary"></i>API do IntellexIA
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-3">
+          Os dados do escritório em formato de API, para você montar <strong>suas próprias telas, planilhas e
+          automações</strong>, por exemplo pedindo ao <strong>Claude Code</strong>. Mesmos números das telas e do
+          conector do Claude, sempre com as <strong>suas permissões</strong>.
+        </p>
+
+        <h6 class="fw-semibold"><i class="bi bi-key me-1"></i>Seus tokens</h6>
+        <div id="apiTokenNovo" class="alert alert-success d-none" role="status">
+          <div class="mb-2"><strong>Token criado.</strong> Copie agora: <strong>ele não aparece de novo.</strong></div>
+          <div class="input-group input-group-sm">
+            <input type="text" class="form-control font-monospace" id="apiTokenNovoValor" readonly>
+            <button class="btn btn-outline-success" type="button" id="apiTokenNovoCopiar" title="Copiar token">
+              <i class="bi bi-clipboard"></i>
+            </button>
+          </div>
+          <div class="small mt-2">Guarde numa variável de ambiente (<code>INTELLEXIA_TOKEN</code>) ou num <code>.env</code> fora do git.</div>
+        </div>
+        <div id="apiTokensErro" class="alert alert-danger d-none py-2 small"></div>
+        <div id="apiTokensCarregando" class="text-muted small mb-2">Carregando…</div>
+        <div class="table-responsive mb-2 d-none" id="apiTokensTabela">
+          <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Nome</th><th>Final</th><th>Validade</th><th>Último uso</th><th>Situação</th><th></th></tr></thead>
+            <tbody id="apiTokensCorpo"></tbody>
+          </table>
+        </div>
+        <p id="apiTokensVazio" class="text-muted small d-none">Você ainda não tem token.</p>
+
+        <form id="apiTokenForm" class="row g-2 align-items-end mb-3" autocomplete="off">
+          <div class="col-sm-6">
+            <label class="form-label small mb-1" for="apiTokenNome">Nome do token</label>
+            <input class="form-control form-control-sm" id="apiTokenNome" maxlength="100" required
+                   placeholder="Ex.: Claude Code do notebook">
+          </div>
+          <div class="col-sm-3">
+            <label class="form-label small mb-1" for="apiTokenValidade">Validade</label>
+            <select class="form-select form-select-sm" id="apiTokenValidade">
+              <option value="30">30 dias</option>
+              <option value="90" selected>90 dias</option>
+              <option value="180">180 dias</option>
+              <option value="">Sem validade</option>
+            </select>
+          </div>
+          <div class="col-sm-3 d-grid">
+            <button type="submit" class="btn btn-primary btn-sm" id="apiTokenCriar"><i class="bi bi-plus-lg me-1"></i>Criar token</button>
+          </div>
+        </form>
+
+        <hr class="my-3">
+        <h6 class="fw-semibold"><i class="bi bi-terminal me-1"></i>Como usar</h6>
+        <label class="form-label small fw-semibold mb-1" for="apiBaseUrl">Endereço da API</label>
+        <div class="input-group input-group-sm mb-2">
+          <input type="text" class="form-control font-monospace" id="apiBaseUrl" value="{{ api_cat.base }}" readonly>
+          <button class="btn btn-outline-primary" type="button" data-api-copiar="apiBaseUrl" title="Copiar endereço">
+            <i class="bi bi-clipboard"></i>
+          </button>
+        </div>
+        <p class="small mb-1">Toda chamada leva o token no cabeçalho. Teste com:</p>
+        <pre class="small bg-body-tertiary border rounded p-2 mb-2" style="white-space: pre-wrap; word-break: break-all;">curl -H "Authorization: Bearer $INTELLEXIA_TOKEN" "{{ api_cat.base }}/eu"</pre>
+        <p class="small mb-1">No <strong>Claude Code</strong>, comece pedindo algo assim:</p>
+        <div class="position-relative mb-2">
+          <pre class="small bg-body-tertiary border rounded p-2 pe-5 mb-0" id="apiPromptClaude" style="white-space: pre-wrap;">Use a API do IntellexIA (documentação em {{ api_cat.base }}/openapi.json, token na variável INTELLEXIA_TOKEN) para montar uma tela que lista os benefícios B91 indeferidos na 1ª instância de uma empresa, com filtro por vigência.</pre>
+          <button class="btn btn-sm btn-outline-secondary position-absolute top-0 end-0 m-1" type="button"
+                  data-api-copiar="apiPromptClaude" title="Copiar o pedido"><i class="bi bi-clipboard"></i></button>
+        </div>
+        <p class="text-muted small mb-3">
+          Respostas em JSON; listas paginam por <code>limite</code> e <code>deslocamento</code>; erros vêm como
+          <code>{"erro": "..."}</code>. Limite de 120 chamadas por minuto por token.
+        </p>
+
+        <div class="accordion accordion-flush border rounded" id="apiRotas">
+          {% for grupo in api_cat.grupos %}
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse"
+                data-bs-target="#apiGrupo{{ loop.index }}" aria-expanded="false" aria-controls="apiGrupo{{ loop.index }}">
+                <span class="me-2">{{ grupo.rotulo }}</span>
+                <span class="badge text-bg-secondary rounded-pill">{{ grupo.rotas|length }}</span>
+              </button>
+            </h2>
+            <div id="apiGrupo{{ loop.index }}" class="accordion-collapse collapse" data-bs-parent="#apiRotas">
+              <ul class="list-unstyled small mb-0 px-3 py-2">
+                {% for r in grupo.rotas %}
+                <li class="mb-2"><span class="badge {{ 'text-bg-primary' if r.metodo == 'POST' else 'text-bg-success' }} me-1">{{ r.metodo }}</span><code>{{ r.caminho }}</code><br><span class="text-muted">{{ r.resumo }}</span></li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a href="{{ url_for('minha_api.documentacao') }}" class="btn btn-primary"><i class="bi bi-braces me-1"></i>Documentação completa</a>
+        <a href="{{ url_for('minha_api.index') }}" class="btn btn-outline-secondary"><i class="bi bi-key me-1"></i>Minha API</a>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  (function () {
+    var modal = document.getElementById('apiModal');
+    if (!modal) return;
+    var URL_LISTA = '{{ url_for("minha_api.tokens_json") }}';
+    var URL_CRIAR = '{{ url_for("minha_api.criar_token_json") }}';
+    var URL_REVOGAR = '{{ url_for("minha_api.revogar_token_json", token_id=0) }}';
+    var corpo = document.getElementById('apiTokensCorpo');
+    var tabela = document.getElementById('apiTokensTabela');
+    var vazio = document.getElementById('apiTokensVazio');
+    var carregando = document.getElementById('apiTokensCarregando');
+    var erro = document.getElementById('apiTokensErro');
+    var SITUACAO = { ativo: ['Ativo', 'text-bg-success'], vencido: ['Vencido', 'text-bg-warning'], revogado: ['Revogado', 'text-bg-secondary'] };
+
+    function data(iso, padrao) {
+      if (!iso) return padrao;
+      return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
+    }
+    function celula(tr, texto, classe) {
+      var td = document.createElement('td');
+      td.textContent = texto;
+      if (classe) td.className = classe;
+      tr.appendChild(td);
+      return td;
+    }
+    function mostrarErro(msg) {
+      erro.textContent = msg;
+      erro.classList.toggle('d-none', !msg);
+    }
+    function pedir(url, opcoes) {
+      return fetch(url, Object.assign({ credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' } }, opcoes || {}))
+        .then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (d) {
+            if (!r.ok) throw new Error(d.erro || ('Falha (' + r.status + ')'));
+            return d;
+          });
+        });
+    }
+    function desenhar(tokens) {
+      corpo.innerHTML = '';
+      tokens.forEach(function (t) {
+        var tr = document.createElement('tr');
+        celula(tr, t.nome);
+        celula(tr, '…' + t.final, 'font-monospace');
+        celula(tr, data(t.expira_em, 'Sem validade'), 'text-nowrap');
+        celula(tr, data(t.ultimo_uso, 'Nunca'), 'text-nowrap');
+        var sit = SITUACAO[t.situacao] || [t.situacao, 'text-bg-light'];
+        var badge = document.createElement('span');
+        badge.className = 'badge ' + sit[1];
+        badge.textContent = sit[0];
+        celula(tr, '').appendChild(badge);
+        var acao = celula(tr, '', 'text-end');
+        if (t.situacao === 'ativo') {
+          var b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'btn btn-sm btn-outline-danger';
+          b.textContent = 'Revogar';
+          b.addEventListener('click', function () {
+            if (!confirm('Revogar o token “' + t.nome + '”? Ele para de funcionar na hora.')) return;
+            pedir(URL_REVOGAR.replace('/0/', '/' + t.id + '/'), { method: 'POST', body: '{}' })
+              .then(carregar).catch(function (e) { mostrarErro(e.message); });
+          });
+          acao.appendChild(b);
+        }
+        corpo.appendChild(tr);
+      });
+      tabela.classList.toggle('d-none', !tokens.length);
+      vazio.classList.toggle('d-none', !!tokens.length);
+    }
+    function carregar() {
+      mostrarErro('');
+      return pedir(URL_LISTA, { method: 'GET' })
+        .then(function (d) { carregando.classList.add('d-none'); desenhar(d.tokens); })
+        .catch(function (e) { carregando.classList.add('d-none'); mostrarErro('Não foi possível carregar os tokens: ' + e.message); });
+    }
+
+    modal.addEventListener('show.bs.modal', carregar);
+    modal.addEventListener('hidden.bs.modal', function () {
+      // O token criado não fica na página depois de fechar.
+      document.getElementById('apiTokenNovoValor').value = '';
+      document.getElementById('apiTokenNovo').classList.add('d-none');
+    });
+
+    document.getElementById('apiTokenForm').addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var botao = document.getElementById('apiTokenCriar');
+      var validade = document.getElementById('apiTokenValidade').value;
+      botao.disabled = true;
+      pedir(URL_CRIAR, { method: 'POST', body: JSON.stringify({
+        nome: document.getElementById('apiTokenNome').value,
+        validade: validade === '' ? null : Number(validade)
+      }) })
+        .then(function (d) {
+          document.getElementById('apiTokenNovoValor').value = d.token;
+          document.getElementById('apiTokenNovo').classList.remove('d-none');
+          document.getElementById('apiTokenNome').value = '';
+          return carregar();
+        })
+        .catch(function (e) { mostrarErro(e.message); })
+        .then(function () { botao.disabled = false; });
+    });
+
+    function copiar(botao, texto) {
+      navigator.clipboard.writeText(texto).then(function () {
+        var antes = botao.innerHTML;
+        botao.innerHTML = '<i class="bi bi-clipboard-check"></i>';
+        setTimeout(function () { botao.innerHTML = antes; }, 1500);
+      });
+    }
+    document.getElementById('apiTokenNovoCopiar').addEventListener('click', function () {
+      copiar(this, document.getElementById('apiTokenNovoValor').value);
+    });
+    modal.querySelectorAll('[data-api-copiar]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var alvo = document.getElementById(b.getAttribute('data-api-copiar'));
+        copiar(b, alvo.value !== undefined ? alvo.value : alvo.textContent);
+      });
+    });
+  })();
+</script>

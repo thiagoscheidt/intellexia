@@ -3764,6 +3764,111 @@ class McpOAuthToken(db.Model):
         return f'<McpOAuthToken type={self.token_type} user_id={self.user_id} revoked={self.revoked}>'
 
 
+class ApiToken(db.Model):
+    """Tabela api_tokens - Token pessoal da API do IntellexIA (``/api/v1``).
+
+    O token em si é mostrado uma vez, na criação; aqui fica só o SHA-256 e os
+    4 últimos caracteres para a pessoa reconhecê-lo na tela. O escritório e as
+    permissões vêm do usuário dono, conferidos a cada requisição. Ver
+    ``api_token_service``.
+    """
+    __tablename__ = 'api_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    name = db.Column(db.String(100), nullable=False)
+    token_hash = db.Column(db.String(64), nullable=False, unique=True)
+    last4 = db.Column(db.String(4), nullable=False)
+
+    expires_at = db.Column(db.DateTime, nullable=True)       # UTC; NULL = sem validade
+    revoked_at = db.Column(db.DateTime, nullable=True)       # UTC
+    revoked_by_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+
+    created_at = db.Column(db.DateTime, nullable=False)      # UTC
+    last_used_at = db.Column(db.DateTime, nullable=True)     # UTC
+    last_used_ip = db.Column(db.String(45), nullable=True)
+
+    user = db.relationship('User', foreign_keys=[user_id], passive_deletes=True)
+
+    def __repr__(self):
+        return f'<ApiToken id={self.id} user_id={self.user_id} final={self.last4}>'
+
+
+class PromptLibraryItem(db.Model):
+    """Tabela prompt_library_items - Prompt, agente ou skill da Biblioteca de IA.
+
+    Pessoal (só o dono vê) ou do escritório. O ``slug`` é o nome do comando no
+    Claude (``meu_<tipo>_<slug>`` / ``escritorio_<tipo>_<slug>``). Os campos a preencher são
+    lidos do ``corpo`` (``{{campo}}``), nunca guardados à parte. Ver
+    ``prompt_library_service``.
+    """
+    __tablename__ = 'prompt_library_items'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'slug', name='uq_prompt_library_firm_slug'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+
+    tipo = db.Column(db.String(10), nullable=False, default='prompt')            # prompt | agente | skill
+    titulo = db.Column(db.String(200), nullable=False)
+    slug = db.Column(db.String(80), nullable=False)
+    descricao = db.Column(db.String(1000), nullable=True)                        # "quando usar"
+    corpo = db.Column(db.Text(16777215), nullable=False)                         # MEDIUMTEXT
+    anexos_json = db.Column(db.Text(16777215), nullable=True)                    # [{"nome", "conteudo"}]
+    area = db.Column(db.String(30), nullable=False, default='geral')
+    usa_intellexia = db.Column(db.Boolean, nullable=False, default=False)
+    visibilidade = db.Column(db.String(12), nullable=False, default='pessoal')   # pessoal | escritorio
+
+    recomendado = db.Column(db.Boolean, nullable=False, default=False)
+    recomendado_por_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+
+    versao = db.Column(db.Integer, nullable=False, default=1)
+    usos = db.Column(db.Integer, nullable=False, default=0)
+
+    arquivado_em = db.Column(db.DateTime, nullable=True)                         # UTC
+    created_at = db.Column(db.DateTime, nullable=False)                          # UTC
+    updated_at = db.Column(db.DateTime, nullable=False)                          # UTC
+
+    owner = db.relationship('User', foreign_keys=[owner_id], passive_deletes=True)
+
+    def __repr__(self):
+        return f'<PromptLibraryItem id={self.id} slug={self.slug} {self.visibilidade}>'
+
+
+class PromptLibraryVersion(db.Model):
+    """Tabela prompt_library_versions - Uma linha por versão salva de um item da biblioteca."""
+    __tablename__ = 'prompt_library_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey('prompt_library_items.id', ondelete='CASCADE'),
+                        nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    versao = db.Column(db.Integer, nullable=False)
+    titulo = db.Column(db.String(200), nullable=False)
+    descricao = db.Column(db.String(1000), nullable=True)
+    corpo = db.Column(db.Text(16777215), nullable=False)
+    anexos_json = db.Column(db.Text(16777215), nullable=True)
+    editado_por_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False)                          # UTC
+
+    editado_por = db.relationship('User', foreign_keys=[editado_por_id], passive_deletes=True)
+
+
+class PromptLibraryFavorite(db.Model):
+    """Tabela prompt_library_favorites - Estrela de um usuário num item da biblioteca."""
+    __tablename__ = 'prompt_library_favorites'
+
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey('prompt_library_items.id', ondelete='CASCADE'),
+                        primary_key=True, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, nullable=False)                          # UTC
+
+
 class NotificationSetting(db.Model):
     """Tabela notification_settings - Configuração de notificações por escritório.
 

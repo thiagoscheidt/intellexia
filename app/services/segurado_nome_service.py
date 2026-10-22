@@ -17,6 +17,14 @@ Regras:
   pessoa, e o advogado decide se usa.
 - Nada aqui cruza ``segurado_nomes`` com ``benefits`` por JOIN de texto: as
   buscas são por lista de CPFs, sem depender de collation igual nas tabelas.
+
+**Consulta completa** (``consultar_completo``: ferramenta ``consultar_cpf`` e
+``POST /api/v1/segurados/consultar-cpf``) é a exceção decidida pelo Thiago em
+22/10/2026: **qualquer CPF válido**, mesmo fora da base, e a resposta inteira do
+fornecedor (nome, nascimento, sexo, nome da mãe...). Nada dela é gravado — nem
+em ``segurado_nomes`` —, então cada pedido é pago; por isso entra no **mesmo
+limite diário** do revelar nome, contado pelo registro de uso
+(``user_mcp_calls``, chamadas sem erro), já que não há linha própria para contar.
 """
 
 from __future__ import annotations
@@ -111,10 +119,14 @@ class NomeNaoRevelavel(Exception):
 
 ORIGEM_TELA = 'tela'
 ORIGEM_MCP = 'mcp'
+ORIGEM_API = 'api'
+# Os caminhos automatizados dividem a mesma cota diária: separados, quem usa
+# o Claude e a API teria o dobro de consultas pagas.
+ORIGENS_AUTOMATIZADAS = (ORIGEM_MCP, ORIGEM_API)
 
 
 def limite_diario_mcp() -> int:
-    """Consultas pagas por usuário por dia (de São Paulo) pelo Claude/MCP."""
+    """Consultas pagas por usuário por dia (de São Paulo) pelo Claude/MCP e pela API."""
     try:
         return max(0, int(os.getenv('CPF_NOME_LIMITE_DIARIO_MCP', '30')))
     except ValueError:
@@ -128,14 +140,77 @@ def _inicio_do_dia_utc():
     return inicio.astimezone(timezone.utc).replace(tzinfo=None)
 
 
-def consultas_mcp_hoje(law_firm_id: int, user_id: int | None) -> int:
-    """Consultas pagas que o usuário fez hoje pelo MCP — o que já estava salvo não conta."""
+# Nomes com que o uso da consulta completa é registrado em ``user_mcp_calls``
+# (o middleware do MCP grava o nome da ferramenta; a API, "MÉTODO /caminho").
+FERRAMENTA_CONSULTA_COMPLETA = 'consultar_cpf'
+ROTA_CONSULTA_COMPLETA = 'POST /segurados/consultar-cpf'
+
+
+def consultas_completas_hoje(law_firm_id: int, user_id: int | None) -> int:
+    """Consultas completas de CPF que o usuário fez hoje (MCP + API), sem as que deram erro."""
+    from app.models import UserMcpCall
+    from app.utils.timezone import now_sp
+
+    if not user_id:
+        return 0
+    total = db.session.query(db.func.sum(UserMcpCall.calls - UserMcpCall.errors)).filter(
+        UserMcpCall.law_firm_id == law_firm_id,
+        UserMcpCall.user_id == user_id,
+        UserMcpCall.call_date == now_sp().date(),
+        db.or_(db.and_(UserMcpCall.kind == UserMcpCall.KIND_TOOL, UserMcpCall.name == FERRAMENTA_CONSULTA_COMPLETA),
+               db.and_(UserMcpCall.kind == 'api', UserMcpCall.name == ROTA_CONSULTA_COMPLETA)),
+    ).scalar()
+    return int(total or 0)
+
+
+def consultas_usadas_hoje(law_firm_id: int, user_id: int | None) -> int:
+    """O que já saiu do limite diário hoje: nomes revelados + consultas completas (MCP e API)."""
+    return consultas_automatizadas_hoje(law_firm_id, user_id) + consultas_completas_hoje(law_firm_id, user_id)
+
+
+def consultas_restantes_hoje(law_firm_id: int, user_id: int | None) -> int:
+    return max(0, limite_diario_mcp() - consultas_usadas_hoje(law_firm_id, user_id))
+
+
+def _limite_atingido() -> NomeNaoRevelavel:
+    return NomeNaoRevelavel(
+        f'Limite diário de {limite_diario_mcp()} consultas de CPF pelo Claude ou pela API atingido para '
+        'este usuário (revelar nome e consulta completa somados). Amanhã libera de novo; pela tela de '
+        'Benefícios (botão "Revelar nome") continua disponível.', 429)
+
+
+def consultar_completo(law_firm_id: int, cpf, user_id: int | None, origem: str = ORIGEM_MCP) -> dict:
+    """Tudo o que o fornecedor devolve para um CPF válido, de dentro ou de fora da base.
+
+    Sem cache e sem gravar: cada pedido é uma consulta paga. Pelo MCP e pela
+    API vale o limite diário do usuário; a tela (Ferramentas → Consulta de CPF)
+    fica fora dele, como o botão "Revelar nome" — o limite existe para o Claude
+    ou um script não dispararem centenas de consultas, não para quem clica.
+    Levanta ``NomeNaoRevelavel`` (CPF inválido, limite) ou
+    ``cpf_nome_client.CpfNomeIndisponivel`` (fornecedor/token/cota).
+    """
+    chave = normalizar_cpf(cpf)
+    if not chave or not cpf_valido(chave):
+        raise NomeNaoRevelavel('CPF inválido: confira os 11 dígitos (com ou sem pontuação).')
+    if origem in ORIGENS_AUTOMATIZADAS and consultas_usadas_hoje(law_firm_id, user_id) >= limite_diario_mcp():
+        raise _limite_atingido()
+    resultado = cpf_nome_client.consultar_completo(chave)
+    na_base, nascimento_fap = _nascimento_na_base(law_firm_id, chave)
+    nascimento = cpf_nome_client._nascimento(resultado.dados.get('NASC')) if resultado.encontrado else None
+    return {'cpf': chave, 'cpf_formatado': formatar_cpf(chave), 'encontrado': resultado.encontrado,
+            'dados': resultado.dados, 'fonte': cpf_nome_client.FONTE,
+            'segurado_da_base': bool(na_base),
+            'nascimento_diverge': bool(nascimento and nascimento_fap and nascimento != nascimento_fap)}
+
+
+def consultas_automatizadas_hoje(law_firm_id: int, user_id: int | None) -> int:
+    """Consultas pagas que o usuário fez hoje pelo MCP e pela API — o que já estava salvo não conta."""
     if not user_id:
         return 0
     return SeguradoNome.query.filter(
         SeguradoNome.law_firm_id == law_firm_id,
         SeguradoNome.consultado_por_id == user_id,
-        SeguradoNome.origem == ORIGEM_MCP,
+        SeguradoNome.origem.in_(ORIGENS_AUTOMATIZADAS),
         SeguradoNome.consultado_em >= _inicio_do_dia_utc(),
     ).count()
 
@@ -143,7 +218,7 @@ def consultas_mcp_hoje(law_firm_id: int, user_id: int | None) -> int:
 def revelar(law_firm_id: int, cpf, user_id: int | None, origem: str = ORIGEM_TELA) -> dict:
     """Devolve o nome do CPF, consultando o fornecedor só se ainda não foi revelado.
 
-    Pelo MCP (``origem='mcp'``) vale o limite diário por usuário
+    Pelo MCP e pela API (``origem`` em ``ORIGENS_AUTOMATIZADAS``) vale o limite diário por usuário
     (``CPF_NOME_LIMITE_DIARIO_MCP``): uma pergunta mal entendida não pode virar
     centenas de consultas pagas. Nome já salvo não conta no limite.
 
@@ -162,11 +237,9 @@ def revelar(law_firm_id: int, cpf, user_id: int | None, origem: str = ORIGEM_TEL
     if not eh_do_escritorio:
         raise NomeNaoRevelavel('Este CPF não está entre os segurados do escritório.', 404)
 
-    if origem == ORIGEM_MCP and consultas_mcp_hoje(law_firm_id, user_id) >= limite_diario_mcp():
-        raise NomeNaoRevelavel(
-            f'Limite diário de {limite_diario_mcp()} consultas de nome pelo Claude atingido para '
-            'este usuário. Amanhã libera de novo; pela tela de Benefícios (botão "Revelar nome") '
-            'continua disponível.', 429)
+    if (origem in ORIGENS_AUTOMATIZADAS
+            and consultas_usadas_hoje(law_firm_id, user_id) >= limite_diario_mcp()):
+        raise _limite_atingido()
 
     resultado = cpf_nome_client.consultar_nome(chave)
     reg = SeguradoNome(

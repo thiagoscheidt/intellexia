@@ -286,18 +286,25 @@ def get_users_mcp(law_firm_id: int) -> dict[int, dict]:
             info['connected'] = True
 
     today = now_sp().date()
+    # A API (/api/v1) grava na mesma tabela com kind='api'; conta à parte para
+    # "chamadas do MCP" continuar sendo só ferramenta e comando pronto.
+    eh_api = UserMcpCall.kind == 'api'
+    eh_hoje = UserMcpCall.call_date == today
     uso = (db.session.query(
                UserMcpCall.user_id,
-               db.func.min(UserMcpCall.call_date),
-               db.func.max(UserMcpCall.last_called_at),
-               db.func.sum(db.case((UserMcpCall.call_date == today, UserMcpCall.calls), else_=0)),
-               db.func.sum(UserMcpCall.calls))
+               db.func.min(db.case((eh_api, None), else_=UserMcpCall.call_date)),
+               db.func.max(db.case((eh_api, None), else_=UserMcpCall.last_called_at)),
+               db.func.sum(db.case((db.and_(eh_hoje, db.not_(eh_api)), UserMcpCall.calls), else_=0)),
+               db.func.sum(db.case((eh_api, 0), else_=UserMcpCall.calls)),
+               db.func.sum(db.case((db.and_(eh_hoje, eh_api), UserMcpCall.calls), else_=0)),
+               db.func.sum(db.case((eh_api, UserMcpCall.calls), else_=0)))
            .filter(UserMcpCall.law_firm_id == law_firm_id)
            .group_by(UserMcpCall.user_id).all())
-    for user_id, primeiro, ultimo, hoje, total in uso:
+    for user_id, primeiro, ultimo, hoje, total, api_hoje, api_total in uso:
         info = por_usuario.setdefault(user_id, {'connected': False, 'clients': set()})
         info.update(first_use=primeiro, last_use=ultimo,
-                    calls_today=int(hoje or 0), calls_total=int(total or 0))
+                    calls_today=int(hoje or 0), calls_total=int(total or 0),
+                    api_calls_today=int(api_hoje or 0), api_calls_total=int(api_total or 0))
 
     for info in por_usuario.values():
         info['clients'] = sorted(info['clients'])
@@ -305,6 +312,8 @@ def get_users_mcp(law_firm_id: int) -> dict[int, dict]:
         info.setdefault('last_use', None)
         info.setdefault('calls_today', 0)
         info.setdefault('calls_total', 0)
+        info.setdefault('api_calls_today', 0)
+        info.setdefault('api_calls_total', 0)
     return por_usuario
 
 

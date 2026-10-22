@@ -1,0 +1,76 @@
+{#
+  Janela rápida da Biblioteca de IA (botão "Biblioteca" da header e Ctrl+K):
+  achar e copiar um prompt sem sair da tela. Os itens vêm de
+  /prompts/rapido.json só quando a janela abre — a header não carrega nada.
+  Lógica em static/js/biblioteca_rapida.js; texto do usuário sempre por textContent.
+#}
+<div class="modal fade" id="bibliotecaRapida" tabindex="-1" aria-labelledby="bibliotecaRapidaTitulo" aria-hidden="true"
+     data-url-itens="{{ url_for('prompt_library.rapido_json') }}" data-url-uso="{{ url_for('prompt_library.uso_json', item_id=0) }}">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable br-dialogo">
+    <div class="modal-content">
+      <div class="modal-header py-2">
+        <h5 class="modal-title fs-6" id="bibliotecaRapidaTitulo"><i class="bi bi-chat-square-quote me-1"></i>Biblioteca de IA</h5>
+        <span class="ms-2 small text-body-secondary d-none d-md-inline"><kbd>Ctrl</kbd> + <kbd>K</kbd> abre de qualquer tela</span>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+
+      <div class="br-busca px-3 pt-3 pb-2" data-br-vista="lista">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="search" class="form-control" id="brBusca" placeholder="Buscar prompt, agente ou skill…"
+                 aria-label="Buscar na biblioteca" autocomplete="off">
+        </div>
+        <div class="small text-body-secondary mt-1 d-none d-md-block">↑ ↓ para escolher · <kbd>Enter</kbd> copia (ou preenche os campos)</div>
+      </div>
+
+      <div class="modal-body pt-1" id="brCorpo">
+        <div data-br-vista="lista">
+          <div id="brLista" role="listbox" aria-label="Itens da biblioteca"></div>
+          <div class="text-center text-body-secondary py-4" id="brEstado">Carregando…</div>
+        </div>
+        <div data-br-vista="preencher" hidden>
+          <button type="button" class="btn btn-sm btn-link px-0 mb-2" id="brVoltar"><i class="bi bi-arrow-left me-1"></i>Voltar à lista</button>
+          <div class="fw-semibold mb-2" id="brPreencherTitulo"></div>
+          <div class="row g-2 mb-3" id="brCampos"></div>
+          <div class="small text-body-secondary mb-1">Como vai ficar</div>
+          <pre class="br-pre" id="brPrevia"></pre>
+          <div class="d-flex gap-2 justify-content-end">
+            <button type="button" class="btn btn-outline-secondary" id="brClaude"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir no Claude</button>
+            <button type="button" class="btn btn-primary" id="brCopiar"><i class="bi bi-clipboard me-1"></i>Copiar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer py-2 justify-content-between">
+        <span class="small text-success" id="brAviso" role="status" aria-live="polite"></span>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('prompt_library.novo') }}"><i class="bi bi-plus-lg me-1"></i>Novo</a>
+          <a class="btn btn-sm btn-primary" href="{{ url_for('prompt_library.index') }}"><i class="bi bi-box-arrow-in-right me-1"></i>Abrir a biblioteca</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+  .br-dialogo { margin-top: 4.5rem; }
+  #bibliotecaRapida a.btn { color: var(--bs-btn-color); }
+  #bibliotecaRapida a.btn:hover { color: var(--bs-btn-hover-color); }
+  .br-secao { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: var(--bs-secondary-color);
+    font-weight: 700; margin: .75rem 0 .3rem; }
+  .br-item { display: flex; align-items: center; gap: .65rem; width: 100%; text-align: left; border: 1px solid transparent;
+    background: transparent; border-radius: 10px; padding: .5rem .6rem; color: var(--bs-body-color); }
+  .br-item:hover, .br-item.ativo { background: var(--bs-tertiary-bg); border-color: var(--bs-border-color); }
+  .br-item.ativo { box-shadow: inset 3px 0 0 #7c3aed; }
+  .br-icone { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; background: #ede9fe; color: #6d28d9; }
+  [data-bs-theme="dark"] .br-icone { background: rgba(139, 92, 246, .2); color: #c4b5fd; }
+  .br-texto { flex: 1; min-width: 0; }
+  .br-titulo { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .br-sub { font-size: .76rem; color: var(--bs-secondary-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .br-cmd { font-family: var(--bs-font-monospace); color: #6d28d9; }
+  [data-bs-theme="dark"] .br-cmd { color: #c4b5fd; }
+  .br-acao { font-size: .78rem; font-weight: 600; color: var(--bs-primary-text-emphasis); white-space: nowrap; }
+  .br-pre { font-family: var(--bs-font-monospace); font-size: .8rem; white-space: pre-wrap; overflow-wrap: anywhere;
+    background: var(--bs-tertiary-bg); border-radius: 8px; padding: .75rem; max-height: 16rem; overflow: auto; }
+</style>
+<script src="{{ static_versionado('js/biblioteca_rapida.js') }}" defer></script>

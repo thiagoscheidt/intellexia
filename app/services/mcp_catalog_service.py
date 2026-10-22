@@ -48,6 +48,8 @@ _ICONES = {
     "Monitoramento de Processos": "bi-broadcast",
     "Utilidades": "bi-tools",
     "Revisão de Petições": "bi-file-earmark-check",
+    "API do IntellexIA": "bi-braces",
+    "Biblioteca de IA": "bi-chat-square-quote",
 }
 ICONE_PADRAO = "bi-grid"
 
@@ -94,7 +96,14 @@ def _parse(texto):
             continue
         m = _LINHA_ITEM.match(linha)
         if m and atual is not None:
-            atual["itens"].append({"nome": m.group(1), "descricao": _texto_simples(m.group(2))})
+            # | `nome` | Nome curto | O que faz | Origem |  — o nome curto é o título
+            # dos cards da Biblioteca de IA; tabela antiga, sem a coluna, ainda lê.
+            celulas = [c.strip() for c in linha.strip().strip("|").split("|")]
+            if len(celulas) >= 4:
+                titulo, descricao = _texto_simples(celulas[1]), _texto_simples(celulas[2])
+            else:
+                titulo, descricao = "", _texto_simples(m.group(2))
+            atual["itens"].append({"nome": m.group(1), "titulo": titulo, "descricao": descricao})
     grupos = [g for g in grupos if g["itens"]]
     prioridade = {titulo: i for i, titulo in enumerate(_ORDEM_MODAL)}
     grupos.sort(key=lambda g: prioridade.get(g["titulo"], len(_ORDEM_MODAL)))  # sort estável

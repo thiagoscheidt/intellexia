@@ -50,6 +50,8 @@ _MANUALS = (
     ("diario-oficial", "Diário Oficial", "MANUAL_DIARIO_OFICIAL.md"),
     ("notificacoes", "Notificações por E-mail", "MANUAL_NOTIFICACOES.md"),
     ("conectar-ia", "Conectar sua IA (MCP)", "MANUAL_MCP.md"),
+    ("api", "API do IntellexIA", "MANUAL_API.md"),
+    ("biblioteca-ia", "Biblioteca de IA", "MANUAL_BIBLIOTECA_IA.md"),
 )
 
 # Marcador de callout -> classe CSS (string vazia = callout neutro).

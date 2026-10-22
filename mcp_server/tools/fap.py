@@ -1086,32 +1086,67 @@ def fap_filter_values_handler(law_firm_id: int) -> dict:
 # ── Revelar nome do segurado (consulta paga por CPF) ──────────────────────────
 
 
-def revelar_nome_segurado_handler(law_firm_id: int, user_id: int | None, cpf: str) -> dict:
-    """Mesma consulta do botão "Revelar nome" das telas, com limite diário por usuário."""
+def consultar_cpf_handler(law_firm_id: int, user_id: int | None, cpf: str) -> dict:
+    """Consulta completa de um CPF no fornecedor: tudo o que ele devolve, sem gravar.
+
+    Também é a rota POST /api/v1/segurados/consultar-cpf. Qualquer CPF válido,
+    dentro do mesmo limite diário do revelar nome (MCP + API somados). O uso é
+    contado pelo registro em ``user_mcp_calls``, gravado depois da chamada; por
+    isso ``consultas_restantes_hoje`` já desconta esta.
+    """
     from fastmcp.exceptions import ToolError
 
     from app.services import cpf_nome_client
     from app.services import segurado_nome_service as svc
 
     if not svc.disponivel():
-        raise ToolError(
-            "A consulta de nome por CPF não está configurada nesta instalação. "
-            "Ofereça o link consulta_cpf_receita do benefício (consulta gratuita da Receita)."
-        )
+        mensagem = "A consulta de CPF não está configurada nesta instalação."
+        raise ToolError(mensagem) from cpf_nome_client.CpfNomeIndisponivel(mensagem)
     try:
-        r = svc.revelar(law_firm_id, cpf, user_id, origem=svc.ORIGEM_MCP)
+        r = svc.consultar_completo(law_firm_id, cpf, user_id)
     except svc.NomeNaoRevelavel as e:
-        raise ToolError(e.mensagem)
+        raise ToolError(e.mensagem) from e
     except cpf_nome_client.CpfNomeIndisponivel as e:
-        raise ToolError(e.mensagem)
+        raise ToolError(e.mensagem) from e
+    r["consultas_restantes_hoje"] = max(0, svc.consultas_restantes_hoje(law_firm_id, user_id) - 1)
+    if not r["encontrado"]:
+        r["aviso"] = "O fornecedor não encontrou este CPF."
+    elif r["nascimento_diverge"]:
+        r["aviso"] = ("O nascimento da consulta não bate com o do FAP para este segurado: "
+                      "pode ser outra pessoa.")
+    return r
+
+
+def revelar_nome_segurado_handler(law_firm_id: int, user_id: int | None, cpf: str,
+                                  origem: str = "mcp") -> dict:
+    """Mesma consulta do botão "Revelar nome" das telas, com limite diário por usuário.
+
+    Também é a rota POST /api/v1/segurados/revelar-nome (``origem='api'``): MCP e
+    API dividem a cota.
+    """
+    from fastmcp.exceptions import ToolError
+
+    from app.services import cpf_nome_client
+    from app.services import segurado_nome_service as svc
+
+    # ``from e`` leva a causa junto: a API lê dela o status HTTP (404, 429, 503).
+    if not svc.disponivel():
+        mensagem = ("A consulta de nome por CPF não está configurada nesta instalação. "
+                    "Ofereça o link consulta_cpf_receita do benefício (consulta gratuita da Receita).")
+        raise ToolError(mensagem) from cpf_nome_client.CpfNomeIndisponivel(mensagem)
+    try:
+        r = svc.revelar(law_firm_id, cpf, user_id, origem=origem)
+    except svc.NomeNaoRevelavel as e:
+        raise ToolError(e.mensagem) from e
+    except cpf_nome_client.CpfNomeIndisponivel as e:
+        raise ToolError(e.mensagem) from e
 
     resultado = {
         "cpf": r["cpf"],
         "encontrado": r["status"] == "encontrado",
         "nome": r["nome"],
         "ja_estava_salvo": r["ja_revelado"],
-        "consultas_restantes_hoje": max(
-            0, svc.limite_diario_mcp() - svc.consultas_mcp_hoje(law_firm_id, user_id)),
+        "consultas_restantes_hoje": svc.consultas_restantes_hoje(law_firm_id, user_id),
     }
     if r["nascimento_diverge"]:
         resultado["aviso"] = (

@@ -1,0 +1,224 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Consulta de CPF - Ferramentas{% endblock %}
+
+{% block extra_css %}
+<style>
+  .ccpf-entrada { font-size: 1.35rem; letter-spacing: .04em; font-family: var(--bs-font-monospace); }
+  .ccpf-avatar { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem; font-weight: 700; background: #eef2ff; color: #4338ca; flex-shrink: 0; }
+  [data-bs-theme="dark"] .ccpf-avatar { background: rgba(99, 102, 241, .22); color: #c7d2fe; }
+  .ccpf-nome { font-size: 1.35rem; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+  .ccpf-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .75rem; }
+  .ccpf-campo { background: var(--bs-tertiary-bg); border-radius: 10px; padding: .6rem .8rem; }
+  .ccpf-campo dt { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--bs-secondary-color);
+    font-weight: 600; margin-bottom: .15rem; }
+  .ccpf-campo dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .ccpf-campo dd small { font-weight: 400; color: var(--bs-secondary-color); }
+  .ccpf-historico button { text-align: left; }
+  .ccpf-vazio { color: var(--bs-secondary-color); text-align: center; padding: 2.5rem 1rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Consulta de CPF', subtitle='Os dados do titular no serviço de consulta: nome, nascimento, sexo e nome da mãe', icon='bi bi-person-vcard') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small">
+  <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+  <li class="breadcrumb-item">Ferramentas</li>
+  <li class="breadcrumb-item active" aria-current="page">Consulta de CPF</li>
+</ol></nav>
+{% endcall %}
+
+<div class="row g-3">
+  <div class="col-lg-5 col-xl-4">
+    <div class="card">
+      <div class="card-body">
+        {% if not disponivel %}
+        <div class="alert alert-warning mb-3"><i class="bi bi-exclamation-triangle me-1"></i>A consulta de CPF não está configurada nesta instalação.</div>
+        {% endif %}
+        <form id="ccpfForm" autocomplete="off">
+          <label class="form-label fw-semibold" for="ccpfCpf">CPF</label>
+          <input class="form-control form-control-lg ccpf-entrada" id="ccpfCpf" inputmode="numeric" maxlength="14"
+                 placeholder="000.000.000-00" {% if not disponivel %}disabled{% endif %} required>
+          <div class="form-text">Com ou sem pontuação. Vale para qualquer CPF, da base do escritório ou não.</div>
+          <button type="submit" class="btn btn-primary btn-lg w-100 mt-3" id="ccpfBotao" {% if not disponivel %}disabled{% endif %}>
+            <i class="bi bi-search me-1"></i>Consultar
+          </button>
+        </form>
+        <div class="alert alert-info small mt-3 mb-0">
+          <i class="bi bi-coin me-1"></i><strong>Consulta paga:</strong> cada pedido é cobrado do escritório, mesmo repetindo o CPF.
+          Nada fica salvo no sistema — o resultado some ao sair da página.
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header py-2 fw-semibold small"><i class="bi bi-clock-history me-1"></i>Consultadas nesta página</div>
+      <div class="list-group list-group-flush ccpf-historico" id="ccpfHistorico">
+        <div class="list-group-item small text-body-secondary" id="ccpfHistoricoVazio">Nenhuma ainda.</div>
+      </div>
+    </div>
+
+    <p class="small text-body-secondary mt-3 mb-0">
+      Também no Claude, pelo conector (“consulte o CPF …”, ferramenta <code>consultar_cpf</code>) e na API
+      (<code>POST /api/v1/segurados/consultar-cpf</code>) — lá com limite diário por usuário.
+    </p>
+  </div>
+
+  <div class="col-lg-7 col-xl-8">
+    <div class="card h-100">
+      <div class="card-body" id="ccpfResultado" aria-live="polite">
+        <div class="ccpf-vazio"><i class="bi bi-person-vcard fs-1 d-block mb-2"></i>Informe um CPF e clique em Consultar. O resultado aparece aqui.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    // Tudo o que vem da consulta entra por textContent, nunca por innerHTML.
+    var URL = {{ url_for('tools.consulta_cpf_consultar')|tojson }};
+    var form = document.getElementById('ccpfForm');
+    var entrada = document.getElementById('ccpfCpf');
+    var botao = document.getElementById('ccpfBotao');
+    var saida = document.getElementById('ccpfResultado');
+    var historico = document.getElementById('ccpfHistorico');
+    var ROTULOS = { NOME: 'Nome', NASC: 'Nascimento', SEXO: 'Sexo', NOME_MAE: 'Nome da mãe', CPF: 'CPF' };
+    var PRINCIPAIS = ['NASC', 'SEXO', 'NOME_MAE'];
+
+    function el(tag, classe, texto) {
+      var x = document.createElement(tag);
+      if (classe) x.className = classe;
+      if (texto !== undefined && texto !== null) x.textContent = texto;
+      return x;
+    }
+    function mascara(v) {
+      var d = (v || '').replace(/\D/g, '').slice(0, 11);
+      return d.replace(/^(\d{3})(\d)/, '$1.$2').replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
+    }
+    entrada.addEventListener('input', function () { entrada.value = mascara(entrada.value); });
+
+    function rotulo(chave) {
+      if (ROTULOS[chave]) return ROTULOS[chave];
+      var s = chave.toLowerCase().replace(/_/g, ' ');
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    }
+    function idade(nasc) {
+      var m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(nasc || '');
+      if (!m) return '';
+      var n = new Date(+m[3], +m[2] - 1, +m[1]);
+      var hoje = new Date();
+      var a = hoje.getFullYear() - n.getFullYear();
+      if (hoje < new Date(hoje.getFullYear(), n.getMonth(), n.getDate())) a--;
+      return a >= 0 && a < 130 ? a + ' anos' : '';
+    }
+    function texto(r) {
+      var linhas = ['CPF: ' + r.cpf_formatado];
+      Object.keys(r.dados).forEach(function (k) { if (k !== 'CPF') linhas.push(rotulo(k) + ': ' + r.dados[k]); });
+      return linhas.join('\n');
+    }
+    function copiar(t, b) {
+      var ok = function () { var o = b.innerHTML; b.textContent = 'Copiado'; setTimeout(function () { b.innerHTML = o; }, 1500); };
+      if (navigator.clipboard && window.isSecureContext) { navigator.clipboard.writeText(t).then(ok); return; }
+      var area = el('textarea'); area.value = t; document.body.appendChild(area); area.select();
+      document.execCommand('copy'); area.remove(); ok();
+    }
+
+    function mostrarErro(msg) {
+      saida.innerHTML = '';
+      var a = el('div', 'alert alert-danger mb-0');
+      a.appendChild(el('i', 'bi bi-exclamation-triangle me-1'));
+      a.appendChild(document.createTextNode(msg));
+      saida.appendChild(a);
+    }
+
+    function mostrar(r) {
+      saida.innerHTML = '';
+      if (!r.encontrado) {
+        var v = el('div', 'ccpf-vazio');
+        v.appendChild(el('i', 'bi bi-person-x fs-1 d-block mb-2'));
+        v.appendChild(document.createTextNode('O serviço não encontrou o CPF ' + r.cpf_formatado + '.'));
+        saida.appendChild(v);
+        return;
+      }
+      var d = r.dados;
+      var topo = el('div', 'd-flex align-items-center gap-3 mb-3');
+      topo.appendChild(el('div', 'ccpf-avatar', (d.NOME || '?').trim().charAt(0)));
+      var id = el('div', 'flex-grow-1 min-w-0');
+      id.appendChild(el('div', 'ccpf-nome', d.NOME || '(sem nome)'));
+      var linha = el('div', 'd-flex flex-wrap align-items-center gap-2 mt-1');
+      linha.appendChild(el('span', 'font-monospace', r.cpf_formatado));
+      linha.appendChild(el('span', 'badge ' + (r.segurado_da_base ? 'text-bg-success' : 'text-bg-secondary'),
+        r.segurado_da_base ? 'Segurado da base do escritório' : 'Fora da base do escritório'));
+      id.appendChild(linha);
+      topo.appendChild(id);
+      var acoes = el('div', 'd-flex flex-column gap-1');
+      var b1 = el('button', 'btn btn-sm btn-outline-secondary text-nowrap'); b1.type = 'button';
+      b1.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copiar dados';
+      b1.addEventListener('click', function () { copiar(texto(r), b1); });
+      var b2 = el('button', 'btn btn-sm btn-outline-secondary text-nowrap'); b2.type = 'button';
+      b2.innerHTML = '<i class="bi bi-braces me-1"></i>Copiar JSON';
+      b2.addEventListener('click', function () { copiar(JSON.stringify(r.dados, null, 2), b2); });
+      acoes.appendChild(b1); acoes.appendChild(b2);
+      topo.appendChild(acoes);
+      saida.appendChild(topo);
+
+      if (r.nascimento_diverge) {
+        var w = el('div', 'alert alert-warning py-2');
+        w.appendChild(el('i', 'bi bi-exclamation-triangle me-1'));
+        w.appendChild(document.createTextNode('O nascimento do serviço não bate com o do FAP para este segurado: pode ser outra pessoa.'));
+        saida.appendChild(w);
+      }
+
+      var campos = el('dl', 'ccpf-campos mb-0');
+      var chaves = PRINCIPAIS.filter(function (k) { return k in d; })
+        .concat(Object.keys(d).filter(function (k) { return PRINCIPAIS.indexOf(k) < 0 && k !== 'NOME' && k !== 'CPF'; }));
+      chaves.forEach(function (k) {
+        var c = el('div', 'ccpf-campo');
+        c.appendChild(el('dt', null, rotulo(k)));
+        var dd = el('dd', null, d[k] === null || d[k] === '' ? '—' : (typeof d[k] === 'object' ? JSON.stringify(d[k]) : String(d[k])));
+        if (k === 'NASC' && idade(d[k])) { dd.appendChild(document.createTextNode(' ')); dd.appendChild(el('small', null, '(' + idade(d[k]) + ')')); }
+        c.appendChild(dd);
+        campos.appendChild(c);
+      });
+      saida.appendChild(campos);
+      saida.appendChild(el('div', 'small text-body-secondary mt-3', 'Fonte: ' + r.fonte + '. Nada desta consulta foi salvo no sistema.'));
+    }
+
+    function guardar(r) {
+      var vazio = document.getElementById('ccpfHistoricoVazio');
+      if (vazio) vazio.remove();
+      var b = el('button', 'list-group-item list-group-item-action small'); b.type = 'button';
+      b.appendChild(el('span', 'font-monospace me-2', r.cpf_formatado));
+      b.appendChild(document.createTextNode(r.encontrado ? (r.dados.NOME || '') : 'não encontrado'));
+      b.addEventListener('click', function () { mostrar(r); });
+      historico.insertBefore(b, historico.firstChild);
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var cpf = entrada.value.replace(/\D/g, '');
+      if (cpf.length !== 11) { mostrarErro('Digite os 11 dígitos do CPF.'); entrada.focus(); return; }
+      botao.disabled = true;
+      botao.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Consultando…';
+      fetch(URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cpf: cpf }) })
+        .then(function (resp) { return resp.json().then(function (j) { return { ok: resp.ok, j: j }; }); })
+        .then(function (x) {
+          if (!x.ok || !x.j.ok) { mostrarErro(x.j.message || 'Não foi possível consultar agora.'); return; }
+          mostrar(x.j);
+          guardar(x.j);
+        })
+        .catch(function () { mostrarErro('Falha de conexão. Tente de novo.'); })
+        .finally(function () {
+          botao.disabled = false;
+          botao.innerHTML = '<i class="bi bi-search me-1"></i>Consultar';
+        });
+    });
+  })();
+</script>
+{% endblock %}

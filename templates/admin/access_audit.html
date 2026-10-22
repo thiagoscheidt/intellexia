@@ -172,6 +172,11 @@
                                     {% else %}
                                     <span class="text-muted small">Nunca conectou</span>
                                     {% endif %}
+                                    {% if m and m.api_calls_total %}
+                                    <small class="d-block text-muted mt-1" title="Chamadas à API do IntellexIA com token pessoal">
+                                        <i class="bi bi-braces me-1"></i>API: {{ m.api_calls_today }} {{ 'chamada' if m.api_calls_today == 1 else 'chamadas' }} hoje
+                                    </small>
+                                    {% endif %}
                                 </td>
                                 <td>{{ u.last_activity.strftime('%d/%m/%Y %H:%M') if u.last_activity else '—' }}</td>
                                 <td>
@@ -188,7 +193,7 @@
                                             data-user-id="{{ u.id }}" data-user-name="{{ u.name }}">
                                             <i class="bi bi-window-stack me-1"></i>Telas
                                         </button>
-                                        {% if u.mcp and (u.mcp.connected or u.mcp.calls_total) %}
+                                        {% if u.mcp and (u.mcp.connected or u.mcp.calls_total or u.mcp.api_calls_total) %}
                                         <button class="btn btn-sm btn-outline-secondary btn-user-mcp"
                                             data-user-id="{{ u.id }}" data-user-name="{{ u.name }}"
                                             title="Funções do MCP que este usuário usou">
@@ -255,7 +260,7 @@
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-plug me-1"></i> Uso do MCP — <span id="mcpUserName"></span></h5>
+                <h5 class="modal-title"><i class="bi bi-plug me-1"></i> Uso do MCP e da API — <span id="mcpUserName"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
             </div>
             <div class="modal-body">
@@ -271,7 +276,7 @@
                     <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
                 </div>
                 <div id="mcpError" class="alert alert-danger d-none mb-0"></div>
-                <div id="mcpEmpty" class="text-muted d-none">Nenhuma chamada ao MCP no período.</div>
+                <div id="mcpEmpty" class="text-muted d-none">Nenhuma chamada ao MCP ou à API no período.</div>
                 <div class="table-responsive d-none" id="mcpTableWrap">
                     <table class="table table-sm align-middle mb-0">
                         <thead class="table-light">
@@ -402,7 +407,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
                 data.functions.forEach(function (f) {
                     var tipo = f.kind === 'prompt'
-                        ? '<span class="badge text-bg-light border ms-1">comando</span>' : '';
+                        ? '<span class="badge text-bg-light border ms-1">comando</span>'
+                        : (f.kind === 'api' ? '<span class="badge text-bg-light border ms-1">API</span>' : '');
                     var erroTitulo = f.last_error ? ' title="Último erro: ' + escapeHtml(f.last_error) + '"' : '';
                     var tr = document.createElement('tr');
                     tr.innerHTML =

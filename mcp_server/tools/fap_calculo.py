@@ -126,14 +126,7 @@ def listar_beneficios_calculo_fap_handler(
     limite = clamp_limit(limite, 50)
     deslocamento = clamp_offset(deslocamento)
 
-    # pagina() é por página inteira; a janela (deslocamento, limite) cobre no
-    # máximo duas páginas de tamanho `limite`.
-    primeira = deslocamento // limite + 1
-    resto = deslocamento % limite
-    itens, total = svc.pagina(q, primeira, limite, law_firm_id=law_firm_id)
-    if resto:
-        mais, _ = svc.pagina(q, primeira + 1, limite, law_firm_id=law_firm_id)
-        itens = (itens + mais)[resto:resto + limite]
+    itens, total = svc.janela(q, deslocamento, limite, law_firm_id=law_firm_id)
     return page_envelope(total, deslocamento, [_serializar(i) for i in itens])
 
 

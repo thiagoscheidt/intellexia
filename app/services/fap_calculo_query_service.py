@@ -232,6 +232,20 @@ def pagina(query, page, per_page=50, *, law_firm_id=None):
     return _montar(linhas, firm_id), total
 
 
+def janela(query, deslocamento, limite, *, law_firm_id=None):
+    """Itens de ``deslocamento`` a ``deslocamento + limite`` (dicts) e o total.
+
+    Para o MCP e a API, que paginam por deslocamento. Sem o teto de 200 da
+    ``pagina``: quem chama já limitou o tamanho — montar a janela com duas
+    ``pagina`` cortadas em 200 devolvia, com limite maior, linhas de outra
+    posição sem avisar.
+    """
+    firm_id = _firm_id(query, law_firm_id)
+    total = query.order_by(None).count()
+    linhas = _linhas(query, firm_id, max(int(deslocamento), 0), max(int(limite), 1))
+    return _montar(linhas, firm_id), total
+
+
 def todos(query, *, law_firm_id=None, lote=1000):
     """Todos os itens do filtro, na ordem da tela, em lotes — para a planilha.
 

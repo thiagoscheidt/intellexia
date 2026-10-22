@@ -1,0 +1,326 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+{% from "prompt_library/_ferramentas.html" import modal_ferramentas %}
+
+{% set novo_titulo = {'prompt': 'Novo prompt', 'agente': 'Novo agente', 'skill': 'Nova skill'}.get(dados.tipo, 'Novo item') %}
+{% block title %}{{ 'Editar' if item else novo_titulo }} · Biblioteca de IA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ static_versionado('css/prompt_library.css') }}">
+{% endblock %}
+
+{% block content %}
+{% call page_hero(title=('Editar “' ~ item.titulo ~ '”') if item else novo_titulo,
+                  subtitle='Biblioteca de IA', icon='bi bi-chat-square-quote') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small">
+  <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+  <li class="breadcrumb-item"><a href="{{ url_for('prompt_library.index') }}">Biblioteca de IA</a></li>
+  <li class="breadcrumb-item active" aria-current="page">{{ 'Editar' if item else 'Novo' }}</li>
+</ol></nav>
+{% endcall %}
+
+<div class="plb-page plb-editor">
+  <div>
+    {% if erro %}
+    <div class="alert {{ 'alert-warning' if achados else 'alert-danger' }}" role="alert">
+      <i class="bi {{ 'bi-shield-exclamation' if achados else 'bi-exclamation-triangle' }} me-1"></i>{{ erro }}
+    </div>
+    {% endif %}
+
+    <form method="post" id="plbEditor">
+      <div class="row g-3">
+        <div class="col-xl-8">
+          <div class="card"><div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="plbTitulo">Título</label>
+              <input class="form-control form-control-lg" id="plbTitulo" name="titulo" maxlength="200" required
+                     value="{{ dados.titulo }}" placeholder="Ex.: Resumo de sentença FAP">
+            </div>
+            {% set vis_atual = item.visibilidade if item else dados.visibilidade %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="plbComando">Comando no Claude</label>
+              <div class="input-group">
+                <span class="input-group-text font-monospace" id="plbPrefixo">/{{ prefixo_comando(vis_atual, dados.tipo) }}</span>
+                <input class="form-control font-monospace" id="plbComando" name="comando" maxlength="60"
+                       value="{{ dados.comando or '' }}" placeholder="resumo_sentenca" aria-describedby="plbPrefixo plbComandoAjuda"
+                       {% if item or dados.comando %}data-editado="1"{% endif %}>
+              </div>
+              <div class="form-text" id="plbComandoAjuda">
+                É como o item aparece na lista de comandos do Claude (conector IntellexIA). O começo diz de quem é (meu ou do escritório) e o tipo; o nome sai do título, e você pode trocar por um curto, fácil de lembrar. Só letras, números e “_”.
+              </div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="plbDescricao">Quando usar <span class="fw-normal text-body-secondary">(opcional)</span></label>
+              <input class="form-control" id="plbDescricao" name="descricao" maxlength="1000" value="{{ dados.descricao or '' }}"
+                     placeholder="Ex.: Para ler uma sentença e saber em 1 minuto se cabe recurso">
+            </div>
+            <div class="mb-2">
+              <div class="d-flex justify-content-between align-items-end gap-2 mb-2">
+                <label class="form-label fw-semibold mb-0" for="plbCorpo">Texto</label>
+                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#plbEscolherFerramenta">
+                  <i class="bi bi-plug me-1"></i>Inserir ferramenta do IntellexIA
+                </button>
+              </div>
+              <textarea class="form-control plb-corpo" id="plbCorpo" name="corpo" required
+                        placeholder="Cole aqui o texto. Para um campo a preencher na hora, escreva entre chaves duplas: {{ '{{empresa}}' }}, {{ '{{vigencia}}' }}.">{{ dados.corpo }}</textarea>
+              <div class="form-text">
+                Campos a preencher: escreva <code>{{ '{{nome_do_campo}}' }}</code>. Quem usar preenche na hora, na tela ou no Claude.
+              </div>
+              <div class="mt-2 small" id="plbCamposDetectados"></div>
+              <div class="mt-2 small" id="plbFerramentasCitadas"></div>
+            </div>
+          </div></div>
+
+          <div class="card mt-3"><div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div>
+                <div class="fw-semibold"><i class="bi bi-paperclip me-1"></i>Anexos <span class="fw-normal text-body-secondary">(opcional)</span></div>
+                <div class="small text-body-secondary">Textos de apoio que vão junto com o prompt: modelo de peça, checklist, exemplos. Na skill do Claude viram os arquivos da pasta.</div>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap flex-shrink-0 ms-2" id="plbAddAnexo"><i class="bi bi-plus-lg me-1"></i>Anexo</button>
+            </div>
+            <div id="plbAnexos">
+              {% for a in dados.anexos %}
+              <div class="plb-anexo border rounded p-2 mb-2">
+                <div class="d-flex gap-2 mb-2">
+                  <input class="form-control form-control-sm" name="anexo_nome" value="{{ a.nome }}" placeholder="nome do arquivo (ex.: checklist.md)" maxlength="200">
+                  <button type="button" class="btn btn-sm btn-outline-danger" data-remover-anexo aria-label="Remover anexo"><i class="bi bi-trash"></i></button>
+                </div>
+                <textarea class="form-control" name="anexo_conteudo" rows="5">{{ a.conteudo }}</textarea>
+              </div>
+              {% endfor %}
+            </div>
+            <template id="plbModeloAnexo">
+              <div class="plb-anexo border rounded p-2 mb-2">
+                <div class="d-flex gap-2 mb-2">
+                  <input class="form-control form-control-sm" name="anexo_nome" placeholder="nome do arquivo (ex.: checklist.md)" maxlength="200">
+                  <button type="button" class="btn btn-sm btn-outline-danger" data-remover-anexo aria-label="Remover anexo"><i class="bi bi-trash"></i></button>
+                </div>
+                <textarea class="form-control" name="anexo_conteudo" rows="5"></textarea>
+              </div>
+            </template>
+          </div></div>
+        </div>
+
+        <div class="col-xl-4">
+          <div class="card"><div class="card-body">
+            <div class="fw-semibold mb-2">Tipo</div>
+            <div class="row g-2 mb-3">
+              {% set explica = {'prompt': 'Texto para colar, com ou sem campos.',
+                                'agente': 'Roteiro com papel, passos e ferramentas do IntellexIA.',
+                                'skill': 'Instruções com anexos, no formato de skill do Claude.'} %}
+              {% for chave, rotulo in tipos.items() %}
+              <div class="col-4">
+                <label class="plb-tipo-opcao d-block h-100">
+                  <input class="visually-hidden" type="radio" name="tipo" value="{{ chave }}" {% if dados.tipo == chave %}checked{% endif %}>
+                  <div class="card text-center p-2">
+                    <i class="bi {{ tipo_icone[chave] }} fs-4"></i>
+                    <div class="fw-semibold small">{{ rotulo }}</div>
+                    <div class="text-body-secondary" style="font-size:.7rem">{{ explica[chave] }}</div>
+                  </div>
+                </label>
+              </div>
+              {% endfor %}
+            </div>
+
+            <label class="form-label fw-semibold" for="plbArea">Área</label>
+            <select class="form-select mb-3" id="plbArea" name="area">
+              {% for chave, (rotulo, icone, cor) in areas.items() %}
+              <option value="{{ chave }}" {% if dados.area == chave %}selected{% endif %}>{{ rotulo }}</option>
+              {% endfor %}
+            </select>
+
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="checkbox" value="1" id="plbUsa" name="usa_intellexia" {% if dados.usa_intellexia %}checked{% endif %}>
+              <label class="form-check-label" for="plbUsa">Usa os dados do IntellexIA no Claude
+                <span class="d-block small text-body-secondary">Marque quando o texto manda o Claude consultar benefícios, jurisprudência, processos etc. pelo conector.</span>
+              </label>
+            </div>
+
+            {% if pode_compartilhar %}
+            <div class="fw-semibold mb-1">Quem vê</div>
+            {% for chave, rotulo in visibilidades.items() %}
+            <div class="form-check">
+              <input class="form-check-input" type="radio" name="visibilidade" id="plbVis{{ chave }}" value="{{ chave }}" {% if dados.visibilidade == chave %}checked{% endif %}>
+              <label class="form-check-label" for="plbVis{{ chave }}">
+                {% if chave == 'pessoal' %}<i class="bi bi-lock me-1"></i>Só eu{% else %}<i class="bi bi-people me-1"></i>Todo o escritório{% endif %}
+              </label>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div class="small text-body-secondary"><i class="bi bi-people me-1"></i>Item do escritório. Só quem criou muda quem vê.</div>
+            {% endif %}
+
+            {% if achados %}
+            <div class="form-check mt-3 p-2 ps-4 border border-warning rounded">
+              <input class="form-check-input" type="checkbox" value="1" id="plbConfirmar" name="confirmar_dados">
+              <label class="form-check-label small" for="plbConfirmar">Conferi: pode ir para o escritório assim mesmo.</label>
+            </div>
+            {% endif %}
+
+            <hr>
+            <div class="d-grid gap-2">
+              <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar na biblioteca</button>
+              <a class="btn btn-outline-secondary" href="{{ url_for('prompt_library.index') }}">Cancelar</a>
+            </div>
+            {% if item %}
+            <div class="small text-body-secondary mt-3">Versão {{ item.versao }}</div>
+            {% endif %}
+          </div></div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{{ modal_ferramentas('plbEscolherFerramenta', 'inserir', ferramentas) }}
+<script type="application/json" id="plbMapaFerramentas">{{ mapa_ferramentas|tojson }}</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ static_versionado('js/prompt_library_ferramentas.js') }}"></script>
+<script>
+  (function () {
+    var corpo = document.getElementById('plbCorpo');
+    var saida = document.getElementById('plbCamposDetectados');
+    var padrao = /\{\{\s*([\p{L}_][\p{L}\p{N}_]{0,59})\s*\}\}/gu;
+    function detectar() {
+      var vistos = [];
+      var m;
+      padrao.lastIndex = 0;
+      while ((m = padrao.exec(corpo.value)) !== null) {
+        if (vistos.indexOf(m[1]) < 0) vistos.push(m[1]);
+      }
+      saida.innerHTML = '';
+      if (!vistos.length) return;
+      saida.appendChild(document.createTextNode('Campos encontrados: '));
+      vistos.forEach(function (nome) {
+        var s = document.createElement('span');
+        s.className = 'plb-selo plb-selo-campo me-1';
+        s.textContent = nome;
+        saida.appendChild(s);
+      });
+    }
+    corpo.addEventListener('input', detectar);
+    detectar();
+
+    // Comando: mesmo formato do slugify do servidor (sem acento, minúsculas, "_").
+    function slugify(t) {
+      return (t || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60).replace(/_+$/, '');
+    }
+    var titulo = document.getElementById('plbTitulo');
+    var comando = document.getElementById('plbComando');
+    var prefixo = document.getElementById('plbPrefixo');
+    titulo.addEventListener('input', function () {
+      if (!comando.dataset.editado) comando.value = slugify(titulo.value);
+    });
+    comando.addEventListener('input', function () { comando.dataset.editado = comando.value ? '1' : ''; });
+    comando.addEventListener('blur', function () {
+      comando.value = slugify(comando.value.replace(/^\/?(escritorio_|meu_)?(prompt_|agente_|skill_)?/i, ''));
+      if (!comando.value) { comando.dataset.editado = ''; comando.value = slugify(titulo.value); }
+    });
+    // Prefixo = de quem é + tipo; muda junto com "Quem vê" e com o tipo.
+    var visFixa = {{ (item.visibilidade if item and not pode_compartilhar else '')|tojson }};
+    function atualizarPrefixo() {
+      var vis = visFixa || (document.querySelector('input[name="visibilidade"]:checked') || {}).value;
+      var tipo = (document.querySelector('input[name="tipo"]:checked') || {}).value || 'prompt';
+      prefixo.textContent = '/' + (vis === 'escritorio' ? 'escritorio_' : 'meu_') + tipo + '_';
+    }
+    document.querySelectorAll('input[name="visibilidade"], input[name="tipo"]').forEach(function (r) {
+      r.addEventListener('change', atualizarPrefixo);
+    });
+    atualizarPrefixo();
+
+    // ── ferramentas do conector: inserir no cursor e mostrar as citadas ──
+    var mapa = JSON.parse(document.getElementById('plbMapaFerramentas').textContent || '{}');
+    var nomes = Object.keys(mapa);
+    var citadasBox = document.getElementById('plbFerramentasCitadas');
+    var usa = document.getElementById('plbUsa');
+    function citadas() {
+      var texto = corpo.value + ' ' + Array.prototype.map.call(
+        document.querySelectorAll('textarea[name="anexo_conteudo"]'), function (t) { return t.value; }).join(' ');
+      return nomes.map(function (n) {
+        var m = new RegExp('(^|[^\\w])' + n + '(?![\\w])').exec(texto);
+        return m ? [m.index, n] : null;
+      }).filter(Boolean).sort(function (a, b) { return a[0] - b[0]; }).map(function (x) { return x[1]; });
+    }
+    function mostrarCitadas() {
+      var lista = citadas();
+      citadasBox.innerHTML = '';
+      if (!lista.length) return;
+      citadasBox.appendChild(document.createTextNode('Ferramentas que o roteiro chama: '));
+      var modulos = [];
+      var semAcesso = [];
+      lista.forEach(function (n) {
+        var s = document.createElement('span');
+        s.className = 'plb-selo plb-selo-dado me-1';
+        s.textContent = n;
+        citadasBox.appendChild(s);
+        if (mapa[n].modulo && modulos.indexOf(mapa[n].modulo) < 0) modulos.push(mapa[n].modulo);
+        if (!mapa[n].acesso) semAcesso.push(n);
+      });
+      if (modulos.length) {
+        var aviso = document.createElement('div');
+        aviso.className = 'text-body-secondary mt-1';
+        aviso.textContent = 'Usa ' + (modulos.length > 1 ? 'os módulos ' : 'o módulo ') + modulos.join(', ') +
+          ': quem não tiver recebe “acesso negado” ao usar este item no Claude.';
+        citadasBox.appendChild(aviso);
+      }
+      if (semAcesso.length) {
+        var alerta = document.createElement('div');
+        alerta.className = 'text-danger mt-1';
+        alerta.textContent = 'Você não tem acesso a ' + semAcesso.join(', ') + ' — o roteiro vai falhar para você nesse passo.';
+        citadasBox.appendChild(alerta);
+      }
+      if (usa && !usa.checked) usa.checked = true;
+    }
+    corpo.addEventListener('input', mostrarCitadas);
+    document.getElementById('plbAnexos').addEventListener('input', mostrarCitadas);
+    mostrarCitadas();
+
+    var modalFerr = document.getElementById('plbEscolherFerramenta');
+    var cursor = null;
+    corpo.addEventListener('blur', function () { cursor = [corpo.selectionStart, corpo.selectionEnd]; });
+    var voltarAoTexto = false;
+    // O card do modal avisa qual ferramenta (static/js/prompt_library_ferramentas.js).
+    document.addEventListener('plb:inserir-ferramenta', function (e) {
+      var linha = 'Chame a ferramenta ' + e.detail + ' do IntellexIA para ';
+      var ini = cursor ? cursor[0] : corpo.value.length;
+      var fim = cursor ? cursor[1] : corpo.value.length;
+      var antes = corpo.value.slice(0, ini);
+      if (antes && !/\n$/.test(antes)) linha = '\n' + linha;
+      corpo.value = antes + linha + corpo.value.slice(fim);
+      var pos = antes.length + linha.length;
+      cursor = [pos, pos];
+      voltarAoTexto = true;
+      detectar();
+      mostrarCitadas();
+    });
+    // O Bootstrap devolve o foco ao botão quando o modal termina de fechar (num
+    // ouvinte registrado no clique, que roda depois deste — daí o setTimeout). Sem
+    // isto, quem continuasse digitando escreveria no botão, e o espaço o reabriria.
+    modalFerr.addEventListener('hidden.bs.modal', function () {
+      if (!voltarAoTexto) return;
+      voltarAoTexto = false;
+      setTimeout(function () {
+        corpo.focus();
+        corpo.setSelectionRange(cursor[0], cursor[1]);
+      }, 0);
+    });
+
+    var anexos = document.getElementById('plbAnexos');
+    document.getElementById('plbAddAnexo').addEventListener('click', function () {
+      var novo = document.getElementById('plbModeloAnexo').content.cloneNode(true);
+      anexos.appendChild(novo);
+      var campos = anexos.querySelectorAll('input[name="anexo_nome"]');
+      campos[campos.length - 1].focus();
+    });
+    anexos.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-remover-anexo]');
+      if (b) b.closest('.plb-anexo').remove();
+    });
+  })();
+</script>
+{% endblock %}

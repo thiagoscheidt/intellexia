@@ -1,0 +1,325 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/user_avatar.html" import user_avatar %}
+{% from "prompt_library/_ferramentas.html" import modal_ferramentas %}
+
+{% block title %}Biblioteca de IA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ static_versionado('css/prompt_library.css') }}">
+{% endblock %}
+
+{% macro card(i) %}
+{%- set abas = [] -%}
+{%- if i.sistema %}{% set _ = abas.append('sistema') %}{% else -%}
+  {%- if i.meu %}{% set _ = abas.append('meus') %}{% endif -%}
+  {%- if i.visibilidade == 'escritorio' %}{% set _ = abas.append('escritorio') %}{% endif -%}
+  {%- if i.favorito %}{% set _ = abas.append('favoritos') %}{% endif -%}
+{%- endif %}
+<article class="plb-card{% if i.recomendado %} rec{% endif %}" id="item-{{ i.id }}" data-id="{{ i.id }}"
+         data-abas="{{ abas|join(' ') }}" data-tipo="{{ i.tipo }}" data-area="{{ i.area }}"
+         data-rec="{{ 1 if i.recomendado else 0 }}" data-usa="{{ 1 if (i.usa_intellexia or i.ferramentas) else 0 }}"
+         data-usos="{{ i.usos }}" data-atualizado="{{ i.atualizado_em or '' }}" data-titulo="{{ i.titulo }}"
+         data-busca="{{ [i.titulo, i.descricao, i.corpo, i.autor, i.area_rotulo, i.tipo_rotulo, i.comando, i.ferramentas|join(' ')]|join(' ') }}">
+  <div class="plb-topo">
+    <div class="plb-icone plb-a-{{ i.area_cor }}"><i class="bi {{ i.tipo_icone }}"></i></div>
+    <div class="min-w-0">
+      <div class="plb-titulo">{{ i.titulo }}</div>
+      <div class="plb-tipo"><i class="bi {{ i.tipo_icone }}"></i> {{ i.tipo_rotulo }} · {{ i.area_rotulo }}</div>
+    </div>
+    {% if not i.sistema %}
+    <button type="button" class="plb-estrela{% if i.favorito %} on{% endif %}" data-favorito="{{ i.id }}"
+            title="{{ 'Tirar dos favoritos' if i.favorito else 'Favoritar' }}" aria-pressed="{{ 'true' if i.favorito else 'false' }}">
+      <i class="bi {{ 'bi-star-fill' if i.favorito else 'bi-star' }}"></i>
+    </button>
+    {% endif %}
+  </div>
+  <div class="plb-selos">
+    {% if i.recomendado %}<span class="plb-selo plb-selo-rec"><i class="bi bi-patch-check-fill"></i> Recomendado</span>{% endif %}
+    {% if i.campos %}<span class="plb-selo plb-selo-campo" title="{{ i.campos|join(', ') }}"><i class="bi bi-input-cursor-text"></i> {{ i.campos|length }} campo{{ 's' if i.campos|length > 1 }}</span>{% endif %}
+    {% if i.ferramentas %}<span class="plb-selo plb-selo-dado" title="Ferramentas do IntellexIA que o roteiro chama: {{ i.ferramentas|join(', ') }}"><i class="bi bi-plug"></i> {{ i.ferramentas|length }} ferramenta{{ 's' if i.ferramentas|length > 1 }}</span>
+    {% elif i.usa_intellexia %}<span class="plb-selo plb-selo-dado" title="Usa os dados do IntellexIA no Claude"><i class="bi bi-plug"></i> {{ i.area_rotulo if i.area != 'geral' else 'IntellexIA' }}</span>{% endif %}
+    {% if i.anexos %}<span class="plb-selo" title="{{ i.anexos|join(', ') }}"><i class="bi bi-paperclip"></i> {{ i.anexos|length }} anexo{{ 's' if i.anexos|length > 1 }}</span>{% endif %}
+    {% if not i.sistema and i.visibilidade == 'pessoal' %}<span class="plb-selo plb-selo-pessoal"><i class="bi bi-lock"></i> Só eu</span>{% endif %}
+    {% if not i.sistema and i.versao > 1 %}<span class="plb-selo">v{{ i.versao }}</span>{% endif %}
+  </div>
+  {% if i.descricao %}<div class="small text-body-secondary">{{ i.descricao }}</div>{% endif %}
+  <div class="plb-previa">{{ i.corpo|plb_previa }}</div>
+  <div class="plb-meta">
+    {% if i.sistema %}
+    <span class="plb-icone plb-a-proc" style="width:22px;height:22px;border-radius:50%;font-size:.7rem"><i class="bi bi-cpu"></i></span> IntellexIA
+    {% else %}
+    {{ user_avatar(i.autor_foto, i.autor, size=22, font_size=11, seed=i.autor_id) }} {{ i.autor }}
+    {% endif %}
+    <span>•</span> <span data-usos-rotulo>{{ i.usos }} uso{{ 's' if i.usos != 1 }}</span>
+    <span class="plb-cmd" title="Comando no Claude (conector IntellexIA)">/{{ i.comando }}</span>
+  </div>
+  <div class="plb-acoes">
+    {% if i.campos %}
+    <button type="button" class="btn btn-primary btn-sm" data-preencher="{{ i.id }}"><i class="bi bi-pencil-square me-1"></i>Preencher e copiar</button>
+    {% else %}
+    <button type="button" class="btn btn-primary btn-sm" data-copiar="{{ i.id }}"><i class="bi bi-clipboard me-1"></i>Copiar</button>
+    {% endif %}
+    {% if i.tipo == 'skill' and not i.sistema %}
+    <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('prompt_library.baixar_skill', item_id=i.id) }}"><i class="bi bi-download me-1"></i>Baixar skill</a>
+    {% else %}
+    <button type="button" class="btn btn-outline-secondary btn-sm" data-abrir-claude="{{ i.id }}"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir no Claude</button>
+    {% endif %}
+    <div class="dropdown">
+      <button class="btn btn-sm btn-link text-body-secondary px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Mais ações">
+        <i class="bi bi-three-dots fs-5"></i>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        {% if i.sistema %}
+        <li><button type="button" class="dropdown-item" data-acao="{{ url_for('prompt_library.duplicar_sistema', nome=i.comando) }}"><i class="bi bi-copy me-2"></i>Duplicar para editar</button></li>
+        {% else %}
+        {% if i.pode_editar %}<li><a class="dropdown-item" href="{{ url_for('prompt_library.editar', item_id=i.id) }}"><i class="bi bi-pencil me-2"></i>Editar</a></li>{% endif %}
+        <li><button type="button" class="dropdown-item" data-acao="{{ url_for('prompt_library.duplicar', item_id=i.id) }}"><i class="bi bi-copy me-2"></i>Duplicar</button></li>
+        <li><button type="button" class="dropdown-item" data-versoes="{{ i.id }}"><i class="bi bi-clock-history me-2"></i>Ver versões</button></li>
+        {% if i.meu %}
+          {% if i.visibilidade == 'pessoal' %}
+          <li><button type="button" class="dropdown-item" data-acao="{{ url_for('prompt_library.visibilidade', item_id=i.id) }}" data-visibilidade="escritorio"><i class="bi bi-people me-2"></i>Compartilhar com o escritório</button></li>
+          {% else %}
+          <li><button type="button" class="dropdown-item" data-acao="{{ url_for('prompt_library.visibilidade', item_id=i.id) }}" data-visibilidade="pessoal" data-confirmar="Tornar pessoal? Os colegas deixam de ver este item."><i class="bi bi-lock me-2"></i>Tornar pessoal</button></li>
+          {% endif %}
+        {% endif %}
+        {% if eh_admin and i.visibilidade == 'escritorio' %}
+        <li><button type="button" class="dropdown-item" data-acao="{{ url_for('prompt_library.recomendar', item_id=i.id) }}" data-valor="{{ 0 if i.recomendado else 1 }}"><i class="bi bi-patch-check me-2"></i>{{ 'Retirar recomendação' if i.recomendado else 'Recomendar ao escritório' }}</button></li>
+        {% endif %}
+        <li><a class="dropdown-item" href="{{ url_for('prompt_library.baixar_skill', item_id=i.id) }}"><i class="bi bi-file-zip me-2"></i>Baixar como skill do Claude</a></li>
+        {% if i.pode_editar %}
+        <li><hr class="dropdown-divider"></li>
+        <li><button type="button" class="dropdown-item text-danger" data-acao="{{ url_for('prompt_library.arquivar', item_id=i.id) }}" data-confirmar="Tirar “{{ i.titulo }}” da biblioteca?"><i class="bi bi-archive me-2"></i>Arquivar</button></li>
+        {% endif %}
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</article>
+{% endmacro %}
+
+{% block content %}
+<div class="plb-page pt-3">
+  <div>
+
+    <div class="plb-hero d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3 mb-3">
+      <div>
+        <h1><i class="bi bi-chat-square-quote me-2"></i>Biblioteca de IA</h1>
+        <div class="plb-subtitulo">Prompts, agentes e skills do escritório</div>
+        <p>O que funciona, num lugar só — seu e dos colegas. Tudo aparece como comando no Claude, pelo conector do IntellexIA.</p>
+      </div>
+      <div class="d-flex align-items-center gap-4 flex-wrap">
+        <div class="plb-stat"><b>{{ contagem.meus }}</b><span>meus</span></div>
+        <div class="plb-stat"><b>{{ contagem.escritorio }}</b><span>do escritório</span></div>
+        <div class="plb-stat"><b>{{ contagem.usos }}</b><span>usos</span></div>
+        <div class="d-flex flex-column gap-2">
+          <div class="dropdown">
+            <button class="btn btn-success fw-semibold w-100 dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-plus-lg me-1"></i>Novo
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end plb-novo">
+              {% set explica = {'prompt': 'Texto para colar, com ou sem campos', 'agente': 'Roteiro que consulta os dados do IntellexIA', 'skill': 'Instruções com anexos, no formato do Claude'} %}
+              {% for chave, rotulo in tipos.items() %}
+              <li><a class="dropdown-item" href="{{ url_for('prompt_library.novo', tipo=chave) }}">
+                <i class="bi {{ tipo_icone[chave] }} me-2"></i><span><strong>{{ rotulo }}</strong><small>{{ explica[chave] }}</small></span>
+              </a></li>
+              {% endfor %}
+              <li><hr class="dropdown-divider"></li>
+              <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#plbImportar">
+                <i class="bi bi-upload me-2"></i><span><strong>Importar skill do Claude</strong><small>O .zip ou o SKILL.md que você já tem</small></span>
+              </button></li>
+            </ul>
+          </div>
+          <button type="button" class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#plbFerramentas"><i class="bi bi-plug me-1"></i>Ferramentas do IntellexIA</button>
+          <button type="button" class="btn btn-outline-light btn-sm" data-bs-toggle="modal" data-bs-target="#plbAjuda"><i class="bi bi-question-circle me-1"></i>Como usar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+      <ul class="nav plb-abas" role="tablist">
+        <li class="nav-item"><button type="button" class="nav-link" data-aba="meus">Meus <small>{{ contagem.meus }}</small></button></li>
+        <li class="nav-item"><button type="button" class="nav-link" data-aba="escritorio">Do escritório <small>{{ contagem.escritorio }}</small></button></li>
+        <li class="nav-item"><button type="button" class="nav-link" data-aba="sistema">Do IntellexIA <small>{{ contagem.sistema }}</small></button></li>
+        <li class="nav-item"><button type="button" class="nav-link" data-aba="favoritos"><i class="bi bi-star-fill text-warning"></i> Favoritos <small data-favoritos-total>{{ contagem.favoritos }}</small></button></li>
+      </ul>
+      <div class="input-group plb-busca flex-grow-1" style="flex-basis:16rem">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input type="search" class="form-control" id="plbBusca" placeholder="Buscar por título, texto, área ou autor…" aria-label="Buscar na biblioteca">
+      </div>
+      <select class="form-select w-auto" id="plbOrdem" aria-label="Ordenar">
+        <option value="usos">Mais usados</option>
+        <option value="recentes">Mais recentes</option>
+        <option value="az">A–Z</option>
+      </select>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-lg-3 col-xl-2">
+        <div class="card plb-filtros"><div class="card-body p-3">
+          <h6>Tipo</h6>
+          <button type="button" class="plb-f active" data-filtro="tipo" data-valor=""><span><i class="bi bi-collection"></i>Todos</span><span class="n" data-conta-tipo=""></span></button>
+          {% for chave, rotulo in tipos.items() %}
+          <button type="button" class="plb-f" data-filtro="tipo" data-valor="{{ chave }}"><span><i class="bi {{ tipo_icone[chave] }}"></i>{{ rotulo }}</span><span class="n" data-conta-tipo="{{ chave }}"></span></button>
+          {% endfor %}
+          <h6>Área</h6>
+          {% for chave, (rotulo, icone, cor) in areas.items() %}
+          <button type="button" class="plb-f" data-filtro="area" data-valor="{{ chave }}"><span><i class="bi {{ icone }} plb-cor-{{ cor }}"></i>{{ rotulo }}</span><span class="n" data-conta-area="{{ chave }}"></span></button>
+          {% endfor %}
+          <h6>Selo</h6>
+          <button type="button" class="plb-f" data-filtro="rec" data-valor="1"><span><i class="bi bi-patch-check-fill text-primary"></i>Recomendados</span><span class="n" data-conta-rec></span></button>
+          <button type="button" class="plb-f" data-filtro="usa" data-valor="1"><span><i class="bi bi-plug"></i>Usa dados do IntellexIA</span><span class="n" data-conta-usa></span></button>
+        </div></div>
+      </div>
+
+      <div class="col-lg-9 col-xl-10">
+        <div class="plb-grid" id="plbGrade">
+          <div class="plb-secao" data-secao="rec" hidden><i class="bi bi-patch-check-fill text-primary"></i> Recomendados pelo escritório <small>— escolhidos pela coordenação</small></div>
+          <div class="plb-secao" data-secao="todos" hidden><i class="bi bi-people"></i> Todos do escritório</div>
+          {% for i in itens %}{{ card(i) }}{% endfor %}
+          <div class="plb-aviso-ferr" data-so-aba="sistema" hidden>
+            <span class="plb-icone plb-a-jur"><i class="bi bi-plug"></i></span>
+            <div class="flex-grow-1">
+              <div class="fw-semibold">Além destes comandos, o conector tem {{ ferramentas.total }} ferramentas</div>
+              <div class="small text-body-secondary">Tudo o que o Claude consegue consultar no IntellexIA. Use uma num agente para ele chamar sempre a mesma.</div>
+            </div>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#plbFerramentas"><i class="bi bi-grid-3x3-gap me-1"></i>Ver ferramentas</button>
+          </div>
+          {% for i in sistema %}{{ card(i) }}{% endfor %}
+          <div class="plb-vazio" id="plbVazio" hidden></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<form id="plbForm" method="post" class="d-none">
+  <input type="hidden" name="visibilidade">
+  <input type="hidden" name="valor">
+  <input type="hidden" name="voltar">
+</form>
+
+{{ modal_ferramentas('plbFerramentas', 'ver', ferramentas) }}
+
+<div class="modal fade" id="plbAjuda" tabindex="-1" aria-labelledby="plbAjudaTitulo" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content plb-ajuda">
+      <div class="modal-header">
+        <h5 class="modal-title" id="plbAjudaTitulo"><i class="bi bi-lightbulb me-1 text-warning"></i>Como usar a biblioteca</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="plb-passo"><span class="plb-passo-n">1</span>Guarde</div>
+              <p class="small mb-2">Em <strong>+ Novo</strong>, escolha prompt, agente ou skill, dê um título e cole o texto. O que muda a cada uso vira <strong>campo</strong> entre chaves duplas: <span class="plb-campo">{{ '{{empresa}}' }}</span>, <span class="plb-campo">{{ '{{vigencia}}' }}</span>.</p>
+              <p class="small mb-0">Escolha <strong>quem vê</strong>: só você, ou todo o escritório. Já tem uma skill no Claude? Em <strong>+ Novo</strong>, use <strong>Importar skill do Claude</strong>.</p>
+            </div>
+            <div class="col-md-4">
+              <div class="plb-passo"><span class="plb-passo-n">2</span>Use aqui</div>
+              <ul class="small ps-3 mb-0">
+                <li><strong>Copiar</strong> e colar no Claude.</li>
+                <li><strong>Preencher e copiar</strong>, quando tem campos: você preenche e copia o texto pronto.</li>
+                <li><strong>Abrir no Claude</strong> abre uma conversa nova e copia o texto (se não aparecer, cole com Ctrl+V).</li>
+                <li>A <i class="bi bi-star"></i> guarda nos <strong>Favoritos</strong>; o <strong>⋯</strong> tem editar, duplicar, versões e compartilhar.</li>
+              </ul>
+            </div>
+            <div class="col-md-4">
+              <div class="plb-passo"><span class="plb-passo-n">3</span>Use no Claude, sem copiar</div>
+              <p class="small mb-2">Com o conector do IntellexIA, cada item vira um <strong>comando</strong> — o nome está em cada card:</p>
+              <div class="small mb-2">
+                <span class="plb-cmd">/escritorio_prompt_…</span> <span class="plb-cmd">/escritorio_agente_…</span> <span class="plb-cmd">/meu_skill_…</span>
+                <div class="text-body-secondary mt-1">de quem é (meu ou do escritório) + o tipo + o nome.</div>
+              </div>
+              <p class="small mb-2">Quer saber o que o Claude consegue consultar? Botão <strong>Ferramentas do IntellexIA</strong>, no topo.</p>
+              <p class="small mb-0">No <strong>Claude Code</strong>, digite <code>/</code> e procure <code>intellexia</code>; no <strong>claude.ai</strong>, botão <strong>+</strong> da conversa → IntellexIA. Item novo não apareceu? Reconecte, ou peça: “usa o prompt de resumo de sentença da biblioteca”. E para guardar o que deu certo: “<strong>salva isso na minha biblioteca</strong>”.</p>
+            </div>
+          </div>
+          <div class="small text-body-secondary border-top mt-3 pt-2">
+            <i class="bi {{ tipo_icone['prompt'] }}"></i> <strong>Prompt</strong>: texto para colar ·
+            <i class="bi {{ tipo_icone['agente'] }}"></i> <strong>Agente</strong>: roteiro que consulta os dados do IntellexIA ·
+            <i class="bi {{ tipo_icone['skill'] }}"></i> <strong>Skill</strong>: instruções com anexos, no formato do Claude
+          </div>
+      </div>
+      <div class="modal-footer">
+        <a class="btn btn-outline-secondary" href="{{ url_for('docs.manuais') }}#biblioteca-ia"><i class="bi bi-book me-1"></i>Manual completo</a>
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendi</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="plbPreencher" tabindex="-1" aria-labelledby="plbPreencherTitulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="plbPreencherTitulo">Preencher</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-2 mb-3" id="plbCampos"></div>
+        <div class="small text-body-secondary mb-1">Como vai ficar</div>
+        <pre class="plb-pre" id="plbPrevia"></pre>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" id="plbPreencherClaude"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir no Claude</button>
+        <button type="button" class="btn btn-primary" id="plbPreencherCopiar"><i class="bi bi-clipboard me-1"></i>Copiar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="plbVersoes" tabindex="-1" aria-labelledby="plbVersoesTitulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="plbVersoesTitulo">Versões</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body" id="plbVersoesCorpo"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="plbImportar" tabindex="-1" aria-labelledby="plbImportarTitulo" aria-hidden="true">
+  <div class="modal-dialog">
+    <form class="modal-content" method="post" enctype="multipart/form-data" action="{{ url_for('prompt_library.importar') }}">
+      <div class="modal-header">
+        <h5 class="modal-title" id="plbImportarTitulo">Importar skill do Claude</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small">No Claude, abra <strong>Configurações → Capacidades → Skills</strong>, baixe a skill e envie aqui o <code>.zip</code> (ou só o <code>SKILL.md</code>). Ela entra em “Meus”, só para você, até você compartilhar.</p>
+        <input class="form-control" type="file" name="arquivo" accept=".zip,.md,.markdown,.txt" required>
+        <p class="small text-body-secondary mt-2 mb-0">Só arquivos de texto entram (instruções, modelos, checklists). Scripts ficam de fora: uma skill compartilhada rodaria na máquina dos colegas.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-upload me-1"></i>Importar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="plb-aviso" id="plbAviso" role="status" aria-live="polite"></div>
+
+<script type="application/json" id="plbTextos">{{ dict_textos|tojson }}</script>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  window.PLB = {
+    abaInicial: {{ aba|tojson }},
+    eh_admin: {{ 'true' if eh_admin else 'false' }},
+    urls: {
+      favorito: {{ url_for('prompt_library.favorito_json', item_id=0)|tojson }},
+      uso: {{ url_for('prompt_library.uso_json', item_id=0)|tojson }},
+      versoes: {{ url_for('prompt_library.versoes_json', item_id=0)|tojson }},
+      restaurar: {{ url_for('prompt_library.restaurar', item_id=0, versao=999999)|tojson }}
+    }
+  };
+</script>
+<script src="{{ static_versionado('js/prompt_library.js') }}"></script>
+<script src="{{ static_versionado('js/prompt_library_ferramentas.js') }}"></script>
+{% endblock %}

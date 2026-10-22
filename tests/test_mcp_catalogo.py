@@ -59,6 +59,10 @@ def main():
         erros.append(f"comando sem documentação no manual: {falta}")
     for sobra in sorted(doc_cmd - comandos):
         erros.append(f"comando no manual que não existe no servidor: {sobra}")
+    for g in cat["grupos"]:
+        for i in g["itens"]:
+            if not i.get("titulo"):
+                erros.append(f"ferramenta sem a coluna Nome no manual (título dos cards da Biblioteca de IA): {i['nome']}")
     if cat["total_anunciado"] != len(ferramentas):
         erros.append(f"manual anuncia {cat['total_anunciado']} ferramentas, "
                      f"o servidor tem {len(ferramentas)}")

@@ -115,6 +115,19 @@ def test_conexao(firm, users):
     check('topo: 1 conectado, 1 usou hoje', stats['mcp_connected'] == 1 and stats['mcp_active_today'] == 1, str(stats))
 
 
+def test_api(firm, users):
+    print('\n2b. Uso da API separado do MCP')
+    c = users[0]
+    svc.record_mcp_call(c.id, firm.id, 'api', 'GET /fap/beneficios', True, 30)
+    svc.record_mcp_call(c.id, firm.id, 'api', 'GET /fap/beneficios', True, 50)
+    info = svc.get_users_mcp(firm.id)
+    check('API não soma nas chamadas do MCP', info[c.id]['calls_today'] == 4, str(info[c.id]))
+    check('API contada à parte', info[c.id]['api_calls_today'] == 2, str(info[c.id]))
+    funcoes = {f['name']: f for f in svc.get_user_mcp_functions(firm.id, c.id)}
+    check('detalhe traz a rota da API com kind=api',
+          funcoes.get('GET /fap/beneficios', {}).get('kind') == 'api', str(funcoes.keys()))
+
+
 def test_middleware(firm, users):
     print('\n3. Middleware do servidor MCP')
     from mcp_server import usage_log
@@ -179,6 +192,8 @@ def test_tela(firm, users):
     j = c.get(f'/admin/access-audit/users/{admin.id}/mcp?days=30').get_json()
     nomes = {f['name']: f for f in j['functions']}
     check('detalhe por JSON', nomes['resumo_fap']['calls'] == 3 and nomes['dou_do_dia']['kind'] == 'prompt', str(j)[:300])
+    check('coluna mostra o uso da API de hoje', 'API: 2 chamadas hoje' in html)
+    check('modal identifica chamada da API', "f.kind === 'api'" in html)
     outro = LawFirm.query.filter(LawFirm.id != firm.id).first()
     if outro:
         alheio = User.query.filter_by(law_firm_id=outro.id).first()
@@ -193,6 +208,7 @@ def main() -> int:
         try:
             test_registro(firm, users)
             test_conexao(firm, users)
+            test_api(firm, users)
             test_middleware(firm, users)
             test_tela(firm, users)
         finally:

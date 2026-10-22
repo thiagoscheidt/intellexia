@@ -27,6 +27,9 @@ from app.blueprints.process_knowledge import process_knowledge_bp
 from app.blueprints.docs import docs_bp
 from app.blueprints.communications import communications_bp
 from app.blueprints.dou import dou_bp
+from app.blueprints.public_api import public_api_bp
+from app.blueprints.minha_api import minha_api_bp
+from app.blueprints.prompt_library import prompt_library_bp
 
 __all__ = [
     'auth_bp',
@@ -55,4 +58,7 @@ __all__ = [
     'docs_bp',
     'communications_bp',
     'dou_bp',
+    'public_api_bp',
+    'minha_api_bp',
+    'prompt_library_bp',
 ]

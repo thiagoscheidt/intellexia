@@ -1,0 +1,78 @@
+{#
+  Modal das ferramentas do conector em cards — o mesmo componente em dois usos:
+  - modo 'ver' (tela da biblioteca): conhecer o que existe; cada card tem "Usar num agente";
+  - modo 'inserir' (editor): clicar no card insere a linha no texto (evento
+    `plb:inserir-ferramenta`, tratado pelo editor).
+  Dados de `prompt_library_service.cards_ferramentas`; busca e filtro em
+  static/js/prompt_library_ferramentas.js.
+#}
+{% macro modal_ferramentas(id, modo, dados) %}
+<div class="modal fade plb-modal-ferramentas" id="{{ id }}" tabindex="-1" aria-labelledby="{{ id }}Titulo" aria-hidden="true"
+     data-modo="{{ modo }}">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="{{ id }}Titulo">
+          <i class="bi bi-plug me-1"></i>{{ 'Inserir ferramenta do IntellexIA' if modo == 'inserir' else 'Ferramentas do IntellexIA' }}
+          <small class="text-body-secondary fw-normal ms-1">{{ dados.total }} ferramentas</small>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="plb-fm-topo">
+        <p class="small text-body-secondary mb-2">
+          {% if modo == 'inserir' %}
+          Clique numa ferramenta: entra no texto, onde está o cursor, “Chame a ferramenta <code>nome</code> do IntellexIA para …” — complete com o que você quer.
+          {% else %}
+          O que o Claude consegue consultar no IntellexIA pelo conector. Ele escolhe sozinho, mas um agente que diz qual chamar dá o mesmo resultado toda vez.
+          {% endif %}
+        </p>
+        <div class="input-group mb-2">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="search" class="form-control" data-fm-busca placeholder="Buscar: benefícios, jurisprudência, CNPJ, diário oficial…" aria-label="Buscar ferramenta">
+        </div>
+        <div class="plb-fm-chips" role="group" aria-label="Filtrar por área">
+          <button type="button" class="plb-fm-chip active" data-fm-area="">Todas <span>{{ dados.total }}</span></button>
+          {% for chave, rotulo, n in dados.filtros %}
+          <button type="button" class="plb-fm-chip" data-fm-area="{{ chave }}">{{ rotulo }} <span>{{ n }}</span></button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="modal-body plb-fm-corpo">
+        <div class="plb-fm-grade">
+          {% for f in dados.itens %}
+          {% set tag = 'button' if (modo == 'inserir' and f.acesso) else 'div' %}
+          <{{ tag }} {% if tag == 'button' %}type="button" data-fm-inserir="{{ f.nome }}"{% endif %}
+               class="plb-fc{% if not f.acesso %} off{% endif %}" data-area="{{ f.area }}"
+               data-busca="{{ f.titulo }} {{ f.nome }} {{ f.descricao }} {{ f.grupo }}"
+               {% if not f.acesso %}title="{{ f.motivo }}"{% endif %}>
+            <span class="plb-fc-topo">
+              <span class="plb-icone plb-a-{{ f.cor }}"><i class="bi {{ f.icone }}"></i></span>
+              <span class="plb-fc-area plb-cor-{{ f.cor }}">{{ f.grupo }}</span>
+            </span>
+            <span class="plb-fc-tit">{{ f.titulo }}</span>
+            <code class="plb-fc-nome">{{ f.nome }}</code>
+            <span class="plb-fc-desc" title="{{ f.descricao }}">{{ f.descricao }}</span>
+            <span class="plb-fc-pe">
+              {% if not f.acesso %}
+              <i class="bi bi-lock"></i> sem acesso{% if f.so_admin %} · só administradores{% elif f.modulo_rotulo %} · módulo {{ f.modulo_rotulo }}{% endif %}
+              {% elif modo == 'inserir' %}
+              <span class="plb-fc-acao"><i class="bi bi-plus-circle"></i> Inserir</span>
+              {% else %}
+              <a class="plb-fc-acao" href="{{ url_for('prompt_library.novo', ferramenta=f.nome) }}"><i class="bi bi-robot"></i> Usar num agente</a>
+              {% endif %}
+              {% if f.so_admin and f.acesso %}<span class="plb-selo ms-auto">só admin</span>{% endif %}
+            </span>
+          </{{ tag }}>
+          {% endfor %}
+        </div>
+        <div class="text-center text-body-secondary py-4" data-fm-vazio hidden>Nenhuma ferramenta com essa busca.</div>
+      </div>
+      {% if dados.bloqueadas %}
+      <div class="modal-footer justify-content-start small text-body-secondary">
+        <i class="bi bi-lock"></i> Em cinza, no fim: {{ dados.bloqueadas }} ferramenta{{ 's' if dados.bloqueadas > 1 }} de módulos que seu usuário não tem. Peça acesso a um administrador.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endmacro %}
