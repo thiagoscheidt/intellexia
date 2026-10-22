@@ -44,6 +44,8 @@ class JudicialDocumentService:
         self.max_documents_per_execution = max_documents_per_execution
 
     def _build_query(self, document_id: int | None = None, include_errors: bool = False):
+        # scripts/process_judicial_documents.py repete esta condição em SQL puro
+        # (SQL_HA_PENDENTES) para não carregar a aplicação com a fila vazia.
         statuses = ['pending']
         if include_errors:
             statuses.append('error')

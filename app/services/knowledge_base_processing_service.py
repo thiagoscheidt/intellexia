@@ -36,7 +36,11 @@ class KnowledgeBaseProcessingService:
         self.judicial_document_service = JudicialDocumentService()
 
     def _build_query(self, file_id: int | None = None, include_errors: bool = False):
-        """Monta a query base para itens pendentes (ou um item específico)."""
+        """Monta a query base para itens pendentes (ou um item específico).
+
+        `scripts/process_knowledge_base.py` repete esta condição em SQL puro
+        (`SQL_HA_PENDENTES`) para não carregar a aplicação com a fila vazia.
+        """
         statuses = ["pending"]
         if include_errors:
             statuses.append("error")

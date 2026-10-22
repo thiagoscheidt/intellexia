@@ -18,11 +18,24 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from main import app
-from app.services.knowledge_base_processing_service import KnowledgeBaseProcessingService
+from app.utils.database_config import existe_na_fila, load_env_file
 
 
 DEFAULT_BATCH_SIZE = 5
+
+# Mesma condição de KnowledgeBaseProcessingService._build_query, em SQL puro,
+# para saber se há o que fazer antes de carregar a aplicação (ver
+# app/utils/database_config.py). Mudou lá, muda aqui.
+SQL_HA_PENDENTES = """
+    SELECT 1 FROM knowledge_base kb
+    WHERE kb.is_active = :ativo
+      AND kb.processing_status IN :statuses
+      AND kb.id NOT IN (
+          SELECT jd.knowledge_base_id FROM judicial_documents jd
+          WHERE jd.knowledge_base_id IS NOT NULL
+      )
+    LIMIT 1
+"""
 
 
 def parse_args():
@@ -44,6 +57,18 @@ def parse_args():
 
 if __name__ == "__main__":
     args = parse_args()
+
+    if not args.file_id:
+        load_env_file(os.path.join(PROJECT_ROOT, ".env"))
+        statuses = ["pending", "error"] if args.include_errors else ["pending"]
+        if not existe_na_fila(SQL_HA_PENDENTES, ativo=True, statuses=statuses):
+            print("Nenhum arquivo pendente encontrado.")
+            print("Total processado: 0")
+            sys.exit(0)
+
+    from main import app
+    from app.services.knowledge_base_processing_service import KnowledgeBaseProcessingService
+
     service = KnowledgeBaseProcessingService(
         flask_app=app,
         max_files_per_execution=max(1, args.batch_size),
