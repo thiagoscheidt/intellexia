@@ -11,6 +11,7 @@ execução tenta de novo. Nada de CPF em log.
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections import Counter, deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
@@ -239,6 +240,15 @@ _LISTAGENS_ADIANTADAS = 16
 _LISTAGENS_EM_PARALELO = 4
 
 
+def _motivo_do_banco(e: Exception) -> str:
+    """Tipo, código e coluna do erro do banco — sem o valor, que pode ser CPF ou nascimento."""
+    orig = getattr(e, 'orig', None)
+    args = getattr(orig, 'args', ()) or ()
+    codigo = f' {args[0]}' if args and isinstance(args[0], int) else ''
+    coluna = re.search(r"column '([^']+)'", str(orig or ''))
+    return f"{type(e).__name__}{codigo}" + (f' (coluna {coluna.group(1)})' if coluna else '')
+
+
 def _raizes_do_escritorio(law_firm_id: int) -> list[str]:
     from app.models import FapCompany
     from app.utils.cnpj import TAMANHO_CNPJ_RAIZ, completar_zeros
@@ -370,7 +380,7 @@ def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            _erro(ano, cnpj, f'ao gravar: {type(e).__name__}')
+            _erro(ano, cnpj, f'ao gravar: {_motivo_do_banco(e)}')
             return True
         conta['itens_novos'] += cont['itens_novos']
         conta['itens_atualizados'] += cont['itens_atualizados']

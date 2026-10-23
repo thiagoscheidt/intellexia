@@ -2889,7 +2889,7 @@ class FapCalculoEstabelecimento(db.Model):
     tem_itens = db.Column(db.Boolean, nullable=False, default=False)
     # Lista {id, tipo, data} do /calculos, mais recente primeiro.
     historico_json = db.Column(db.Text)
-    protocolo = db.Column(db.String(40))
+    protocolo = db.Column(db.String(80))  # contestação ou "Processo Judicial nº <CNJ>" (46)
 
     situacao = db.Column(db.String(20))
     erro = db.Column(db.String(255))

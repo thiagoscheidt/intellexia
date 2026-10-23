@@ -335,6 +335,18 @@ def test_erro_de_estabelecimento_vai_ao_log(fid):
           str(logs))
 
 
+def test_motivo_do_banco_sem_valor(fid):
+    print('erro ao gravar: código e coluna, nunca o valor')
+    import pymysql
+    from sqlalchemy.exc import DataError
+    e = DataError('INSERT ...', {}, pymysql.err.DataError(
+        1292, "Incorrect date value: '1985-02-30' for column 'data_nascimento' at row 1"))
+    m = sync._motivo_do_banco(e)
+    check('código e coluna', m == 'DataError 1292 (coluna data_nascimento)', m)
+    check('sem o valor', '1985' not in m, m)
+    check('exceção sem orig', sync._motivo_do_banco(ValueError('x')) == 'ValueError')
+
+
 def main():
     with app.app_context():
         firm = LawFirm.query.filter_by(cnpj=TEST_CNPJ).first()
@@ -352,7 +364,8 @@ def main():
                       test_tem_itens_false_nao_chama_beneficios,
                       test_sincronizar_duas_raizes_uma_sem_acesso, test_somente_novos_pula_gravados,
                       test_expirada_interrompe, test_falha_na_lista_de_anos_e_incompleta,
-                      test_empresas_pequenas_em_paralelo, test_erro_de_estabelecimento_vai_ao_log):
+                      test_empresas_pequenas_em_paralelo, test_erro_de_estabelecimento_vai_ao_log,
+                      test_motivo_do_banco_sem_valor):
                 t(fid)
         finally:
             db.session.rollback()
