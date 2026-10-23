@@ -94,6 +94,8 @@ def main(argv=None, svc=None) -> int:
         _log('Resumo:')
         for k in ('estabelecimentos', 'com_itens', 'itens_novos', 'itens_atualizados', 'sem_acesso', 'erros'):
             _log(f'  {k}: {r[k]}')
+        for motivo, n in (r.get('motivos_erro') or {}).items():
+            _log(f'    {n}× {motivo}')
         _log(f'  tempo: {time.time() - t0:.0f}s')
         if r['expirada']:
             _log('ERRO: sessão FAP expirada no meio. Faça login, atualize o FAP_AUTH_JSON e rode de novo '

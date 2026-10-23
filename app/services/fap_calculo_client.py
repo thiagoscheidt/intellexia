@@ -45,7 +45,10 @@ def _consultar(svc, caminho: str) -> FapWebResult:
                                 message='Sem acesso (HTTP 403): sessão parcial ou sem procuração.')
         return FapWebResult(ok=False, status_code=e.code, message=f'Erro HTTP {e.code} no portal FAP.')
     except Exception as e:  # rede, timeout
-        return FapWebResult(ok=False, message=f'Falha de rede no portal FAP: {type(e).__name__}')
+        # URLError embrulha a causa (timeout, conexão recusada); sem ela o log não diz qual foi.
+        causa = getattr(e, 'reason', None)
+        detalhe = f' ({causa})' if causa else ''
+        return FapWebResult(ok=False, message=f'Falha de rede no portal FAP: {type(e).__name__}{detalhe}')
     try:
         return FapWebResult(ok=True, data=json.loads(body.decode('utf-8')))
     except ValueError:

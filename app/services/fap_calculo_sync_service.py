@@ -12,7 +12,8 @@ from __future__ import annotations
 
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import Counter, deque
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 
@@ -229,6 +230,13 @@ def completar_central(law_firm_id: int, ano: int | None = None) -> dict:
 
 
 _LOG_A_CADA = 200
+# Erros de estabelecimento logados um a um; daí em diante, só a contagem por motivo.
+_ERROS_NO_LOG = 50
+# Listagem de estabelecimentos adiantada, num pool à parte, para a fila do pool
+# principal nunca esvaziar: a maioria das raízes tem 1 a 3 estabelecimentos, e
+# esperar cada empresa terminar antes de listar a próxima deixava os workers parados.
+_LISTAGENS_ADIANTADAS = 16
+_LISTAGENS_EM_PARALELO = 4
 
 
 def _raizes_do_escritorio(law_firm_id: int) -> list[str]:
@@ -246,7 +254,9 @@ def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
     """Consulta do FAP de todas as vigências, empresas e estabelecimentos.
 
     Rede em ``ThreadPoolExecutor``; banco só no fluxo principal, um commit por
-    estabelecimento. Nunca apaga por ausência. Sessão expirada interrompe tudo
+    estabelecimento. A fila é contínua entre empresas (e vigências): o pool
+    recebe estabelecimentos de várias raízes ao mesmo tempo, até ``2 × workers``
+    na fila, enquanto as próximas listagens já correm num pool menor. Nunca apaga por ausência. Sessão expirada interrompe tudo
     (``expirada=True``); o que já foi gravado fica.
     """
     from app.utils.cnpj import TAMANHO_CNPJ, TAMANHO_CNPJ_RAIZ, completar_zeros
@@ -258,8 +268,10 @@ def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
     def _fim():
         conta['incompleta'] = bool(conta['erros'] or conta['anos_falhou']
                                    or conta.pop('listagem_falhou', False))
+        conta['motivos_erro'] = dict(motivos.most_common())
         return conta
 
+    motivos: Counter = Counter()
     if anos is None:
         r = client.listar_anos(svc)
         if not r.ok:
@@ -280,79 +292,128 @@ def sincronizar(law_firm_id: int, svc, anos: list[int] | None = None,
         raizes = list(filtro_cnpjs) if filtro_cnpjs else _raizes_do_escritorio(law_firm_id)
     raizes = [completar_zeros(r, TAMANHO_CNPJ_RAIZ) for r in raizes]
 
+    trabalho = ((ano, posicao, raiz) for ano in anos for posicao, raiz in enumerate(raizes, 1))
+    listagens: deque = deque()  # (ano, posição, raiz, futuro), na ordem
+    pendentes: dict = {}  # futuro → (ano, cnpj)
+    alvo = 2 * max(1, workers)
+    ano_logado = [None]
     t0 = time.time()
-    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        for ano in anos:
+
+    def _erro(ano, cnpj, motivo):
+        conta['erros'] += 1
+        motivos[motivo] += 1
+        n = sum(motivos.values())
+        if n <= _ERROS_NO_LOG:
+            log(f'  ERRO {ano} {cnpj}: {motivo}')
+        elif n == _ERROS_NO_LOG + 1:
+            log(f'  (mais de {_ERROS_NO_LOG} erros: os próximos só entram na contagem por motivo)')
+
+    def _abrir_empresa(ano, posicao, raiz, resp) -> bool:
+        """Lista → estabelecimentos na fila do pool. ``False`` = sessão expirada."""
+        if ano != ano_logado[0]:
+            ano_logado[0] = ano
             log(f'Vigência {ano}: {len(raizes)} empresa(s)')
-            for posicao, raiz in enumerate(raizes, 1):
-                resp = client.listar_estabelecimentos(svc, ano, raiz)
-                if not resp.ok:
-                    if resp.expired:
-                        conta['expirada'] = True
-                        return _fim()
-                    if resp.status_code == 403:
-                        conta['sem_acesso'] += 1
-                    elif resp.status_code != 404:
-                        conta['erros'] += 1
-                        conta['listagem_falhou'] = True
-                    log(f'  ERRO ao listar estabelecimentos {raiz} {ano}: '
-                        f'{resp.status_code} {resp.message}')
-                    continue
-                estabs = list(resp.data or [])
-                if filtro_cnpjs.get(raiz):
-                    estabs = [c for c in estabs if c in filtro_cnpjs[raiz]]
-                if not estabs:
-                    continue
+        if not resp.ok:
+            if resp.expired:
+                conta['expirada'] = True
+                return False
+            if resp.status_code == 403:
+                conta['sem_acesso'] += 1
+            elif resp.status_code != 404:
+                conta['erros'] += 1
+                conta['listagem_falhou'] = True
+            log(f'  ERRO ao listar estabelecimentos {raiz} {ano}: '
+                f'{resp.status_code} {resp.message}')
+            return True
+        estabs = list(resp.data or [])
+        if filtro_cnpjs.get(raiz):
+            estabs = [c for c in estabs if c in filtro_cnpjs[raiz]]
+        if not estabs:
+            return True
 
-                gravados = {
-                    c: (cal, sit) for c, cal, sit in db.session.query(
-                        FapCalculoEstabelecimento.cnpj, FapCalculoEstabelecimento.calculo_atual_id,
-                        FapCalculoEstabelecimento.situacao).filter(
-                        FapCalculoEstabelecimento.law_firm_id == law_firm_id,
-                        FapCalculoEstabelecimento.ano_vigencia == ano,
-                        FapCalculoEstabelecimento.cnpj.in_(estabs))
-                }
-                total_raiz = len(estabs)
-                if somente_novos:
-                    estabs = [c for c in estabs
-                              if gravados.get(c, (None, None))[1] not in SITUACOES_QUE_GRAVAM_ITENS]
-                log(f'  {ano} · empresa {posicao}/{len(raizes)} {raiz}: '
-                    f'{len(estabs)} de {total_raiz} estabelecimento(s) a buscar')
+        gravados = {
+            c: (cal, sit) for c, cal, sit in db.session.query(
+                FapCalculoEstabelecimento.cnpj, FapCalculoEstabelecimento.calculo_atual_id,
+                FapCalculoEstabelecimento.situacao).filter(
+                FapCalculoEstabelecimento.law_firm_id == law_firm_id,
+                FapCalculoEstabelecimento.ano_vigencia == ano,
+                FapCalculoEstabelecimento.cnpj.in_(estabs))
+        }
+        total_raiz = len(estabs)
+        if somente_novos:
+            estabs = [c for c in estabs
+                      if gravados.get(c, (None, None))[1] not in SITUACOES_QUE_GRAVAM_ITENS]
+        log(f'  {ano} · empresa {posicao}/{len(raizes)} {raiz}: '
+            f'{len(estabs)} de {total_raiz} estabelecimento(s) a buscar')
+        for c in estabs:
+            pendentes[pool.submit(buscar_estabelecimento, svc, ano, c,
+                                  gravados.get(c, (None, None))[0])] = (ano, c)
+        return True
 
-                futuros = {pool.submit(buscar_estabelecimento, svc, ano, c,
-                                       gravados.get(c, (None, None))[0]): c for c in estabs}
-                for futuro in as_completed(futuros):
-                    cnpj = futuros[futuro]
-                    try:
-                        busca = futuro.result()
-                    except Exception as e:
-                        conta['erros'] += 1
-                        log(f'  ERRO {ano} {cnpj}: {type(e).__name__}')
-                        continue
-                    if busca.situacao == 'expirada':
-                        for f in futuros:
-                            f.cancel()
-                        conta['expirada'] = True
-                        return _fim()
-                    conta['estabelecimentos'] += 1
-                    if busca.situacao == 'sem_acesso':
-                        conta['sem_acesso'] += 1
-                    elif busca.situacao == 'erro':
-                        conta['erros'] += 1
-                    try:
-                        cont = gravar_estabelecimento(law_firm_id, busca)
-                        db.session.commit()
-                    except Exception as e:
-                        db.session.rollback()
-                        conta['erros'] += 1
-                        log(f'  ERRO ao gravar {ano} {cnpj}: {type(e).__name__}')
-                        continue
-                    conta['itens_novos'] += cont['itens_novos']
-                    conta['itens_atualizados'] += cont['itens_atualizados']
-                    if busca.situacao == 'ok' and (busca.resumo or {}).get('tem_itens'):
-                        conta['com_itens'] += 1
-                    if conta['estabelecimentos'] % _LOG_A_CADA == 0:
-                        log(f"  {conta['estabelecimentos']} estabelecimentos ({time.time() - t0:.0f}s) — "
-                            f"itens novos {conta['itens_novos']}, sem acesso {conta['sem_acesso']}, "
-                            f"erros {conta['erros']}")
+    def _registrar(ano, cnpj, futuro) -> bool:
+        """Grava um estabelecimento buscado. ``False`` = sessão expirada."""
+        try:
+            busca = futuro.result()
+        except Exception as e:
+            _erro(ano, cnpj, type(e).__name__)
+            return True
+        if busca.situacao == 'expirada':
+            conta['expirada'] = True
+            return False
+        conta['estabelecimentos'] += 1
+        if busca.situacao == 'sem_acesso':
+            conta['sem_acesso'] += 1
+        elif busca.situacao == 'erro':
+            _erro(ano, cnpj, busca.erro or 'erro sem mensagem')
+        try:
+            cont = gravar_estabelecimento(law_firm_id, busca)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            _erro(ano, cnpj, f'ao gravar: {type(e).__name__}')
+            return True
+        conta['itens_novos'] += cont['itens_novos']
+        conta['itens_atualizados'] += cont['itens_atualizados']
+        if busca.situacao == 'ok' and (busca.resumo or {}).get('tem_itens'):
+            conta['com_itens'] += 1
+        if conta['estabelecimentos'] % _LOG_A_CADA == 0:
+            principais = '; '.join(f'{n}× {m}' for m, n in motivos.most_common(3))
+            log(f"  {conta['estabelecimentos']} estabelecimentos ({time.time() - t0:.0f}s) — "
+                f"itens novos {conta['itens_novos']}, sem acesso {conta['sem_acesso']}, "
+                f"erros {conta['erros']}" + (f' ({principais})' if principais else ''))
+        return True
+
+    def _encher_listagens():
+        while len(listagens) < _LISTAGENS_ADIANTADAS:
+            item = next(trabalho, None)
+            if item is None:
+                return
+            ano, _, raiz = item
+            listagens.append((*item, pool_lista.submit(client.listar_estabelecimentos, svc, ano, raiz)))
+
+    def _parar():
+        for f in list(pendentes) + [item[3] for item in listagens]:
+            f.cancel()
+        return _fim()
+
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as pool, \
+            ThreadPoolExecutor(max_workers=max(1, min(_LISTAGENS_EM_PARALELO, workers // 4))) as pool_lista:
+        _encher_listagens()
+        while listagens or pendentes:
+            # Abre a próxima empresa enquanto a fila do pool não está cheia; só espera
+            # a listagem chegar se não houver nenhum estabelecimento em andamento.
+            while listagens and len(pendentes) < alvo and (not pendentes or listagens[0][3].done()):
+                ano, posicao, raiz, futuro = listagens.popleft()
+                _encher_listagens()
+                if not _abrir_empresa(ano, posicao, raiz, futuro.result()):
+                    return _parar()
+            if not pendentes:
+                continue
+            espera = set(pendentes)
+            if listagens and len(pendentes) < alvo:
+                espera.add(listagens[0][3])
+            prontos, _ = wait(espera, return_when=FIRST_COMPLETED)
+            for futuro in prontos:
+                if futuro in pendentes and not _registrar(*pendentes.pop(futuro), futuro):
+                    return _parar()
     return _fim()

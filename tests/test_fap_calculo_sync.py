@@ -5,6 +5,7 @@
 """
 
 import sys
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -291,6 +292,49 @@ def test_falha_na_lista_de_anos_e_incompleta(fid):
     check('403 não é incompleta', r['incompleta'] is False, str(r))
 
 
+def test_empresas_pequenas_em_paralelo(fid):
+    print('empresas de 1 estabelecimento rodam em paralelo')
+    import threading
+    _limpar(fid)
+    raizes = [f'{n:08d}' for n in range(33333331, 33333339)]
+    p = Portal({r: [r + '000191'] for r in raizes})
+    trava, ativos, pico = threading.Lock(), [0], [0]
+    calculos_orig = p.calculos
+
+    def calculos_lentos(svc, ano, cnpj):
+        with trava:
+            ativos[0] += 1
+            pico[0] = max(pico[0], ativos[0])
+        time.sleep(0.2)
+        with trava:
+            ativos[0] -= 1
+        return calculos_orig(svc, ano, cnpj)
+
+    p.calculos = calculos_lentos
+    t0 = time.time()
+    r = _com_portal(p, lambda: sync.sincronizar(
+        fid, None, anos=[ANO], raizes=raizes, workers=4, log=lambda *_: None))
+    check('8 estabelecimentos', r['estabelecimentos'] == 8 and r['erros'] == 0, str(r))
+    check('mais de uma empresa ao mesmo tempo', pico[0] >= 3, f'pico {pico[0]}')
+    check('tempo de lotes, não de fila', time.time() - t0 < 1.2, f'{time.time() - t0:.2f}s')
+
+
+def test_erro_de_estabelecimento_vai_ao_log(fid):
+    print('erro de estabelecimento: motivo no log e no resultado')
+    _limpar(fid)
+    p = Portal({'11111111': [ESTAB_B1, ESTAB_B2]})
+    p.calculos = lambda svc, ano, cnpj: FapWebResult(
+        ok=False, message='Falha de rede no portal FAP: TimeoutError')
+    logs = []
+    r = _com_portal(p, lambda: sync.sincronizar(
+        fid, None, anos=[ANO], raizes=['11111111'], workers=2, log=logs.append))
+    check('2 erros', r['erros'] == 2 and r['incompleta'] is True, str(r))
+    check('motivo agregado', r['motivos_erro'] == {'Falha de rede no portal FAP: TimeoutError': 2},
+          str(r.get('motivos_erro')))
+    check('CNPJ e motivo no log', any(ESTAB_B1 in str(m) and 'TimeoutError' in str(m) for m in logs),
+          str(logs))
+
+
 def main():
     with app.app_context():
         firm = LawFirm.query.filter_by(cnpj=TEST_CNPJ).first()
@@ -307,7 +351,8 @@ def main():
                       test_item_que_sumiu_fica, test_sem_calculo, test_403_nao_apaga,
                       test_tem_itens_false_nao_chama_beneficios,
                       test_sincronizar_duas_raizes_uma_sem_acesso, test_somente_novos_pula_gravados,
-                      test_expirada_interrompe, test_falha_na_lista_de_anos_e_incompleta):
+                      test_expirada_interrompe, test_falha_na_lista_de_anos_e_incompleta,
+                      test_empresas_pequenas_em_paralelo, test_erro_de_estabelecimento_vai_ao_log):
                 t(fid)
         finally:
             db.session.rollback()
