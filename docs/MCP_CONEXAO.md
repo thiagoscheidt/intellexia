@@ -98,11 +98,11 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `decisoes_parecidas` | Decisões semanticamente próximas de uma decisão (índice próprio da jurisprudência) |
 | `exportar_jurisprudencia_excel` | Planilha XLSX das decisões filtradas (link assinado, 1 h de validade) |
 | `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (OpenCNPJ/Receita) — qualquer usuário logado |
-| `revisar_peticao_inicial` | Revisão real com o FapPetitionReviewerAgent (prompts/referências do escritório). Com `identificador_documento`, registra a revisão no módulo (petição, histórico, custo, status) |
+| `revisar_peticao_inicial` | Abre a revisão no módulo pelo `identificador_documento` (Id Wrike, obrigatório) e roda o FapPetitionReviewerAgent em segundo plano, pelo mesmo `_start_review_in_background` da tela; responde na hora com `revisao_id` e manda e-mail a quem pediu ao terminar (RPI-37). Entradas: `texto_peticao` (curta), `link_drive` (baixa pela conta de serviço ou público) ou nenhuma → `link_envio` de uso único (`/revisao/enviar/<token>`, 2 h) com `comando_curl` para o Claude mandar o anexo |
 | `listar_peticoes_revisao` | Petições do Revisor com workflow_status, nº de revisões e última revisão (paginada) |
 | `detalhar_revisao` | Achados de uma revisão existente: gravidade, localização, correção, referência do manual, documentos faltantes e teses |
 | `historico_revisoes_peticao` | Evolução entre revisões da mesma petição: novos, reincidentes e resolvidos |
-| `comparar_versoes_peticao` | Revisão comparativa (original × revisada) com o agente oficial; registra se receber `identificador_documento` |
+| `comparar_versoes_peticao` | Revisão comparativa (original × revisada) com o agente oficial, pelo mesmo caminho em segundo plano do `revisar_peticao_inicial` |
 | `ler_manual_revisor` | Lê a referência ativa (manual_fap, casos_referencia, project_instructions) por seção ou termo |
 | `versoes_manual_revisor` | Versões das referências: ativa, autor, data, tamanho |
 | `auditoria_revisor` | Trilha de auditoria do módulo (paginada) |

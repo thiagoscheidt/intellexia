@@ -3796,6 +3796,37 @@ class ApiToken(db.Model):
         return f'<ApiToken id={self.id} user_id={self.user_id} final={self.last4}>'
 
 
+class FapReviewUploadLink(db.Model):
+    """Tabela fap_review_upload_links - Link de envio do arquivo para uma revisão pedida pelo Claude.
+
+    O Claude não consegue mandar o arquivo anexado pela chamada do MCP (RPI-37):
+    a ferramenta gera este link de uso único, que a pessoa abre no navegador ou
+    o próprio Claude usa com `curl`. O token só existe no link; aqui fica o
+    SHA-256, como em ``api_tokens``. Vale para um escritório, um usuário (quem
+    pediu), um Id Wrike e um envio.
+    """
+    __tablename__ = 'fap_review_upload_links'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    token_hash = db.Column(db.String(64), nullable=False, unique=True)
+    identifier = db.Column(db.String(96), nullable=False, comment='Id Wrike da petição')
+    title = db.Column(db.String(255), nullable=False, default='', comment='Título informado, usado se a petição for nova')
+
+    expires_at = db.Column(db.DateTime, nullable=False)      # UTC
+    used_at = db.Column(db.DateTime, nullable=True)          # UTC
+    execution_id = db.Column(db.Integer, db.ForeignKey('fap_review_executions.id', ondelete='SET NULL'),
+                             nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False)      # UTC
+
+    user = db.relationship('User', foreign_keys=[user_id], passive_deletes=True)
+
+    def __repr__(self):
+        return f'<FapReviewUploadLink id={self.id} identifier={self.identifier}>'
+
+
 class PromptLibraryItem(db.Model):
     """Tabela prompt_library_items - Prompt, agente ou skill da Biblioteca de IA.
 

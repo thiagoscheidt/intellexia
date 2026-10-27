@@ -515,7 +515,7 @@ def _usa_conta_de_servico(law_firm_id: Optional[int]) -> bool:
 
 
 def download_drive_file(drive_file_id: str, dest_dir: str, *, law_firm_id: Optional[int],
-                        timeout: int = 90) -> tuple:
+                        timeout: int = 90, gdoc_como: Optional[str] = None) -> tuple:
     """Baixa do Drive. Retorna (caminho_salvo, nome_original, sha256).
 
     Para o escritório dono da conta de serviço (`GOOGLE_DRIVE_LAW_FIRM_ID`),
@@ -526,7 +526,9 @@ def download_drive_file(drive_file_id: str, dest_dir: str, *, law_firm_id: Optio
     os.makedirs(dest_dir, exist_ok=True)
     if _usa_conta_de_servico(law_firm_id):
         try:
-            return google_drive_client.cliente().baixar(drive_file_id, dest_dir)
+            # `gdoc_como` só quando pedido: os importadores de sempre seguem no PDF.
+            extra = {'gdoc_como': gdoc_como} if gdoc_como else {}
+            return google_drive_client.cliente().baixar(drive_file_id, dest_dir, **extra)
         except google_drive_client.DriveErro:
             pass
     try:

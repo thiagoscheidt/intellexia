@@ -98,8 +98,10 @@ def list_review_petitions_handler(
 
 def get_review_detail_handler(law_firm_id: int, revisao_id: int) -> dict:
     """Achados completos de uma revisão já feita, validando o escritório."""
+    from datetime import datetime
+
     from app.models import FapReviewExecution
-    from app.services.fap_review_service import load_execution_result_payload
+    from app.services.fap_review_service import fail_if_stuck, load_execution_result_payload
 
     execution = FapReviewExecution.query.filter_by(
         id=revisao_id, law_firm_id=law_firm_id
@@ -111,12 +113,32 @@ def get_review_detail_handler(law_firm_id: int, revisao_id: int) -> dict:
     findings = payload.get("findings") or []
     petition = execution.petition
 
+    # Revisão presa (servidor reiniciou no meio) vira falha, como na tela.
+    fail_if_stuck(execution)
+
+    if execution.status == "processing":
+        iniciada = execution.updated_at or execution.created_at
+        minutos = int((datetime.now() - iniciada).total_seconds() // 60) if iniciada else None
+        return {
+            "revisao_id": execution.id,
+            "peticao_id": execution.petition_id,
+            "numero_revisao": execution.revision_number,
+            "status": "processando",
+            "processando_ha_minutos": minutos,
+            "aviso": (
+                "A revisão ainda está processando — costuma levar alguns minutos. "
+                "Quem pediu recebe um e-mail quando terminar; não abra outra revisão."
+            ),
+        }
     if execution.status != "completed":
         return {
             "revisao_id": execution.id,
-            "status": execution.status,
+            "peticao_id": execution.petition_id,
+            "numero_revisao": execution.revision_number,
+            "status": "falhou" if execution.status == "failed" else execution.status,
             "erro_execucao": execution.error_message,
-            "aviso": "A revisão ainda não foi concluída — não há achados para mostrar.",
+            "aviso": "A revisão não foi concluída — não há achados para mostrar. "
+                     "Pela tela do Revisor dá para reprocessá-la.",
         }
 
     resumo = payload.get("executive_summary") or {}

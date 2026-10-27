@@ -1,57 +1,149 @@
 """
 Tools: Revisor de Petições FAP
 ==============================
-Usa o FapPetitionReviewerAgent real (mesmo agente do módulo Revisor de
-Petições), com os prompts e referências ativos do escritório — manual FAP,
-casos de referência e instruções de projeto versionados por law_firm.
+A revisão pedida pelo Claude entra no módulo como a enviada pela tela: cria a
+execução "processando" e roda o mesmo agente em segundo plano
+(`fap_review._start_review_in_background`), com os prompts, referências,
+pontos de atenção e achados descartados do escritório.
+
+Rodar o agente dentro da chamada não funciona (RPI-37): em produção a revisão
+passa de 5 minutos — o prompt carrega o manual FAP e os casos de referência, e
+o raciocínio do modelo vai a dezenas de milhares de tokens — e o app do Claude
+desiste antes. A tool responde na hora; o resultado sai por detalhar_revisao e
+por e-mail a quem pediu.
 """
 from __future__ import annotations
 
-import asyncio
 import os
 
+_SEM_ID_WRIKE = (
+    "Informe o Id Wrike da petição em 'identificador_documento'. Pergunte ao "
+    "usuário qual é antes de chamar de novo — a revisão é registrada nessa petição."
+)
 
-def _build_agent(law_firm_id: int):
-    """Agente revisor com os prompts, referências e configuração do escritório."""
-    from app.agents.fap_review.reviewer_agent import FapPetitionReviewerAgent
-    from app.models import FapReviewPromptVersion, FapReviewReferenceVersion, FapReviewSetting
 
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not openai_api_key:
-        raise RuntimeError("OPENAI_API_KEY não configurada no servidor.")
+def _abrir_revisao(law_firm_id: int, user_id: int | None, identificador: str | None,
+                   abrir) -> dict:
+    """Abre a revisão no módulo e dispara o agente em segundo plano.
 
-    def _active_reference(ref_type: str) -> str:
-        row = FapReviewReferenceVersion.query.filter_by(
-            law_firm_id=law_firm_id, reference_type=ref_type, is_active=True
-        ).first()
-        return row.content if row else ""
+    ``abrir()`` devolve o dicionário de `open_file_review` — muda só de onde o
+    arquivo vem (texto gravado em .txt, arquivo baixado do Drive).
+    """
+    from app.blueprints.fap_review import _start_review_in_background
+    from app.services.fap_review_service import revision_result_url
+    from app.services.fap_review_upload_service import pergunta_claude
 
-    def _active_prompt(prompt_type: str) -> str:
-        row = FapReviewPromptVersion.query.filter_by(
-            law_firm_id=law_firm_id, prompt_type=prompt_type, is_active=True
-        ).first()
-        return row.content if row else ""
+    try:
+        aberta = abrir()
+    except ValueError as e:
+        return {"erro": str(e)}
 
-    setting = FapReviewSetting.query.filter_by(law_firm_id=law_firm_id).first()
-    model = setting.reviewer_model if setting else "gpt-4o-mini"
-    temperature = setting.reviewer_temperature if setting else 0.0
-
-    agent = FapPetitionReviewerAgent(
-        openai_api_key=openai_api_key,
-        model=model,
-        temperature=temperature,
-    )
-    agent.load_reference_documents(
-        manual_md=_active_reference("manual_fap"),
-        cases_md=_active_reference("casos_referencia"),
-        project_instructions_md=_active_reference("project_instructions"),
-    )
-    prompts = {
-        "reviewer_identity": _active_prompt("revisor_identity"),
-        "reviewer_rules": _active_prompt("revisor_rules"),
-        "reviewer_output_format": _active_prompt("revisor_output_format"),
+    revisao_id = aberta["revisao_id"]
+    numero = aberta["numero_revisao"]
+    link = revision_result_url(revisao_id)
+    if aberta["ja_em_andamento"]:
+        inicio = (f"A petição \"{aberta['titulo']}\" já tem a revisão {numero} em andamento, "
+                  "então não abri outra.")
+    else:
+        inicio = (f"Revisão {numero} da petição \"{aberta['titulo']}\" iniciada. "
+                  "Ela leva alguns minutos e roda no IntellexIA — você não precisa ficar aqui esperando.")
+    pergunta = pergunta_claude(numero, str(identificador).strip())
+    resposta = {
+        "status": "processando",
+        "ja_em_andamento": aberta["ja_em_andamento"],
+        "peticao_id": aberta["peticao_id"],
+        "peticao_criada": aberta["peticao_criada"],
+        "titulo": aberta["titulo"],
+        "revisao_id": revisao_id,
+        "numero_revisao": numero,
+        "link": link,
+        # O Claude repassa isto: sem o texto pronto, ele tende a omitir o link
+        # ou a dizer que vai "aguardar" — e não há como aguardar daqui.
+        "mensagem_para_usuario": (
+            f"{inicio} Acompanhe por este link: {link}. Quando terminar, você recebe "
+            f"um e-mail; ou me pergunte \"{pergunta}\" que eu trago os achados."
+        ),
+        "proximo_passo": (
+            "Repasse a 'mensagem_para_usuario' ao usuário, com o link, e encerre a "
+            "resposta. Não espere, não chame esta ferramenta de novo e não consulte "
+            "o resultado agora: ele ainda não existe. Quando o usuário perguntar, use "
+            f"detalhar_revisao(revisao_id={revisao_id})."
+        ),
     }
-    return agent, prompts, model
+    if aberta["ja_em_andamento"]:
+        return resposta
+
+    _start_review_in_background(
+        revisao_id, law_firm_id, aberta["petition_path"], aberta["compared_path"],
+        notify_user=True,
+    )
+    return resposta
+
+
+def _preparar(identificador: str | None) -> dict | None:
+    """Recusas comuns a toda entrada; None quando dá para seguir."""
+    if not (identificador or "").strip():
+        return {"erro": _SEM_ID_WRIKE}
+    if not os.getenv("OPENAI_API_KEY"):
+        return {"erro": "OPENAI_API_KEY não configurada no servidor."}
+    return None
+
+
+def _link_de_envio(law_firm_id: int, user_id: int | None, identificador: str, titulo: str) -> dict:
+    """Sem texto nem Drive: link de uso único para o arquivo chegar (página ou curl)."""
+    from app.services.fap_review_upload_service import (
+        create_upload_link, expires_at_sp, upload_link_url,
+    )
+
+    try:
+        link, token = create_upload_link(law_firm_id, user_id, identificador, titulo)
+    except ValueError as e:
+        return {"erro": str(e)}
+    url = upload_link_url(token)
+    expira = f"{expires_at_sp(link):%H:%M}"
+    return {
+        "status": "aguardando_arquivo",
+        "link_envio": url,
+        "expira_em": expira,
+        "comando_curl": f'curl -sS -F arquivo=@"<caminho do anexo>" {url}',
+        "mensagem_para_usuario": (
+            f"Para eu mandar a petição para revisão, solte o arquivo (PDF, DOCX ou TXT) "
+            f"nesta página: {url} — o link vale até {expira} e serve para um envio."
+        ),
+        "proximo_passo": (
+            "Se o usuário anexou a petição nesta conversa: liste /mnt/user-data/attachments/ "
+            "(ls -la) e considere só PDF, DOCX e TXT. Nenhum → não rode o curl; peça o "
+            "arquivo ou repasse a 'mensagem_para_usuario'. Um → rode o 'comando_curl' com o "
+            "caminho dele e repasse ao usuário a 'mensagem' do JSON devolvido, dizendo o "
+            "nome do arquivo enviado. Mais de um → pergunte ao usuário qual é a petição, "
+            "listando os nomes, antes de enviar (a menos que ele já tenha dito). Se o curl "
+            "falhar (rede recusada, comando indisponível) ou não houver anexo, repasse a "
+            "'mensagem_para_usuario' com o link e encerre."
+        ),
+    }
+
+
+def _revisao_do_drive(law_firm_id: int, user_id: int | None, identificador: str,
+                      titulo: str, link_drive: str) -> dict:
+    """Baixa a petição do Drive e abre a revisão com o arquivo original."""
+    from pathlib import Path
+
+    from app.services import fap_review_service as svc
+    from app.services.fap_review_upload_service import download_review_file_from_drive
+
+    def abrir():
+        # Antes de baixar: não baixa à toa o que a tela recusaria ou o que já roda.
+        petition, _ = svc.check_new_revision_allowed(law_firm_id, identificador)
+        running = svc.running_revision(petition)
+        if running:
+            return svc._in_progress_payload(petition, running)
+        caminho, nome = download_review_file_from_drive(link_drive, law_firm_id)
+        aberta = svc.open_file_review(law_firm_id, user_id, identificador, caminho, nome, title=titulo)
+        if aberta["ja_em_andamento"]:
+            Path(caminho).unlink(missing_ok=True)
+        return aberta
+
+    return _abrir_revisao(law_firm_id, user_id, identificador, abrir)
 
 
 def compare_petition_versions_handler(
@@ -64,9 +156,8 @@ def compare_petition_versions_handler(
 ) -> dict:
     """Revisão comparativa (versão original × revisada) com o agente do escritório.
 
-    A tela já faz isso; o MCP só sabia revisar versão única. Responde "a v2
-    corrigiu o que o revisor apontou?" com o próprio agente, em vez de o
-    assistente comparar os textos por conta.
+    Responde "a v2 corrigiu o que o revisor apontou?" com o próprio agente, em vez
+    de o assistente comparar os textos por conta.
     """
     texto_original = (texto_original or "").strip()
     texto_revisado = (texto_revisado or "").strip()
@@ -74,153 +165,49 @@ def compare_petition_versions_handler(
         return {
             "erro": "Envie o texto completo das duas versões (mínimo ~200 caracteres cada)."
         }
+    from app.services.fap_review_service import start_text_review
 
-    try:
-        agent, prompts, model = _build_agent(law_firm_id)
-    except RuntimeError as e:
-        return {"erro": str(e)}
-
-    result = asyncio.run(agent.review_petition_comparative(
-        original_petition_file_path="",
-        revised_petition_file_path="",
-        original_petition_text=texto_original,
-        revised_petition_text=texto_revisado,
-        user_id=user_id,
-        law_firm_id=law_firm_id,
-        **prompts,
+    recusa = _preparar(identificador_documento)
+    if recusa:
+        return recusa
+    return _abrir_revisao(law_firm_id, user_id, identificador_documento, lambda: start_text_review(
+        law_firm_id, user_id, identificador_documento, texto_original,
+        title=titulo, compared_text=texto_revisado,
     ))
-
-    payload = result.model_dump(mode="json")
-    payload["modelo_utilizado"] = model
-    payload["tipo_analise"] = "comparativa"
-
-    identificador = (identificador_documento or "").strip()
-    if not identificador:
-        payload["registrado_no_sistema"] = False
-        payload["aviso_registro"] = (
-            "Comparação não registrada no módulo Revisor: informe "
-            "'identificador_documento' para que ela entre no histórico da petição."
-        )
-        return payload
-
-    from app.services.fap_review_service import record_text_review
-
-    try:
-        registro = record_text_review(
-            law_firm_id=law_firm_id,
-            user_id=user_id,
-            identifier=identificador,
-            petition_text=texto_revisado,
-            result_payload=payload,
-            title=titulo,
-            comparative=True,
-        )
-    except ValueError as e:
-        payload["registrado_no_sistema"] = False
-        payload["aviso_registro"] = f"Comparação não registrada: {e}"
-        return payload
-
-    payload["registrado_no_sistema"] = True
-    payload.update(registro)
-    return payload
 
 
 def review_petition_handler(
-    petition_text: str,
+    petition_text: str | None,
     law_firm_id: int,
-    case_type: str = "trabalhista",
     user_id: int | None = None,
     identificador_documento: str | None = None,
     titulo: str = "",
+    link_drive: str | None = None,
 ) -> dict:
-    """Revisa o texto de uma petição com o agente revisor oficial do escritório.
+    """Abre a revisão de uma petição no módulo Revisor, pelo Id Wrike.
 
-    Com ``identificador_documento``, a revisão é **registrada no módulo** (entra no
-    histórico da petição, no custo e no status do fluxo), igual à feita pela tela.
-    Sem ele, a revisão é efêmera — e a resposta diz isso, para o agente não dar a
-    entender que ficou salva.
+    Texto → revisão do texto. Link do Drive → baixa e revisa o arquivo. Nenhum
+    dos dois → link de envio de uso único (página ou curl do Claude).
     """
-    from app.agents.fap_review.reviewer_agent import FapPetitionReviewerAgent
-    from app.models import FapReviewPromptVersion, FapReviewReferenceVersion, FapReviewSetting
+    from app.services.fap_review_service import start_text_review
 
+    recusa = _preparar(identificador_documento)
+    if recusa:
+        return recusa
     petition_text = (petition_text or "").strip()
+    link_drive = (link_drive or "").strip()
+    if petition_text and link_drive:
+        return {"erro": "Mande o texto ou o link do Drive, não os dois."}
+    if link_drive:
+        return _revisao_do_drive(law_firm_id, user_id, identificador_documento, titulo, link_drive)
+    if not petition_text:
+        return _link_de_envio(law_firm_id, user_id, identificador_documento, titulo)
     if len(petition_text) < 200:
         return {
             "erro": "Texto da petição muito curto para revisão (mínimo ~200 caracteres). "
-                    "Envie o texto completo da petição."
+                    "Envie o texto completo da petição, ou deixe o texto em branco para "
+                    "receber o link de envio do arquivo."
         }
-
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not openai_api_key:
-        return {"erro": "OPENAI_API_KEY não configurada no servidor."}
-
-    def _active_reference(ref_type: str) -> str:
-        row = FapReviewReferenceVersion.query.filter_by(
-            law_firm_id=law_firm_id, reference_type=ref_type, is_active=True
-        ).first()
-        return row.content if row else ""
-
-    def _active_prompt(prompt_type: str) -> str:
-        row = FapReviewPromptVersion.query.filter_by(
-            law_firm_id=law_firm_id, prompt_type=prompt_type, is_active=True
-        ).first()
-        return row.content if row else ""
-
-    setting = FapReviewSetting.query.filter_by(law_firm_id=law_firm_id).first()
-    model = setting.reviewer_model if setting else "gpt-4o-mini"
-    temperature = setting.reviewer_temperature if setting else 0.0
-
-    agent = FapPetitionReviewerAgent(
-        openai_api_key=openai_api_key,
-        model=model,
-        temperature=temperature,
-    )
-    agent.load_reference_documents(
-        manual_md=_active_reference("manual_fap"),
-        cases_md=_active_reference("casos_referencia"),
-        project_instructions_md=_active_reference("project_instructions"),
-    )
-
-    result = asyncio.run(agent.review_petition_single_version(
-        petition_file_path="",
-        petition_text=petition_text,
-        reviewer_identity=_active_prompt("revisor_identity"),
-        reviewer_rules=_active_prompt("revisor_rules"),
-        reviewer_output_format=_active_prompt("revisor_output_format"),
-        user_id=user_id,
-        law_firm_id=law_firm_id,
+    return _abrir_revisao(law_firm_id, user_id, identificador_documento, lambda: start_text_review(
+        law_firm_id, user_id, identificador_documento, petition_text, title=titulo,
     ))
-
-    payload = result.model_dump(mode="json")
-    payload["modelo_utilizado"] = model
-    payload["tipo_caso"] = case_type
-
-    identificador = (identificador_documento or "").strip()
-    if not identificador:
-        payload["registrado_no_sistema"] = False
-        payload["aviso_registro"] = (
-            "Revisão não registrada no módulo Revisor: informe 'identificador_documento' "
-            "para que ela entre no histórico da petição, no custo e no status do fluxo."
-        )
-        return payload
-
-    from app.services.fap_review_service import record_text_review
-
-    try:
-        registro = record_text_review(
-            law_firm_id=law_firm_id,
-            user_id=user_id,
-            identifier=identificador,
-            petition_text=petition_text,
-            result_payload=payload,
-            title=titulo,
-        )
-    except ValueError as e:
-        # A revisão foi feita; só o registro falhou — devolve o resultado assim mesmo.
-        payload["registrado_no_sistema"] = False
-        payload["aviso_registro"] = f"Revisão não registrada: {e}"
-        return payload
-
-    payload["registrado_no_sistema"] = True
-    payload.update(registro)
-    return payload

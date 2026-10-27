@@ -1960,38 +1960,59 @@ def salvar_prompt(
 
 @mcp.tool()
 def revisar_peticao_inicial(
-    texto_peticao: str,
-    tipo_caso: str = "trabalhista",
-    identificador_documento: str | None = None,
+    identificador_documento: str,
     titulo: str = "",
+    texto_peticao: str | None = None,
+    link_drive: str | None = None,
 ) -> dict:
-    """Revisa uma petição FAP com o agente revisor oficial do escritório.
+    """Pede uma revisão nova de uma petição FAP ao agente revisor oficial do escritório.
 
-    Usa os mesmos prompts, manual FAP e casos de referência configurados no
-    módulo Revisor de Petições. Retorna achados (findings) com severidade,
-    documentos faltantes, teses identificadas e resumo executivo. A revisão pode
-    levar ~1 minuto em petições longas.
+    A revisão entra no módulo Revisor de Petições como se o usuário a tivesse
+    enviado pela tela: mesmos prompts, manual FAP, casos de referência e pontos
+    de atenção da revisão anterior; fica no histórico da petição, com custo e
+    status do fluxo.
 
-    Informando 'identificador_documento', a revisão é **registrada no módulo**
-    como uma revisão da petição (histórico, custo e status do fluxo) — igual à
-    feita pela tela. Sem ele, a revisão é descartada depois da resposta.
+    ANTES de chamar, pergunte ao usuário o Id Wrike da petição (só números) e
+    confira em listar_peticoes_revisao(identificador=...) se ela já existe. Se
+    existir, diga qual é (título e nº de revisões) — a revisão entra como a
+    próxima dela; se não, a petição é criada com o 'titulo' informado.
+
+    COMO MANDAR A PETIÇÃO — escolha uma entrada, nunca duas:
+    - Arquivo anexado na conversa, ou petição longa: NÃO copie o texto. Chame
+      sem 'texto_peticao' e sem 'link_drive': a resposta traz 'link_envio' e o
+      'comando_curl'. Siga o 'proximo_passo' — ele diz como escolher o anexo em
+      /mnt/user-data/attachments/ (se houver mais de um PDF/DOCX/TXT, pergunte
+      ao usuário qual é) e o que fazer se o curl não funcionar (repassar o link
+      para a pessoa soltar o arquivo na página).
+    - Arquivo no Google Drive: passe o link em 'link_drive'. Ele precisa estar
+      compartilhado com intellexia-drive@intellexia-503416.iam.gserviceaccount.com
+      ou aberto a qualquer pessoa com o link.
+    - Petição curta colada na conversa (até ~20 mil caracteres): 'texto_peticao'.
+
+    A revisão leva alguns minutos e roda em segundo plano: a resposta volta na
+    hora com status "processando", o 'link' da revisão e a 'mensagem_para_usuario'.
+    Repasse essa mensagem (com o link) e encerre: não espere nem chame de novo.
+    Quando o usuário pedir o resultado, use detalhar_revisao(revisao_id).
 
     Args:
-        texto_peticao: Texto completo da petição (mínimo ~200 caracteres).
-        tipo_caso: trabalhista ou previdenciario (padrão: trabalhista).
-        identificador_documento: Identificador da petição no escritório (ex.: "FAP-2024-013").
-            Se a petição já existir com esse identificador, entra como nova revisão dela.
+        identificador_documento: Id Wrike da petição (ex.: "4387120543"). Obrigatório.
         titulo: Título da petição, usado só quando ela é criada agora.
+        texto_peticao: Texto da petição — só para petição curta colada na conversa.
+        link_drive: Link do arquivo no Google Drive (PDF, DOCX ou Google Docs).
 
     Returns:
-        Achados e resumo da revisão. 'registrado_no_sistema' indica se ficou salva;
-        quando true, traz 'peticao_id', 'revisao_id' e 'numero_revisao'.
+        Com texto ou Drive: status "processando", 'revisao_id', 'numero_revisao',
+        'peticao_id', 'link' e 'mensagem_para_usuario'. Sem os dois: status
+        "aguardando_arquivo", 'link_envio', 'expira_em', 'comando_curl' e
+        'proximo_passo'. Se a petição já tiver uma revisão rodando, devolve essa
+        ('ja_em_andamento': true) sem abrir outra.
     """
     claims = require_module("fap_review")
     with app.app_context():
         return review_petition_handler(
-            texto_peticao, claims["law_firm_id"], tipo_caso, user_id=claims.get("user_id"),
+            texto_peticao, claims["law_firm_id"], user_id=claims.get("user_id"),
             identificador_documento=identificador_documento, titulo=titulo,
+            link_drive=link_drive,
         )
 
 
@@ -2032,9 +2053,15 @@ def listar_peticoes_revisao(
 def detalhar_revisao(revisao_id: int) -> dict:
     """Achados completos de uma revisão já feita (pela tela ou pelo Claude).
 
-    Use isto em vez de revisar de novo: a revisão já existe, custa ~1 minuto de IA
+    Use isto em vez de revisar de novo: a revisão já existe, custa minutos de IA
     para refazer e o resultado ficaria fora do histórico. Pegue o 'revisao_id' em
-    listar_peticoes_revisao ('ultima_revisao_id') ou em historico_revisoes_peticao.
+    listar_peticoes_revisao ('ultima_revisao_id'), em historico_revisoes_peticao
+    ou na resposta de revisar_peticao_inicial. Se ainda estiver "processando",
+    diga ao usuário há quanto tempo e que ele recebe e-mail ao terminar.
+
+    Para "como está a revisão N da petição X?" (a pergunta que a página de envio
+    manda copiar): chame historico_revisoes_peticao(identificador=X) e use o
+    'revisao_id' da revisão N.
 
     Args:
         revisao_id: Id da revisão (execução) no módulo Revisor.
@@ -2075,26 +2102,28 @@ def historico_revisoes_peticao(
 def comparar_versoes_peticao(
     texto_original: str,
     texto_revisado: str,
-    identificador_documento: str | None = None,
+    identificador_documento: str,
     titulo: str = "",
 ) -> dict:
-    """Revisa duas versões de uma petição em conjunto (original × revisada).
+    """Pede uma revisão das duas versões de uma petição em conjunto (original × revisada).
 
     Use quando existirem duas versões e a pergunta for "a v2 corrigiu o que o
     revisor apontou?": o agente oficial analisa as mudanças, em vez de comparar
     os textos por conta própria. Para uma versão só, use revisar_peticao_inicial.
-    Leva ~1 minuto.
+
+    Como em revisar_peticao_inicial: pergunte antes o Id Wrike ao usuário; a
+    comparação entra no histórico da petição, roda em segundo plano (alguns
+    minutos) e a resposta volta na hora com status "processando". O resultado sai
+    por detalhar_revisao(revisao_id) e o usuário recebe e-mail ao terminar.
 
     Args:
         texto_original: Texto completo da versão anterior (mínimo ~200 caracteres).
         texto_revisado: Texto completo da versão nova (mínimo ~200 caracteres).
-        identificador_documento: Identificador da petição no escritório. Informando,
-            a comparação é registrada como uma revisão da petição (histórico e custo).
+        identificador_documento: Id Wrike da petição (só números). Obrigatório.
         titulo: Título da petição, usado só quando ela é criada agora.
 
     Returns:
-        Achados, mudanças entre as versões e resumo executivo. 'registrado_no_sistema'
-        indica se ficou salva.
+        status "processando", 'revisao_id', 'numero_revisao', 'peticao_id' e 'link'.
     """
     claims = require_module("fap_review")
     with app.app_context():

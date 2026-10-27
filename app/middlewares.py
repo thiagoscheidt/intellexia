@@ -26,6 +26,10 @@ def init_app_middlewares(app):
         # última atividade — ver app/blueprints/public_api.py.
         if request.path == '/api/v1' or request.path.startswith('/api/v1/'):
             return None
+        # Link de envio do arquivo da revisão pedida pelo Claude: o token do
+        # link é a autorização (app/blueprints/fap_review_upload.py).
+        if request.path.startswith('/revisao/enviar/'):
+            return None
 
         public_endpoints = ['auth.login', 'auth.login_post', 'auth.register', 'auth.register_post',
                            'auth.forgot_password', 'auth.forgot_password_post',

@@ -1,0 +1,237 @@
+{#
+  Link de envio do arquivo para a revisão pedida pelo Claude (RPI-37) — opção B
+  aprovada pelo Thiago: confere a petição antes de soltar o arquivo; depois do
+  envio, link para acompanhar e a pergunta pronta para colar no Claude.
+
+  Página standalone (não herda base.html): não há sessão, o token é a
+  autorização. Texto vindo do servidor entra por textContent no JS.
+
+  Contexto: estado ('valido' | 'usado' | 'expirado' | 'inexistente'), token e,
+  quando válido, o de fap_review_upload_service.link_page_context; quando usado,
+  revisao {revisao_id, numero_revisao, link}.
+#}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Enviar petição para revisão · IntellexIA</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:#eef1f5; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#1f2937; display:flex; align-items:center; justify-content:center; padding:24px 16px; }
+  .card { background:#fff; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:26px; width:100%; max-width:440px; }
+  .topo { display:flex; align-items:center; gap:8px; font-weight:700; color:#4f46e5; font-size:15px; }
+  .topo img { width:26px; height:26px; object-fit:contain; }
+  .selo { margin-left:auto; background:#eef2ff; color:#3730a3; border-radius:999px; padding:3px 10px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+  h1 { font-size:19px; margin:18px 0 8px; }
+  .m { color:#6b7280; font-size:13px; line-height:1.5; }
+  .lin { display:flex; justify-content:space-between; gap:12px; font-size:13.5px; padding:7px 0; border-bottom:1px solid #f1f5f9; }
+  .lin span:first-child { color:#6b7280; white-space:nowrap; }
+  .lin span:last-child { text-align:right; font-weight:600; overflow-wrap:anywhere; }
+  .drop { display:block; border:2px dashed #c7d2fe; background:#f5f7ff; border-radius:12px; text-align:center; padding:28px 14px; margin-top:18px; font-size:14px; cursor:pointer; transition:background .15s, border-color .15s; }
+  .drop:hover, .drop.sobre { background:#eef2ff; border-color:#818cf8; }
+  .drop b { color:#4f46e5; }
+  .drop input { display:none; }
+  .seta { width:36px; height:36px; margin:0 auto 8px; border-radius:50%; background:#e0e7ff; color:#4f46e5; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; }
+  .progresso { display:none; margin-top:16px; }
+  .barra { height:8px; background:#e5e7eb; border-radius:999px; overflow:hidden; }
+  .barra div { height:100%; width:0; background:#4f46e5; transition:width .2s; }
+  .erro { display:none; margin-top:14px; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:8px; padding:10px 12px; font-size:13.5px; }
+  .aviso { margin-top:18px; background:#fffbeb; border:1px solid #fde68a; color:#78350f; border-radius:8px; padding:12px 14px; font-size:13.5px; line-height:1.5; }
+  .center { text-align:center; }
+  .spin { width:44px; height:44px; border-radius:50%; border:4px solid #fde68a; border-top-color:#d97706; margin:4px auto 14px; animation:gira 1s linear infinite; }
+  @keyframes gira { to { transform:rotate(360deg); } }
+  .btn { display:inline-block; background:#4f46e5; color:#fff; text-decoration:none; border-radius:8px; padding:11px 20px; font-weight:700; font-size:14px; margin-top:16px; }
+  .btn:hover { background:#4338ca; }
+  .claude { margin-top:20px; text-align:left; }
+  .claude .rot { font-size:13px; color:#374151; margin-bottom:6px; }
+  .code { background:#1e1b2e; border-radius:10px; overflow:hidden; border:1px solid #2e2a45; }
+  .code-top { display:flex; align-items:center; justify-content:space-between; padding:7px 10px 7px 12px; background:#29253d; font-size:11.5px; color:#a5a3c2; }
+  .copiar { display:inline-flex; align-items:center; gap:6px; background:#3b3660; color:#e9e7ff; border:0; border-radius:6px; padding:5px 10px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .copiar:hover { background:#4a4478; }
+  .copiar.ok { background:#065f46; color:#d1fae5; }
+  .copiar.ok svg { display:none; }
+  .copiar svg { width:13px; height:13px; }
+  .code pre { margin:0; padding:12px 14px; color:#f5f3ff; font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace; font-size:13.5px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .oculto { display:none; }
+  @media (max-width: 480px) { .card { padding:20px; } .selo { display:none; } }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="topo">
+    <img src="{{ url_for('static', filename='assets/img/logo_maior.png') }}" alt="">
+    IntellexIA <span class="selo">Revisor de Petições</span>
+  </div>
+
+{% if estado == 'inexistente' %}
+  <h1>Link não encontrado</h1>
+  <p class="m">Este endereço de envio não existe. Confira se o link foi copiado inteiro, ou peça um novo ao Claude.</p>
+
+{% elif estado == 'expirado' %}
+  <h1>Este link expirou</h1>
+  <p class="m">Os links de envio valem por 2 horas. Peça ao Claude para revisar a petição de novo: ele gera um link novo.</p>
+
+{% elif estado == 'usado' %}
+  <h1>Este link já foi usado</h1>
+  <p class="m">O arquivo já foi enviado por este link{% if revisao.numero_revisao %} e virou a revisão {{ revisao.numero_revisao }}{% endif %}. Cada link serve para um envio.</p>
+  {% if revisao.link %}<div class="center"><a class="btn" href="{{ revisao.link }}">Acompanhar a revisão</a></div>{% endif %}
+
+{% else %}
+  <section id="antes">
+    <h1>Confira e envie o arquivo</h1>
+    <div class="lin"><span>Petição</span><span>{{ titulo }}{% if peticao_nova %} <span class="m">(nova)</span>{% endif %}</span></div>
+    <div class="lin"><span>Id Wrike</span><span>{{ identificador }}</span></div>
+    <div class="lin"><span>Esta será a</span><span>revisão {{ proxima_revisao }}</span></div>
+    {% if pedido_por %}<div class="lin"><span>Pedido por</span><span>{{ pedido_por }}, pelo Claude</span></div>{% endif %}
+
+    {% if bloqueio %}
+      <div class="aviso">{{ bloqueio }}</div>
+    {% elif em_andamento %}
+      <div class="aviso">
+        A revisão {{ em_andamento.revision_number }} desta petição ainda está em processamento.
+        Espere ela terminar e volte a este link para enviar o arquivo (vale até {{ expira_em.strftime('%H:%M') }}).
+        {% if link_em_andamento %}<br><a href="{{ link_em_andamento }}">Acompanhar a revisão {{ em_andamento.revision_number }}</a>{% endif %}
+      </div>
+    {% else %}
+      <label class="drop" id="drop">
+        <input type="file" id="arquivo" accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain">
+        <div class="seta">↑</div>
+        Arraste o arquivo aqui ou <b>escolha no computador</b>
+        <div class="m" style="margin-top:4px;">PDF, DOCX ou TXT · válido até {{ expira_em.strftime('%H:%M') }}</div>
+      </label>
+      <div class="progresso" id="progresso">
+        <div class="m" id="progresso-texto" style="margin-bottom:6px;">Enviando…</div>
+        <div class="barra"><div id="barra"></div></div>
+      </div>
+      <div class="erro" id="erro"></div>
+    {% endif %}
+  </section>
+
+  <section id="depois" class="oculto">
+    <div class="center">
+      <div class="spin"></div>
+      <h1 style="margin-top:0;" id="d-titulo"></h1>
+      <p class="m" id="d-arquivo"></p>
+      <p class="m">Leva alguns minutos. Você recebe um e-mail quando terminar.</p>
+      <a class="btn" id="d-link" href="#">Acompanhar a revisão</a>
+    </div>
+    <div class="claude">
+      <div class="rot">Ou volte ao Claude e cole esta pergunta:</div>
+      <div class="code">
+        <div class="code-top">
+          <span>Claude</span>
+          <button type="button" class="copiar" id="copiar">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>
+            <span id="copiar-texto">Copiar</span>
+          </button>
+        </div>
+        <pre id="pergunta"></pre>
+      </div>
+    </div>
+  </section>
+{% endif %}
+</main>
+
+{% if estado == 'valido' and not bloqueio and not em_andamento %}
+<script>
+(function () {
+  var drop = document.getElementById('drop');
+  var input = document.getElementById('arquivo');
+  var erro = document.getElementById('erro');
+  var progresso = document.getElementById('progresso');
+  var barra = document.getElementById('barra');
+  var progressoTexto = document.getElementById('progresso-texto');
+  var enviando = false;
+
+  function mostrarErro(msg) {
+    erro.textContent = msg;
+    erro.style.display = 'block';
+    progresso.style.display = 'none';
+    drop.style.display = 'block';
+    enviando = false;
+  }
+
+  function concluir(r) {
+    document.getElementById('antes').classList.add('oculto');
+    document.getElementById('d-titulo').textContent = 'Revisão ' + r.numero_revisao + ' em processamento';
+    var hora = new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'});
+    document.getElementById('d-arquivo').textContent = r.arquivo + ' · enviado às ' + hora;
+    document.getElementById('d-link').href = r.link;
+    document.getElementById('pergunta').textContent = r.pergunta_claude;
+    document.getElementById('depois').classList.remove('oculto');
+  }
+
+  function enviar(arquivo) {
+    if (!arquivo || enviando) return;
+    enviando = true;
+    erro.style.display = 'none';
+    drop.style.display = 'none';
+    progresso.style.display = 'block';
+    progressoTexto.textContent = 'Enviando ' + arquivo.name + '…';
+    barra.style.width = '0';
+
+    var dados = new FormData();
+    dados.append('arquivo', arquivo);
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', window.location.pathname);
+    xhr.upload.onprogress = function (e) {
+      if (e.lengthComputable) barra.style.width = Math.round(e.loaded / e.total * 100) + '%';
+    };
+    xhr.onload = function () {
+      var r = null;
+      try { r = JSON.parse(xhr.responseText); } catch (e) { /* resposta não-JSON: proxy ou servidor */ }
+      if (xhr.status === 200 && r && r.ok) { concluir(r); return; }
+      if (xhr.status === 413 && !r) { mostrarErro('O arquivo é grande demais para este envio.'); return; }
+      mostrarErro((r && r.erro) || 'Não foi possível enviar o arquivo. Tente de novo.');
+    };
+    xhr.onerror = function () { mostrarErro('A conexão caiu durante o envio. Tente de novo.'); };
+    xhr.send(dados);
+  }
+
+  input.addEventListener('change', function () { enviar(input.files[0]); });
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('sobre'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('sobre'); });
+  });
+  drop.addEventListener('drop', function (e) {
+    if (e.dataTransfer && e.dataTransfer.files.length) enviar(e.dataTransfer.files[0]);
+  });
+  // Soltar fora da área não abre o arquivo no navegador (e não perde a página).
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('drop', function (e) { e.preventDefault(); });
+
+  var botao = document.getElementById('copiar');
+  var botaoTexto = document.getElementById('copiar-texto');
+  function marcarCopiado() {
+    botao.classList.add('ok');
+    botaoTexto.textContent = '✓ Copiado';
+    setTimeout(function () { botao.classList.remove('ok'); botaoTexto.textContent = 'Copiar'; }, 2000);
+  }
+  function copiarSemApi(texto) {
+    var area = document.createElement('textarea');
+    area.value = texto;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try { document.execCommand('copy'); marcarCopiado(); } catch (e) { /* sem cópia: a pessoa seleciona */ }
+    document.body.removeChild(area);
+  }
+  botao.addEventListener('click', function () {
+    var texto = document.getElementById('pergunta').textContent;
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(texto).then(marcarCopiado, function () { copiarSemApi(texto); });
+    } else {
+      copiarSemApi(texto);
+    }
+  });
+})();
+</script>
+{% endif %}
+</body>
+</html>

@@ -259,11 +259,11 @@ Os prompts, agentes e skills que você e o escritório guardam na **Biblioteca d
 
 | Ferramenta | Nome | O que faz | Origem |
 |---|---|---|---|
-| `revisar_peticao_inicial` | Revisar petição inicial | Revisa o texto de uma petição com o **agente revisor oficial** do escritório (mesmos prompts, manual FAP e casos de referência do módulo Revisor): achados com severidade, documentos faltantes, teses e resumo executivo | IA |
+| `revisar_peticao_inicial` | Revisar petição inicial | Pede ao **agente revisor oficial** do escritório uma revisão nova da petição, pelo **Id Wrike** (o Claude pergunta antes): o arquivo anexado vai direto por um **link de envio** (ou a pessoa solta na página), o do **Drive** pelo link, e petição curta pelo texto. Entra no histórico como a da tela e roda em segundo plano — o resultado sai em `detalhar_revisao` e por e-mail a quem pediu | IA |
 | `listar_peticoes_revisao` | Petições no Revisor | Petições do Revisor com o estágio de cada uma, nº de revisões e data da última — "o que está aguardando ajuste?" | Sistema |
-| `detalhar_revisao` | Achados de uma revisão | Os achados de uma revisão **já feita**: gravidade, localização, correção sugerida e referência do manual | Sistema |
+| `detalhar_revisao` | Achados de uma revisão | Os achados de uma revisão **já feita**: gravidade, localização, correção sugerida e referência do manual. Enquanto processa, diz há quanto tempo | Sistema |
 | `historico_revisoes_peticao` | Histórico de revisões | Evolução entre as revisões da mesma petição: o que foi resolvido, o que **reincidiu** e o que é novo | Sistema |
-| `comparar_versoes_peticao` | Comparar versões da petição | Revisa **duas versões juntas** (original × revisada) com o agente oficial — "a v2 corrigiu o que foi apontado?" | IA |
+| `comparar_versoes_peticao` | Comparar versões da petição | Revisa **duas versões juntas** (original × revisada) com o agente oficial — "a v2 corrigiu o que foi apontado?". Também pelo Id Wrike e em segundo plano | IA |
 | `ler_manual_revisor` | Manual FAP do escritório | Lê o **manual FAP do escritório** (e casos de referência) por seção ou termo — é o que permite explicar um achado citando a régua real | Sistema |
 | `versoes_manual_revisor` | Versões do manual do Revisor | Versões do manual e das referências: qual está ativa, quem criou e quando | Sistema |
 | `auditoria_revisor` | Auditoria do Revisor | Quem fez o quê e quando no módulo | Sistema |

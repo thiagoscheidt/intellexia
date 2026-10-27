@@ -15,3 +15,6 @@ wheels/
 instance/
 
 uv.lockuploads/mcp_exports/
+
+# Modelos do brainstorming (visual companion)
+.superpowers/

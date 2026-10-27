@@ -675,15 +675,18 @@ def _build_prior_attention_points(
 
 def _start_review_in_background(execution_id: int, law_firm_id: int, petition_file_path: str,
                                 compared_file_path: str | None = None,
-                                benefits_spreadsheet: dict | None = None) -> None:
+                                benefits_spreadsheet: dict | None = None,
+                                notify_user: bool = False) -> None:
     """Dispara o agente revisor numa thread e devolve o controle imediatamente.
 
     A chamada à LLM leva 1-2 min; processar dentro da requisição estoura os
     timeouts de proxy (Cloudflare ~100s). O POST retorna na hora e a tela de
     resultado acompanha o status (auto-refresh).
 
-    Usado tanto pelo envio de uma revisão nova quanto pelo reprocessamento de
-    uma que falhou — o tratamento de falha da thread mora só aqui.
+    Usado pelo envio de uma revisão nova, pelo reprocessamento de uma que falhou
+    e pela revisão pedida pelo Claude (MCP) — o tratamento de falha da thread
+    mora só aqui. ``notify_user`` manda e-mail a quem pediu quando termina: o
+    Claude não é avisado depois que a ferramenta respondeu (RPI-37).
     """
     app_obj = current_app._get_current_object()
 
@@ -709,6 +712,13 @@ def _start_review_in_background(execution_id: int, law_firm_id: int, petition_fi
                 except Exception:
                     db.session.rollback()
             finally:
+                if notify_user:
+                    try:
+                        _svc.send_revision_finished_email(execution_id)
+                    except Exception as email_error:
+                        db.session.rollback()
+                        app_obj.logger.warning(
+                            'Revisão %s: e-mail de conclusão não enviado: %s', execution_id, email_error)
                 db.session.remove()
 
     threading.Thread(
@@ -1280,16 +1290,9 @@ def revision():
                     office_document_identifier=law_firm_document_identifier,
                 ).first()
 
-            if petition and petition.workflow_status in _svc.NEW_REVISION_BLOCKED_STATUSES:
-                status_label = PETITION_WORKFLOW_STATUSES.get(petition.workflow_status, petition.workflow_status)
-                unlock_hint = (
-                    'Um administrador deve aprová-la ou devolvê-la para ajustes.'
-                    if petition.workflow_status == 'awaiting_approval'
-                    else 'Um administrador pode reabri-la para ajustes.'
-                )
-                return jsonify({
-                    'error': f'Esta petição está "{status_label}" e não aceita nova revisão. {unlock_hint}'
-                }), 403
+            block_reason = _svc.describe_new_revision_block(petition)
+            if block_reason:
+                return jsonify({'error': block_reason}), 403
 
 
             # Salvar arquivo principal
@@ -1513,13 +1516,7 @@ def revision_result(execution_id: int):
 
     # Watchdog: a revisão roda em thread; se o processo web for reiniciado no
     # meio, a execução ficaria presa em "processando" para sempre.
-    if _svc.is_execution_stuck(execution):
-        execution.status = 'failed'
-        execution.error_message = ('Processamento interrompido (tempo excedido — provável reinício '
-                                   'do servidor). Envie a revisão novamente.')
-        execution.completed_at = datetime.now()
-        _sync_petition_after_revision(execution)
-        db.session.commit()
+    _svc.fail_if_stuck(execution)
 
     petition = execution.petition
     document_identifier = (

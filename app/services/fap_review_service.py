@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import re
+import secrets
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -421,30 +422,108 @@ def _safe_slug(value: str, max_len: int = 40) -> str:
     return slug.strip('_')[:max_len] or 'peticao'
 
 
-def record_text_review(law_firm_id: int, user_id: int | None, identifier: str,
-                       petition_text: str, result_payload: dict,
-                       title: str = '', comparative: bool = False) -> dict:
-    """Registra no módulo uma revisão feita a partir de texto (via MCP).
+def describe_new_revision_block(petition) -> str | None:
+    """Motivo pelo qual a petição não aceita revisão nova; None quando aceita."""
+    if not petition or petition.workflow_status not in NEW_REVISION_BLOCKED_STATUSES:
+        return None
+    status_label = PETITION_WORKFLOW_STATUSES.get(petition.workflow_status, petition.workflow_status)
+    unlock_hint = (
+        'Um administrador deve aprová-la ou devolvê-la para ajustes.'
+        if petition.workflow_status == 'awaiting_approval'
+        else 'Um administrador pode reabri-la para ajustes.'
+    )
+    return f'Esta petição está "{status_label}" e não aceita nova revisão. {unlock_hint}'
 
-    Segue o mesmo caminho da tela: reaproveita/cria a petição pelo identificador do
-    escritório, guarda o texto revisado em disco (para a tela conseguir abrir o
-    documento) e grava a execução já concluída, sincronizando o status da petição.
 
-    Retorna ``{"peticao_id", "revisao_id", "numero_revisao", "status_peticao",
-    "peticao_criada"}``.
+def check_new_revision_allowed(law_firm_id: int, identifier: str) -> tuple:
+    """Confere se o Id Wrike aceita revisão nova, como a tela.
+
+    Devolve ``(petição existente ou None, identificador normalizado)``. Levanta
+    ValueError com a mensagem para o usuário: Id inválido para petição nova ou
+    petição bloqueada (aguardando aprovação, aprovada, protocolada, arquivada).
     """
     identifier = str(identifier or '').strip()
-    if not identifier:
-        raise ValueError('Identificador do documento é obrigatório para registrar a revisão.')
-    if len(identifier) > MAX_IDENTIFIER_LENGTH:
-        raise ValueError(
-            f'O identificador do documento deve ter no máximo {MAX_IDENTIFIER_LENGTH} caracteres.'
-        )
+    petition = None
+    if identifier:
+        petition = FapReviewPetition.query.filter_by(
+            law_firm_id=law_firm_id,
+            office_document_identifier=identifier,
+        ).first()
+    if not petition:
+        # Só petição nova passa pela validação, como na tela: a existente pode
+        # ter Id anterior ao RPI-23 e continua aceitando revisão.
+        identifier, identifier_error = validate_wrike_identifier(identifier)
+        if identifier_error:
+            raise ValueError(identifier_error)
 
-    petition = FapReviewPetition.query.filter_by(
-        law_firm_id=law_firm_id,
-        office_document_identifier=identifier,
-    ).first()
+    block = describe_new_revision_block(petition)
+    if block:
+        raise ValueError(block)
+    return petition, identifier
+
+
+def running_revision(petition) -> FapReviewExecution | None:
+    """Revisão da petição ainda em processamento (não presa), se houver."""
+    if not petition:
+        return None
+    running = FapReviewExecution.query.filter_by(
+        petition_id=petition.id,
+        execution_type='revision',
+        status='processing',
+    ).order_by(FapReviewExecution.id.desc()).first()
+    if running and not is_execution_stuck(running):
+        return running
+    return None
+
+
+def _next_revision_number(petition) -> int:
+    if not petition:
+        return 1
+    return FapReviewExecution.query.filter_by(
+        petition_id=petition.id,
+        execution_type='revision',
+    ).count() + 1
+
+
+def _in_progress_payload(petition, running) -> dict:
+    return {
+        'ja_em_andamento': True,
+        'peticao_id': petition.id,
+        'revisao_id': running.id,
+        'numero_revisao': running.revision_number,
+        'peticao_criada': False,
+        'titulo': petition.title,
+    }
+
+
+def open_file_review(law_firm_id: int, user_id: int | None, identifier: str,
+                     main_path: str, main_filename: str, title: str = '',
+                     compared_path: str | None = None, on_created=None) -> dict:
+    """Abre no módulo uma revisão de um arquivo já salvo, como o envio da tela.
+
+    Ponto único das revisões que não vêm da tela (RPI-37): texto do Claude
+    (gravado em .txt), arquivo do link de envio e arquivo do Drive. Reaproveita
+    ou cria a petição pelo Id Wrike e grava a execução em 'processing'. Quem
+    chama dispara o agente em segundo plano (`fap_review._start_review_in_background`),
+    o mesmo da tela: a revisão passa de 5 minutos em produção e o Claude
+    desiste da chamada antes.
+
+    Com ``compared_path`` é comparativa: ``main_path`` é a versão original e
+    ``compared_path`` a revisada, na mesma ordem dos arquivos da tela.
+
+    ``on_created(execution)`` roda depois de a execução existir e antes do
+    commit, na mesma transação — o link de envio é consumido ali, para dois
+    envios simultâneos não abrirem duas revisões. Se ele levantar, nada é gravado.
+
+    Levanta ValueError com a mensagem para o usuário (Id inválido, petição
+    bloqueada). Se a petição já tem revisão em processamento, não abre outra —
+    cada uma é uma chamada paga ao modelo — e devolve a que está rodando, com
+    ``ja_em_andamento``; o arquivo fica para quem chamou decidir.
+    """
+    petition, identifier = check_new_revision_allowed(law_firm_id, identifier)
+    running = running_revision(petition)
+    if running:
+        return _in_progress_payload(petition, running)
 
     petition_created = False
     if not petition:
@@ -459,64 +538,159 @@ def record_text_review(law_firm_id: int, user_id: int | None, identifier: str,
         db.session.flush()
         petition_created = True
 
-    revision_number = FapReviewExecution.query.filter_by(
-        petition_id=petition.id,
-        execution_type='revision',
-    ).count() + 1
-
-    # O texto revisado vira arquivo: a tela abre o documento da execução e a revisão
-    # precisa ser auditável — sem isso ficaria um registro sem o que foi revisado.
-    stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f'{stamp}_mcp_{_safe_slug(identifier)}_rev{revision_number}.md'
-    filepath = upload_directory(law_firm_id, 'revisions') / filename
-    filepath.write_text(petition_text or '', encoding='utf-8')
-
+    revision_number = _next_revision_number(petition)
     now = datetime.now()
     execution = FapReviewExecution(
         law_firm_id=law_firm_id,
         user_id=user_id,
         petition_id=petition.id,
         execution_type='revision',
-        status='completed',
+        status='processing',
         revision_number=revision_number,
-        main_document_path=str(filepath),
-        main_document_filename=filename,
+        main_document_path=str(main_path),
+        main_document_filename=main_filename,
         law_firm_document_identifier=identifier,
         auxiliary_documents_count=0,
         auxiliary_documents_json=json.dumps([]),
-        comparative_analysis=comparative,
-        result_json=json.dumps(result_payload, ensure_ascii=False, indent=2),
-        used_versions_json=json.dumps(collect_active_versions(law_firm_id), ensure_ascii=False),
-        completed_at=now,
+        comparative_analysis=compared_path is not None,
+        compared_document_path=str(compared_path) if compared_path else None,
     )
-
-    tokens_used = result_payload.get('tokens_used')
-    if tokens_used is not None:
-        execution.tokens_used = tokens_used
-    cost_usd = result_payload.get('cost_usd')
-    if cost_usd is not None:
-        from decimal import Decimal
-        execution.cost_usd = Decimal(str(cost_usd))
-
     db.session.add(execution)
     db.session.flush()
-
-    sync_petition_after_revision(execution)
+    petition.latest_revision_id = execution.id
+    petition.revision_count = max(petition.revision_count or 0, revision_number)
+    if petition.workflow_status != 'in_review':
+        petition.workflow_status = 'in_review'
+        petition.status_changed_at = now
+    petition.updated_at = now
+    if on_created:
+        try:
+            on_created(execution)
+        except Exception:
+            db.session.rollback()
+            raise
     db.session.commit()
 
     if petition_created:
         log_audit(law_firm_id, user_id, 'petition_created', 'petition', petition.id,
                   f'Petição criada via MCP: {petition.title}')
-    log_audit(law_firm_id, user_id, 'revision_completed', 'execution', execution.id,
-              f'Revisão via MCP (Claude) concluída: {identifier}')
+    log_audit(law_firm_id, user_id, 'revision_started', 'execution', execution.id,
+              f'Revisão via MCP (Claude) iniciada: {identifier}')
 
     return {
+        'ja_em_andamento': False,
         'peticao_id': petition.id,
         'revisao_id': execution.id,
         'numero_revisao': revision_number,
-        'status_peticao': petition.workflow_status,
         'peticao_criada': petition_created,
+        'titulo': petition.title,
+        'petition_path': str(main_path),
+        'compared_path': str(compared_path) if compared_path else None,
     }
+
+
+def start_text_review(law_firm_id: int, user_id: int | None, identifier: str,
+                      petition_text: str, title: str = '',
+                      compared_text: str | None = None) -> dict:
+    """Abre a revisão de um texto mandado pelo Claude (ver `open_file_review`).
+
+    O texto vira arquivo .txt: é dele que o agente da tela extrai o texto (.md
+    cairia no modo anexo) e a revisão precisa ser auditável na tela. Com revisão
+    em andamento, nada é gravado em disco.
+    """
+    petition, identifier = check_new_revision_allowed(law_firm_id, identifier)
+    running = running_revision(petition)
+    if running:
+        return _in_progress_payload(petition, running)
+
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    base_name = (f'{stamp}_{secrets.token_hex(3)}_mcp_{_safe_slug(identifier)}'
+                 f'_rev{_next_revision_number(petition)}')
+    directory = upload_directory(law_firm_id, 'revisions')
+    filename = f'{base_name}.txt'
+    filepath = directory / filename
+    filepath.write_text(petition_text or '', encoding='utf-8')
+    compared_path = None
+    if compared_text is not None:
+        compared_path = directory / f'{base_name}_revisada.txt'
+        compared_path.write_text(compared_text, encoding='utf-8')
+
+    return open_file_review(law_firm_id, user_id, identifier, str(filepath), filename,
+                            title=title, compared_path=str(compared_path) if compared_path else None)
+
+
+STUCK_EXECUTION_MESSAGE = ('Processamento interrompido (tempo excedido — provável reinício '
+                           'do servidor). Envie a revisão novamente.')
+
+
+def fail_if_stuck(execution) -> bool:
+    """Marca como falha a revisão presa em 'processing'; True se marcou."""
+    if not is_execution_stuck(execution):
+        return False
+    execution.status = 'failed'
+    execution.error_message = STUCK_EXECUTION_MESSAGE
+    execution.completed_at = datetime.now()
+    sync_petition_after_revision(execution)
+    db.session.commit()
+    return True
+
+
+def revision_result_url(execution_id: int) -> str:
+    """Endereço absoluto da tela da revisão, também fora de requisição (MCP, thread)."""
+    from flask import current_app, url_for
+    from app.utils.urls import app_public_url
+
+    with current_app.test_request_context(base_url=app_public_url()):
+        return url_for('fap_review.revision_result', execution_id=execution_id, _external=True)
+
+
+def send_revision_finished_email(execution_id: int) -> bool:
+    """Avisa quem pediu a revisão pelo Claude que ela terminou (ou falhou).
+
+    O Claude não recebe nada depois que a ferramenta respondeu: sem o e-mail, a
+    pessoa só saberia perguntando. Sem SMTP ou sem e-mail no cadastro, não envia.
+    """
+    from flask import current_app, render_template, url_for
+    from app.services import email_service
+    from app.utils.urls import app_public_url
+
+    execution = FapReviewExecution.query.get(execution_id)
+    if not execution or execution.status not in {'completed', 'failed'}:
+        return False
+    user = _Usuario.query.get(execution.user_id) if execution.user_id else None
+    if not user or not user.email:
+        return False
+
+    petition = execution.petition
+    title = petition.title if petition else execution.law_firm_document_identifier
+    ok = execution.status == 'completed'
+    findings = (load_execution_result_payload(execution).get('findings') or []) if ok else []
+    by_severity = Counter(str(f.get('severity') or 'SEM GRAVIDADE').upper() for f in findings)
+
+    if ok:
+        subject = f'Revisão pronta: {title} (revisão {execution.revision_number})'
+    else:
+        subject = f'Revisão não concluída: {title} (revisão {execution.revision_number})'
+    # Os context processors do app leem a sessão: fora de requisição (thread da
+    # revisão) o template só renderiza dentro de um request de teste.
+    with current_app.test_request_context(base_url=app_public_url()):
+        html = render_template(
+            'emails/revisao_concluida.html',
+            user=user,
+            execution=execution,
+            petition_title=title,
+            identifier=execution.law_firm_document_identifier,
+            ok=ok,
+            total_findings=len(findings),
+            by_severity=sorted(by_severity.items(), key=lambda kv: _severity_order(kv[0])),
+            link=url_for('fap_review.revision_result', execution_id=execution.id, _external=True),
+        )
+    return email_service.send_email(user.email, subject, html)
+
+
+def _severity_order(severity: str) -> int:
+    order = {'CRÍTICO': 0, 'CRITICO': 0, 'MODERADO': 1, 'FORMAL': 2}
+    return order.get(severity, 3)
 
 
 # ── Estatísticas por advogado ────────────────────────────────────────────────
