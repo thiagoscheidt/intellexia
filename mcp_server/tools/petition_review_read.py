@@ -10,6 +10,9 @@ a mesma fonte da tela.
 """
 from __future__ import annotations
 
+import re
+import unicodedata
+
 from mcp_server.tools.pagination import (
     clamp_limit,
     clamp_offset,
@@ -38,6 +41,11 @@ def _finding_dict(f: dict) -> dict:
         "referencia_manual": f.get("manual_reference"),
         "padrao_novo": f.get("is_new_pattern", False),
     }
+
+
+def _origem(execution) -> str:
+    from app.services.fap_review_service import describe_review_origin
+    return describe_review_origin(execution)
 
 
 def _severity_counts(findings: list[dict]) -> dict:
@@ -124,10 +132,11 @@ def get_review_detail_handler(law_firm_id: int, revisao_id: int) -> dict:
             "peticao_id": execution.petition_id,
             "numero_revisao": execution.revision_number,
             "status": "processando",
+            "origem": _origem(execution),
             "processando_ha_minutos": minutos,
             "aviso": (
-                "A revisão ainda está processando — costuma levar alguns minutos. "
-                "Quem pediu recebe um e-mail quando terminar; não abra outra revisão."
+                "A revisão (enviada pela tela do Revisor) ainda está processando — costuma "
+                "levar alguns minutos. Não abra outra revisão."
             ),
         }
     if execution.status != "completed":
@@ -136,6 +145,7 @@ def get_review_detail_handler(law_firm_id: int, revisao_id: int) -> dict:
             "peticao_id": execution.petition_id,
             "numero_revisao": execution.revision_number,
             "status": "falhou" if execution.status == "failed" else execution.status,
+            "origem": _origem(execution),
             "erro_execucao": execution.error_message,
             "aviso": "A revisão não foi concluída — não há achados para mostrar. "
                      "Pela tela do Revisor dá para reprocessá-la.",
@@ -150,6 +160,8 @@ def get_review_detail_handler(law_firm_id: int, revisao_id: int) -> dict:
         "status_peticao": petition.workflow_status if petition else None,
         "status_peticao_descricao": _status_label(petition.workflow_status) if petition else None,
         "numero_revisao": execution.revision_number,
+        "origem": _origem(execution),
+        "modelo": execution.model_name,
         "tipo_analise": payload.get("analysis_type"),
         "revisao_focada": payload.get("focused_review", False),
         "documento": execution.main_document_filename,
@@ -178,6 +190,97 @@ def get_review_detail_handler(law_firm_id: int, revisao_id: int) -> dict:
         "tokens_usados": execution.tokens_used,
         "custo_usd": float(execution.cost_usd) if execution.cost_usd is not None else None,
     }
+
+
+# ── Mesmo achado entre revisões ─────────────────────────────────────
+# A revisão seguinte reescreve o mesmo apontamento com outras palavras
+# ("arts. 370/371", "destacamos/compartilhamos" — relato da Protege, 28/10/2026).
+# Comparar a descrição idêntica marcava o mesmo achado como resolvido E novo.
+
+# Medido nas revisões seguidas do banco local (28/10/2026): o mesmo achado
+# reescrito fica entre 0,56 e 0,80 de sobreposição; achados diferentes da mesma
+# categoria, até 0,36. O Jaccard dava 0,37–0,42 para reescritas óbvias ("há
+# repetição e sobreposição" x "ainda há sobreposição") porque a descrição longa
+# dilui as palavras em comum.
+LIMIAR_MESMO_ACHADO = 0.55
+# Mesma localização na petição ("Pedidos", "Item 3"): basta menos texto em comum.
+LIMIAR_MESMO_LOCAL = 0.4
+# Abaixo disso a sobreposição engana ("Falta o NTEP" estaria contido em qualquer
+# achado longo que cite o NTEP): compara pelo Jaccard.
+_MINIMO_PALAVRAS_SOBREPOSICAO = 5
+_PALAVRA = re.compile(r"[0-9a-z]+")
+# Palavras que aparecem em quase todo achado ou que só dizem "de novo" na
+# revisão seguinte ("ainda", "permanece"): não distinguem um achado de outro.
+_GENERICAS = frozenset("""
+    que para com uma umas uns nao mais ainda dos das pelo pela pelos pelas por como seu sua seus
+    suas este esta estes estas esse essa esses essas isso isto nos nas aos entre sem sobre tambem
+    foi ser sao ter tem deve devem pode podem documento texto peticao trecho manual padrao forma
+    uso usa usado usada permanece permanecem persiste persistem continua continuam mantem
+    """.split())
+
+
+def _normalizar(texto) -> str:
+    sem_acento = unicodedata.normalize("NFKD", str(texto or "")).encode("ascii", "ignore").decode()
+    return " ".join(sem_acento.lower().split())
+
+
+def _palavras(texto) -> set[str]:
+    # Palavras de até 2 letras ("de", "do", "no") não distinguem achado; número
+    # distingue ("370", "371"), seja qual for o tamanho.
+    return {p for p in _PALAVRA.findall(_normalizar(texto))
+            if (p.isdigit() or len(p) > 2) and p not in _GENERICAS}
+
+
+def _nota_mesmo_achado(anterior: dict, atual: dict) -> float:
+    trecho = _normalizar(anterior.get("location_excerpt"))
+    if trecho and trecho == _normalizar(atual.get("location_excerpt")):
+        return 1.0
+    a, b = _palavras(anterior.get("description")), _palavras(atual.get("description"))
+    if not a or not b:
+        return 0.0
+    if min(len(a), len(b)) >= _MINIMO_PALAVRAS_SOBREPOSICAO:
+        return len(a & b) / min(len(a), len(b))
+    return len(a & b) / len(a | b)
+
+
+def _limiar(anterior: dict, atual: dict) -> float:
+    local = _normalizar(anterior.get("location"))
+    if local and local == _normalizar(atual.get("location")):
+        return LIMIAR_MESMO_LOCAL
+    return LIMIAR_MESMO_ACHADO
+
+
+def casar_achados(anteriores: list[dict], atuais: list[dict]) -> list[tuple[int, int]]:
+    """Pares (índice na revisão anterior, índice na atual) que são o mesmo achado.
+
+    Um para um, só dentro da mesma categoria, maior semelhança primeiro: trecho
+    da petição igual vale 1; senão, a sobreposição das palavras da descrição
+    (sem acento, caixa nem palavras genéricas; Jaccard quando uma das duas é
+    curta). Casa a partir de ``LIMIAR_MESMO_ACHADO``, ou de
+    ``LIMIAR_MESMO_LOCAL`` quando a localização é a mesma.
+    """
+    candidatos = []
+    for i, anterior in enumerate(anteriores):
+        for j, atual in enumerate(atuais):
+            if _normalizar(anterior.get("category")) != _normalizar(atual.get("category")):
+                continue
+            nota = _nota_mesmo_achado(anterior, atual)
+            if nota >= _limiar(anterior, atual):
+                candidatos.append((-nota, i, j))
+    usados_antes: set[int] = set()
+    usados_agora: set[int] = set()
+    pares = []
+    for _, i, j in sorted(candidatos):
+        if i in usados_antes or j in usados_agora:
+            continue
+        usados_antes.add(i)
+        usados_agora.add(j)
+        pares.append((i, j))
+    return pares
+
+
+def _descricao(finding: dict) -> str:
+    return " ".join(str(finding.get("description") or "").split())
 
 
 def petition_review_history_handler(
@@ -211,25 +314,27 @@ def petition_review_history_handler(
     )
 
     revisoes = []
-    anteriores: set[str] = set()
+    anteriores: list[dict] = []
     for e in executions:
         payload = load_execution_result_payload(e)
         findings = payload.get("findings") or []
-        # Descrição normalizada identifica o mesmo achado entre revisões.
-        atuais = {
-            " ".join(str(f.get("description") or "").lower().split())
-            for f in findings if f.get("description")
-        }
+        atuais = [f for f in findings if isinstance(f, dict) and f.get("description")]
+        casados = casar_achados(anteriores, atuais)
+        casados_antes = {i for i, _ in casados}
+        casados_agora = {j for _, j in casados}
         revisoes.append({
             "revisao_id": e.id,
             "numero_revisao": e.revision_number,
             "status": e.status,
+            "origem": _origem(e),
             "concluida_em": _iso(e.completed_at),
             "total_achados": len(findings),
             "achados_por_gravidade": _severity_counts(findings),
-            "reincidentes": sorted(atuais & anteriores) if anteriores else [],
-            "resolvidos_desde_a_anterior": sorted(anteriores - atuais) if anteriores else [],
-            "novos": sorted(atuais - anteriores) if anteriores else sorted(atuais),
+            "reincidentes": [_descricao(atuais[j]) for _, j in sorted(casados, key=lambda par: par[1])],
+            "resolvidos_desde_a_anterior": [
+                _descricao(f) for i, f in enumerate(anteriores) if i not in casados_antes
+            ],
+            "novos": [_descricao(f) for j, f in enumerate(atuais) if j not in casados_agora],
         })
         anteriores = atuais
 

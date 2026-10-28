@@ -1,5 +1,7 @@
 # Revisor pelo Claude: envio do arquivo — Implementation Plan
 
+> **Substituído em 28/10/2026** por `docs/superpowers/specs/2026-10-28-revisor-no-claude-design.md`: o Claude passou a revisar na própria conversa e o link de envio, o Drive e a revisão no servidor pelo MCP saíram.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** a revisão pedida pelo Claude recebe o arquivo original da petição por link de envio de uso único (página ou `curl`) ou por link do Drive, além do texto curto que já funciona.

@@ -1,0 +1,10 @@
+{# Selo da revisão feita no Claude (fap_review_service.REVIEW_ORIGIN_CLAUDE):
+   o Claude do usuário revisou na conversa e o IntellexIA só conferiu e gravou.
+   Fica fora da pontuação e não envia a petição para aprovação. #}
+{% macro selo_claude(execution, classes='') -%}
+{%- if execution and execution.review_origin == 'claude' -%}
+<span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle {{ classes }}"
+    title="Revisão feita pelo Claude, na conversa, com as instruções do Revisor ({{ execution.model_name or 'modelo não informado' }}). Fica fora da pontuação e não envia a petição para aprovação.">
+    <i class="bi bi-chat-dots me-1"></i>Feita no Claude</span>
+{%- endif -%}
+{%- endmacro %}

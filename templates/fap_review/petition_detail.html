@@ -1,5 +1,6 @@
 {% extends "layout/base.html" %}
 {% from 'fap_review/_wrike_link.html' import wrike_link %}
+{% from 'fap_review/_selo_origem.html' import selo_claude %}
 
 {% from "partials/page_hero.html" import page_hero %}
 
@@ -551,14 +552,22 @@
                         petição</label>
                     <div class="petition-status-row justify-content-lg-end">
                         {% set is_admin_user = session.get('user_role') == 'admin' %}
+                        {# Última revisão feita no Claude: o advogado não manda para aprovação
+                           (o admin, que aprova, pode). Ver CLAUDE_REVIEW_APPROVAL_BLOCK. #}
+                        {% set bloqueio_claude = not is_admin_user and petition.latest_revision
+                            and petition.latest_revision.review_origin == 'claude' %}
                         <select id="petitionWorkflowStatus" class="form-select" style="max-width: 280px;"
                             {% if not is_admin_user and petition.workflow_status in ['awaiting_approval', 'ready_for_filing'] %}disabled
                             title="Somente administradores alteram o status nesta etapa"{% endif %}>
                             {% for status_key, status_label in petition_status_labels.items() %}
                             {% if is_admin_user or status_key != 'ready_for_filing'
                             or petition.workflow_status == 'ready_for_filing' %}
+                            {% set opcao_bloqueada = bloqueio_claude and status_key in ['awaiting_approval', 'ready_for_filing']
+                                and petition.workflow_status != status_key %}
                             <option value="{{ status_key }}" {% if petition.workflow_status==status_key %}selected{%
-                                endif %}>{{ status_label }}</option>
+                                endif %}{% if opcao_bloqueada %} disabled data-bloqueio-claude="1"
+                                title="{{ claude_approval_block }}"{% endif %}>{{ status_label }}{% if opcao_bloqueada %}
+                                — última revisão feita no Claude{% endif %}</option>
                             {% endif %}
                             {% endfor %}
                         </select>
@@ -662,6 +671,7 @@
                     <div>
                         <div class="petition-panel-subtitle">Revisão mais recente registrada nesta petição</div>
                         <div class="petition-latest-revision">R{{ petition.latest_revision.revision_number or '?' }}
+                            {{ selo_claude(petition.latest_revision, 'fs-6 align-middle') }}
                         </div>
                     </div>
                     <span
@@ -771,6 +781,7 @@
                             <td class="ps-3">
                                 <span class="revision-chip"><i class="bi bi-layers me-1"></i> R{{
                                     execution.revision_number or loop.revindex }}</span>
+                                {{ selo_claude(execution, 'ms-1') }}
                             </td>
                             <td>
                                 {% if execution.status == 'completed' and petition.latest_revision_id

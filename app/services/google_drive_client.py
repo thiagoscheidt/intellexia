@@ -237,15 +237,11 @@ class DriveClient:
     def metadados(self, file_id: str) -> dict:
         return self._get(f'files/{file_id}', {'fields': _CAMPOS}).json()
 
-    def baixar(self, file_id: str, dest_dir: str, *, meta: Optional[dict] = None,
-               gdoc_como: Optional[str] = None) -> tuple[str, str, str]:
+    def baixar(self, file_id: str, dest_dir: str, *, meta: Optional[dict] = None) -> tuple[str, str, str]:
         """Baixa para `dest_dir`. Devolve (caminho, nome original, sha256).
 
         Grava em `.part` e só renomeia depois de conferir que veio o arquivo —
         nunca a página HTML de erro — e com o tamanho anunciado.
-
-        Documento nativo do Google sai em PDF; `gdoc_como=MIME_DOCX` exporta em
-        DOCX (o Revisor extrai o texto do DOCX; o PDF iria como anexo).
         """
         meta = meta or self.metadados(file_id)
         mime = meta.get('mimeType')
@@ -253,12 +249,9 @@ class DriveClient:
         if mime == MIME_PASTA:
             raise DriveSemAcesso('Pasta não se baixa: escolha os arquivos dentro dela.')
         exportar_como = EXPORTAVEIS.get(mime)
-        if exportar_como and gdoc_como:
-            exportar_como = gdoc_como
         if exportar_como:
-            extensao = '.docx' if exportar_como == MIME_DOCX else '.pdf'
-            if not nome.lower().endswith(extensao):
-                nome += extensao
+            if not nome.lower().endswith('.pdf'):
+                nome += '.pdf'
             resposta = self._get(f'files/{file_id}/export', {'mimeType': exportar_como}, stream=True)
             tamanho_esperado = None
         else:

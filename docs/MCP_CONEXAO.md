@@ -98,11 +98,13 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `decisoes_parecidas` | Decisões semanticamente próximas de uma decisão (índice próprio da jurisprudência) |
 | `exportar_jurisprudencia_excel` | Planilha XLSX das decisões filtradas (link assinado, 1 h de validade) |
 | `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (OpenCNPJ/Receita) — qualquer usuário logado |
-| `revisar_peticao_inicial` | Abre a revisão no módulo pelo `identificador_documento` (Id Wrike, obrigatório) e roda o FapPetitionReviewerAgent em segundo plano, pelo mesmo `_start_review_in_background` da tela; responde na hora com `revisao_id` e manda e-mail a quem pediu ao terminar (RPI-37). Entradas: `texto_peticao` (curta), `link_drive` (baixa pela conta de serviço ou público) ou nenhuma → `link_envio` de uso único (`/revisao/enviar/<token>`, 2 h) com `comando_curl` para o Claude mandar o anexo |
+| `revisar_peticao_inicial` | Instruções do FapPetitionReviewerAgent (prompt de sistema e mensagem da tarefa montados pelo mesmo código do agente, com os prompts, referências e pontos de atenção ativos) em partes de até 40 mil caracteres, para o Claude revisar o anexo na conversa. Id Wrike/`peticao_id` opcionais (`fap_review_claude_service`) |
+| `conferir_revisao_peticao` | Confere o JSON do Claude contra o contrato de saída e passa o mesmo parse/saneador do agente (`montar_resultado`); grava rascunho em `fap_review_drafts` (24 h) e devolve os achados para exibir |
+| `gravar_revisao_peticao` | Grava o rascunho como `FapReviewExecution` concluída com `review_origin='claude'` (fora da pontuação, sem aprovação); cria a petição pelo Id Wrike se for nova |
 | `listar_peticoes_revisao` | Petições do Revisor com workflow_status, nº de revisões e última revisão (paginada) |
 | `detalhar_revisao` | Achados de uma revisão existente: gravidade, localização, correção, referência do manual, documentos faltantes e teses |
 | `historico_revisoes_peticao` | Evolução entre revisões da mesma petição: novos, reincidentes e resolvidos |
-| `comparar_versoes_peticao` | Revisão comparativa (original × revisada) com o agente oficial, pelo mesmo caminho em segundo plano do `revisar_peticao_inicial` |
+| `comparar_versoes_peticao` | Como `revisar_peticao_inicial`, com as instruções da revisão comparativa (original × revisada) |
 | `ler_manual_revisor` | Lê a referência ativa (manual_fap, casos_referencia, project_instructions) por seção ou termo |
 | `versoes_manual_revisor` | Versões das referências: ativa, autor, data, tamanho |
 | `auditoria_revisor` | Trilha de auditoria do módulo (paginada) |
@@ -148,7 +150,7 @@ Exemplos de uso no Claude:
 | `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `listar_beneficios_calculo_fap`, `resumo_beneficios_calculo_fap`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel`, `buscar_por_segurado`, `revelar_nome_segurado` | Painel FAP |
 | `listar_cats_fap`, `listar_massas_salariais_fap`, `listar_vinculos_fap`, `listar_rotatividade_fap` | Painel de Contestações |
 | `listar_processos`, `detalhar_processo`, `pesquisar_jurisprudencia`, `detalhar_decisao`, `panorama_jurisprudencia`, `valores_de_filtro_jurisprudencia`, `decisoes_parecidas`, `exportar_jurisprudencia_excel` | Painel de Processos |
-| `revisar_peticao_inicial`, `listar_peticoes_revisao`, `detalhar_revisao`, `historico_revisoes_peticao`, `comparar_versoes_peticao`, `ler_manual_revisor`, `versoes_manual_revisor`, `auditoria_revisor` | Revisor de Petições |
+| `revisar_peticao_inicial`, `conferir_revisao_peticao`, `gravar_revisao_peticao`, `listar_peticoes_revisao`, `detalhar_revisao`, `historico_revisoes_peticao`, `comparar_versoes_peticao`, `ler_manual_revisor`, `versoes_manual_revisor`, `auditoria_revisor` | Revisor de Petições |
 | `estatisticas_revisor` | Revisor de Petições **+ papel de administrador** (espelha o `require_admin_user` da tela) |
 
 Sem o módulo liberado, a ferramenta retorna um erro de permissão claro. Permissões são

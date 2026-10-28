@@ -3199,6 +3199,12 @@ class FapReviewExecution(db.Model):
     # "não registrado": a configuração do escritório pode ter mudado desde
     # então, e inferir a partir dela recriaria o mesmo defeito.
     model_name = db.Column(db.String(100), comment='Modelo LLM usado nesta execução')
+    # Quem fez a revisão. Vazia = o IntellexIA (agente do escritório, no
+    # servidor). 'claude' = o Claude do usuário, na conversa, com as instruções
+    # do Revisor; o IntellexIA só conferiu e gravou o resultado. Revisão do
+    # Claude fica fora da pontuação e não envia a petição para aprovação
+    # (fap_review_service.REVIEW_ORIGIN_CLAUDE).
+    review_origin = db.Column(db.String(20), comment="Origem: vazia = IntellexIA; 'claude' = feita no Claude")
 
     # Análise comparativa (se houver duas versões)
     comparative_analysis = db.Column(db.Boolean, default=False, comment='True se análise comparativa')
@@ -3796,35 +3802,40 @@ class ApiToken(db.Model):
         return f'<ApiToken id={self.id} user_id={self.user_id} final={self.last4}>'
 
 
-class FapReviewUploadLink(db.Model):
-    """Tabela fap_review_upload_links - Link de envio do arquivo para uma revisão pedida pelo Claude.
+class FapReviewDraft(db.Model):
+    """Tabela fap_review_drafts - Resultado de uma revisão feita no Claude, conferido e ainda não gravado.
 
-    O Claude não consegue mandar o arquivo anexado pela chamada do MCP (RPI-37):
-    a ferramenta gera este link de uso único, que a pessoa abre no navegador ou
-    o próprio Claude usa com `curl`. O token só existe no link; aqui fica o
-    SHA-256, como em ``api_tokens``. Vale para um escritório, um usuário (quem
-    pediu), um Id Wrike e um envio.
+    O Claude revisa na conversa e manda o JSON para conferência: o IntellexIA
+    passa o mesmo parse e o mesmo saneador do agente e guarda o resultado aqui.
+    É isto que o Claude mostra ao usuário e, se ele disser que sim, o que vira
+    a revisão no histórico — o gravado é o mostrado, sem o Claude reescrever o
+    JSON. Guarda só o resultado, nunca a petição; vence em 24 h.
     """
-    __tablename__ = 'fap_review_upload_links'
+    __tablename__ = 'fap_review_drafts'
 
     id = db.Column(db.Integer, primary_key=True)
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
 
-    token_hash = db.Column(db.String(64), nullable=False, unique=True)
-    identifier = db.Column(db.String(96), nullable=False, comment='Id Wrike da petição')
-    title = db.Column(db.String(255), nullable=False, default='', comment='Título informado, usado se a petição for nova')
+    mode = db.Column(db.String(20), nullable=False, comment='revisao ou comparacao')
+    petition_id = db.Column(db.Integer, db.ForeignKey('fap_review_petitions.id', ondelete='SET NULL'),
+                            nullable=True, comment='Petição para a qual o resultado foi conferido')
+    identifier = db.Column(db.String(96), nullable=True, comment='Id Wrike informado na conferência')
 
-    expires_at = db.Column(db.DateTime, nullable=False)      # UTC
-    used_at = db.Column(db.DateTime, nullable=True)          # UTC
-    execution_id = db.Column(db.Integer, db.ForeignKey('fap_review_executions.id', ondelete='SET NULL'),
-                             nullable=True)
+    result_json = db.Column(db.Text, nullable=False, comment='PetitionReviewResult saneado')
+    used_versions_json = db.Column(db.Text, comment='Versões de prompt/referência ativas na conferência')
+
     created_at = db.Column(db.DateTime, nullable=False)      # UTC
+    expires_at = db.Column(db.DateTime, nullable=False)      # UTC
+    saved_execution_id = db.Column(db.Integer, db.ForeignKey('fap_review_executions.id', ondelete='SET NULL'),
+                                   nullable=True)
+    saved_at = db.Column(db.DateTime, nullable=True)         # UTC
 
     user = db.relationship('User', foreign_keys=[user_id], passive_deletes=True)
+    petition = db.relationship('FapReviewPetition', foreign_keys=[petition_id])
 
     def __repr__(self):
-        return f'<FapReviewUploadLink id={self.id} identifier={self.identifier}>'
+        return f'<FapReviewDraft id={self.id} mode={self.mode}>'
 
 
 class PromptLibraryItem(db.Model):

@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **67 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **69 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -28,9 +28,8 @@ O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de 
 - "Quais intimações chegaram esta semana e ainda não foram lidas?";
 - "O que saiu no processo 5001181-56.2023.4.03.6100?" — a linha do tempo das publicações do processo;
 - "Explica essa intimação: tem prazo?" — a IA diz o prazo, a providência e a urgência;
-- "**Revise esta petição**" (colando o texto) — o agente revisor oficial aponta achados e documentos faltantes;
-- "**Revise esta petição, identificador FAP-2024-013**" — a revisão entra no painel do Revisor, com histórico e custo;
-- "O que a revisão da FAP-2024-013 apontou?" — lê os achados sem gastar outra rodada de IA;
+- "**Revise esta petição**" (com o arquivo anexado) — o Claude revisa na conversa com o manual e as regras do Revisor do escritório e, se você quiser, grava no histórico da petição;
+- "O que a revisão da petição 4387120543 apontou?" — lê os achados de uma revisão que já existe, sem revisar de novo;
 - Comando pronto `/analise_empresa` — análise completa de uma empresa em um clique.
 
 ---
@@ -259,19 +258,21 @@ Os prompts, agentes e skills que você e o escritório guardam na **Biblioteca d
 
 | Ferramenta | Nome | O que faz | Origem |
 |---|---|---|---|
-| `revisar_peticao_inicial` | Revisar petição inicial | Pede ao **agente revisor oficial** do escritório uma revisão nova da petição, pelo **Id Wrike** (o Claude pergunta antes): o arquivo anexado vai direto por um **link de envio** (ou a pessoa solta na página), o do **Drive** pelo link, e petição curta pelo texto. Entra no histórico como a da tela e roda em segundo plano — o resultado sai em `detalhar_revisao` e por e-mail a quem pediu | IA |
+| `revisar_peticao_inicial` | Revisar petição inicial | Entrega ao Claude as **instruções do Revisor do escritório** (regras, manual FAP, casos de referência, pontos de atenção da última revisão) para ele **revisar a petição anexada ali na conversa**. A petição não vai para o IntellexIA; o Id Wrike é opcional | Sistema |
+| `conferir_revisao_peticao` | Conferir revisão feita no Claude | Confere o resultado da revisão feita na conversa com o **mesmo saneador da tela** (tira duplicado, corrige contagem de dias, marca o que já foi descartado) e devolve os achados para o Claude mostrar. Guarda como rascunho por 24 h, fora do histórico | Sistema |
+| `gravar_revisao_peticao` | Gravar revisão no histórico | Grava no histórico da petição a revisão conferida — **só se você disser que sim** —, com o selo **"Feita no Claude"**. Para petição nova, pede o Id Wrike | Sistema |
 | `listar_peticoes_revisao` | Petições no Revisor | Petições do Revisor com o estágio de cada uma, nº de revisões e data da última — "o que está aguardando ajuste?" | Sistema |
 | `detalhar_revisao` | Achados de uma revisão | Os achados de uma revisão **já feita**: gravidade, localização, correção sugerida e referência do manual. Enquanto processa, diz há quanto tempo | Sistema |
 | `historico_revisoes_peticao` | Histórico de revisões | Evolução entre as revisões da mesma petição: o que foi resolvido, o que **reincidiu** e o que é novo | Sistema |
-| `comparar_versoes_peticao` | Comparar versões da petição | Revisa **duas versões juntas** (original × revisada) com o agente oficial — "a v2 corrigiu o que foi apontado?". Também pelo Id Wrike e em segundo plano | IA |
+| `comparar_versoes_peticao` | Comparar versões da petição | Como `revisar_peticao_inicial`, para **duas versões anexadas** (original × revisada) — "a v2 corrigiu o que foi apontado?" | Sistema |
 | `ler_manual_revisor` | Manual FAP do escritório | Lê o **manual FAP do escritório** (e casos de referência) por seção ou termo — é o que permite explicar um achado citando a régua real | Sistema |
 | `versoes_manual_revisor` | Versões do manual do Revisor | Versões do manual e das referências: qual está ativa, quem criou e quando | Sistema |
 | `auditoria_revisor` | Auditoria do Revisor | Quem fez o quê e quando no módulo | Sistema |
 | `estatisticas_revisor` | Desempenho por advogado | Score, retrabalho e reincidência por advogado — **só para administradores** | Cálculo |
 
-> [!IA] A revisão usa as configurações do módulo **Revisor de Petições** (modelo, manual e prompts ativos do escritório) e pode levar cerca de 1 minuto em petições longas.
+> [!IA] **Quem revisa é o Claude da sua conversa**, com as instruções do Revisor do escritório (manual e prompts ativos). Leva alguns minutos e gasta o limite do **seu plano do Claude**, não o do IntellexIA. A qualidade acompanha o modelo escolhido na conversa: prefira Sonnet ou Opus, e uma revisão por conversa.
 
-> [!ALERTA] **Para a revisão entrar no sistema, informe o identificador do documento** (ex.: "revise esta petição, identificador FAP-2024-013"). Com ele, a revisão vira uma revisão da petição como qualquer outra: aparece no painel, conta no histórico e no custo. Sem ele, a IA responde a análise mas **nada fica salvo**.
+> [!ALERTA] A revisão gravada pelo Claude leva o selo **"Feita no Claude"**: aparece no histórico da petição, mas **fica fora da pontuação dos advogados e não envia a petição para aprovação**. Para aprovar, a última revisão tem de ser feita pela tela do Revisor.
 
 > [!INFO] Pedir para *ler* uma revisão que já existe (`detalhar_revisao`) é instantâneo e não gasta IA — prefira isso a mandar revisar de novo.
 

@@ -30,7 +30,6 @@ from app.blueprints.dou import dou_bp
 from app.blueprints.public_api import public_api_bp
 from app.blueprints.minha_api import minha_api_bp
 from app.blueprints.prompt_library import prompt_library_bp
-from app.blueprints.fap_review_upload import fap_review_upload_bp
 
 __all__ = [
     'auth_bp',
@@ -62,5 +61,4 @@ __all__ = [
     'public_api_bp',
     'minha_api_bp',
     'prompt_library_bp',
-    'fap_review_upload_bp',
 ]

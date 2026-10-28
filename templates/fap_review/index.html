@@ -1,5 +1,6 @@
 {% extends "layout/base.html" %}
 {% from 'fap_review/_wrike_link.html' import wrike_link %}
+{% from 'fap_review/_selo_origem.html' import selo_claude %}
 
 {% from "partials/page_hero.html" import page_hero %}
 {% from "partials/user_avatar.html" import user_avatar %}
@@ -654,6 +655,11 @@
         box-shadow: 0 0 0 2px var(--col-color);
     }
 
+    /* Última revisão feita no Claude: o advogado não solta o cartão na aprovação. */
+    .kanban-col.drop-blocked {
+        opacity: .45;
+    }
+
     .kanban-card-title {
         display: block;
         font-size: .82rem;
@@ -1154,6 +1160,7 @@
                     <!-- Ações -->
                     <div class="pr-actions">
                         {% if latest_revision %}
+                        {{ selo_claude(latest_revision, 'align-self-center') }}
                         <a href="{{ url_for('fap_review.revision_result', execution_id=latest_revision.id) }}"
                             class="btn btn-sm btn-outline-primary action-icon-btn" target="_blank"
                             rel="noopener noreferrer" title="Última Revisão">
@@ -1263,6 +1270,8 @@
                                 data-petition-id="{{ petition.id }}"
                                 data-status-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}"
                                 data-reviewer="{{ row.latest_reviewer_id or '' }}"
+                                {% if latest_revision and latest_revision.review_origin == 'claude'
+                                and session.get('user_role') != 'admin' %}data-bloqueio-aprovacao="{{ claude_approval_block }}"{% endif %}
                                 data-search="{{ (petition.title ~ ' ' ~ (petition.office_document_identifier or '') ~ ' ' ~ (latest_reviewer_name or ''))|lower }}">
                                 <a class="kanban-card-title"
                                     href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}">{{ petition.title }}</a>
@@ -1527,6 +1536,8 @@
             }
         }
 
+        const APPROVAL_STATUSES = ['awaiting_approval', 'ready_for_filing'];
+
         async function moveCard(card, targetCol) {
             const sourceBody = card.parentElement;
             const sourceCol = sourceBody.closest('.kanban-col');
@@ -1566,12 +1577,17 @@
                 draggedCard = card;
                 card.classList.add('dragging');
                 e.dataTransfer.effectAllowed = 'move';
+                if (card.dataset.bloqueioAprovacao) {
+                    document.querySelectorAll('.kanban-col').forEach(function (c) {
+                        if (APPROVAL_STATUSES.indexOf(c.dataset.status) !== -1) c.classList.add('drop-blocked');
+                    });
+                }
             });
             card.addEventListener('dragend', function () {
                 card.classList.remove('dragging');
                 draggedCard = null;
-                document.querySelectorAll('.kanban-col.drag-over').forEach(function (c) {
-                    c.classList.remove('drag-over');
+                document.querySelectorAll('.kanban-col.drag-over, .kanban-col.drop-blocked').forEach(function (c) {
+                    c.classList.remove('drag-over', 'drop-blocked');
                 });
             });
         });
@@ -1588,7 +1604,12 @@
             col.addEventListener('drop', function (e) {
                 e.preventDefault();
                 col.classList.remove('drag-over');
-                if (draggedCard) moveCard(draggedCard, col);
+                if (!draggedCard) return;
+                if (draggedCard.dataset.bloqueioAprovacao && APPROVAL_STATUSES.indexOf(col.dataset.status) !== -1) {
+                    showKanbanError(draggedCard.dataset.bloqueioAprovacao);
+                    return;
+                }
+                moveCard(draggedCard, col);
             });
         });
     });

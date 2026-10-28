@@ -280,23 +280,25 @@ Trilha completa do módulo: quem criou/alterou petições, iniciou e concluiu re
 
 ## :claude: Usando o Revisor pelo Claude (MCP)
 
-Com a IA conectada (veja o manual **"Conectar sua IA"**), o Claude usa **o mesmo agente revisor e o mesmo manual** do escritório:
+Com a IA conectada (veja o manual **"Conectar sua IA"**), o Claude revisa a petição **ali mesmo, na conversa**, seguindo **as mesmas instruções do Revisor do escritório**: as regras, o manual FAP, os casos de referência e os pontos de atenção da última revisão da petição. Também dá para **consultar** petições, revisões anteriores (sem refazer), o histórico de evolução (novos × reincidentes × resolvidos) e o próprio manual.
 
-- **Pedir uma revisão** de uma petição a partir do texto, ou **comparar duas versões**. O Claude pergunta o **Id Wrike** antes: a revisão entra no histórico oficial da petição como se você a tivesse enviado pela tela — mesma numeração, mesmo status, mesma auditoria, e os pontos da revisão anterior e os achados descartados valem igual. Se o Id ainda não existe, a petição é criada;
-- **Consultar** petições, revisões anteriores (sem refazer), o histórico de evolução (novos × reincidentes × resolvidos) e o próprio manual de revisão.
+### Como pedir uma revisão
 
-### Como a petição chega ao IntellexIA
+1. **Anexe a petição** na conversa (PDF ou DOCX) e peça: "revise esta petição". Para comparar, anexe a versão original e a revisada e pergunte "a nova versão corrigiu o que foi apontado?".
+2. Se a petição já existe no Revisor, diga o **Id Wrike**, ou deixe o Claude encontrá-la pelo nome da empresa e confirme. Assim ele revisa com os pontos de atenção da última revisão. Para petição nova, não precisa de Id nessa hora.
+3. O Claude lê as instruções, revisa e mostra os **achados na conversa**. Leva alguns minutos, e ele vai dizendo em que passo está.
+4. Antes de mostrar, o resultado passa pelo **mesmo saneador da tela**: sai achado duplicado, a contagem de dias entre DCB e DIB é corrigida e o que a equipe já marcou como **não pertinente** vem marcado.
+5. No fim, o Claude **pergunta se você quer gravar** no histórico do Revisor. Se disser que não, nada fica gravado. Se disser que sim, a revisão entra como a próxima revisão da petição; para petição nova, ele pede o Id Wrike.
 
-O Claude escolhe o caminho sozinho; você só precisa ter o arquivo à mão:
+A petição **não vai para o IntellexIA**: o Claude lê o arquivo que você anexou. Não há link de envio nem nada a liberar nas configurações do Claude.
 
-- **Arquivo anexado na conversa** (PDF, DOCX ou TXT): o Claude envia o arquivo original direto para o IntellexIA, sem reescrever o texto — leva segundos mesmo em petição longa. Se houver mais de um arquivo na conversa, ele pergunta qual é a petição.
-- **Quando o Claude não consegue enviar**, ele te passa um **link de envio**: abra, confira a petição, o Id Wrike e o número da revisão, e solte o arquivo na página. O link vale por **2 horas** e serve para **um envio**. Depois do envio, a página mostra o link para acompanhar e a pergunta pronta para colar no Claude, com o botão **Copiar**.
-- **Arquivo no Google Drive**: cole o link na conversa. O arquivo precisa estar **compartilhado com `intellexia-drive@intellexia-503416.iam.gserviceaccount.com`** (Leitor) ou aberto a qualquer pessoa com o link. Google Docs também vale.
-- **Petição curta colada na conversa**: o Claude manda o texto mesmo.
+> [!ALERTA] **Revisão "Feita no Claude".** A revisão gravada pelo Claude aparece no histórico com esse selo e segue duas regras:
+> - **fica fora da pontuação** dos advogados, porque foi feita pelo modelo escolhido na conversa e não pelo do escritório;
+> - **não envia a petição para aprovação**: o botão "Versão final — enviar para aprovação" vem desabilitado, e quem não é administrador não muda o status para "Aguardando aprovação". Para aprovar, faça uma revisão pela tela.
+>
+> Ela também não vira "ponto de atenção" da revisão seguinte, que continua partindo da última revisão feita pela tela.
 
-> [!ALERTA] Para o Claude conseguir enviar o arquivo anexado, o domínio do IntellexIA precisa estar liberado na conta do Claude, em **Settings > Capabilities** (plano individual) ou **Organization settings > Capabilities** (Team/Enterprise). Sem isso, ele te passa o link de envio.
-
-> [!INFO] **A revisão pedida pelo Claude roda em segundo plano.** Leva alguns minutos, como pela tela: o Claude responde na hora que ela está **processando** e o link para acompanhar. Quando terminar, você recebe um **e-mail** com o número de achados por gravidade; no Claude, é só pedir "mostre a revisão". Se a petição já tiver uma revisão rodando, o Claude não abre outra.
+> [!INFO] **Quem revisa é o Claude da sua conversa.** A revisão gasta o limite do **seu plano do Claude**, não o do IntellexIA, e a qualidade acompanha o modelo escolhido: prefira Sonnet ou Opus. As instruções do Revisor são longas, então faça **uma revisão por conversa**.
 
 As estatísticas dos advogados via MCP seguem a mesma regra da tela: **apenas administradores**.
 

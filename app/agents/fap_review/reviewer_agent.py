@@ -268,7 +268,35 @@ class FapPetitionReviewerAgent:
         Returns:
             Prompt completo do sistema
         """
-        output_schema = self._OUTPUT_SCHEMA_COMPARATIVE if comparative else self._OUTPUT_SCHEMA_SINGLE
+        return self.montar_prompt_sistema(
+            reviewer_identity,
+            reviewer_rules,
+            manual=self.manual_content,
+            casos=self.cases_content,
+            instrucoes_projeto=self.project_instructions,
+            focused_review=focused_review,
+            comparative=comparative,
+        )
+
+    @classmethod
+    def montar_prompt_sistema(
+        cls,
+        reviewer_identity: str = "",
+        reviewer_rules: str = "",
+        *,
+        manual: str = "",
+        casos: str = "",
+        instrucoes_projeto: str = "",
+        focused_review: bool = False,
+        comparative: bool = False,
+    ) -> str:
+        """Prompt do sistema do revisor, sem instanciar o agente (nem a LLM).
+
+        Fonte única: o agente usa este texto, e as instruções que o Claude
+        recebe para revisar na própria conversa também (revisão feita no
+        Claude). Divergindo, o Claude revisaria com outra régua.
+        """
+        output_schema = cls._OUTPUT_SCHEMA_COMPARATIVE if comparative else cls._OUTPUT_SCHEMA_SINGLE
         # reviewer_output_format (prompt configurável) NÃO é injetado: o schema de
         # saída é contrato do código. Uma versão configurada desatualizada competia
         # com o contrato e fazia o modelo omitir campos novos (ex.: location_excerpt).
@@ -325,13 +353,13 @@ acima: o nome da empresa como aparece dentro de uma transcrição não conta com
 O texto do próprio advogado, fora das aspas, continua integralmente auditado.
 
 MANUAL DE REFERÊNCIA:
-{self.manual_content if self.manual_content else 'Manual não carregado'}
+{manual if manual else 'Manual não carregado'}
 
 CASOS DE REFERÊNCIA:
-{self.cases_content if self.cases_content else 'Casos não carregados'}
+{casos if casos else 'Casos não carregados'}
 
 INSTRUÇÕES DO PROJETO:
-{self.project_instructions if self.project_instructions else 'Instruções não carregadas'}"""
+{instrucoes_projeto if instrucoes_projeto else 'Instruções não carregadas'}"""
         
         return base_system
 
@@ -477,36 +505,15 @@ INSTRUÇÕES DO PROJETO:
 
             result_dict = self._extract_json_dict_from_response(response_text)
 
-            parse_errors: list[str] = []
-            sanitizer_discards: list[dict] = []
-            theses = self._parse_theses(result_dict.get('theses', []), parse_errors)
-            findings = self._parse_findings(
-                result_dict.get('findings', []), parse_errors,
-                documento_texto=petition_text or '', descartes=sanitizer_discards)
-            missing_documents = self._parse_missing_documents(result_dict.get('missing_documents', []), parse_errors)
-            self._ensure_output_parsed(
+            result, _parse_errors = self.montar_resultado(
                 result_dict,
-                parsed_items=len(theses) + len(findings) + len(missing_documents),
-                list_keys=('theses', 'findings', 'missing_documents'),
-                parse_errors=parse_errors,
+                comparativa=False,
+                revisao_focada=bool(prior_attention_points),
+                documento_texto=petition_text or '',
                 truncada=self._resposta_truncada(response),
-            )
-
-            # Criar resultado com dados salvaguardados
-            result = PetitionReviewResult(
-                analysis_type="single_version",
-                focused_review=bool(prior_attention_points),
                 tokens_used=total_tokens or None,
                 cost_usd=float(total_cost) if total_cost else None,
-                theses=theses,
-                findings=findings,
-                missing_documents=missing_documents,
-                sanitizer_discards=sanitizer_discards,
-                executive_summary=self._build_executive_summary(
-                    result_dict.get('executive_summary', {}), findings),
-                new_patterns=[],
             )
-
             return result
 
         except ReviewOutputParseError:
@@ -683,35 +690,17 @@ INSTRUÇÕES DO PROJETO:
 
             result_dict = self._extract_json_dict_from_response(response_text)
 
-            parse_errors: list[str] = []
-            sanitizer_discards: list[dict] = []
-            comparative_changes = self._parse_comparative_changes(result_dict.get('comparative_changes', []), parse_errors)
             # A revisão comparativa audita a versão REVISADA — é o texto dela que
             # o saneador precisa para saber se uma correção já foi atendida.
-            findings = self._parse_findings(
-                result_dict.get('findings', []), parse_errors,
-                documento_texto=revised_petition_text or '', descartes=sanitizer_discards)
-            self._ensure_output_parsed(
+            result, _parse_errors = self.montar_resultado(
                 result_dict,
-                parsed_items=len(comparative_changes) + len(findings),
-                list_keys=('comparative_changes', 'findings'),
-                parse_errors=parse_errors,
+                comparativa=True,
+                revisao_focada=bool(prior_attention_points),
+                documento_texto=revised_petition_text or '',
                 truncada=self._resposta_truncada(response),
-            )
-
-            result = PetitionReviewResult(
-                analysis_type="comparative",
-                focused_review=bool(prior_attention_points),
                 tokens_used=total_tokens or None,
                 cost_usd=float(total_cost) if total_cost else None,
-                comparative_changes=comparative_changes,
-                findings=findings,
-                new_patterns=[],
-                sanitizer_discards=sanitizer_discards,
-                executive_summary=self._build_executive_summary(
-                    result_dict.get('executive_summary', {}), findings),
             )
-
             return result
 
         except ReviewOutputParseError:
@@ -806,7 +795,85 @@ INSTRUÇÕES DO PROJETO:
 
     # Métodos auxiliares para parsing
 
-    def _parse_model_items(self, data: list, model_cls: type[BaseModel], label: str,
+    @classmethod
+    def montar_resultado(
+        cls,
+        result_dict: dict,
+        *,
+        comparativa: bool,
+        revisao_focada: bool,
+        documento_texto: str = '',
+        truncada: bool = False,
+        tokens_used: int | None = None,
+        cost_usd: float | None = None,
+    ) -> tuple[PetitionReviewResult, list[str]]:
+        """JSON do revisor → resultado validado e saneado, sem LLM.
+
+        Mesmo caminho para a resposta do modelo do escritório e para o JSON da
+        revisão feita no Claude (`conferir_revisao_peticao`): o que o Claude
+        mostra ao usuário passou pelo mesmo saneador da tela. Devolve também os
+        erros de parse — item fora do schema sai sem derrubar os outros — e
+        levanta ReviewOutputParseError quando nada pôde ser aproveitado.
+        """
+        parse_errors: list[str] = []
+        sanitizer_discards: list[dict] = []
+        if comparativa:
+            comparative_changes = cls._parse_comparative_changes(
+                result_dict.get('comparative_changes', []), parse_errors)
+            findings = cls._parse_findings(
+                result_dict.get('findings', []), parse_errors,
+                documento_texto=documento_texto, descartes=sanitizer_discards)
+            cls._ensure_output_parsed(
+                result_dict,
+                parsed_items=len(comparative_changes) + len(findings),
+                list_keys=('comparative_changes', 'findings'),
+                parse_errors=parse_errors,
+                truncada=truncada,
+            )
+            result = PetitionReviewResult(
+                analysis_type="comparative",
+                focused_review=revisao_focada,
+                tokens_used=tokens_used,
+                cost_usd=cost_usd,
+                comparative_changes=comparative_changes,
+                findings=findings,
+                new_patterns=[],
+                sanitizer_discards=sanitizer_discards,
+                executive_summary=cls._build_executive_summary(
+                    result_dict.get('executive_summary', {}), findings),
+            )
+            return result, parse_errors
+
+        theses = cls._parse_theses(result_dict.get('theses', []), parse_errors)
+        findings = cls._parse_findings(
+            result_dict.get('findings', []), parse_errors,
+            documento_texto=documento_texto, descartes=sanitizer_discards)
+        missing_documents = cls._parse_missing_documents(
+            result_dict.get('missing_documents', []), parse_errors)
+        cls._ensure_output_parsed(
+            result_dict,
+            parsed_items=len(theses) + len(findings) + len(missing_documents),
+            list_keys=('theses', 'findings', 'missing_documents'),
+            parse_errors=parse_errors,
+            truncada=truncada,
+        )
+        result = PetitionReviewResult(
+            analysis_type="single_version",
+            focused_review=revisao_focada,
+            tokens_used=tokens_used,
+            cost_usd=cost_usd,
+            theses=theses,
+            findings=findings,
+            missing_documents=missing_documents,
+            sanitizer_discards=sanitizer_discards,
+            executive_summary=cls._build_executive_summary(
+                result_dict.get('executive_summary', {}), findings),
+            new_patterns=[],
+        )
+        return result, parse_errors
+
+    @classmethod
+    def _parse_model_items(cls, data: list, model_cls: type[BaseModel], label: str,
                            parse_errors: list[str] | None = None) -> list:
         """Valida itens um a um; item inválido é logado e coletado, sem derrubar os demais."""
         result = []
@@ -822,11 +889,13 @@ INSTRUÇÕES DO PROJETO:
                     parse_errors.append(message)
         return result
 
-    def _parse_theses(self, data: list, parse_errors: list[str] | None = None) -> list[IdentifiedThesis]:
+    @classmethod
+    def _parse_theses(cls, data: list, parse_errors: list[str] | None = None) -> list[IdentifiedThesis]:
         """Parse lista de teses"""
-        return self._parse_model_items(data, IdentifiedThesis, "thesis", parse_errors)
+        return cls._parse_model_items(data, IdentifiedThesis, "thesis", parse_errors)
 
-    def _parse_findings(self, data: list, parse_errors: list[str] | None = None,
+    @classmethod
+    def _parse_findings(cls, data: list, parse_errors: list[str] | None = None,
                         documento_texto: str = '',
                         descartes: list[dict] | None = None) -> list[FindingItem]:
         """Parse lista de achados, já saneada.
@@ -844,22 +913,26 @@ INSTRUÇÕES DO PROJETO:
             correcao = mantido.get('sanitizer_fix') if isinstance(mantido, dict) else None
             if correcao:
                 print(f"[FapReviewer] achado corrigido ({correcao['regra']}): {correcao['motivo']}")
-        return self._parse_model_items(mantidos, FindingItem, "finding", parse_errors)
+        return cls._parse_model_items(mantidos, FindingItem, "finding", parse_errors)
 
 
-    def _parse_missing_documents(self, data: list, parse_errors: list[str] | None = None) -> list[MissingDocument]:
+    @classmethod
+    def _parse_missing_documents(cls, data: list, parse_errors: list[str] | None = None) -> list[MissingDocument]:
         """Parse lista de documentos em falta"""
-        return self._parse_model_items(data, MissingDocument, "missing_document", parse_errors)
+        return cls._parse_model_items(data, MissingDocument, "missing_document", parse_errors)
 
-    def _parse_new_patterns(self, data: list, parse_errors: list[str] | None = None) -> list[NewPattern]:
+    @classmethod
+    def _parse_new_patterns(cls, data: list, parse_errors: list[str] | None = None) -> list[NewPattern]:
         """Parse lista de padrões novos"""
-        return self._parse_model_items(data, NewPattern, "new_pattern", parse_errors)
+        return cls._parse_model_items(data, NewPattern, "new_pattern", parse_errors)
 
-    def _parse_comparative_changes(self, data: list, parse_errors: list[str] | None = None) -> list[ComparativeAnalysisChange]:
+    @classmethod
+    def _parse_comparative_changes(cls, data: list, parse_errors: list[str] | None = None) -> list[ComparativeAnalysisChange]:
         """Parse lista de alterações comparativas"""
-        return self._parse_model_items(data, ComparativeAnalysisChange, "comparative_change", parse_errors)
+        return cls._parse_model_items(data, ComparativeAnalysisChange, "comparative_change", parse_errors)
 
-    def _ensure_output_parsed(self, result_dict: dict, *, parsed_items: int,
+    @classmethod
+    def _ensure_output_parsed(cls, result_dict: dict, *, parsed_items: int,
                               list_keys: tuple[str, ...], parse_errors: list[str],
                               truncada: bool = False) -> None:
         """Falha alto quando a resposta do modelo não pôde ser aproveitada.
@@ -892,7 +965,8 @@ INSTRUÇÕES DO PROJETO:
                 f"schema esperado da revisão. Erros: {details}"
             )
 
-    def _parse_executive_summary(self, data: dict) -> ExecutiveSummary:
+    @classmethod
+    def _parse_executive_summary(cls, data: dict) -> ExecutiveSummary:
         """Parse resumo executivo"""
         try:
             return ExecutiveSummary(**data)
@@ -905,7 +979,8 @@ INSTRUÇÕES DO PROJETO:
                 correction_priority="N/A"
             )
 
-    def _build_executive_summary(self, data: dict, findings: list[FindingItem]) -> ExecutiveSummary:
+    @classmethod
+    def _build_executive_summary(cls, data: dict, findings: list[FindingItem]) -> ExecutiveSummary:
         """Resumo executivo com totais recontados dos achados efetivamente mantidos.
 
         O modelo conta os próprios achados, mas o saneamento (ex.: falso positivo
@@ -917,7 +992,7 @@ INSTRUÇÕES DO PROJETO:
         anterior — esses saem, senão uma petição limpa parece ter pendência.
         Documento em falta não sustenta risco: ele já tem seção própria.
         """
-        summary = self._parse_executive_summary(data)
+        summary = cls._parse_executive_summary(data)
         if not findings:
             summary.main_legal_risks = []
         severities = [str(f.severity or "").strip().upper() for f in findings]
@@ -1048,7 +1123,8 @@ Os dados acima foram extraídos automaticamente dos documentos auxiliares enviad
 4. Se um documento auxiliar comprovar a presença de um documento que você apontaria como faltante, NÃO o liste em missing_documents — cite-o como atendido.
 5. Trate os dados extraídos como afirmações dos documentos auxiliares, não como verdade absoluta: em caso de conflito, aponte a divergência para conferência humana em vez de presumir qual lado está errado."""
 
-    def _format_auxiliary_documents(self, auxiliary_documents: list[dict] | None) -> str:
+    @classmethod
+    def _format_auxiliary_documents(cls, auxiliary_documents: list[dict] | None) -> str:
         """Monta o bloco dos documentos auxiliares: nomes + dados extraídos + instrução de cruzamento."""
         if not auxiliary_documents:
             return ""
@@ -1065,7 +1141,7 @@ Os dados acima foram extraídos automaticamente dos documentos auxiliares enviad
             else:
                 names.append(str(doc))
 
-        preview_names = names[:self._AUX_PREVIEW_LIMIT]
+        preview_names = names[:cls._AUX_PREVIEW_LIMIT]
         suffix = ""
         if len(names) > len(preview_names):
             suffix = f" (+{len(names) - len(preview_names)} arquivos)"
@@ -1078,23 +1154,24 @@ Os dados acima foram extraídos automaticamente dos documentos auxiliares enviad
         return (header
                 + "\n\nDADOS EXTRAÍDOS DOS DOCUMENTOS AUXILIARES:\n"
                 + "\n\n".join(blocks)
-                + "\n\n" + self._AUX_CROSS_CHECK_INSTRUCTIONS)
+                + "\n\n" + cls._AUX_CROSS_CHECK_INSTRUCTIONS)
 
+    @classmethod
     def _build_single_user_message(
-        self,
+        cls,
         *,
         auxiliary_documents: list[dict] | None,
         petition_text: str | None = None,
         prior_attention_points: str | None = None,
     ) -> str:
-        aux_text = self._format_auxiliary_documents(auxiliary_documents)
+        aux_text = cls._format_auxiliary_documents(auxiliary_documents)
         petition_source = (
             "O conteúdo textual extraído da petição segue abaixo nesta mensagem."
             if petition_text else
             "O documento foi enviado como anexo de arquivo nesta mensagem."
         )
         petition_body = f"\n\nTEXTO DA PETIÇÃO:\n{petition_text}" if petition_text else ""
-        if prior_attention_points and prior_attention_points.startswith(self._NO_ACTIVE_PRIOR_ATTENTION_MARKER):
+        if prior_attention_points and prior_attention_points.startswith(cls._NO_ACTIVE_PRIOR_ATTENTION_MARKER):
             return f"""Revise esta nova versão de uma petição inicial de FAP já analisada anteriormente.
 
 PETIÇÃO A REVISAR:
@@ -1167,8 +1244,9 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
 - missing_documents (array de documentos em falta)
 - executive_summary (resumo executivo)"""
 
+    @classmethod
     def _build_comparative_user_message(
-        self,
+        cls,
         *,
         auxiliary_documents: list[dict] | None,
         original_petition_text: str | None = None,
@@ -1177,7 +1255,7 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
         original_file_name: str = "",
         revised_file_name: str = "",
     ) -> str:
-        aux_text = self._format_auxiliary_documents(auxiliary_documents)
+        aux_text = cls._format_auxiliary_documents(auxiliary_documents)
         original_source = (
             f"VERSÃO ORIGINAL ({original_file_name or 'documento original'}) enviada como texto extraído abaixo."
             if original_petition_text else
@@ -1190,7 +1268,7 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
         )
         original_body = f"\n\nTEXTO DA VERSÃO ORIGINAL:\n{original_petition_text}" if original_petition_text else ""
         revised_body = f"\n\nTEXTO DA VERSÃO REVISADA:\n{revised_petition_text}" if revised_petition_text else ""
-        if prior_attention_points and prior_attention_points.startswith(self._NO_ACTIVE_PRIOR_ATTENTION_MARKER):
+        if prior_attention_points and prior_attention_points.startswith(cls._NO_ACTIVE_PRIOR_ATTENTION_MARKER):
             return f"""Revise comparativamente estas duas versões de petição de FAP.
 
 {original_source}

@@ -1,5 +1,6 @@
 {% extends "layout/base.html" %}
 {% from 'fap_review/_wrike_link.html' import wrike_link %}
+{% from 'fap_review/_selo_origem.html' import selo_claude %}
 
 {% from "partials/page_hero.html" import page_hero %}
 
@@ -784,6 +785,20 @@
 
     <div class="container-fluid">
         <div class="row g-4">
+            {% if execution.review_origin == 'claude' %}
+            <div class="col-12">
+                <div class="alert alert-info d-flex align-items-start gap-2 mb-0">
+                    <i class="bi bi-chat-dots mt-1"></i>
+                    <div>
+                        <strong>Revisão feita no Claude.</strong>
+                        {{ execution.user.name if execution.user else 'Quem pediu' }} revisou esta petição pelo Claude,
+                        na conversa, com as instruções do Revisor ({{ model_label }}); o IntellexIA conferiu e gravou o
+                        resultado. Ela fica fora da pontuação dos advogados e não envia a petição para aprovação —
+                        para isso, faça uma revisão pela tela.
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             {% if execution_superseded %}
             <div class="col-12">
                 <div class="alert alert-secondary d-flex align-items-center justify-content-between flex-wrap gap-2 mb-0">
@@ -899,7 +914,8 @@
                                     </div>
                                     <div class="execution-meta-card">
                                         <div class="execution-meta-label">Revisão</div>
-                                        <div class="execution-meta-value">R{{ execution.revision_number or 1 }}</div>
+                                        <div class="execution-meta-value">R{{ execution.revision_number or 1 }}
+                                            {{ selo_claude(execution, 'ms-1 align-middle') }}</div>
                                     </div>
                                 </div>
 
@@ -1749,10 +1765,14 @@
                                 <i class="bi bi-arrow-repeat me-1"></i> Revisada — enviar nova versão
                             </button>
                             <button type="button" class="btn btn-sm btn-primary" id="triageFinalVersionBtn"
-                                data-outcome="final_version">
+                                data-outcome="final_version"{% if execution.review_origin == 'claude' %} disabled
+                                data-bloqueado="1" title="{{ claude_approval_block }}"{% endif %}>
                                 <i class="bi bi-send-check me-1"></i> Versão final — enviar para aprovação
                             </button>
                         </div>
+                        {% if execution.review_origin == 'claude' %}
+                        <div class="small text-muted mt-2"><i class="bi bi-chat-dots me-1"></i>{{ claude_approval_block }}</div>
+                        {% endif %}
                         <div id="triageActionFeedback" class="small mt-2" style="display:none;"></div>
                     </div>
                     {% endif %}
@@ -2597,7 +2617,8 @@
                             }
                         } catch (error) {
                             showTriageFeedback(error.message || 'Não foi possível concluir a triagem.', true);
-                            buttons.forEach(function (b) { b.disabled = false; });
+                            // Versão final de revisão feita no Claude continua travada.
+                            buttons.forEach(function (b) { if (!b.dataset.bloqueado) b.disabled = false; });
                         }
                     });
                 });

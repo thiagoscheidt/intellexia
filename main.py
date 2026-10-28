@@ -40,7 +40,6 @@ from app.blueprints import (
     knowledge_base_bp, admin_users_bp, access_audit_bp, process_panel_bp,
     disputes_center_bp, fap_panel_bp, fap_review_bp,
     impugnacao_references_bp, jurisprudence_bp, fap_calculo_bp, process_knowledge_bp, docs_bp, communications_bp, dou_bp, public_api_bp, minha_api_bp, prompt_library_bp,
-    fap_review_upload_bp,
 )
 from app.blueprints.case_comments import case_comments_bp
 from app.blueprints.fap_reasons import fap_reasons_bp
@@ -77,7 +76,6 @@ app.register_blueprint(dou_bp)
 app.register_blueprint(public_api_bp)
 app.register_blueprint(minha_api_bp)
 app.register_blueprint(prompt_library_bp)
-app.register_blueprint(fap_review_upload_bp)
 
 
 @app.route('/favicon.ico')

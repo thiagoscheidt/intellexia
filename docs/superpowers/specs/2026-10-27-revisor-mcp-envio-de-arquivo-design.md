@@ -1,5 +1,7 @@
 # Revisor pelo Claude: o arquivo da petição chega sem o Claude reescrevê-lo (RPI-37)
 
+> **Substituído em 28/10/2026** por `docs/superpowers/specs/2026-10-28-revisor-no-claude-design.md`: o Claude passou a revisar na própria conversa e o link de envio, o Drive e a revisão no servidor pelo MCP saíram.
+
 ## Por quê
 
 O card RPI-37 ("revisar_peticao_inicial não devolve resultado pelo MCP") teve

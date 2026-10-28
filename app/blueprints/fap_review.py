@@ -581,7 +581,13 @@ def _build_prior_attention_points(
     law_firm_document_identifier: str,
     current_execution_id: int,
 ) -> str | None:
-    """Resume os pontos de atenção da última revisão concluída do mesmo documento."""
+    """Resume os pontos de atenção da última revisão concluída do mesmo documento.
+
+    Só revisões do IntellexIA contam: uma feita no Claude (outro modelo, talvez
+    mais fraco) não pode estreitar a revisão seguinte para o "modo focado" nos
+    achados dela. Vale para a revisão da tela e para as instruções que o Claude
+    recebe (fap_review_claude_service).
+    """
     if not petition_id and not law_firm_document_identifier:
         return None
 
@@ -591,6 +597,7 @@ def _build_prior_attention_points(
         FapReviewExecution.status == 'completed',
         FapReviewExecution.id != current_execution_id,
         FapReviewExecution.result_json.isnot(None),
+        _svc.intellexia_reviews_only(),
     )
 
     if petition_id:
@@ -675,18 +682,15 @@ def _build_prior_attention_points(
 
 def _start_review_in_background(execution_id: int, law_firm_id: int, petition_file_path: str,
                                 compared_file_path: str | None = None,
-                                benefits_spreadsheet: dict | None = None,
-                                notify_user: bool = False) -> None:
+                                benefits_spreadsheet: dict | None = None) -> None:
     """Dispara o agente revisor numa thread e devolve o controle imediatamente.
 
     A chamada à LLM leva 1-2 min; processar dentro da requisição estoura os
     timeouts de proxy (Cloudflare ~100s). O POST retorna na hora e a tela de
     resultado acompanha o status (auto-refresh).
 
-    Usado pelo envio de uma revisão nova, pelo reprocessamento de uma que falhou
-    e pela revisão pedida pelo Claude (MCP) — o tratamento de falha da thread
-    mora só aqui. ``notify_user`` manda e-mail a quem pediu quando termina: o
-    Claude não é avisado depois que a ferramenta respondeu (RPI-37).
+    Usado tanto pelo envio de uma revisão nova quanto pelo reprocessamento de
+    uma que falhou — o tratamento de falha da thread mora só aqui.
     """
     app_obj = current_app._get_current_object()
 
@@ -712,13 +716,6 @@ def _start_review_in_background(execution_id: int, law_firm_id: int, petition_fi
                 except Exception:
                     db.session.rollback()
             finally:
-                if notify_user:
-                    try:
-                        _svc.send_revision_finished_email(execution_id)
-                    except Exception as email_error:
-                        db.session.rollback()
-                        app_obj.logger.warning(
-                            'Revisão %s: e-mail de conclusão não enviado: %s', execution_id, email_error)
                 db.session.remove()
 
     threading.Thread(
@@ -1230,6 +1227,7 @@ def index():
     ]
 
     return render_template('fap_review/index.html',
+                          claude_approval_block=_svc.CLAUDE_REVIEW_APPROVAL_BLOCK,
                           total_petitions=total_petitions,
                           ready_petitions=ready_petitions,
                           in_review_petitions=in_review_petitions,
@@ -1593,6 +1591,7 @@ def revision_result(execution_id: int):
 
     return render_template('fap_review/revision_result.html',
                           execution=execution,
+                          claude_approval_block=_svc.CLAUDE_REVIEW_APPROVAL_BLOCK,
                           model_label=_svc.describe_model_name(execution.model_name),
                           sanitizer_discards=(result_data or {}).get('sanitizer_discards') or [],
                           petition=petition,
@@ -1674,6 +1673,7 @@ def petition_detail(petition_id: int):
 
     return render_template(
         'fap_review/petition_detail.html',
+        claude_approval_block=_svc.CLAUDE_REVIEW_APPROVAL_BLOCK,
         petition=petition,
         revisions=revisions,
         revision_files=revision_files,
@@ -1893,6 +1893,13 @@ def petition_update_status(petition_id: int):
     if _svc.status_transition_requires_admin(old_status, new_status) and session.get('user_role') != 'admin':
         return jsonify({'error': 'Apenas administradores podem executar esta mudança de status.'}), 403
 
+    # Revisão feita no Claude não envia para aprovação: o advogado não leva à
+    # aprovação o que o modelo do escritório não revisou. O admin, que aprova,
+    # continua podendo mudar à mão.
+    if (new_status in _svc.APPROVAL_STATUSES and session.get('user_role') != 'admin'
+            and _svc.latest_revision_is_claude(petition)):
+        return jsonify({'error': _svc.CLAUDE_REVIEW_APPROVAL_BLOCK}), 403
+
     try:
         petition.workflow_status = new_status
         petition.status_changed_at = datetime.now()
@@ -2104,6 +2111,9 @@ def revision_complete_triage(execution_id: int):
     new_status = _svc.TRIAGE_OUTCOME_STATUSES.get(outcome)
     if not new_status:
         return jsonify({'error': 'Desfecho de triagem inválido.'}), 400
+
+    if new_status in _svc.APPROVAL_STATUSES and _svc.is_claude_review(execution):
+        return jsonify({'error': _svc.CLAUDE_REVIEW_APPROVAL_BLOCK}), 403
 
     if petition.workflow_status in _svc.NEW_REVISION_BLOCKED_STATUSES:
         return jsonify({'error': 'Esta petição está travada para triagem. Um administrador pode reabri-la.'}), 403
