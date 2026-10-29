@@ -344,6 +344,33 @@ passa a casar os achados de duas revisões seguidas, um para um:
   O Jaccard que o desenho sugeria de início dava 0,37 a 0,42 para reescritas
   óbvias e as perderia.
 
+## Ajuste depois do teste em homologação (28/10/2026)
+
+Duas revisões reais na conta do Thiago, em homologação, com a petição da
+FRASLE (DOCX de 1.068 linhas). As duas demoraram muito; a segunda foi
+compactada duas vezes pelo claude.ai. Medido em homologação: manual 126.883
+caracteres, casos de referência 196.942, instruções do projeto 4.838. As
+instruções iam em 10 partes, cerca de 100 mil tokens, antes da petição.
+
+- **Casos de referência sob consulta** (decisão do Thiago): não vão inteiros.
+  O Claude os consulta por termo com `ler_manual_revisor(tipo="casos_referencia",
+  termo=...)`. O manual, a régua, continua inteiro. Estimativa em homologação:
+  de 10 para cerca de 4 partes. É a única diferença em relação às instruções
+  do agente da tela.
+- **Formato do JSON repetido no fim**, junto da tarefa: a compactação levava a
+  parte 1, onde está o contrato, e o Claude chutava o formato (teses recusadas
+  no 1º teste, documentos em falta no 2º).
+- **Item fora do formato vira aviso e pedido de reenvio** com o
+  `formato_esperado`. Item que não era objeto (tese em texto solto) sumia sem
+  registro nenhum, inclusive no agente da tela; agora entra em `parse_errors`.
+- **Confirmar a petição achada pelo Claude** antes de usar o histórico: no 2º
+  teste ele usou a petição 69 por conta própria.
+- Fora deste ajuste, anotado para card próprio: a regra R4 do saneador (60 dias)
+  descartou nos dois testes um achado de data divergente ("DIB 04/05/1993" no
+  texto x 26/04/2013 na tabela), porque descarta qualquer achado que cite
+  DCB/DIB com duas datas a mais de 60 dias, mesmo sem falar de
+  restabelecimento. Vale também para a revisão da tela.
+
 ## Testes no claude.ai
 
 - **T1, antes de construir** (5 min, conta do escritório, conversa nova):

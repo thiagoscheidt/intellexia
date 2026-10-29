@@ -95,6 +95,7 @@ from mcp_server.tools.communications import (
     process_communications_handler,
 )
 from mcp_server.tools.petition_reviewer import (
+    change_status_handler,
     confer_review_handler,
     review_instructions_handler,
     save_review_handler,
@@ -1968,16 +1969,18 @@ def revisar_peticao_inicial(
     """Instruções do Revisor de Petições para VOCÊ revisar uma petição FAP aqui na conversa.
 
     A revisão é feita por você, com o arquivo que o usuário anexou: esta
-    ferramenta devolve as mesmas instruções que o agente revisor do escritório
-    recebe (identidade, regras, manual FAP, casos de referência, pontos de
-    atenção da última revisão da petição e o contrato de saída em JSON). A
-    petição não vai para o IntellexIA.
+    ferramenta devolve as instruções do agente revisor do escritório
+    (identidade, regras, manual FAP, pontos de atenção da última revisão da
+    petição e o contrato de saída em JSON). Os casos de referência não vêm
+    inteiros: consulte-os por termo em ler_manual_revisor(tipo="casos_referencia",
+    termo=...) quando precisar. A petição não vai para o IntellexIA.
 
     Fluxo:
-    1. Se o usuário citou a petição (Id Wrike) ou você a encontrou em
-       listar_peticoes_revisao (pelo nome da empresa) e ele confirmou, passe
-       'identificador_documento' ou 'peticao_id': as instruções vêm com os
-       pontos de atenção dela. Petição nova ou não informada: chame sem.
+    1. Se o usuário informou a petição (Id Wrike), passe 'identificador_documento'
+       ou 'peticao_id': as instruções vêm com os pontos de atenção dela. Se você
+       a encontrou por conta própria (ex.: pelo nome da empresa), PERGUNTE ao
+       usuário se é ela antes de usar. Petição nova, não confirmada, ou pedido
+       de revisão sem histórico: chame sem.
     2. As instruções vêm em partes: chame com parte=1, 2, ... até 'total_partes'
        e leia todas antes de começar. Avise o usuário que leva alguns minutos.
     3. Revise e mande o JSON para conferir_revisao_peticao. Mostre ao usuário o
@@ -2019,6 +2022,8 @@ def conferir_revisao_peticao(
     "não pertinente"). Guarda o resultado como rascunho por 24 h — não entra no
     histórico.
 
+    Se vierem 'avisos' (itens deixados de fora por formato), corrija-os pelo
+    'formato_esperado' e mande o resultado inteiro de novo antes de mostrar.
     Mostre ao usuário os achados que ESTA ferramenta devolver (não os do seu
     JSON) e pergunte se ele quer gravar no histórico do Revisor.
 
@@ -2080,6 +2085,49 @@ def gravar_revisao_peticao(
         return save_review_handler(
             claims["law_firm_id"], claims.get("user_id"), rascunho_id,
             identificador_documento, peticao_id, titulo, nome_arquivo, modelo,
+        )
+
+
+@mcp.tool()
+def mudar_status_peticao(
+    novo_status: str,
+    peticao_id: int | None = None,
+    identificador: str | None = None,
+) -> dict:
+    """Muda o status de uma petição do Revisor — SÓ quando o usuário pedir explicitamente.
+
+    Antes de chamar, confirme com o usuário o que vai fazer, com o título da
+    petição e os dois status (ex.: "mudar 'Impugnação Empresa X' de Em revisão
+    para Aguardando aprovação?"). Nunca mude por iniciativa própria, nem depois
+    de uma revisão ou gravação sem o usuário pedir.
+
+    Segue as mesmas regras da tela do Revisor:
+    - aprovar (ready_for_filing), devolver para ajustes e reabrir petição que
+      está aguardando aprovação ou aprovada são só de administrador;
+    - se a última revisão da petição foi feita no Claude, quem não é admin não
+      manda para aprovação: antes é preciso uma revisão pela tela do Revisor.
+    Recusada, explique o motivo ao usuário com a mensagem de 'erro'. Não
+    conclui a triagem dos achados (isso continua na tela).
+
+    Status: new (Nova), in_review (Em revisão), awaiting_adjustments
+    (Aguardando ajustes), awaiting_approval (Aguardando aprovação),
+    ready_for_filing (Aprovada pelo revisor), filed (Processo iniciado),
+    archived (Arquivada). Aceita o código ou o nome.
+
+    Args:
+        novo_status: Status de destino, pelo código ou pelo nome.
+        peticao_id: Id da petição no Revisor (de listar_peticoes_revisao).
+        identificador: Alternativa ao id — o Id Wrike da petição.
+
+    Returns:
+        'status_anterior', 'status' (com as descrições), 'titulo' e
+        'mensagem_para_usuario'; 'sem_mudanca' quando já estava no status.
+        Recusa: 'erro' e o 'status_atual'.
+    """
+    claims = require_module("fap_review")
+    with app.app_context():
+        return change_status_handler(
+            claims["law_firm_id"], claims.get("user_id"), novo_status, peticao_id, identificador,
         )
 
 

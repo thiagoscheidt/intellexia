@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **69 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **70 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -261,6 +261,7 @@ Os prompts, agentes e skills que você e o escritório guardam na **Biblioteca d
 | `revisar_peticao_inicial` | Revisar petição inicial | Entrega ao Claude as **instruções do Revisor do escritório** (regras, manual FAP, casos de referência, pontos de atenção da última revisão) para ele **revisar a petição anexada ali na conversa**. A petição não vai para o IntellexIA; o Id Wrike é opcional | Sistema |
 | `conferir_revisao_peticao` | Conferir revisão feita no Claude | Confere o resultado da revisão feita na conversa com o **mesmo saneador da tela** (tira duplicado, corrige contagem de dias, marca o que já foi descartado) e devolve os achados para o Claude mostrar. Guarda como rascunho por 24 h, fora do histórico | Sistema |
 | `gravar_revisao_peticao` | Gravar revisão no histórico | Grava no histórico da petição a revisão conferida — **só se você disser que sim** —, com o selo **"Feita no Claude"**. Para petição nova, pede o Id Wrike | Sistema |
+| `mudar_status_peticao` | Mudar status da petição | Muda o status de uma petição do Revisor **quando você pede** (o Claude confirma antes), com as **mesmas regras da tela**: aprovar, devolver e reabrir só para administrador, e revisão "Feita no Claude" não vai para aprovação por quem não é admin | Sistema |
 | `listar_peticoes_revisao` | Petições no Revisor | Petições do Revisor com o estágio de cada uma, nº de revisões e data da última — "o que está aguardando ajuste?" | Sistema |
 | `detalhar_revisao` | Achados de uma revisão | Os achados de uma revisão **já feita**: gravidade, localização, correção sugerida e referência do manual. Enquanto processa, diz há quanto tempo | Sistema |
 | `historico_revisoes_peticao` | Histórico de revisões | Evolução entre as revisões da mesma petição: o que foi resolvido, o que **reincidiu** e o que é novo | Sistema |

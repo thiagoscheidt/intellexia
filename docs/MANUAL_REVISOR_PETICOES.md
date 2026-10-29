@@ -280,12 +280,12 @@ Trilha completa do módulo: quem criou/alterou petições, iniciou e concluiu re
 
 ## :claude: Usando o Revisor pelo Claude (MCP)
 
-Com a IA conectada (veja o manual **"Conectar sua IA"**), o Claude revisa a petição **ali mesmo, na conversa**, seguindo **as mesmas instruções do Revisor do escritório**: as regras, o manual FAP, os casos de referência e os pontos de atenção da última revisão da petição. Também dá para **consultar** petições, revisões anteriores (sem refazer), o histórico de evolução (novos × reincidentes × resolvidos) e o próprio manual.
+Com a IA conectada (veja o manual **"Conectar sua IA"**), o Claude revisa a petição **ali mesmo, na conversa**, seguindo **as instruções do Revisor do escritório**: as regras, o manual FAP inteiro e os pontos de atenção da última revisão da petição. Os **casos de referência** não vão inteiros, porque são grandes demais para a conversa: o Claude consulta, quando precisa, o que o escritório decidiu em situação parecida. Também dá para **consultar** petições, revisões anteriores (sem refazer), o histórico de evolução (novos × reincidentes × resolvidos) e o próprio manual.
 
 ### Como pedir uma revisão
 
 1. **Anexe a petição** na conversa (PDF ou DOCX) e peça: "revise esta petição". Para comparar, anexe a versão original e a revisada e pergunte "a nova versão corrigiu o que foi apontado?".
-2. Se a petição já existe no Revisor, diga o **Id Wrike**, ou deixe o Claude encontrá-la pelo nome da empresa e confirme. Assim ele revisa com os pontos de atenção da última revisão. Para petição nova, não precisa de Id nessa hora.
+2. Se a petição já existe no Revisor, diga o **Id Wrike**, ou deixe o Claude encontrá-la pelo nome da empresa: ele pergunta se é ela antes de usar o histórico. Assim ele revisa com os pontos de atenção da última revisão. Para petição nova, não precisa de Id nessa hora.
 3. O Claude lê as instruções, revisa e mostra os **achados na conversa**. Leva alguns minutos, e ele vai dizendo em que passo está.
 4. Antes de mostrar, o resultado passa pelo **mesmo saneador da tela**: sai achado duplicado, a contagem de dias entre DCB e DIB é corrigida e o que a equipe já marcou como **não pertinente** vem marcado.
 5. No fim, o Claude **pergunta se você quer gravar** no histórico do Revisor. Se disser que não, nada fica gravado. Se disser que sim, a revisão entra como a próxima revisão da petição; para petição nova, ele pede o Id Wrike.
@@ -297,6 +297,14 @@ A petição **não vai para o IntellexIA**: o Claude lê o arquivo que você ane
 > - **não envia a petição para aprovação**: o botão "Versão final — enviar para aprovação" vem desabilitado, e quem não é administrador não muda o status para "Aguardando aprovação". Para aprovar, faça uma revisão pela tela.
 >
 > Ela também não vira "ponto de atenção" da revisão seguinte, que continua partindo da última revisão feita pela tela.
+
+### Mudar o status da petição pelo Claude
+
+Peça ao Claude, por exemplo: "manda a petição 4387120543 para aguardando ajustes". Ele confirma antes de mudar e segue **as mesmas regras da tela**:
+- aprovar, devolver para ajustes e reabrir continuam **só para administradores**;
+- se a última revisão foi **Feita no Claude**, quem não é administrador não manda para aprovação. Antes, faça uma revisão pela tela.
+
+A mudança fica na auditoria do Revisor como feita via Claude. A triagem dos pontos (revisado / não pertinente) continua sendo na tela.
 
 > [!INFO] **Quem revisa é o Claude da sua conversa.** A revisão gasta o limite do **seu plano do Claude**, não o do IntellexIA, e a qualidade acompanha o modelo escolhido: prefira Sonnet ou Opus. As instruções do Revisor são longas, então faça **uma revisão por conversa**.
 

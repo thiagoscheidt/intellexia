@@ -17,6 +17,9 @@ Cobre:
   8. Estatísticas (mesmos números da tela)
   9. Gate de administrador
   10. Comparação de versões pelo mesmo caminho e recusas das tools
+  11. mudar_status_peticao: as regras da tela (aprovar, devolver e reabrir só
+      admin; revisão feita no Claude não vai para aprovação por não-admin),
+      papel relido do banco, status pelo código ou pelo nome, auditoria
 
 As regras do serviço (partes, contrato, saneador, origem) estão em
 tests/test_fap_review_claude.py. Os dados criados são removidos ao final.
@@ -38,6 +41,7 @@ from app.models import (
     User,
 )
 from mcp_server.tools.petition_reviewer import (
+    change_status_handler,
     confer_review_handler,
     review_instructions_handler,
     save_review_handler,
@@ -57,7 +61,8 @@ _falhas = []
 # colidir com petição real da base local.
 IDENT = '990000000037'
 IDENT_COMPARA = '990000000039'
-IDENTS = (IDENT, IDENT_COMPARA)
+IDENT_STATUS = '990000000046'
+IDENTS = (IDENT, IDENT_COMPARA, IDENT_STATUS)
 
 
 def check(nome: str, condicao: bool, detalhe: str = '') -> None:
@@ -401,6 +406,83 @@ def test_comparacao_e_recusas(law_firm_id, user_id):
           'erro' in review_instructions_handler(law_firm_id, 'revisao', parte=999))
 
 
+def test_mudar_status(law_firm_id, primeiro):
+    print('\n11) mudar_status_peticao')
+    nao_admin = User.query.filter(User.law_firm_id == law_firm_id, User.role != 'admin',
+                                  User.is_active.is_(True)).order_by(User.id).first()
+    admin = User.query.filter(User.law_firm_id == law_firm_id, User.role == 'admin',
+                              User.is_active.is_(True)).order_by(User.id).first()
+    if not nao_admin or not admin:
+        check('banco local tem um admin e um não-admin', False)
+        return
+
+    # Petição com revisão do IntellexIA (feita pela tela).
+    petition = FapReviewPetition(law_firm_id=law_firm_id, created_by_id=admin.id, title='Status MCP',
+                                 office_document_identifier=IDENT_STATUS, workflow_status='in_review')
+    db.session.add(petition)
+    db.session.flush()
+    execution = FapReviewExecution(
+        law_firm_id=law_firm_id, user_id=admin.id, petition_id=petition.id, execution_type='revision',
+        status='completed', revision_number=1, law_firm_document_identifier=IDENT_STATUS,
+        result_json='{"findings": []}')
+    db.session.add(execution)
+    db.session.flush()
+    petition.latest_revision_id = execution.id
+    petition.revision_count = 1
+    db.session.commit()
+
+    r = change_status_handler(law_firm_id, nao_admin.id, 'Aguardando ajustes', identificador=IDENT_STATUS)
+    check('não-admin muda para outro status, pelo nome', r.get('status') == 'awaiting_adjustments'
+          and r.get('status_anterior') == 'in_review', str(r)[:200])
+    check('auditoria registra a mudança via Claude', FapReviewAuditLog.query.filter_by(
+        law_firm_id=law_firm_id, entity_type='petition', entity_id=petition.id,
+        action='petition_status_updated').filter(
+        FapReviewAuditLog.change_description.like('%Claude%')).count() == 1)
+    r = change_status_handler(law_firm_id, nao_admin.id, 'awaiting_adjustments', peticao_id=petition.id)
+    check('mesmo status: avisa que não mudou', r.get('sem_mudanca') is True, str(r)[:200])
+    r = change_status_handler(law_firm_id, nao_admin.id, 'awaiting_approval', peticao_id=petition.id)
+    check('não-admin manda para aprovação com revisão do IntellexIA', r.get('status') == 'awaiting_approval',
+          str(r)[:200])
+    r = change_status_handler(law_firm_id, nao_admin.id, 'ready_for_filing', peticao_id=petition.id)
+    check('não-admin não aprova', 'erro' in r and 'administradores' in r['erro'], str(r)[:200])
+    r = change_status_handler(law_firm_id, nao_admin.id, 'in_review', peticao_id=petition.id)
+    check('não-admin não devolve petição em aprovação', 'erro' in r, str(r)[:200])
+    r = change_status_handler(law_firm_id, admin.id, 'ready_for_filing', peticao_id=petition.id)
+    check('admin aprova', r.get('status') == 'ready_for_filing', str(r)[:200])
+    r = change_status_handler(law_firm_id, admin.id, 'in_review', peticao_id=petition.id)
+    check('admin reabre', r.get('status') == 'in_review', str(r)[:200])
+
+    # A petição do teste 1 tem a última revisão feita no Claude.
+    r = change_status_handler(law_firm_id, nao_admin.id, 'awaiting_approval', peticao_id=primeiro['peticao_id'])
+    check('não-admin não manda para aprovação com a última revisão feita no Claude',
+          'erro' in r and 'Claude' in r['erro'], str(r)[:200])
+    r = change_status_handler(law_firm_id, admin.id, 'awaiting_approval', peticao_id=primeiro['peticao_id'])
+    check('admin pode, como na tela', r.get('status') == 'awaiting_approval', str(r)[:200])
+    change_status_handler(law_firm_id, admin.id, 'in_review', peticao_id=primeiro['peticao_id'])
+
+    r = change_status_handler(law_firm_id, admin.id, 'pronta', peticao_id=petition.id)
+    check('status inválido: erro com a lista dos válidos', 'erro' in r and 'Aguardando aprovação' in r['erro'],
+          str(r)[:200])
+    check('sem petição: erro', 'erro' in change_status_handler(law_firm_id, admin.id, 'in_review'))
+    check('petição de outro escritório: não encontrada',
+          'erro' in change_status_handler(99999, admin.id, 'archived', peticao_id=petition.id))
+    check('usuário inexistente ou de outro escritório: recusado',
+          'erro' in change_status_handler(law_firm_id, 999999, 'archived', peticao_id=petition.id))
+    db.session.refresh(petition)
+    check('nada mudou nas recusas', petition.workflow_status == 'in_review', petition.workflow_status)
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['user_id'] = nao_admin.id
+        sess['law_firm_id'] = law_firm_id
+    resp = client.post(f'/fap-review/petitions/{primeiro["peticao_id"]}/status',
+                       json={'workflow_status': 'awaiting_approval'})
+    check('a tela continua com a mesma regra (mesmo código)', resp.status_code == 403
+          and 'Claude' in (resp.get_json() or {}).get('error', ''), str(resp.status_code))
+    resp = client.post(f'/fap-review/petitions/{petition.id}/status', json={'workflow_status': 'xyz'})
+    check('a tela recusa status inválido', resp.status_code == 400, str(resp.status_code))
+
+
 def _limpar(law_firm_id):
     petitions = FapReviewPetition.query.filter(
         FapReviewPetition.law_firm_id == law_firm_id,
@@ -439,6 +521,7 @@ def main():
             test_estatisticas(firm.id)
             test_gate_admin()
             test_comparacao_e_recusas(firm.id, user.id)
+            test_mudar_status(firm.id, primeiro)
         finally:
             db.session.rollback()
             _limpar(firm.id)

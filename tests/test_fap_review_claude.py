@@ -13,9 +13,11 @@ Cobre:
   1. Montagem do prompt e parse do resultado sem LLM (a mesma do agente)
   2. Instruções em partes: o mesmo prompt do agente, cortado em fim de linha,
      com os pontos de atenção da última revisão do IntellexIA (nunca de uma
-     feita no Claude); petição travada traz aviso
-  3. Conferência: rascunho saneado; JSON fora do contrato recusado; item ruim
-     vira aviso; achado "não pertinente" marcado; rascunho vencido apagado
+     feita no Claude); os casos de referência ficam sob consulta (não vão
+     inteiros); o formato do JSON é repetido no fim; petição travada traz aviso
+  3. Conferência: rascunho saneado; JSON fora do contrato recusado com o
+     formato esperado; item ruim vira aviso e pede reenvio; achado "não
+     pertinente" marcado; rascunho vencido apagado
   4. Gravação: dono, validade, idempotência, petição nova x existente,
      travada, em processamento, origem e modelo gravados
   5. Histórico: o mesmo achado com outra redação casa (reincidente), achado
@@ -196,6 +198,22 @@ def test_instrucoes(firm_id, user_id):
     montadas = claude_svc.montar_instrucoes(firm_id, 'revisao', identificador=IDENT)
     check('as partes juntas são as instruções montadas', completo == montadas['texto'])
     check('traz o contrato de saída do agente', 'CONTRATO TÉCNICO DE SAÍDA' in completo)
+    casos = FapReviewReferenceVersion.query.filter_by(
+        law_firm_id=firm_id, reference_type='casos_referencia', is_active=True).first()
+    if casos and len(casos.content or '') > 2000:
+        trecho_dos_casos = casos.content.strip()[200:700]
+        check('casos de referência não vão inteiros nas instruções', trecho_dos_casos not in completo)
+    check('instruções ensinam a consultar os casos por termo',
+          'ler_manual_revisor' in completo and 'casos_referencia' in completo)
+    manual = FapReviewReferenceVersion.query.filter_by(
+        law_firm_id=firm_id, reference_type='manual_fap', is_active=True).first()
+    if manual and manual.content:
+        check('o manual continua indo inteiro', manual.content.strip()[-300:] in completo)
+    ultima = claude_svc.instrucoes(firm_id, 'revisao', identificador=IDENT, parte=r['total_partes'])['conteudo']
+    check('formato do JSON repetido na última parte', '"missing_documents"' in ultima
+          and '"theses"' in ultima and '"benefit_number"' in ultima)
+    check('instruções mandam confirmar a petição achada antes de usar o histórico',
+          'confirme' in completo.lower())
     check('traz o bloco de adaptação para a conversa', 'conferir_revisao_peticao' in completo)
     check('pontos de atenção da revisão do IntellexIA entram', 'Ponto da revisão oficial' in completo)
     check('revisão focada marcada', r.get('revisao_focada') is True)
@@ -262,6 +280,15 @@ def test_conferencia(firm_id, user_id, petition):
                             'revisao')
     check('item fora do schema: rascunho com aviso', bool(r.get('rascunho_id')) and len(r.get('avisos', [])) == 1,
           str(r.get('avisos')))
+    check('com aviso, pede para corrigir e reenviar antes de mostrar, com o formato esperado',
+          'mande de novo' in r.get('proximo_passo', '') and '"thesis"' in r.get('formato_esperado', ''),
+          str(r.get('proximo_passo'))[:160])
+    r = claude_svc.conferir(firm_id, user_id, _resultado(theses=['Acidente de trajeto']), 'revisao')
+    check('tese em texto solto (o erro do teste real): aviso e formato esperado',
+          len(r.get('avisos', [])) >= 1 and '"thesis"' in r.get('formato_esperado', ''), str(r)[:200])
+    r = claude_svc.conferir(firm_id, user_id, {'achados': []}, 'revisao')
+    check('JSON fora do contrato: erro traz o formato esperado', 'erro' in r
+          and '"missing_documents"' in r.get('formato_esperado', ''), str(r)[:200])
     comparacao = {'comparative_changes': [], 'findings': [_achado('ok')], 'executive_summary': {}}
     check('comparação confere com as chaves dela',
           bool(claude_svc.conferir(firm_id, user_id, comparacao, 'comparacao').get('rascunho_id')))

@@ -1881,44 +1881,16 @@ def petition_update_status(petition_id: int):
 
     payload = request.get_json(silent=True) or {}
     new_status = str(payload.get('workflow_status') or '').strip()
-    if new_status not in PETITION_WORKFLOW_STATUSES:
-        return jsonify({'error': 'Status da petição inválido.'}), 400
-
-    old_status = petition.workflow_status
-    if new_status == old_status:
-        return jsonify({'success': True, 'workflow_status': new_status})
-
-    # Aprovar, devolver para ajustes e reabrir são exclusivos do admin (regra
-    # espelhada dos botões da tela).
-    if _svc.status_transition_requires_admin(old_status, new_status) and session.get('user_role') != 'admin':
-        return jsonify({'error': 'Apenas administradores podem executar esta mudança de status.'}), 403
-
-    # Revisão feita no Claude não envia para aprovação: o advogado não leva à
-    # aprovação o que o modelo do escritório não revisou. O admin, que aprova,
-    # continua podendo mudar à mão.
-    if (new_status in _svc.APPROVAL_STATUSES and session.get('user_role') != 'admin'
-            and _svc.latest_revision_is_claude(petition)):
-        return jsonify({'error': _svc.CLAUDE_REVIEW_APPROVAL_BLOCK}), 403
-
+    # Regras em _svc.change_petition_status — as mesmas da ferramenta do MCP.
     try:
-        petition.workflow_status = new_status
-        petition.status_changed_at = datetime.now()
-        petition.updated_at = datetime.now()
-        db.session.commit()
+        _svc.change_petition_status(petition, new_status, user_id=session.get('user_id'),
+                                    user_role=session.get('user_role'))
+    except _svc.StatusChangeRefused as refused:
+        return jsonify({'error': str(refused)}), refused.status_http
     except Exception as error:
         db.session.rollback()
         current_app.logger.error(f'Erro ao atualizar status da petição: {error}')
         return jsonify({'error': 'Não foi possível atualizar o status da petição.'}), 500
-
-    _log_audit(
-        law_firm_id,
-        'petition_status_updated',
-        'petition',
-        petition.id,
-        f'Status alterado de {PETITION_WORKFLOW_STATUSES.get(old_status, old_status)} para {PETITION_WORKFLOW_STATUSES.get(new_status, new_status)}',
-        old_value=old_status,
-        new_value=new_status,
-    )
 
     return jsonify({'success': True, 'workflow_status': new_status})
 

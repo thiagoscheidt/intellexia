@@ -250,6 +250,53 @@ def status_transition_requires_admin(old_status: str, new_status: str) -> bool:
     return old_status in {'awaiting_approval', 'ready_for_filing'}
 
 
+class StatusChangeRefused(ValueError):
+    """Mudança de status recusada, com a mensagem para o usuário e o status HTTP."""
+
+    def __init__(self, message: str, status_http: int = 400):
+        super().__init__(message)
+        self.status_http = status_http
+
+
+def change_petition_status(petition: FapReviewPetition, new_status: str, *, user_id: int | None,
+                           user_role: str | None, via: str = '') -> str:
+    """Muda o status agregado da petição com as regras da tela. Devolve o status anterior.
+
+    Fonte única do seletor de status, do arrastar do kanban e da ferramenta
+    `mudar_status_peticao` do MCP — o Claude não pode ser porta lateral:
+    aprovar, devolver para ajustes e reabrir são do admin
+    (`status_transition_requires_admin`), e quem não é admin não manda para
+    aprovação a petição cuja última revisão foi feita no Claude. ``via`` vai
+    para a auditoria (ex.: "via Claude"). Levanta StatusChangeRefused.
+    """
+    new_status = str(new_status or '').strip()
+    if new_status not in PETITION_WORKFLOW_STATUSES:
+        raise StatusChangeRefused('Status da petição inválido.', 400)
+    old_status = petition.workflow_status
+    if new_status == old_status:
+        return old_status
+    is_admin = user_role == 'admin'
+    if status_transition_requires_admin(old_status, new_status) and not is_admin:
+        raise StatusChangeRefused('Apenas administradores podem executar esta mudança de status.', 403)
+    # O advogado não leva à aprovação o que o modelo do escritório não revisou.
+    if new_status in APPROVAL_STATUSES and not is_admin and latest_revision_is_claude(petition):
+        raise StatusChangeRefused(CLAUDE_REVIEW_APPROVAL_BLOCK, 403)
+
+    now = datetime.now()
+    petition.workflow_status = new_status
+    petition.status_changed_at = now
+    petition.updated_at = now
+    db.session.commit()
+
+    description = (f'Status alterado de {PETITION_WORKFLOW_STATUSES.get(old_status, old_status)} '
+                   f'para {PETITION_WORKFLOW_STATUSES.get(new_status, new_status)}')
+    if via:
+        description += f' ({via})'
+    log_audit(petition.law_firm_id, user_id, 'petition_status_updated', 'petition', petition.id,
+              description, old_value=old_status, new_value=new_status)
+    return old_status
+
+
 def is_triage_complete(total_findings: int, checked_indices: set[int],
                        ignored_indices: set[int]) -> bool:
     """Triagem completa: todo ponto (1..N) está checado como revisado ou descartado."""

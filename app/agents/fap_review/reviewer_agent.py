@@ -879,6 +879,13 @@ INSTRUÇÕES DO PROJETO:
         result = []
         for item in data if isinstance(data, list) else []:
             if not isinstance(item, dict):
+                # Sumia sem registro: o Claude mandava teses como texto solto
+                # e a revisão saía sem teses, sem dizer por quê.
+                if parse_errors is not None:
+                    parse_errors.append(
+                        f"{label} descartado: veio como {type(item).__name__} ({str(item)[:60]!r}), "
+                        f"e cada item precisa ser um objeto com os campos do formato"
+                    )
                 continue
             try:
                 result.append(model_cls(**item))

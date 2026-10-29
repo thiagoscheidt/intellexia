@@ -69,6 +69,10 @@ documento valem como esse marcador.
 - O "CONTRATO TÉCNICO DE SAÍDA" vale para o argumento `resultado_json` da ferramenta \
 conferir_revisao_peticao (modo "{modo}"). Não mostre o JSON ao usuário: quem mostra o resultado é a \
 conferência.
+- Os casos de referência não vêm inteiros (veja "CASOS DE REFERÊNCIA" abaixo): consulte-os por termo \
+quando precisar.
+- Se você mesmo encontrou a petição no IntellexIA (o usuário não informou), confirme com ele que é ela antes \
+de usar o histórico dela.
 - Antes de começar, avise o usuário que a revisão leva alguns minutos, e diga em que passo está."""
 
 _FONTE = {
@@ -120,6 +124,32 @@ def _peticao_resumo(petition: FapReviewPetition | None) -> dict | None:
     }
 
 
+_CASOS_SOB_CONSULTA = (
+    "Os casos de referência do escritório ({tamanho} caracteres) não vêm nestas instruções, porque "
+    "estouravam a conversa. O MANUAL acima é a régua; os casos mostram como o escritório a aplicou "
+    "(os títulos são por empresa, ex.: \"CASO 1 — EMPRESA X\"). Quando encontrar um ponto e quiser saber "
+    "o que foi decidido em situação parecida, consulte por termo: "
+    "ler_manual_revisor(tipo=\"casos_referencia\", termo=\"<palavra-chave do ponto>\"). Cite o caso em "
+    "manual_reference quando ele embasar o achado."
+)
+
+_FORMATO_NO_FIM = """=== FORMATO DA RESPOSTA (o mesmo do CONTRATO TÉCNICO DE SAÍDA, repetido aqui no fim) ===
+
+Mande para conferir_revisao_peticao, em resultado_json, um objeto JSON exatamente assim:
+{schema}
+
+- Cada item de cada lista é um OBJETO com esses campos — nunca texto solto.
+- Use os nomes de campo em inglês, como acima; os valores em português.
+"""
+
+
+def formato_esperado(modo: str) -> str:
+    """O contrato de saída do agente para o modo — o que a conferência espera receber."""
+    if modo == MODO_COMPARACAO:
+        return FapPetitionReviewerAgent._OUTPUT_SCHEMA_COMPARATIVE
+    return FapPetitionReviewerAgent._OUTPUT_SCHEMA_SINGLE
+
+
 def _pontos_de_atencao(law_firm_id: int, petition, identificador: str) -> str | None:
     from app.blueprints.fap_review import _build_prior_attention_points
 
@@ -163,11 +193,15 @@ def montar_instrucoes(law_firm_id: int, modo: str, *, identificador: str | None 
     pontos = _pontos_de_atencao(law_firm_id, petition, identificador)
     comparativa = modo == MODO_COMPARACAO
 
+    # Casos sob consulta (decisão do Thiago, 28/10/2026): em homologação eram 197
+    # mil caracteres, 60% das instruções — 10 partes, e a conversa do Claude
+    # compactava no meio da revisão, perdendo o formato do JSON.
+    casos = _conteudo_referencia(law_firm_id, 'casos_referencia')
     sistema = FapPetitionReviewerAgent.montar_prompt_sistema(
         _conteudo_prompt(law_firm_id, 'revisor_identity'),
         _conteudo_prompt(law_firm_id, 'revisor_rules'),
         manual=_conteudo_referencia(law_firm_id, 'manual_fap'),
-        casos=_conteudo_referencia(law_firm_id, 'casos_referencia'),
+        casos=_CASOS_SOB_CONSULTA.format(tamanho=f'{len(casos):,}'.replace(',', '.')) if casos else '',
         instrucoes_projeto=_conteudo_referencia(law_firm_id, 'project_instructions'),
         focused_review=bool(pontos),
         comparative=comparativa,
@@ -181,7 +215,8 @@ def montar_instrucoes(law_firm_id: int, modo: str, *, identificador: str | None 
 
     texto = (_ADAPTACAO.format(fonte=_FONTE[modo], modo=modo)
              + '\n\n=== INSTRUÇÕES DO AGENTE REVISOR DO ESCRITÓRIO ===\n\n' + sistema
-             + '\n\n=== TAREFA ===\n\n' + tarefa + '\n')
+             + '\n\n=== TAREFA ===\n\n' + tarefa + '\n\n'
+             + _FORMATO_NO_FIM.format(schema=formato_esperado(modo)))
 
     aviso = None
     bloqueio = _svc.describe_new_revision_block(petition)
@@ -387,7 +422,8 @@ def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_RE
     problemas = _problemas_do_contrato(dados, modo)
     if problemas:
         return {'erro': 'O resultado não segue o contrato de saída: ' + '; '.join(problemas)
-                        + '. Corrija e mande de novo.'}
+                        + '. Corrija seguindo o formato_esperado e mande de novo.',
+                'formato_esperado': formato_esperado(modo)}
     try:
         petition, identificador = _localizar_peticao(law_firm_id, identificador, peticao_id)
     except ValueError as e:
@@ -398,7 +434,8 @@ def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_RE
         resultado, erros = FapPetitionReviewerAgent.montar_resultado(
             dados, comparativa=modo == MODO_COMPARACAO, revisao_focada=focada)
     except ReviewOutputParseError as e:
-        return {'erro': f'{e} Corrija e mande de novo.'}
+        return {'erro': f'{e} Corrija seguindo o formato_esperado e mande de novo.',
+                'formato_esperado': formato_esperado(modo)}
     payload = resultado.model_dump(mode='json')
     # Compacto, sem indentação: o mesmo resultado ocupa ~25% menos e cabe mais
     # achado no limite do TEXT. Quem lê é json.loads, o formato não importa.
@@ -449,11 +486,15 @@ def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_RE
     }
     if erros:
         resposta['avisos'] = [str(e)[:300] for e in erros]
+        resposta['formato_esperado'] = formato_esperado(modo)
     bloqueio = _svc.describe_new_revision_block(petition)
     if bloqueio:
         resposta['aviso'] = f'{bloqueio} Esta revisão não poderá ser gravada no histórico.'
     resposta['proximo_passo'] = (
-        'Mostre ao usuário ESTES achados, e não os do seu JSON: numerados, com gravidade, local e correção '
+        (f'ANTES DE MOSTRAR: a conferência deixou de fora {len(erros)} item(ns) por formato (veja "avisos"). '
+         'Corrija esses itens seguindo "formato_esperado" e mande de novo para conferir_revisao_peticao o '
+         'resultado inteiro; mostre ao usuário só o que a nova conferência devolver. ' if erros else '')
+        + 'Mostre ao usuário ESTES achados, e não os do seu JSON: numerados, com gravidade, local e correção '
         'sugerida; diga quais o saneador descartou ou corrigiu e por quê, e quais já tinham sido marcados como '
         '"não pertinente" nesta petição. Depois pergunte se ele quer gravar esta revisão no histórico do '
         'Revisor do IntellexIA — ela fica com o selo "Feita no Claude", fora da pontuação, e não envia a '
