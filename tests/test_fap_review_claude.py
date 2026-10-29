@@ -599,6 +599,12 @@ def test_etapas_na_descricao_das_ferramentas():
               all(e in doc for e in etapas) and [doc.index(e) for e in etapas] == sorted(doc.index(e) for e in etapas))
         instr = claude_svc._ADAPTACAO + claude_svc._ETAPAS['revisao' if nome.startswith('revisar') else 'comparacao']
         check(f'{nome}: mesmos nomes das instruções', all(e in instr for e in etapas))
+        # "Se for montar lista" o Claude lia como opcional e criava três tarefas com
+        # nomes dele, antes de chamar a ferramenta (homologação, 29/10/2026).
+        check(f'{nome}: lista de tarefas é ordem, não condição',
+              'se for montar' not in doc and 'antes de qualquer outra chamada' in doc)
+    check('instruções mandam substituir a lista montada com outros nomes',
+          'substitua' in claude_svc._ADAPTACAO.split('ETAPAS')[1][:400])
     # DOCX também tem página: o Claude converte para PDF no ambiente dele (teste de 29/10/2026,
     # os achados vinham só com o tópico).
     check('DOCX: instruções mandam converter para PDF e ler por página',

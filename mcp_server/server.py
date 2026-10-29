@@ -2007,6 +2007,20 @@ def revisar_peticao_inicial(
 ) -> dict:
     """Instruções do Revisor de Petições para VOCÊ revisar uma petição FAP aqui na conversa.
 
+    LISTA DE TAREFAS — antes de qualquer outra chamada, monte a lista de
+    tarefas (ou de progresso) com exatamente estas cinco etapas, com estes
+    nomes: não junte, não renomeie, não crie tarefas suas. Avise o usuário que
+    leva alguns minutos.
+    1. Ler as instruções do revisor — parte=1, 2, ... até 'total_partes'.
+    2. Ler a petição — o anexo inteiro, com tabelas e imagens; chame
+       conferir_dados_beneficios com os benefícios citados. Com planilha
+       de benefícios anexada (.xlsx/.csv), rode também conferir_planilha_beneficios.
+    3. Revisar — seguindo as instruções lidas.
+    4. Conferir o resultado no IntellexIA — o JSON vai para conferir_revisao_peticao,
+       com a lista de conferir_dados_beneficios em beneficios_conferidos.
+    5. Mostrar os achados e perguntar se grava — gravar_revisao_peticao só se
+       o usuário disser que sim; gravada, anexe os arquivos (envio_dos_arquivos).
+
     A revisão é feita por você, com o arquivo que o usuário anexou: esta
     ferramenta devolve as instruções do agente revisor do escritório
     (identidade, regras, manual FAP, pontos de atenção da última revisão da
@@ -2019,18 +2033,6 @@ def revisar_peticao_inicial(
     a encontrou por conta própria (ex.: pelo nome da empresa), PERGUNTE ao
     usuário se é ela antes de usar. Petição nova, não confirmada, ou pedido de
     revisão sem histórico: chame sem.
-
-    Etapas — se for montar lista de tarefas ou progresso, use exatamente estas
-    cinco, com estes nomes, e avise o usuário que leva alguns minutos:
-    1. Ler as instruções do revisor — parte=1, 2, ... até 'total_partes'.
-    2. Ler a petição — o anexo inteiro, com tabelas e imagens; chame
-       conferir_dados_beneficios com os benefícios citados. Com planilha
-       de benefícios anexada (.xlsx/.csv), rode também conferir_planilha_beneficios.
-    3. Revisar — seguindo as instruções lidas.
-    4. Conferir o resultado no IntellexIA — o JSON vai para conferir_revisao_peticao,
-       com a lista de conferir_dados_beneficios em beneficios_conferidos.
-    5. Mostrar os achados e perguntar se grava — gravar_revisao_peticao só se
-       o usuário disser que sim; gravada, anexe os arquivos (envio_dos_arquivos).
 
     Para duas versões (original × revisada), use comparar_versoes_peticao.
 
@@ -2301,12 +2303,10 @@ def comparar_versoes_peticao(
 ) -> dict:
     """Instruções do Revisor para VOCÊ comparar duas versões de uma petição aqui na conversa.
 
-    Use quando o usuário anexar a versão original e a revisada e perguntar "a
-    v2 corrigiu o que o revisor apontou?". Funciona como revisar_peticao_inicial,
-    inclusive na escolha da petição. Para uma versão só, use revisar_peticao_inicial.
-
-    Etapas — se for montar lista de tarefas ou progresso, use exatamente estas
-    cinco, com estes nomes, e avise o usuário que leva alguns minutos:
+    LISTA DE TAREFAS — antes de qualquer outra chamada, monte a lista de
+    tarefas (ou de progresso) com exatamente estas cinco etapas, com estes
+    nomes: não junte, não renomeie, não crie tarefas suas. Avise o usuário que
+    leva alguns minutos.
     1. Ler as instruções do revisor — parte=1, 2, ... até 'total_partes'.
     2. Ler as duas versões — os dois anexos inteiros, com tabelas e imagens;
        chame conferir_dados_beneficios com os benefícios da revisada. Com
@@ -2318,6 +2318,10 @@ def comparar_versoes_peticao(
        conferir_dados_beneficios em beneficios_conferidos.
     5. Mostrar os achados e perguntar se grava — gravar_revisao_peticao só se
        o usuário disser que sim; gravada, anexe os arquivos (envio_dos_arquivos).
+
+    Use quando o usuário anexar a versão original e a revisada e perguntar "a
+    v2 corrigiu o que o revisor apontou?". Funciona como revisar_peticao_inicial,
+    inclusive na escolha da petição. Para uma versão só, use revisar_peticao_inicial.
 
     Args:
         identificador_documento: Id Wrike da petição, se o usuário informou. Opcional.

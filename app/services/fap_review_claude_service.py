@@ -96,8 +96,10 @@ quando precisar.
 - Se você mesmo encontrou a petição no IntellexIA (o usuário não informou), confirme com ele que é ela antes \
 de usar o histórico dela.
 
-ETAPAS — faça nesta ordem, sem pular nenhuma. Antes de começar, avise o usuário que a revisão leva \
-alguns minutos; ao passar de uma etapa para a outra, diga em qual está usando o nome abaixo:
+ETAPAS — faça nesta ordem, sem pular nenhuma. A lista de tarefas (ou de progresso) da conversa é \
+exatamente estas cinco, com estes nomes: se você já montou outra, substitua por estas agora. Antes de \
+começar, avise o usuário que a revisão leva alguns minutos; ao passar de uma etapa para a outra, diga \
+em qual está usando o nome abaixo:
 1. Ler as instruções do revisor — todas as partes desta ferramenta, dizendo "parte N de M"; só siga \
 depois da última.
 {etapas}
