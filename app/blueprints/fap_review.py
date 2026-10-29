@@ -17,7 +17,6 @@ import threading
 import asyncio
 import hashlib
 import re
-import unicodedata
 from collections import Counter, defaultdict
 from datetime import datetime
 from io import BytesIO
@@ -48,6 +47,7 @@ from app.services import fap_training_diff_service as _diff_svc
 from app.services import fap_review_aux_service as _aux_svc
 from app.utils.document_utils import localizar_pagina_pdf, render_docx_preview_html
 from app.utils.timezone import now_sp
+from app.utils import planilha_beneficios as _planilha
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +68,6 @@ try:
 except ImportError:
     DocxDocument = None
 
-try:
-    from openpyxl import load_workbook
-except ImportError:
-    load_workbook = None
 
 
 fap_review_bp = Blueprint('fap_review', __name__, url_prefix='/fap-review')
@@ -286,167 +282,13 @@ def _extract_text_from_document(filepath: str) -> str:
         raise
 
 
-def _normalize_spreadsheet_header(value: object) -> str:
-    """Normaliza cabeçalhos de planilha para busca resiliente.
-
-    Além de acento e caixa, derruba pontuação: "Nº", "TESE(S)" e "N° do
-    Benefício" viram texto comparável sem uma entrada de alias para cada
-    variação de digitação.
-    """
-    normalized = unicodedata.normalize('NFKD', str(value or ''))
-    ascii_text = normalized.encode('ascii', 'ignore').decode('ascii')
-    ascii_text = re.sub(r'[^a-z0-9]+', ' ', ascii_text.lower())
-    return ' '.join(ascii_text.split())
-
-
-# Cada escritório nomeia a coluna do seu jeito. A lista está em ordem de
-# preferência: a primeira que existir na aba é a usada.
-_BENEFIT_HEADER_ALIASES = (
-    'numero do beneficio',
-    'numero beneficio',
-    'n do beneficio',
-    'no do beneficio',
-    'n beneficio',
-    'nb',
-    'beneficio',
-)
-_THESIS_HEADER_ALIASES = ('tese', 'teses')
-
-
-def _find_header_index(header_map: dict[str, int], aliases: tuple[str, ...]) -> int | None:
-    """Índice da primeira coluna cujo cabeçalho casa com um dos nomes aceitos."""
-    for alias in aliases:
-        if alias in header_map:
-            return header_map[alias]
-    return None
-
-
-def _find_thesis_index(header_map: dict[str, int]) -> int | None:
-    """Índice da coluna da tese, aceitando singular, plural e sufixos.
-
-    Casa "TESE", "TESES", "TESE(S)" e "TESES APLICADAS" — mas pela primeira
-    palavra, nunca por substring: as vizinhas ("OBS", "Número da CAT") não
-    podem ser confundidas com a coluna da tese.
-    """
-    exact = _find_header_index(header_map, _THESIS_HEADER_ALIASES)
-    if exact is not None:
-        return exact
-
-    for header, index in header_map.items():
-        if header.split(' ', 1)[0] in _THESIS_HEADER_ALIASES:
-            return index
-    return None
-
-
-def _format_benefit_number(value: object) -> str:
-    """Formata número de benefício preservando apenas o valor legível."""
-    if value is None:
-        return ''
-
-    if isinstance(value, bool):
-        return ''
-
-    if isinstance(value, int):
-        return str(value)
-
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
-
-    return str(value).strip()
-
-
-def _normalize_benefit_number(value: object) -> str:
-    """Normaliza número de benefício para comparação textual."""
-    return re.sub(r'\D+', '', _format_benefit_number(value))
-
-
-def _document_mentions_benefit_number(document_text: str, normalized_benefit_number: str) -> bool:
-    """Verifica se o documento menciona o benefício com tolerância a pontuação e separadores."""
-    if not document_text or not normalized_benefit_number:
-        return False
-
-    # Aceita formatos como 1234567890, 123.456.789-0, 123 456 789 0 ou variações com separadores.
-    separator_pattern = r'[\s\.\-\/_;,:\(\)\[\]]*'
-    digit_pattern = separator_pattern.join(re.escape(digit) for digit in normalized_benefit_number)
-    pattern = rf'(?<!\d){digit_pattern}(?!\d)'
-    return re.search(pattern, document_text) is not None
-
-
-def _parse_benefits_spreadsheet(filepath: str) -> list[dict[str, str]]:
-    """Lê a planilha de benefícios (todas as abas) e retorna as linhas com tese preenchida.
-
-    Planilhas reais costumam ter uma aba por vigência (2021, 2022, ...); abas sem
-    as colunas esperadas (ex.: anotações) são ignoradas.
-    """
-    if not load_workbook:
-        raise ImportError('openpyxl não está instalado')
-
-    workbook = load_workbook(filename=filepath, read_only=True, data_only=True)
-
-    try:
-        rows: list[dict[str, str]] = []
-        sheets_with_columns = 0
-        rejected_sheets: list[str] = []
-
-        for worksheet in workbook.worksheets:
-            header_row = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
-            if not header_row:
-                rejected_sheets.append(f'{worksheet.title}: aba vazia')
-                continue
-
-            # Cabeçalho repetido (a planilha real tem "OBS" três vezes): a
-            # primeira ocorrência vence, não a última.
-            header_map: dict[str, int] = {}
-            for index, value in enumerate(header_row):
-                normalized = _normalize_spreadsheet_header(value)
-                if normalized:
-                    header_map.setdefault(normalized, index)
-
-            benefit_idx = _find_header_index(header_map, _BENEFIT_HEADER_ALIASES)
-            thesis_idx = _find_thesis_index(header_map)
-
-            if benefit_idx is None or thesis_idx is None:
-                missing = []
-                if benefit_idx is None:
-                    missing.append('o número do benefício')
-                if thesis_idx is None:
-                    missing.append('a tese')
-                rejected_sheets.append(f'{worksheet.title}: falta {" e ".join(missing)}')
-                continue
-            sheets_with_columns += 1
-
-            for row in worksheet.iter_rows(min_row=2, values_only=True):
-                thesis = ' '.join(str(row[thesis_idx] or '').strip().split()) if thesis_idx < len(row) else ''
-                if not thesis:
-                    continue
-
-                benefit_number = _format_benefit_number(row[benefit_idx] if benefit_idx < len(row) else '')
-                normalized_benefit_number = _normalize_benefit_number(benefit_number)
-                if not normalized_benefit_number:
-                    continue
-
-                rows.append({
-                    'benefit_number': benefit_number,
-                    'benefit_number_normalized': normalized_benefit_number,
-                    'thesis': thesis,
-                    'sheet_name': worksheet.title,
-                })
-
-        if not sheets_with_columns:
-            # Diz o que faltou em cada aba: sem isso, "cabeçalho com outro nome"
-            # e "cabeçalho fora da primeira linha" dão a mesma mensagem.
-            detalhe = '; '.join(rejected_sheets[:8])
-            if len(rejected_sheets) > 8:
-                detalhe += f'; e mais {len(rejected_sheets) - 8} aba(s)'
-            raise ValueError(
-                'Nenhuma aba da planilha tem as duas colunas obrigatórias na primeira '
-                'linha: o número do benefício ("Número do Benefício") e a tese '
-                f'("TESE" ou "TESES"). Abas lidas — {detalhe}.'
-            )
-
-        return rows
-    finally:
-        workbook.close()
+# Planilha de benefícios: regras em app/utils/planilha_beneficios.py — fonte única
+# da tela e do script que a revisão feita no Claude roda no ambiente dele.
+_normalize_spreadsheet_header = _planilha.normalizar_cabecalho
+_format_benefit_number = _planilha.formatar_numero_beneficio
+_normalize_benefit_number = _planilha.normalizar_numero_beneficio
+_document_mentions_benefit_number = _planilha.documento_cita_beneficio
+_parse_benefits_spreadsheet = _planilha.ler_planilha
 
 
 def _load_execution_benefits_spreadsheet(execution) -> dict | None:
@@ -527,34 +369,8 @@ def _build_benefits_spreadsheet_review(
     checked_document_label: str,
 ) -> dict:
     """Gera checagem determinística dos benefícios da planilha contra o documento."""
-    rows = _parse_benefits_spreadsheet(spreadsheet_path)
-
-    items: list[dict[str, object]] = []
-    found_count = 0
-
-    for row in rows:
-        found_in_document = _document_mentions_benefit_number(
-            document_text=document_text,
-            normalized_benefit_number=row['benefit_number_normalized'],
-        )
-        if found_in_document:
-            found_count += 1
-
-        items.append({
-            'benefit_number': row['benefit_number'],
-            'thesis': row['thesis'],
-            'sheet_name': row.get('sheet_name', ''),
-            'found_in_document': found_in_document,
-        })
-
-    return {
-        'source_filename': spreadsheet_filename,
-        'checked_document_label': checked_document_label,
-        'total_rows_with_theses': len(items),
-        'found_count': found_count,
-        'missing_count': max(len(items) - found_count, 0),
-        'items': items,
-    }
+    return _planilha.conferir_planilha(spreadsheet_path, spreadsheet_filename, document_text,
+                                       checked_document_label)
 
 
 # _normalize_finding_field -> app/services/fap_review_service.py (fonte única)

@@ -14,7 +14,10 @@ docs/superpowers/specs/2026-10-28-revisor-no-claude-design.md
 """
 from __future__ import annotations
 
+import ast
+import hashlib
 import json
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import update
@@ -29,6 +32,7 @@ from app.models import (
     FapReviewReferenceVersion,
 )
 from app.services import fap_review_service as _svc
+from app.utils import planilha_beneficios as _planilha
 from app.utils.timezone import SP_TZ
 
 MODO_REVISAO = 'revisao'
@@ -101,11 +105,13 @@ _FONTE = {
 # Etapas 2 e 3 de cada modo; as demais são as mesmas e ficam em _ADAPTACAO.
 _ETAPAS = {
     MODO_REVISAO: ('2. Ler a petição — o arquivo anexado inteiro, inclusive as tabelas de benefícios e as '
-                   'imagens.\n'
+                   'imagens. Se houver planilha de benefícios anexada (.xlsx ou .csv), ou se o usuário pedir a '
+                   'checagem dela, rode também a de conferir_planilha_beneficios.\n'
                    '3. Revisar — compare a petição com o manual e as regras das instruções; na dúvida '
                    'sobre um ponto, consulte os casos de referência por termo.'),
     MODO_COMPARACAO: ('2. Ler as duas versões — a original e a revisada, inteiras, inclusive tabelas e '
-                      'imagens.\n'
+                      'imagens. Se houver planilha de benefícios anexada (.xlsx ou .csv), rode a checagem de '
+                      'conferir_planilha_beneficios contra a versão revisada.\n'
                       '3. Comparar as versões — o que a revisada corrigiu do que o revisor apontou e o '
                       'que ficou pendente; na dúvida, consulte os casos de referência por termo.'),
 }
@@ -200,6 +206,14 @@ Só na comparação: o que a revisada corrigiu e o que ficou pendente.
 ### 📄 Documentos em falta
 | Tese / tópico | Documento | Manual |
 |---|---|---|
+
+### 📊 Planilha de benefícios
+Só se houve checagem da planilha: "N de M benefícios da planilha citados na petição", depois a tabela \
+com os que faltam primeiro:
+| Aba | Benefício | Tese | Na petição |
+|---|---|---|---|
+| 2022 | 633.333.333-3 | B31 indevido | ❌ |
+Mais de 20 citados: mostre só os que faltam e diga quantos foram encontrados.
 
 ### 🧹 Ajustes do saneador
 O que ele descartou ou corrigiu, e por quê. Achados já marcados como "não pertinente" nesta \
@@ -389,6 +403,110 @@ def instrucoes(law_firm_id: int, modo: str, *, identificador: str | None = None,
     return resposta
 
 
+# ── Planilha de benefícios ───────────────────────────────────────────
+
+_SCRIPT_PRINCIPAL = """
+if __name__ == '__main__':
+    import json
+    import sys
+    if len(sys.argv) != 3:
+        sys.exit('uso: python conferir_planilha.py PLANILHA PETICAO')
+    try:
+        resultado = conferir_planilha(sys.argv[1], Path(sys.argv[1]).name,
+                                      texto_do_documento(sys.argv[2]), Path(sys.argv[2]).name)
+    except (ValueError, ImportError) as erro:
+        sys.exit(str(erro))
+    resultado['script_versao'] = VERSAO
+    print(json.dumps(resultado, ensure_ascii=False))
+"""
+
+
+def _codigo_compacto(fonte: str) -> str:
+    """Módulo sem docstring, comentário nem anotação de tipo.
+
+    O Claude copia o script para um arquivo: texto menor é menos tempo e menos
+    chance de errar na cópia. Sem anotação, também roda em Python mais antigo.
+    """
+    arvore = ast.parse(fonte)
+    for no in ast.walk(arvore):
+        if isinstance(no, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            corpo = no.body
+            if corpo and isinstance(corpo[0], ast.Expr) and isinstance(getattr(corpo[0], 'value', None), ast.Constant) \
+                    and isinstance(corpo[0].value.value, str):
+                no.body = corpo[1:] or [ast.Pass()]
+        if isinstance(no, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            no.returns = None
+            for arg in no.args.args + no.args.kwonlyargs + no.args.posonlyargs:
+                arg.annotation = None
+    return ast.unparse(arvore)
+
+
+def script_planilha() -> dict:
+    """O script que o Claude roda no ambiente dele: o módulo da tela + a chamada.
+
+    A versão é o hash do código; a conferência só aceita resultado com a versão
+    atual — o que garante que veio deste script, e não de uma comparação de olho.
+    """
+    codigo = _codigo_compacto(Path(_planilha.__file__).read_text(encoding='utf-8'))
+    versao = hashlib.sha256(codigo.encode('utf-8')).hexdigest()[:12]
+    return {
+        'versao': versao,
+        'script': f"VERSAO = '{versao}'\n" + codigo + '\n' + _SCRIPT_PRINCIPAL,
+        'como_rodar': (
+            'Grave o "script" num arquivo, sem mudar nada (ex.: conferir_planilha.py), e rode no seu ambiente '
+            'de código: python conferir_planilha.py <planilha .xlsx ou .csv> <petição .docx, .pdf ou .txt>. '
+            'Na comparação de versões, use a versão revisada. Ele imprime um JSON com cada benefício da '
+            'planilha que tem tese e se ele foi citado na petição (qualquer pontuação entre os dígitos vale). '
+            'Erro de coluna: o script diz o que faltou em cada aba — repasse ao usuário.'
+        ),
+        'sem_ambiente_de_codigo': (
+            'Se você não conseguir rodar código nesta conversa, NÃO compare de olho: diga ao usuário que a '
+            'checagem da planilha não foi feita (a tela do Revisor faz) e siga a revisão.'
+        ),
+        'proximo_passo': (
+            'Mostre ao usuário quantos benefícios da planilha foram citados e a tabela, com os que faltam '
+            'primeiro (veja a seção 📊 de "como_mostrar" na conferência). Numa revisão, mande o JSON impresso, '
+            'inteiro e sem mudar, em conferir_revisao_peticao(planilha_beneficios=...): ele fica gravado com a '
+            'revisão e aparece na tela como na revisão da web.'
+        ),
+    }
+
+
+def _texto(valor, limite: int) -> str:
+    return ' '.join(str(valor if valor is not None else '').split())[:limite]
+
+
+def _checagem_da_planilha(bruto) -> tuple[dict | None, str | None]:
+    """(bloco para o resultado, aviso). O bloco tem o formato da revisão da tela."""
+    if isinstance(bruto, str):
+        try:
+            bruto = json.loads(bruto)
+        except json.JSONDecodeError:
+            return None, 'A checagem da planilha não é um JSON válido: mande o que o script imprimiu, sem mudar.'
+    if not isinstance(bruto, dict) or bruto.get('script_versao') != script_planilha()['versao']:
+        return None, ('A checagem da planilha não veio do script atual de conferir_planilha_beneficios, então '
+                      'ficou fora: chame a ferramenta, rode o script e mande o JSON que ele imprimir.')
+    itens_brutos = bruto.get('items')
+    if not isinstance(itens_brutos, list) or not all(
+            isinstance(i, dict) and isinstance(i.get('found_in_document'), bool) for i in itens_brutos):
+        return None, 'A checagem da planilha veio fora do formato do script e ficou fora: mande a saída sem mudar.'
+    itens = [{
+        'benefit_number': _texto(i.get('benefit_number'), 40),
+        'thesis': _texto(i.get('thesis'), 300),
+        'sheet_name': _texto(i.get('sheet_name'), 100),
+        'found_in_document': i['found_in_document'],
+    } for i in itens_brutos]
+    citados = sum(1 for i in itens if i['found_in_document'])
+    return {
+        'source_filename': _texto(bruto.get('source_filename'), 200) or 'Planilha enviada',
+        'checked_document_label': _texto(bruto.get('checked_document_label'), 200),
+        'total_rows_with_theses': len(itens),
+        'found_count': citados,
+        'missing_count': len(itens) - citados,
+        'items': itens,
+    }, None
+
+
 # ── Conferência ──────────────────────────────────────────────────────
 
 
@@ -476,7 +594,8 @@ def _ignorados(law_firm_id: int, identificador: str) -> set[str]:
 
 
 def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_REVISAO, *,
-             identificador: str | None = None, peticao_id: int | None = None) -> dict:
+             identificador: str | None = None, peticao_id: int | None = None,
+             planilha_beneficios=None) -> dict:
     """Confere o JSON da revisão feita no Claude e guarda o rascunho saneado.
 
     Mesmo parse e mesmo saneador do agente (`montar_resultado`), sem o texto
@@ -510,6 +629,11 @@ def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_RE
         return {'erro': f'{e} Corrija seguindo o formato_esperado e mande de novo.',
                 'formato_esperado': formato_esperado(modo)}
     payload = resultado.model_dump(mode='json')
+    planilha, aviso_planilha = (None, None)
+    if planilha_beneficios not in (None, '', {}):
+        planilha, aviso_planilha = _checagem_da_planilha(planilha_beneficios)
+    if planilha:
+        payload['benefits_spreadsheet_review'] = planilha
     # Compacto, sem indentação: o mesmo resultado ocupa ~25% menos e cabe mais
     # achado no limite do TEXT. Quem lê é json.loads, o formato não importa.
     result_json = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
@@ -558,6 +682,16 @@ def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_RE
         **exibicao,
         'como_mostrar': _COMO_MOSTRAR,
     }
+    if planilha:
+        resposta['planilha_beneficios'] = {
+            'arquivo': planilha['source_filename'],
+            'total': planilha['total_rows_with_theses'],
+            'citados': planilha['found_count'],
+            'faltando': planilha['missing_count'],
+            'faltantes': [i for i in planilha['items'] if not i['found_in_document']],
+        }
+    if aviso_planilha:
+        resposta['aviso_planilha'] = aviso_planilha
     if erros:
         resposta['avisos'] = [str(e)[:300] for e in erros]
         resposta['formato_esperado'] = formato_esperado(modo)

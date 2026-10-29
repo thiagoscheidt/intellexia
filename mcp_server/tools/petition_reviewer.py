@@ -38,6 +38,7 @@ def confer_review_handler(
     modo: str = "revisao",
     identificador_documento: str | None = None,
     peticao_id: int | None = None,
+    planilha_beneficios=None,
 ) -> dict:
     """Confere o JSON do Claude (parse + saneador) e guarda o rascunho."""
     from app.services import fap_review_claude_service as claude_svc
@@ -47,7 +48,15 @@ def confer_review_handler(
     return claude_svc.conferir(
         law_firm_id, user_id, resultado_json, modo,
         identificador=identificador_documento, peticao_id=peticao_id,
+        planilha_beneficios=planilha_beneficios,
     )
+
+
+def spreadsheet_script_handler() -> dict:
+    """Script da checagem da planilha de benefícios, para o Claude rodar no ambiente dele."""
+    from app.services import fap_review_claude_service as claude_svc
+
+    return claude_svc.script_planilha()
 
 
 def save_review_handler(

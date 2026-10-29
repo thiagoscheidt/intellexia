@@ -298,6 +298,12 @@ A petição **não vai para o IntellexIA**: o Claude lê o arquivo que você ane
 >
 > Ela também não vira "ponto de atenção" da revisão seguinte, que continua partindo da última revisão feita pela tela.
 
+### Planilha de benefícios pelo Claude
+
+Anexe a planilha de benefícios (**.xlsx ou .csv**) junto com a petição, ou peça na conversa: *"confira se os benefícios da planilha foram citados na petição"*. A conferência é a **mesma da tela** (seção *Benefícios da Planilha x Documento*), sem IA: o Claude recebe do IntellexIA o programa da checagem e roda com os arquivos anexados — nada sai da conversa. O resultado aparece numa tabela, com os benefícios **não citados primeiro**.
+
+> Numa revisão, a checagem vai junto ao gravar e aparece na tela como na revisão feita pela web. Se o Claude não conseguir rodar o programa, ele avisa que a checagem **não foi feita** — não compara "de olho".
+
 ### Mudar o status da petição pelo Claude
 
 Peça ao Claude, por exemplo: "manda a petição 4387120543 para aguardando ajustes". Ele confirma antes de mudar e segue **as mesmas regras da tela**:

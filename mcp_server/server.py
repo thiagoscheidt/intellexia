@@ -99,6 +99,7 @@ from mcp_server.tools.petition_reviewer import (
     confer_review_handler,
     review_instructions_handler,
     save_review_handler,
+    spreadsheet_script_handler,
 )
 from mcp_server.tools.petition_review_read import (
     get_review_detail_handler,
@@ -1984,7 +1985,8 @@ def revisar_peticao_inicial(
     Etapas — se for montar lista de tarefas ou progresso, use exatamente estas
     cinco, com estes nomes, e avise o usuário que leva alguns minutos:
     1. Ler as instruções do revisor — parte=1, 2, ... até 'total_partes'.
-    2. Ler a petição — o anexo inteiro, com tabelas e imagens.
+    2. Ler a petição — o anexo inteiro, com tabelas e imagens. Com planilha
+       de benefícios anexada (.xlsx/.csv), rode também conferir_planilha_beneficios.
     3. Revisar — seguindo as instruções lidas.
     4. Conferir o resultado no IntellexIA — o JSON vai para conferir_revisao_peticao.
     5. Mostrar os achados e perguntar se grava — gravar_revisao_peticao só se
@@ -2015,6 +2017,7 @@ def conferir_revisao_peticao(
     modo: str = "revisao",
     identificador_documento: str | None = None,
     peticao_id: int | None = None,
+    planilha_beneficios: dict | str | None = None,
 ) -> dict:
     """Confere o resultado da revisão que você fez na conversa, antes de mostrar ao usuário.
 
@@ -2035,19 +2038,48 @@ def conferir_revisao_peticao(
         modo: "revisao" (uma versão) ou "comparacao" (original × revisada).
         identificador_documento: O mesmo Id Wrike usado nas instruções, se houver.
         peticao_id: O mesmo peticao_id usado nas instruções, se houver.
+        planilha_beneficios: O JSON que o script de conferir_planilha_beneficios
+            imprimiu, inteiro e sem mudar — só se houve checagem da planilha.
+            Fica gravado com a revisão e aparece na tela como na revisão da web.
 
     Returns:
         'rascunho_id', 'vale_ate', 'achados' numerados, documentos em falta,
         teses (ou mudanças, na comparação), 'resumo', 'descartados_pelo_saneador',
-        'avisos' e 'proximo_passo'. JSON fora do contrato: 'erro' — corrija e
-        mande de novo.
+        'avisos', 'planilha_beneficios' (resumo da checagem), 'aviso_planilha'
+        (checagem que ficou fora, e por quê), 'como_mostrar' e 'proximo_passo'.
+        JSON fora do contrato: 'erro' — corrija e mande de novo.
     """
     claims = require_module("fap_review")
     with app.app_context():
         return confer_review_handler(
             claims["law_firm_id"], claims.get("user_id"), resultado_json, modo,
-            identificador_documento, peticao_id,
+            identificador_documento, peticao_id, planilha_beneficios,
         )
+
+
+@mcp.tool()
+def conferir_planilha_beneficios() -> dict:
+    """Confere se os benefícios da planilha (.xlsx ou .csv) foram citados na petição.
+
+    Use quando o usuário anexar a planilha de benefícios junto da petição (numa
+    revisão, na etapa "Ler a petição") ou pedir essa checagem na conversa. É a
+    mesma checagem da tela do Revisor, sem IA: para cada linha com benefício e
+    tese, em todas as abas, procura o número na petição aceitando qualquer
+    pontuação entre os dígitos.
+
+    A planilha e a petição não vão para o IntellexIA: esta ferramenta devolve um
+    script Python, montado do mesmo código da tela, para VOCÊ gravar e rodar no
+    seu ambiente de código com os dois arquivos anexados. Sem ambiente de código,
+    NÃO compare de olho: diga ao usuário que a checagem não foi feita.
+
+    Numa revisão, mande o JSON que o script imprimir em
+    conferir_revisao_peticao(planilha_beneficios=...), inteiro e sem mudar.
+
+    Returns:
+        'script', 'versao', 'como_rodar', 'sem_ambiente_de_codigo' e 'proximo_passo'.
+    """
+    require_module("fap_review")
+    return spreadsheet_script_handler()
 
 
 @mcp.tool()
@@ -2228,6 +2260,8 @@ def comparar_versoes_peticao(
     cinco, com estes nomes, e avise o usuário que leva alguns minutos:
     1. Ler as instruções do revisor — parte=1, 2, ... até 'total_partes'.
     2. Ler as duas versões — os dois anexos inteiros, com tabelas e imagens.
+       Com planilha de benefícios anexada, rode conferir_planilha_beneficios
+       contra a versão revisada.
     3. Comparar as versões — o que a revisada corrigiu e o que ficou pendente.
     4. Conferir o resultado no IntellexIA — o JSON vai para
        conferir_revisao_peticao com modo="comparacao".
