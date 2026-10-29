@@ -1311,6 +1311,66 @@
             </div>
             {% endif %}
 
+            {% if result_data.benefits_data_check %}
+            {# Revisão feita no Claude: a conferência de conferir_dados_beneficios, refeita
+               pelo IntellexIA contra a Central e o cálculo FAP ao conferir o resultado. #}
+            {% set dados_check = result_data.benefits_data_check %}
+            {% set situacao_rotulo = {
+                'confere': ('Confere', 'success'), 'divergente': ('Divergente', 'danger'),
+                'nao_encontrado': ('Não encontrado na base', 'warning'), 'invalido': ('Número inválido', 'secondary'),
+            } %}
+            <div class="col-12">
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center justify-content-between gap-2 flex-wrap">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-database-check text-primary"></i>
+                            Dados dos benefícios × Central e cálculo FAP
+                        </div>
+                        <span class="small text-muted">
+                            {{ dados_check.total or 0 }} conferido(s) · {{ dados_check.conferem or 0 }} conferem ·
+                            {{ dados_check.com_divergencia or 0 }} com divergência ·
+                            {{ dados_check.nao_encontrados or 0 }} não encontrado(s) ·
+                            {{ dados_check.com_alerta or 0 }} com alerta
+                        </span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0 align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Benefício</th>
+                                        <th>Situação</th>
+                                        <th class="pe-3">Divergências e alertas da base</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for item in dados_check.itens or [] %}
+                                    {% set rot = situacao_rotulo.get(item.situacao, (item.situacao, 'secondary')) %}
+                                    <tr>
+                                        <td class="ps-3 fw-semibold text-nowrap">{{ item.numero }}</td>
+                                        <td>
+                                            <span class="badge rounded-pill bg-{{ rot[1] }}-subtle text-{{ rot[1] }}-emphasis border border-{{ rot[1] }}-subtle">{{ rot[0] }}</span>
+                                        </td>
+                                        <td class="pe-3 small">
+                                            {% for d in item.divergencias or [] %}
+                                            <div><span class="fw-semibold text-uppercase">{{ d.campo }}</span>:
+                                                petição <span class="text-danger">{{ d.peticao }}</span> · base {{ d.base | join(', ') }}</div>
+                                            {% endfor %}
+                                            {% for a in item.alertas or [] %}
+                                            <div class="text-warning-emphasis"><i class="bi bi-exclamation-triangle me-1"></i>{{ a.mensagem }}</div>
+                                            {% endfor %}
+                                            {% if not item.divergencias and not item.alertas %}<span class="text-muted">—</span>{% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             {% if result_data.auxiliary_documents_review %}
             {% set aux_review = result_data.auxiliary_documents_review %}
             <div class="col-12">

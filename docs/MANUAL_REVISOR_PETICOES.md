@@ -286,11 +286,20 @@ Com a IA conectada (veja o manual **"Conectar sua IA"**), o Claude revisa a peti
 
 1. **Anexe a petição** na conversa (PDF ou DOCX) e peça: "revise esta petição". Para comparar, anexe a versão original e a revisada e pergunte "a nova versão corrigiu o que foi apontado?".
 2. Se a petição já existe no Revisor, diga o **Id Wrike**, ou deixe o Claude encontrá-la pelo nome da empresa: ele pergunta se é ela antes de usar o histórico. Assim ele revisa com os pontos de atenção da última revisão. Para petição nova, não precisa de Id nessa hora.
-3. O Claude lê as instruções, revisa e mostra os **achados na conversa**. Leva alguns minutos, e ele vai dizendo em que etapa está, sempre nesta ordem: **Ler as instruções do revisor** → **Ler a petição** → **Revisar** → **Conferir o resultado no IntellexIA** → **Mostrar os achados e perguntar se grava**. Na comparação de versões, a 2ª e a 3ª etapas são **Ler as duas versões** e **Comparar as versões**. O resultado vem separado por gravidade (🔴 crítico, 🟡 moderado, 🔵 formal), com a numeração da conferência, o local e o trecho de cada achado; formais em grande quantidade são agrupados por tema. A página só aparece quando a petição é enviada em **PDF** — o DOCX não tem página fixa, e o trecho citado é o que se procura com Ctrl+F.
+3. O Claude lê as instruções, revisa e mostra os **achados na conversa**. Leva alguns minutos, e ele vai dizendo em que etapa está, sempre nesta ordem: **Ler as instruções do revisor** → **Ler a petição** → **Revisar** → **Conferir o resultado no IntellexIA** → **Mostrar os achados e perguntar se grava**. Na comparação de versões, a 2ª e a 3ª etapas são **Ler as duas versões** e **Comparar as versões**. O resultado vem separado por gravidade (🔴 crítico, 🟡 moderado, 🔵 formal), com a numeração da conferência, o local e o trecho de cada achado; formais em grande quantidade são agrupados por tema. Cada achado traz o **tópico e a página**. No PDF, a página é a do próprio arquivo. No **DOCX**, que não tem página fixa, o Claude converte o arquivo para PDF no ambiente dele e usa essa paginação: ela pode diferir em uma página da que o Word mostra, e o Claude avisa isso no topo. Se o ambiente dele não permitir a conversão, ele indica só o tópico. O trecho citado é sempre literal, para achar com Ctrl+F.
 4. Antes de mostrar, o resultado passa pelo **mesmo saneador da tela**: sai achado duplicado, a contagem de dias entre DCB e DIB é corrigida e o que a equipe já marcou como **não pertinente** vem marcado.
 5. No fim, o Claude **pergunta se você quer gravar** no histórico do Revisor. Se disser que não, nada fica gravado. Se disser que sim, a revisão entra como a próxima revisão da petição; para petição nova, ele pede o Id Wrike.
 
-A petição **não vai para o IntellexIA**: o Claude lê o arquivo que você anexou. Não há link de envio nem nada a liberar nas configurações do Claude.
+A revisão em si não depende de enviar a petição ao IntellexIA: o Claude lê o arquivo que você anexou na conversa.
+
+### Arquivos anexados à revisão gravada
+
+Depois de gravar, o Claude tenta **anexar os arquivos à revisão**: a petição (na comparação, a versão original e a revisada) e a planilha de benefícios, se houver. Assim eles ficam na tela da revisão para baixar e pré-visualizar, como numa revisão feita pela web, e a planilha pode ser reaproveitada na revisão seguinte.
+
+- Se o ambiente do Claude tiver acesso à internet, o envio sai sozinho e ele avisa que os arquivos ficaram na revisão.
+- Se não tiver (a mensagem costuma ser *"Could not resolve host"*), ele mostra um **link**: abra no navegador e solte os arquivos na página. O link vale **24 horas** e cada arquivo entra uma vez só, sem trocar o que já foi recebido.
+
+Para o envio sair sozinho, a opção de acesso à rede do ambiente de código precisa estar ligada nas configurações do Claude, com o endereço do IntellexIA liberado. Configuração mudada só vale em **conversa nova**.
 
 > [!ALERTA] **Revisão "Feita no Claude".** A revisão gravada pelo Claude aparece no histórico com esse selo e segue duas regras:
 > - **fica fora da pontuação** dos advogados, porque foi feita pelo modelo escolhido na conversa e não pelo do escritório;
@@ -300,11 +309,13 @@ A petição **não vai para o IntellexIA**: o Claude lê o arquivo que você ane
 
 ### Dados dos benefícios conferidos com a base
 
-Ao ler a petição, o Claude manda ao IntellexIA os benefícios citados e o que a petição diz de cada um: CPF, NIT, espécie, DIB, DCB, nascimento, CNPJ, vigência, nome e CAT. O IntellexIA procura cada número na **Central de contestações** e no **cálculo FAP** do escritório e compara campo a campo, sem IA e com qualquer pontuação ou formato de data. Nada do que chega fica gravado.
+Ao ler a petição, o Claude manda ao IntellexIA os benefícios citados e o que a petição diz de cada um: CPF, NIT, espécie, DIB, DCB, nascimento, CNPJ, vigência, nome e CAT. O IntellexIA procura cada número na **Central de contestações** e no **cálculo FAP** do escritório e compara campo a campo, sem IA e com qualquer pontuação ou formato de data.
 
 - **Divergência** (CPF de outra pessoa, B91 na petição e B94 na base, DIB diferente, número que não existe) vira achado, com o valor da petição e o da base.
 - **Alertas da base** valem mesmo quando os dados conferem: benefício **já excluído do cálculo** no recálculo (a contestação ganhou), **fora do cálculo** do estabelecimento, **não contestado** na vigência, já **deferido**, ou **indeferido nas duas instâncias**.
 - O nome só é conferido com o que já foi **revelado** ou cadastrado; a consulta paga nunca é feita aqui.
+
+Numa revisão, a tabela dessa conferência é **gravada com a revisão** e aparece na tela, no bloco *Dados dos benefícios × Central e cálculo FAP*: o IntellexIA refaz a conferência com a base ao conferir o resultado, então o que fica gravado é o que a base diz, não o que o Claude escreveu. O nome do segurado não entra na tabela.
 
 A mesma conferência serve fora da revisão: peça ao Claude *"confira esses NBs"* com uma lista ou uma planilha, ou use a rota `POST /fap/beneficios/conferir` da API.
 

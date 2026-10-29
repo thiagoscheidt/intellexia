@@ -599,6 +599,12 @@ def test_etapas_na_descricao_das_ferramentas():
               all(e in doc for e in etapas) and [doc.index(e) for e in etapas] == sorted(doc.index(e) for e in etapas))
         instr = claude_svc._ADAPTACAO + claude_svc._ETAPAS['revisao' if nome.startswith('revisar') else 'comparacao']
         check(f'{nome}: mesmos nomes das instruções', all(e in instr for e in etapas))
+    # DOCX também tem página: o Claude converte para PDF no ambiente dele (teste de 29/10/2026,
+    # os achados vinham só com o tópico).
+    check('DOCX: instruções mandam converter para PDF e ler por página',
+          'soffice' in claude_svc._ADAPTACAO and '=== PÁGINA' in claude_svc._ADAPTACAO)
+    check('DOCX: a página não é mais só para PDF', 'DOCX não tem página fixa' not in claude_svc._ADAPTACAO
+          and 'se o arquivo for PDF' not in claude_svc._COMO_MOSTRAR)
 
 
 def main():

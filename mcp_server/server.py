@@ -2027,9 +2027,10 @@ def revisar_peticao_inicial(
        conferir_dados_beneficios com os benefícios citados. Com planilha
        de benefícios anexada (.xlsx/.csv), rode também conferir_planilha_beneficios.
     3. Revisar — seguindo as instruções lidas.
-    4. Conferir o resultado no IntellexIA — o JSON vai para conferir_revisao_peticao.
+    4. Conferir o resultado no IntellexIA — o JSON vai para conferir_revisao_peticao,
+       com a lista de conferir_dados_beneficios em beneficios_conferidos.
     5. Mostrar os achados e perguntar se grava — gravar_revisao_peticao só se
-       o usuário disser que sim.
+       o usuário disser que sim; gravada, anexe os arquivos (envio_dos_arquivos).
 
     Para duas versões (original × revisada), use comparar_versoes_peticao.
 
@@ -2057,6 +2058,7 @@ def conferir_revisao_peticao(
     identificador_documento: str | None = None,
     peticao_id: int | None = None,
     planilha_beneficios: dict | str | None = None,
+    beneficios_conferidos: list[dict | str] | str | None = None,
 ) -> dict:
     """Confere o resultado da revisão que você fez na conversa, antes de mostrar ao usuário.
 
@@ -2080,19 +2082,24 @@ def conferir_revisao_peticao(
         planilha_beneficios: O JSON que o script de conferir_planilha_beneficios
             imprimiu, inteiro e sem mudar — só se houve checagem da planilha.
             Fica gravado com a revisão e aparece na tela como na revisão da web.
+        beneficios_conferidos: A MESMA lista que você mandou para
+            conferir_dados_beneficios na leitura da petição. O IntellexIA refaz
+            a conferência com a base e grava a tabela dos dados dos benefícios
+            com a revisão (aparece na tela).
 
     Returns:
         'rascunho_id', 'vale_ate', 'achados' numerados, documentos em falta,
         teses (ou mudanças, na comparação), 'resumo', 'descartados_pelo_saneador',
         'avisos', 'planilha_beneficios' (resumo da checagem), 'aviso_planilha'
-        (checagem que ficou fora, e por quê), 'como_mostrar' e 'proximo_passo'.
+        (checagem que ficou fora, e por quê), 'dados_beneficios' (totais da
+        tabela gravada), 'aviso_beneficios', 'como_mostrar' e 'proximo_passo'.
         JSON fora do contrato: 'erro' — corrija e mande de novo.
     """
     claims = require_module("fap_review")
     with app.app_context():
         return confer_review_handler(
             claims["law_firm_id"], claims.get("user_id"), resultado_json, modo,
-            identificador_documento, peticao_id, planilha_beneficios,
+            identificador_documento, peticao_id, planilha_beneficios, beneficios_conferidos,
         )
 
 
@@ -2150,9 +2157,12 @@ def gravar_revisao_peticao(
         modelo: O modelo do Claude que fez a revisão (ex.: "Claude Sonnet 5").
 
     Returns:
-        'revisao_id', 'numero_revisao', 'peticao_id', 'peticao_criada', 'link'
-        e 'mensagem_para_usuario'. Gravar de novo o mesmo rascunho devolve a
-        mesma revisão ('ja_gravada').
+        'revisao_id', 'numero_revisao', 'peticao_id', 'peticao_criada', 'link',
+        'mensagem_para_usuario' e 'envio_dos_arquivos': o link para anexar à
+        revisão a petição (e a versão revisada e a planilha, se houver) —
+        tente UMA vez o 'curl' no seu ambiente de código; se falhar, mostre o
+        link ao usuário. Nunca mande o conteúdo do arquivo pelo MCP. Gravar de
+        novo o mesmo rascunho devolve a mesma revisão ('ja_gravada').
     """
     claims = require_module("fap_review")
     with app.app_context():
@@ -2304,9 +2314,10 @@ def comparar_versoes_peticao(
        contra a versão revisada.
     3. Comparar as versões — o que a revisada corrigiu e o que ficou pendente.
     4. Conferir o resultado no IntellexIA — o JSON vai para
-       conferir_revisao_peticao com modo="comparacao".
+       conferir_revisao_peticao com modo="comparacao" e a lista de
+       conferir_dados_beneficios em beneficios_conferidos.
     5. Mostrar os achados e perguntar se grava — gravar_revisao_peticao só se
-       o usuário disser que sim.
+       o usuário disser que sim; gravada, anexe os arquivos (envio_dos_arquivos).
 
     Args:
         identificador_documento: Id Wrike da petição, se o usuário informou. Opcional.

@@ -31,6 +31,7 @@ from app.models import (
     FapReviewPromptVersion,
     FapReviewReferenceVersion,
 )
+from app.services import fap_review_arquivos_service as _arquivos
 from app.services import fap_review_service as _svc
 from app.utils import planilha_beneficios as _planilha
 from app.utils.timezone import SP_TZ
@@ -76,9 +77,20 @@ documento valem como esse marcador.
 - O "CONTRATO TÉCNICO DE SAÍDA" vale para o argumento `resultado_json` da ferramenta \
 conferir_revisao_peticao (modo "{modo}"). Não mostre o JSON ao usuário: quem mostra o resultado é a \
 conferência.
-- Em `location`, diga o tópico ou a seção; se o arquivo for PDF, acrescente a página (ex.: "Tópico 6 · \
-p. 12"). DOCX não tem página fixa (depende de como o Word monta o documento): fique no tópico e capriche \
-no `location_excerpt` literal, que o usuário acha com Ctrl+F.
+- Em `location`, diga o tópico ou a seção e a página do arquivo (ex.: "Tópico 6 · p. 12"); o \
+`location_excerpt` vai literal, para o usuário achar com Ctrl+F. PDF já tem página. No DOCX a página depende \
+de quem monta o documento: antes de revisar, converta cada DOCX para PDF no seu ambiente de código e leia o texto por página, \
+para saber em que página cai cada trecho (troque o caminho; na comparação, uma pasta por versão):
+  soffice --headless --convert-to pdf --outdir /tmp/paginas "CAMINHO_DA_PETICAO.docx"
+  python3 -c "import glob; c = glob.glob('/tmp/paginas/*.pdf')[0]
+try:
+    import pdfplumber; t = [p.extract_text() or '' for p in pdfplumber.open(c).pages]
+except ImportError:
+    from pypdf import PdfReader; t = [p.extract_text() or '' for p in PdfReader(c).pages]
+for i, x in enumerate(t): print('=== PÁGINA %d ===' % (i + 1)); print(x)"
+  A paginação do LibreOffice pode diferir em uma página da do Word: diga isso uma vez ao usuário, no topo \
+do resultado. Sem ambiente de código ou sem o soffice, fique no tópico e avise uma vez que a página não \
+pôde ser indicada.
 - Os casos de referência não vêm inteiros (veja "CASOS DE REFERÊNCIA" abaixo): consulte-os por termo \
 quando precisar.
 - Se você mesmo encontrou a petição no IntellexIA (o usuário não informou), confirme com ele que é ela antes \
@@ -89,10 +101,12 @@ alguns minutos; ao passar de uma etapa para a outra, diga em qual está usando o
 1. Ler as instruções do revisor — todas as partes desta ferramenta, dizendo "parte N de M"; só siga \
 depois da última.
 {etapas}
-4. Conferir o resultado no IntellexIA — mande o resultado para conferir_revisao_peticao; se voltarem \
-avisos de formato, corrija e mande de novo antes de seguir.
+4. Conferir o resultado no IntellexIA — mande o resultado para conferir_revisao_peticao, com a mesma \
+lista de conferir_dados_beneficios em beneficios_conferidos; se voltarem avisos de formato, corrija e \
+mande de novo antes de seguir.
 5. Mostrar os achados e perguntar se grava — mostre o que a conferência devolveu e pergunte se o \
-usuário quer gravar no IntellexIA; só chame gravar_revisao_peticao se ele disser que sim."""
+usuário quer gravar no IntellexIA; só chame gravar_revisao_peticao se ele disser que sim. Gravada, \
+anexe os arquivos à revisão seguindo "envio_dos_arquivos" da resposta."""
 
 _FONTE = {
     MODO_REVISAO: ('A petição é o arquivo anexado nesta conversa. Sem anexo, peça o arquivo ao usuário '
@@ -197,7 +211,7 @@ Uma ou duas frases com a prioridade de correção.
 
 ### 🔴 Críticos
 **1. Título curto do achado**
-📍 Local (tópico; página se o arquivo for PDF)
+📍 Local (tópico · p. N)
 > "trecho literal do achado"
 
 ✏️ **Correção:** a correção sugerida
@@ -471,7 +485,7 @@ def script_planilha() -> dict:
         'como_rodar': (
             'Grave o "script" num arquivo, sem mudar nada (ex.: conferir_planilha.py), e rode no seu ambiente '
             'de código: python conferir_planilha.py <planilha .xlsx ou .csv> <petição .docx, .pdf ou .txt>. '
-            'Na comparação de versões, use a versão revisada. Ele imprime um JSON com cada benefício da '
+            + _arquivos.ONDE_ESTAO_OS_ANEXOS + ' Na comparação de versões, use a versão revisada. Ele imprime um JSON com cada benefício da '
             'planilha que tem tese e se ele foi citado na petição (qualquer pontuação entre os dígitos vale). '
             'Erro de coluna: o script diz o que faltou em cada aba — repasse ao usuário.'
         ),
@@ -521,6 +535,34 @@ def _checagem_da_planilha(bruto) -> tuple[dict | None, str | None]:
         'missing_count': len(itens) - citados,
         'items': itens,
     }, None
+
+
+_TOTAIS_DOS_DADOS = ('total', 'conferem', 'com_divergencia', 'nao_encontrados', 'invalidos', 'com_alerta')
+
+
+def _tabela_dos_dados(law_firm_id: int, beneficios) -> tuple[dict | None, str | None]:
+    """(tabela para o resultado, aviso). Refaz conferir_dados_beneficios com a lista do Claude.
+
+    A conferência roda aqui, contra a base, e não é copiada do que o Claude
+    mostrou: o gravado é o que a base diz. Fica de fora o nome do segurado (já
+    está na Central para quem pode ver) e as linhas inteiras da base.
+    """
+    from app.services import conferencia_beneficios_service as _conf
+
+    try:
+        r = _conf.conferir(law_firm_id, beneficios)
+    except ValueError as e:
+        return None, (f'A tabela dos dados dos benefícios ficou fora: {e} Mande em beneficios_conferidos a mesma '
+                      'lista que foi para conferir_dados_beneficios.')
+    itens = [{
+        'numero': i['numero_normalizado'] or str(i['numero'])[:40],
+        'situacao': i['situacao'],
+        'divergencias': [{'campo': d['campo'], 'peticao': _texto(d['peticao'], 120),
+                          'base': [_texto(b, 120) for b in d['base'][:3]]} for d in i['divergencias']],
+        'alertas': [{'codigo': a['codigo'], 'vigencia': a.get('vigencia'), 'mensagem': _texto(a['mensagem'], 300)}
+                    for a in i['alertas']],
+    } for i in r['itens']]
+    return {**{k: r[k] for k in _TOTAIS_DOS_DADOS}, 'itens': itens}, None
 
 
 # ── Conferência ──────────────────────────────────────────────────────
@@ -611,7 +653,7 @@ def _ignorados(law_firm_id: int, identificador: str) -> set[str]:
 
 def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_REVISAO, *,
              identificador: str | None = None, peticao_id: int | None = None,
-             planilha_beneficios=None) -> dict:
+             planilha_beneficios=None, beneficios_conferidos=None) -> dict:
     """Confere o JSON da revisão feita no Claude e guarda o rascunho saneado.
 
     Mesmo parse e mesmo saneador do agente (`montar_resultado`), sem o texto
@@ -650,6 +692,11 @@ def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_RE
         planilha, aviso_planilha = _checagem_da_planilha(planilha_beneficios)
     if planilha:
         payload['benefits_spreadsheet_review'] = planilha
+    dados_beneficios, aviso_beneficios = (None, None)
+    if beneficios_conferidos not in (None, '', [], {}):
+        dados_beneficios, aviso_beneficios = _tabela_dos_dados(law_firm_id, beneficios_conferidos)
+    if dados_beneficios:
+        payload['benefits_data_check'] = dados_beneficios
     # Compacto, sem indentação: o mesmo resultado ocupa ~25% menos e cabe mais
     # achado no limite do TEXT. Quem lê é json.loads, o formato não importa.
     result_json = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
@@ -708,6 +755,10 @@ def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_RE
         }
     if aviso_planilha:
         resposta['aviso_planilha'] = aviso_planilha
+    if dados_beneficios:
+        resposta['dados_beneficios'] = {k: dados_beneficios[k] for k in _TOTAIS_DOS_DADOS}
+    if aviso_beneficios:
+        resposta['aviso_beneficios'] = aviso_beneficios
     if erros:
         resposta['avisos'] = [str(e)[:300] for e in erros]
         resposta['formato_esperado'] = formato_esperado(modo)
@@ -748,6 +799,16 @@ def _ja_gravada(rascunho: FapReviewDraft) -> dict:
         'titulo': petition.title if petition else None,
         'link': link,
         'mensagem_para_usuario': f'Esta revisão já estava gravada no histórico: {link}',
+        **(_envio_dos_arquivos(execution) if execution else {}),
+    }
+
+
+def _envio_dos_arquivos(execution: FapReviewExecution) -> dict:
+    """Link para anexar os arquivos à revisão gravada, e o que fazer com ele."""
+    return {
+        'envio_dos_arquivos': _arquivos.envio_para_o_claude(execution),
+        'proximo_passo': ('Mostre a mensagem_para_usuario. Depois anexe os arquivos à revisão seguindo '
+                          '"envio_dos_arquivos": uma tentativa com o curl e, se falhar, o link para o usuário.'),
     }
 
 
@@ -881,4 +942,5 @@ def gravar(law_firm_id: int, user_id: int, rascunho_id: int, *, identificador: s
             'Ela fica fora da pontuação e não envia a petição para aprovação — para isso, a última revisão '
             'precisa ser feita pela tela do Revisor.'
         ),
+        **_envio_dos_arquivos(execution),
     }

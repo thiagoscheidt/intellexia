@@ -197,6 +197,10 @@ def test_conferencia(firm_id, user_id):
     check('MCP: a planilha passa pelo handler da conferência',
           (r.get('planilha_beneficios') or {}).get('total') == 2, str(r.get('planilha_beneficios')))
     check('MCP: handler do script devolve a versão atual', spreadsheet_script_handler()['versao'] == versao)
+    como_rodar = spreadsheet_script_handler()['como_rodar']
+    check('como rodar diz onde ficam os anexos (uploads e attachments) e manda procurar',
+          all(t in como_rodar for t in ('/mnt/user-data/uploads', '/mnt/user-data/attachments', 'find ')),
+          como_rodar)
 
     r = claude_svc.conferir(firm_id, user_id, _resultado(), 'revisao')
     check('sem planilha: nada muda', 'aviso_planilha' not in r and 'planilha_beneficios' not in r)

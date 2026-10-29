@@ -1,0 +1,165 @@
+{#
+  Arquivos de uma revisão feita no Claude, anexados depois de gravar.
+
+  Página standalone (não herda base.html): não há sessão, o token assinado é a
+  autorização. Uma área de soltar por campo ainda vazio; cada arquivo vai assim
+  que é solto. Texto vindo do servidor entra por textContent no JS.
+
+  Contexto: estado ('valido' | 'expirado' | 'inexistente') e, quando válido, o
+  de fap_review_arquivos_service.contexto_da_pagina.
+#}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Arquivos da revisão · IntellexIA</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:#eef1f5; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; color:#1f2937; display:flex; align-items:center; justify-content:center; padding:24px 16px; }
+  .card { background:#fff; border-radius:14px; box-shadow:0 1px 3px rgba(0,0,0,.08); padding:26px; width:100%; max-width:460px; }
+  .topo { display:flex; align-items:center; gap:8px; font-weight:700; color:#4f46e5; font-size:15px; }
+  .topo img { width:26px; height:26px; object-fit:contain; }
+  .selo { margin-left:auto; background:#eef2ff; color:#3730a3; border-radius:999px; padding:3px 10px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+  h1 { font-size:19px; margin:18px 0 8px; }
+  .m { color:#6b7280; font-size:13px; line-height:1.5; }
+  .lin { display:flex; justify-content:space-between; gap:12px; font-size:13.5px; padding:7px 0; border-bottom:1px solid #f1f5f9; }
+  .lin span:first-child { color:#6b7280; white-space:nowrap; }
+  .lin span:last-child { text-align:right; font-weight:600; overflow-wrap:anywhere; }
+  .campo { margin-top:16px; }
+  .campo .rot { font-size:13px; font-weight:600; margin-bottom:6px; }
+  .drop { display:block; border:2px dashed #c7d2fe; background:#f5f7ff; border-radius:12px; text-align:center; padding:18px 14px; font-size:14px; cursor:pointer; transition:background .15s, border-color .15s; }
+  .drop:hover, .drop.sobre { background:#eef2ff; border-color:#818cf8; }
+  .drop b { color:#4f46e5; }
+  .drop input { display:none; }
+  .ok { display:flex; align-items:center; gap:8px; background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; border-radius:10px; padding:10px 12px; font-size:13.5px; overflow-wrap:anywhere; }
+  .barra { height:6px; background:#e5e7eb; border-radius:999px; overflow:hidden; margin-top:8px; display:none; }
+  .barra div { height:100%; width:0; background:#4f46e5; transition:width .2s; }
+  .erro { display:none; margin-top:8px; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; border-radius:8px; padding:8px 12px; font-size:13px; }
+  .center { text-align:center; }
+  .btn { display:inline-block; background:#4f46e5; color:#fff; text-decoration:none; border-radius:8px; padding:11px 20px; font-weight:700; font-size:14px; margin-top:20px; }
+  .btn:hover { background:#4338ca; }
+  @media (max-width: 480px) { .card { padding:20px; } .selo { display:none; } }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="topo">
+    <img src="{{ url_for('static', filename='assets/img/logo_maior.png') }}" alt="">
+    IntellexIA <span class="selo">Revisor de Petições</span>
+  </div>
+
+{% if estado == 'inexistente' %}
+  <h1>Link não encontrado</h1>
+  <p class="m">Confira se o link foi copiado inteiro. Os arquivos também podem ser anexados pela tela da revisão.</p>
+
+{% elif estado == 'expirado' %}
+  <h1>Este link expirou</h1>
+  <p class="m">O link vale por 24 horas depois de gravar a revisão. Os arquivos ainda podem ser anexados pela tela da revisão.</p>
+
+{% else %}
+  {% set rotulos = {
+      'peticao': 'Versão original' if comparacao else 'Petição',
+      'revisada': 'Versão revisada',
+      'planilha': 'Planilha de benefícios (opcional)',
+  } %}
+  {% set aceita = {
+      'peticao': '.pdf,.docx,.txt', 'revisada': '.pdf,.docx,.txt', 'planilha': '.xlsx,.csv',
+  } %}
+  <h1>Anexar os arquivos à revisão</h1>
+  <div class="lin"><span>Petição</span><span>{{ titulo }}</span></div>
+  <div class="lin"><span>Id Wrike</span><span>{{ identificador }}</span></div>
+  <div class="lin"><span>Revisão</span><span>{{ numero_revisao }} · feita no Claude</span></div>
+
+  {% for campo in campos %}
+  <div class="campo">
+    <div class="rot">{{ rotulos[campo] }}</div>
+    {% if campo in recebidos %}
+      <div class="ok">✓ <span>{{ recebidos[campo] }} — recebido</span></div>
+    {% else %}
+      <label class="drop" data-campo="{{ campo }}">
+        <input type="file" name="{{ campo }}" accept="{{ aceita[campo] }}">
+        Arraste aqui ou <b>escolha no computador</b>
+        <div class="m" style="margin-top:4px;">{{ aceita[campo] | replace(',', ', ') | upper }}</div>
+      </label>
+      <div class="ok" style="display:none;">✓ <span></span></div>
+      <div class="barra"><div></div></div>
+      <div class="erro"></div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="center"><a class="btn" href="{{ link_revisao }}">Abrir a revisão</a></div>
+  <p class="m center" style="margin-top:10px;">Abrir a revisão pede login no IntellexIA.</p>
+{% endif %}
+</main>
+
+{% if estado == 'valido' %}
+<script>
+(function () {
+  document.querySelectorAll('.drop').forEach(function (drop) {
+    var campo = drop.getAttribute('data-campo');
+    var input = drop.querySelector('input');
+    var ok = drop.nextElementSibling;
+    var barra = ok.nextElementSibling;
+    var erro = barra.nextElementSibling;
+    var enviando = false;
+
+    function falhou(msg) {
+      erro.textContent = msg;
+      erro.style.display = 'block';
+      barra.style.display = 'none';
+      drop.style.display = 'block';
+      enviando = false;
+    }
+
+    function enviar(arquivo) {
+      if (!arquivo || enviando) return;
+      enviando = true;
+      erro.style.display = 'none';
+      drop.style.display = 'none';
+      barra.style.display = 'block';
+      barra.firstElementChild.style.width = '0';
+      var dados = new FormData();
+      dados.append(campo, arquivo);
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', window.location.pathname);
+      xhr.upload.onprogress = function (e) {
+        if (e.lengthComputable) barra.firstElementChild.style.width = Math.round(e.loaded / e.total * 100) + '%';
+      };
+      xhr.onload = function () {
+        var r = null;
+        try { r = JSON.parse(xhr.responseText); } catch (e) { /* resposta não-JSON: proxy ou servidor */ }
+        if (xhr.status === 200 && r && r.ok) {
+          barra.style.display = 'none';
+          ok.lastElementChild.textContent = arquivo.name + ' — recebido';
+          ok.style.display = 'flex';
+          return;
+        }
+        if (xhr.status === 413 && !r) { falhou('O arquivo é grande demais para este envio.'); return; }
+        falhou((r && r.erro) || 'Não foi possível enviar o arquivo. Tente de novo.');
+      };
+      xhr.onerror = function () { falhou('A conexão caiu durante o envio. Tente de novo.'); };
+      xhr.send(dados);
+    }
+
+    input.addEventListener('change', function () { enviar(input.files[0]); });
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('sobre'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('sobre'); });
+    });
+    drop.addEventListener('drop', function (e) {
+      if (e.dataTransfer && e.dataTransfer.files.length) enviar(e.dataTransfer.files[0]);
+    });
+  });
+  // Soltar fora da área não abre o arquivo no navegador (e não perde a página).
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('drop', function (e) { e.preventDefault(); });
+})();
+</script>
+{% endif %}
+</body>
+</html>
