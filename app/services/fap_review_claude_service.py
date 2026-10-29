@@ -52,9 +52,12 @@ LIMITE_RESULTADO_BYTES = 65_535
 # isso, `{"achados": [...]}` passaria pelo parse como revisão sem nenhum achado
 # — uma petição "limpa" pronta para gravar.
 CHAVES_DO_CONTRATO = {
-    MODO_REVISAO: ('theses', 'findings', 'missing_documents', 'executive_summary'),
-    MODO_COMPARACAO: ('comparative_changes', 'findings', 'executive_summary'),
+    MODO_REVISAO: ('theses', 'findings', 'missing_documents'),
+    MODO_COMPARACAO: ('comparative_changes', 'findings'),
 }
+# executive_summary fica fora da cobrança: as contagens são recontadas dos achados
+# e o texto que vier (objeto, texto solto ou nada) é aproveitado no parse. Recusar
+# por ele obrigava o Claude a reescrever o JSON inteiro — a parte demorada.
 
 _ADAPTACAO = """COMO FAZER ESTA REVISÃO AQUI NA CONVERSA (instruções do IntellexIA para o Claude)
 
@@ -69,11 +72,23 @@ documento valem como esse marcador.
 - O "CONTRATO TÉCNICO DE SAÍDA" vale para o argumento `resultado_json` da ferramenta \
 conferir_revisao_peticao (modo "{modo}"). Não mostre o JSON ao usuário: quem mostra o resultado é a \
 conferência.
+- Em `location`, diga o tópico ou a seção; se o arquivo for PDF, acrescente a página (ex.: "Tópico 6 · \
+p. 12"). DOCX não tem página fixa (depende de como o Word monta o documento): fique no tópico e capriche \
+no `location_excerpt` literal, que o usuário acha com Ctrl+F.
 - Os casos de referência não vêm inteiros (veja "CASOS DE REFERÊNCIA" abaixo): consulte-os por termo \
 quando precisar.
 - Se você mesmo encontrou a petição no IntellexIA (o usuário não informou), confirme com ele que é ela antes \
 de usar o histórico dela.
-- Antes de começar, avise o usuário que a revisão leva alguns minutos, e diga em que passo está."""
+
+ETAPAS — faça nesta ordem, sem pular nenhuma. Antes de começar, avise o usuário que a revisão leva \
+alguns minutos; ao passar de uma etapa para a outra, diga em qual está usando o nome abaixo:
+1. Ler as instruções do revisor — todas as partes desta ferramenta, dizendo "parte N de M"; só siga \
+depois da última.
+{etapas}
+4. Conferir o resultado no IntellexIA — mande o resultado para conferir_revisao_peticao; se voltarem \
+avisos de formato, corrija e mande de novo antes de seguir.
+5. Mostrar os achados e perguntar se grava — mostre o que a conferência devolveu e pergunte se o \
+usuário quer gravar no IntellexIA; só chame gravar_revisao_peticao se ele disser que sim."""
 
 _FONTE = {
     MODO_REVISAO: ('A petição é o arquivo anexado nesta conversa. Sem anexo, peça o arquivo ao usuário '
@@ -81,6 +96,18 @@ _FONTE = {
     MODO_COMPARACAO: ('As duas versões são os arquivos anexados nesta conversa. Pergunte qual é a versão '
                       'original e qual a revisada se não estiver claro; sem os dois anexos, peça-os antes '
                       'de começar.'),
+}
+
+# Etapas 2 e 3 de cada modo; as demais são as mesmas e ficam em _ADAPTACAO.
+_ETAPAS = {
+    MODO_REVISAO: ('2. Ler a petição — o arquivo anexado inteiro, inclusive as tabelas de benefícios e as '
+                   'imagens.\n'
+                   '3. Revisar — compare a petição com o manual e as regras das instruções; na dúvida '
+                   'sobre um ponto, consulte os casos de referência por termo.'),
+    MODO_COMPARACAO: ('2. Ler as duas versões — a original e a revisada, inteiras, inclusive tabelas e '
+                      'imagens.\n'
+                      '3. Comparar as versões — o que a revisada corrigiu do que o revisor apontou e o '
+                      'que ficou pendente; na dúvida, consulte os casos de referência por termo.'),
 }
 
 
@@ -141,6 +168,51 @@ Mande para conferir_revisao_peticao, em resultado_json, um objeto JSON exatament
 - Cada item de cada lista é um OBJETO com esses campos — nunca texto solto.
 - Use os nomes de campo em inglês, como acima; os valores em português.
 """
+
+# Como o Claude apresenta o resultado conferido. Volta na resposta da
+# conferência, que é quando ele vai escrever para o usuário.
+_COMO_MOSTRAR = """Monte a resposta ao usuário em Markdown, nesta ordem (pule a seção que vier vazia):
+
+## Revisão da petição
+**N achados** · 🔴 N críticos · 🟡 N moderados · 🔵 N formais
+Uma ou duas frases com a prioridade de correção.
+
+### 🔴 Críticos
+**1. Título curto do achado**
+📍 Local (tópico; página se o arquivo for PDF)
+> "trecho literal do achado"
+
+✏️ **Correção:** a correção sugerida
+📘 Manual: referência, se houver · 🆕 Padrão novo — confirme, se `padrao_novo`
+
+### 🟡 Moderados
+Mesmo formato dos críticos.
+
+### 🔵 Formais
+Até 10, no mesmo formato, mais enxuto. Mais que isso, uma tabela por tema:
+| Tema | Achados | Exemplos |
+|---|---|---|
+| Pontuação | 35, 36, 43 | vírgulas, travessões |
+
+### 🔁 Mudanças entre as versões
+Só na comparação: o que a revisada corrigiu e o que ficou pendente.
+
+### 📄 Documentos em falta
+| Tese / tópico | Documento | Manual |
+|---|---|---|
+
+### 🧹 Ajustes do saneador
+O que ele descartou ou corrigiu, e por quê. Achados já marcados como "não pertinente" nesta \
+petição também vêm aqui.
+
+---
+Pergunta sobre gravar no histórico.
+
+Regras:
+- Mantenha a numeração da conferência (`numero`): é por ela que o usuário vai citar o achado.
+- Críticos e moderados aparecem todos, um a um; nunca agrupe nem resuma esses.
+- O trecho vai em citação (> ), exatamente como veio; sem trecho, omita a linha.
+- Não mostre o JSON nem nomes de campo."""
 
 
 def formato_esperado(modo: str) -> str:
@@ -213,7 +285,7 @@ def montar_instrucoes(law_firm_id: int, modo: str, *, identificador: str | None 
         tarefa = FapPetitionReviewerAgent._build_single_user_message(
             auxiliary_documents=None, prior_attention_points=pontos)
 
-    texto = (_ADAPTACAO.format(fonte=_FONTE[modo], modo=modo)
+    texto = (_ADAPTACAO.format(fonte=_FONTE[modo], modo=modo, etapas=_ETAPAS[modo])
              + '\n\n=== INSTRUÇÕES DO AGENTE REVISOR DO ESCRITÓRIO ===\n\n' + sistema
              + '\n\n=== TAREFA ===\n\n' + tarefa + '\n\n'
              + _FORMATO_NO_FIM.format(schema=formato_esperado(modo)))
@@ -332,9 +404,8 @@ def _problemas_do_contrato(dados, modo: str) -> list[str]:
     for chave in esperadas:
         if chave not in dados:
             continue
-        tipo = dict if chave == 'executive_summary' else list
-        if not isinstance(dados[chave], tipo):
-            problemas.append(f'"{chave}" tem de ser {"um objeto" if tipo is dict else "uma lista"}')
+        if not isinstance(dados[chave], list):
+            problemas.append(f'"{chave}" tem de ser uma lista')
     return problemas
 
 
@@ -354,6 +425,8 @@ def _achado_para_exibir(numero: int, achado: dict, ignorados: set[str]) -> dict:
         item['corrigido_pelo_saneador'] = correcao['motivo']
     if _svc.build_finding_fingerprint(achado) in ignorados:
         item['ja_marcado_nao_pertinente'] = True
+    if achado.get('is_new_pattern'):
+        item['padrao_novo'] = True
     return item
 
 
@@ -483,6 +556,7 @@ def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_RE
         'peticao': _peticao_resumo(petition),
         'revisao_focada': focada,
         **exibicao,
+        'como_mostrar': _COMO_MOSTRAR,
     }
     if erros:
         resposta['avisos'] = [str(e)[:300] for e in erros]
@@ -494,9 +568,9 @@ def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_RE
         (f'ANTES DE MOSTRAR: a conferência deixou de fora {len(erros)} item(ns) por formato (veja "avisos"). '
          'Corrija esses itens seguindo "formato_esperado" e mande de novo para conferir_revisao_peticao o '
          'resultado inteiro; mostre ao usuário só o que a nova conferência devolver. ' if erros else '')
-        + 'Mostre ao usuário ESTES achados, e não os do seu JSON: numerados, com gravidade, local e correção '
-        'sugerida; diga quais o saneador descartou ou corrigiu e por quê, e quais já tinham sido marcados como '
-        '"não pertinente" nesta petição. Depois pergunte se ele quer gravar esta revisão no histórico do '
+        + 'Mostre ao usuário ESTES achados, e não os do seu JSON, seguindo o modelo de "como_mostrar" '
+        '(cores por gravidade, numeração da conferência, trecho em citação, ajustes do saneador e o que já '
+        'tinha sido marcado como "não pertinente" nesta petição). Depois pergunte se ele quer gravar esta revisão no histórico do '
         'Revisor do IntellexIA — ela fica com o selo "Feita no Claude", fora da pontuação, e não envia a '
         f'petição para aprovação. Só chame gravar_revisao_peticao(rascunho_id={rascunho.id}, ...) se ele '
         'disser que sim. Para petição nova, peça o Id Wrike (só números) antes de gravar.'

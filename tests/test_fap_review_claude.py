@@ -215,6 +215,13 @@ def test_instrucoes(firm_id, user_id):
     check('instruções mandam confirmar a petição achada antes de usar o histórico',
           'confirme' in completo.lower())
     check('traz o bloco de adaptação para a conversa', 'conferir_revisao_peticao' in completo)
+    check('instruções pedem a página no PDF e explicam o DOCX sem página',
+          'PDF' in completo and 'página' in completo and 'DOCX' in completo)
+    etapas = ['1. Ler as instruções do revisor', '2. Ler a petição', '3. Revisar',
+              '4. Conferir o resultado no IntellexIA', '5. Mostrar os achados e perguntar se grava']
+    check('revisão: as cinco etapas, nesta ordem, com os nomes para o usuário',
+          all(e in completo for e in etapas)
+          and [completo.index(e) for e in etapas] == sorted(completo.index(e) for e in etapas))
     check('pontos de atenção da revisão do IntellexIA entram', 'Ponto da revisão oficial' in completo)
     check('revisão focada marcada', r.get('revisao_focada') is True)
     check('última parte manda conferir', 'conferir_revisao_peticao' in
@@ -232,6 +239,10 @@ def test_instrucoes(firm_id, user_id):
     check('petição nova: instruções sem foco', nova.get('revisao_focada') is False and nova.get('peticao') is None)
     comparacao = claude_svc.montar_instrucoes(firm_id, 'comparacao')['texto']
     check('comparação traz o contrato comparativo', 'comparative_changes' in comparacao)
+    check('comparação: etapas 2 e 3 próprias, demais iguais',
+          '2. Ler as duas versões' in comparacao and '3. Comparar as versões' in comparacao
+          and '2. Ler a petição' not in comparacao
+          and '4. Conferir o resultado no IntellexIA' in comparacao)
     check('modo inválido: erro', 'erro' in claude_svc.instrucoes(firm_id, 'outro'))
     check('petição de outro escritório: erro',
           'erro' in claude_svc.instrucoes(99999, 'revisao', peticao_id=petition.id))
@@ -257,6 +268,16 @@ def test_conferencia(firm_id, user_id, petition):
           [d['regra'] for d in r.get('descartados_pelo_saneador', [])] == ['R2'])
     check('manda mostrar estes achados e perguntar antes de gravar',
           'gravar_revisao_peticao' in r.get('proximo_passo', '') and 'pergunte' in r.get('proximo_passo', ''))
+    como = r.get('como_mostrar', '')
+    check('traz o modelo de apresentação com as cores por gravidade',
+          all(i in como for i in ('🔴', '🟡', '🔵')) and 'Documentos em falta' in como, como[:200])
+    check('modelo manda manter a numeração da conferência e o trecho literal em citação',
+          'numeração' in como and '> ' in como)
+    check('próximo passo manda seguir o modelo de apresentação', 'como_mostrar' in r.get('proximo_passo', ''))
+    novo = claude_svc.conferir(firm_id, user_id, _resultado([_achado('Padrão fora do manual', is_new_pattern=True)]),
+                               'revisao')
+    check('padrão novo marcado no achado', novo['achados'][0].get('padrao_novo') is True, str(novo['achados'][0]))
+    check('achado comum sem a marca de padrão novo', 'padrao_novo' not in r['achados'][0])
     draft = FapReviewDraft.query.get(r['rascunho_id'])
     check('rascunho guarda o resultado saneado', len(json.loads(draft.result_json)['findings']) == 2)
     check('rascunho ligado à petição e ao usuário',
@@ -271,9 +292,24 @@ def test_conferencia(firm_id, user_id, petition):
     r = claude_svc.conferir(firm_id, user_id, {'achados': [_achado('x')]}, 'revisao')
     check('chave de primeiro nível com nome errado: erro com as chaves que faltam',
           'erro' in r and 'findings' in r['erro'], str(r)[:200])
+    # O resumo é recontado dos achados: forma errada nele não pode custar o reenvio do JSON inteiro.
     sem_resumo = _resultado()
     sem_resumo.pop('executive_summary')
-    check('falta executive_summary: erro', 'erro' in claude_svc.conferir(firm_id, user_id, sem_resumo, 'revisao'))
+    r = claude_svc.conferir(firm_id, user_id, sem_resumo, 'revisao')
+    check('falta executive_summary: aceita e reconta', bool(r.get('rascunho_id'))
+          and r['resumo']['total_achados'] == len(sem_resumo['findings']), str(r)[:200])
+    r = claude_svc.conferir(firm_id, user_id,
+                            _resultado(executive_summary='Corrigir primeiro a tabela de benefícios.'), 'revisao')
+    check('executive_summary em texto (o erro do teste real): aceita, texto vira a prioridade',
+          bool(r.get('rascunho_id')) and not r.get('avisos')
+          and r['resumo']['prioridade_de_correcao'] == 'Corrigir primeiro a tabela de benefícios.',
+          str(r)[:300])
+    r = claude_svc.conferir(firm_id, user_id,
+                            _resultado(executive_summary={'main_legal_risks': ['Perda do benefício B91'],
+                                                          'correction_priority': 'Tabela'}), 'revisao')
+    check('resumo sem as contagens: riscos e prioridade não se perdem',
+          r.get('resumo', {}).get('riscos') == ['Perda do benefício B91']
+          and r['resumo']['prioridade_de_correcao'] == 'Tabela', str(r)[:300])
     r = claude_svc.conferir(firm_id, user_id, _resultado(findings='nada'), 'revisao')
     check('findings que não é lista: erro', 'erro' in r)
     r = claude_svc.conferir(firm_id, user_id, _resultado([_achado('ok'), {'description': 'sem gravidade'}]),

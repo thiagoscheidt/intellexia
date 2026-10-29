@@ -974,7 +974,17 @@ INSTRUÇÕES DO PROJETO:
 
     @classmethod
     def _parse_executive_summary(cls, data: dict) -> ExecutiveSummary:
-        """Parse resumo executivo"""
+        """Parse resumo executivo.
+
+        As contagens são recontadas dos achados depois (`_build_executive_summary`):
+        faltar uma delas não pode levar junto os riscos e a prioridade escritos.
+        """
+        if isinstance(data, str):
+            data = {'correction_priority': data}
+        if not isinstance(data, dict):
+            data = {}
+        data = {'total_findings': 0, 'critical_findings': 0, 'moderate_findings': 0,
+                'formal_findings': 0, 'correction_priority': 'N/A', **data}
         try:
             return ExecutiveSummary(**data)
         except Exception:
