@@ -29,7 +29,7 @@ from app.services import public_api_campos as C
 # dá para uma tela carregar a base inteira sem virar extração em massa.
 TETO_PAGINA = 1000
 
-TIPOS = ('string', 'integer', 'boolean', 'lista')
+TIPOS = ('string', 'integer', 'boolean', 'lista', 'objetos')  # objetos: lista JSON no corpo
 _VERDADEIRO = {'true', '1', 'sim', 's', 'yes'}
 _FALSO = {'false', '0', 'nao', 'não', 'n', 'no'}
 
@@ -75,6 +75,14 @@ def _erro(mensagem: str):
 
 
 def _converter(p: Param, valores: list) -> Any:
+    if p.tipo == 'objetos':
+        # Só no corpo: a lista inteira, cada item um objeto ou um valor simples.
+        if len(valores) != 1 or not isinstance(valores[0], list):
+            raise _erro(f'O parâmetro "{p.nome}" precisa ser uma lista JSON.')
+        itens = valores[0]
+        if any(not isinstance(i, (dict, str, int)) or isinstance(i, bool) for i in itens):
+            raise _erro(f'Cada item de "{p.nome}" precisa ser um objeto ou um texto.')
+        return itens or None
     if p.tipo == 'lista':
         itens = [v.strip() for bruto in valores for v in str(bruto).split(',')]
         return [v for v in itens if v] or None
@@ -226,6 +234,10 @@ def _revelar(ctx, p):
     return r
 
 
+def _conferir_beneficios(ctx, p):
+    return _fap().conferir_dados_beneficios_handler(ctx.law_firm_id, p['beneficios'])
+
+
 def _consultar_cpf(ctx, p):
     return _fap().consultar_cpf_handler(ctx.law_firm_id, ctx.user_id, p['cpf'])
 
@@ -333,6 +345,15 @@ ROTAS: tuple[Rota, ...] = (
     Rota('GET', '/fap/beneficios/{id}', 'fap_panel', 'Detalhe de um benefício contestado.', (ID,),
          lambda ctx, p: _fap().get_benefit_detail_handler(p['id'], ctx.law_firm_id),
          detalhe=True, resposta=C.BENEFICIO_DETALHE, grupo='fap'),
+    Rota('POST', '/fap/beneficios/conferir', 'fap_panel',
+         'Confere o que uma petição (ou planilha) diz de cada benefício contra a Central e o cálculo FAP: '
+         'divergências campo a campo e alertas (já excluído do cálculo, fora do cálculo, não contestado...). '
+         'Sem IA; nada fica salvo.', (
+             Param('beneficios', 'objetos',
+                   'Lista de números ou de objetos com "numero" e, se tiver: cpf, nit, especie, dib, dcb, '
+                   'nascimento, cnpj, vigencia, nome, cat (qualquer pontuação e formato de data). Até 500.',
+                   obrigatorio=True, local='body'),
+         ), _conferir_beneficios, resposta=C.CONFERIR_BENEFICIOS, grupo='fap'),
     Rota('GET', '/fap/resumo', 'fap_panel',
          'Contagens: contestações e benefícios por ano, situação, instância, tipo e empresa.', (
              Param('ano_vigencia', 'integer', 'Ano de vigência FAP.'),
@@ -465,6 +486,8 @@ _ROTAS_PROPRIAS = (
 
 
 def _schema(p: Param) -> dict:
+    if p.tipo == 'objetos':
+        return {'type': 'array', 'items': {'oneOf': [{'type': 'object'}, {'type': 'string'}]}}
     if p.tipo == 'lista':
         return {'type': 'array', 'items': {'type': 'string'}}
     schema = {'type': p.tipo}
@@ -580,7 +603,8 @@ def exemplo_curl(rota: Rota, base: str) -> str:
     caminho = rota.caminho.replace('{id}', '123').replace('{numero}', '5001234-56.2024.4.04.7000')
     url = base.rstrip('/') + '/api/v1' + caminho
     if rota.metodo == 'POST':
-        corpo = ', '.join(f'"{p.nome}": "..."' for p in rota.params if p.local == 'body')
+        corpo = ', '.join(f'"{p.nome}": ' + ('[{"numero": "..."}]' if p.tipo == 'objetos' else '"..."')
+                          for p in rota.params if p.local == 'body')
         return (f'curl -X POST -H "Authorization: Bearer $INTELLEXIA_TOKEN" '
                 f'-H "Content-Type: application/json" -d \'{{{corpo}}}\' "{url}"')
     return f'curl -H "Authorization: Bearer $INTELLEXIA_TOKEN" "{url}"'

@@ -394,6 +394,52 @@ CONSULTA_CPF = (
     _t('aviso', 'CPF não encontrado, ou nascimento divergente do FAP.', opcional=True),
 )
 
+_DADOS_DO_REGISTRO = (
+    _t('especie', 'Espécie (B91...B94).'), _t('cpf', 'CPF formatado.'), _t('nit', 'NIT.'),
+    _d('nascimento', 'Nascimento (dd/mm/aaaa).'), _d('dib', 'DIB (dd/mm/aaaa).'), _d('dcb', 'DCB (dd/mm/aaaa).'),
+)
+
+CONFERIR_BENEFICIOS = (
+    _i('total', 'Benefícios recebidos.'),
+    _i('conferem', 'Achados na base, sem divergência no que foi informado.'),
+    _i('com_divergencia', 'Achados na base com ao menos um campo divergente.'),
+    _i('nao_encontrados', 'Número fora da Central e do cálculo FAP do escritório.'),
+    _i('invalidos', 'Item sem dígitos de número.'),
+    _i('com_alerta', 'Achados na base com ao menos um alerta.'),
+    _l('itens', 'Um por benefício recebido, na ordem enviada.',
+       _i('posicao', 'Posição na lista enviada (começa em 1).'),
+       _t('numero', 'Número como veio.'),
+       _t('numero_normalizado', 'Só os dígitos.'),
+       _t('situacao', 'confere, divergente, nao_encontrado ou invalido.'),
+       _l('divergencias', 'Campos que não batem.',
+          _t('campo', 'cpf, nit, especie, dib, dcb, nascimento, cnpj, vigencia, nome ou cat.'),
+          _t('peticao', 'Valor informado (espécie já normalizada).'),
+          _l('base', 'Valores que a base tem para o campo.')),
+       _l('alertas', 'O que a base diz do benefício, mesmo com os dados conferindo.',
+          _t('codigo', 'excluido_do_calculo, ausente_no_calculo_atual, nao_contestado, fora_do_calculo, '
+             'cnpj_atribuido_diferente, deferido, indeferido_nas_duas_instancias, nao_encontrado ou '
+             'numero_invalido.'),
+          _i('vigencia', 'Vigência a que o alerta se refere.'),
+          _t('mensagem', 'O alerta por extenso.')),
+       _l('conferidos', 'Campos informados que foram comparados.'),
+       _l('nao_conferidos', 'Campos informados que não deu para comparar.',
+          _t('campo', 'Campo.'), _t('motivo', 'A base não tem o dado, ou o valor não foi reconhecido.')),
+       _t('segurado_nome', 'Nome já revelado ou cadastrado (nunca consulta paga).'),
+       _l('central', 'Registros na Central de contestações.',
+          _i('id', 'Benefício na Central.'), _l('vigencias', 'Vigências FAP.'), _t('cnpj', 'CNPJ do empregador.'),
+          *_DADOS_DO_REGISTRO, _t('cat', 'Número da CAT (só dígitos).'),
+          _t('status_1a_instancia', 'deferido, indeferido, em_analise ou pendente.'),
+          _t('status_2a_instancia', 'Os mesmos valores, ou nao_se_aplica.'),
+          _l('topicos', 'Tópicos de contestação.')),
+       _l('calculo', 'Itens no cálculo FAP.',
+          _t('vigencia', 'Vigência.'), _t('cnpj', 'Estabelecimento.'), _t('empresa', 'Empresa.'),
+          *_DADOS_DO_REGISTRO,
+          _t('situacao', 'conta (no cálculo) ou excluido (tirado no recálculo).'),
+          _b('contestado', 'Contestado na Central nessa vigência.'),
+          _b('ausente_no_calculo_atual', 'Saiu num recálculo mais novo.'),
+          _t('protocolo', 'Protocolo do cálculo do estabelecimento.'))),
+)
+
 KB_PESQUISA = (
     _t('modo_busca', 'semantic ou full_text.'),
     _t('modo_decidido_por', 'usuario (veio no parâmetro) ou roteador_llm.'),

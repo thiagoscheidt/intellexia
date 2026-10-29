@@ -103,17 +103,29 @@ _FONTE = {
 }
 
 # Etapas 2 e 3 de cada modo; as demais são as mesmas e ficam em _ADAPTACAO.
+# A conferência dos dados é da base do escritório, não do manual: sem dizer o
+# que fazer com ela, o resultado ficava só na conversa e não ia para a revisão.
+_DADOS_VIRAM_ACHADOS = (
+    'Cada divergência de conferir_dados_beneficios vira achado, com o valor da petição e o da base '
+    '(número que não existe na base ou CPF de outra pessoa é crítico); alerta da base que muda o pedido '
+    '(já excluído do cálculo, fora do cálculo, não contestado, já deferido) também vira achado. '
+    '"nao_conferidos" não é erro da petição.'
+)
+
 _ETAPAS = {
     MODO_REVISAO: ('2. Ler a petição — o arquivo anexado inteiro, inclusive as tabelas de benefícios e as '
-                   'imagens. Se houver planilha de benefícios anexada (.xlsx ou .csv), ou se o usuário pedir a '
-                   'checagem dela, rode também a de conferir_planilha_beneficios.\n'
+                   'imagens. Chame conferir_dados_beneficios uma vez, com todos os benefícios citados e o que '
+                   'a petição diz de cada um. Se houver planilha de benefícios anexada (.xlsx ou .csv), ou se '
+                   'o usuário pedir a checagem dela, rode também a de conferir_planilha_beneficios.\n'
                    '3. Revisar — compare a petição com o manual e as regras das instruções; na dúvida '
-                   'sobre um ponto, consulte os casos de referência por termo.'),
+                   'sobre um ponto, consulte os casos de referência por termo. ' + _DADOS_VIRAM_ACHADOS),
     MODO_COMPARACAO: ('2. Ler as duas versões — a original e a revisada, inteiras, inclusive tabelas e '
-                      'imagens. Se houver planilha de benefícios anexada (.xlsx ou .csv), rode a checagem de '
-                      'conferir_planilha_beneficios contra a versão revisada.\n'
+                      'imagens. Chame conferir_dados_beneficios uma vez, com os benefícios citados na versão '
+                      'revisada e o que ela diz de cada um. Se houver planilha de benefícios anexada (.xlsx ou '
+                      '.csv), rode a checagem de conferir_planilha_beneficios contra a versão revisada.\n'
                       '3. Comparar as versões — o que a revisada corrigiu do que o revisor apontou e o '
-                      'que ficou pendente; na dúvida, consulte os casos de referência por termo.'),
+                      'que ficou pendente; na dúvida, consulte os casos de referência por termo. '
+                      + _DADOS_VIRAM_ACHADOS),
 }
 
 
@@ -206,6 +218,10 @@ Só na comparação: o que a revisada corrigiu e o que ficou pendente.
 ### 📄 Documentos em falta
 | Tese / tópico | Documento | Manual |
 |---|---|---|
+
+### 🔎 Dados dos benefícios
+Uma linha com o resultado de conferir_dados_beneficios: "N benefícios conferidos com a base: X conferem, \
+Y com divergência, Z não encontrados". As divergências e os alertas já estão nos achados — não repita.
 
 ### 📊 Planilha de benefícios
 Só se houve checagem da planilha: "N de M benefícios da planilha citados na petição", depois a tabela \

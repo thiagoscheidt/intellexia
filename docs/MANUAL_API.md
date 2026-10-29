@@ -9,7 +9,7 @@
 A API é a mesma base que você vê nas telas e no conector do Claude, entregue em formato de dados (JSON). Com ela, em vez de esperar uma tela nova, você pede ao Claude Code algo como "monta uma tela que filtra os B91 indeferidos da Vale" e ele busca os dados direto do IntellexIA.
 
 - **Mesmos números das telas e do Claude.** A API usa as mesmas consultas do conector do Claude.
-- **Só leitura.** Nada é alterado pela API. A única exceção é revelar o nome de um segurado, que grava o nome como o botão da tela faz. A consulta completa de CPF (`POST /segurados/consultar-cpf`) devolve tudo o que o serviço de consulta traz (nome, nascimento, sexo, nome da mãe) e não grava nada.
+- **Só leitura.** Nada é alterado pela API. A única exceção é revelar o nome de um segurado, que grava o nome como o botão da tela faz. A consulta completa de CPF (`POST /segurados/consultar-cpf`) devolve tudo o que o serviço de consulta traz (nome, nascimento, sexo, nome da mãe) e não grava nada. A conferência de dados de benefícios (`POST /fap/beneficios/conferir`) é POST só para receber a lista: compara o que você manda com a Central e o cálculo FAP e também não grava nada.
 - **Só o seu escritório e só o que você pode ver.** Se você não tem acesso ao Painel de Processos na tela, também não tem pela API.
 
 ---

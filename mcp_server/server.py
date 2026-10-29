@@ -67,6 +67,7 @@ from mcp_server.tools.fap import (
     fap_filter_values_handler,
     revelar_nome_segurado_handler,
     consultar_cpf_handler,
+    conferir_dados_beneficios_handler,
 )
 from mcp_server.tools.fap_calculo import (
     listar_beneficios_calculo_fap_handler,
@@ -589,6 +590,43 @@ def detalhar_beneficio(beneficio_id: int) -> dict:
     claims = require_module("fap_panel")
     with app.app_context():
         return get_benefit_detail_handler(beneficio_id, claims["law_firm_id"])
+
+
+@mcp.tool()
+def conferir_dados_beneficios(beneficios: list[dict | str] | str) -> dict:
+    """Confere os dados de VÁRIOS benefícios de uma vez contra a base do escritório:
+    a Central de contestações e o cálculo FAP. Sem IA; nada do que você manda fica salvo.
+
+    Use sempre que tiver uma lista de benefícios com dados para conferir — os
+    citados numa petição (o Revisor manda chamar na etapa de leitura), numa
+    planilha, num e-mail, ou quando o usuário pedir "confira esses NBs". Uma
+    chamada com todos, nunca uma por benefício; e não compare de olho com
+    listar_beneficios_fap: a comparação daqui aceita qualquer pontuação e
+    formato de data e é a mesma da API.
+
+    Para cada benefício devolve: situacao (confere, divergente, nao_encontrado,
+    invalido); divergencias (campo, o que foi informado e o que a base tem);
+    nao_conferidos (o que não deu para comparar — a base não tem o dado ou o
+    valor não foi reconhecido; não é erro); alertas da base, que valem mesmo
+    com tudo conferindo — já excluído do cálculo no recálculo (a contestação
+    ganhou), fora do cálculo do estabelecimento, não contestado na vigência,
+    CNPJ atribuído diferente do original, deferido, indeferido nas duas
+    instâncias; e os registros achados na Central e no cálculo.
+
+    O nome só confere com o que já foi revelado ou cadastrado: esta ferramenta
+    nunca faz a consulta paga, e revelar_nome_segurado não deve ser chamado em lote.
+
+    Args:
+        beneficios: Lista (até 500) de números de benefício ou de objetos com
+            "numero" e o que a fonte disser de cada um: cpf, nit, especie (B91...
+            B94), dib, dcb, nascimento, cnpj (14 dígitos ou a raiz de 8),
+            vigencia, nome, cat. Mande só o que a fonte traz, como ela traz —
+            ex.: [{"numero": "640.713.298-7", "cpf": "012.345.678-90",
+            "especie": "B94", "dib": "01/09/2023"}, "6222222222"].
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return conferir_dados_beneficios_handler(claims["law_firm_id"], beneficios)
 
 
 @mcp.tool()
@@ -1985,7 +2023,8 @@ def revisar_peticao_inicial(
     Etapas — se for montar lista de tarefas ou progresso, use exatamente estas
     cinco, com estes nomes, e avise o usuário que leva alguns minutos:
     1. Ler as instruções do revisor — parte=1, 2, ... até 'total_partes'.
-    2. Ler a petição — o anexo inteiro, com tabelas e imagens. Com planilha
+    2. Ler a petição — o anexo inteiro, com tabelas e imagens; chame
+       conferir_dados_beneficios com os benefícios citados. Com planilha
        de benefícios anexada (.xlsx/.csv), rode também conferir_planilha_beneficios.
     3. Revisar — seguindo as instruções lidas.
     4. Conferir o resultado no IntellexIA — o JSON vai para conferir_revisao_peticao.
@@ -2259,8 +2298,9 @@ def comparar_versoes_peticao(
     Etapas — se for montar lista de tarefas ou progresso, use exatamente estas
     cinco, com estes nomes, e avise o usuário que leva alguns minutos:
     1. Ler as instruções do revisor — parte=1, 2, ... até 'total_partes'.
-    2. Ler as duas versões — os dois anexos inteiros, com tabelas e imagens.
-       Com planilha de benefícios anexada, rode conferir_planilha_beneficios
+    2. Ler as duas versões — os dois anexos inteiros, com tabelas e imagens;
+       chame conferir_dados_beneficios com os benefícios da revisada. Com
+       planilha de benefícios anexada, rode conferir_planilha_beneficios
        contra a versão revisada.
     3. Comparar as versões — o que a revisada corrigiu e o que ficou pendente.
     4. Conferir o resultado no IntellexIA — o JSON vai para

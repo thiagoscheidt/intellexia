@@ -298,6 +298,16 @@ A petição **não vai para o IntellexIA**: o Claude lê o arquivo que você ane
 >
 > Ela também não vira "ponto de atenção" da revisão seguinte, que continua partindo da última revisão feita pela tela.
 
+### Dados dos benefícios conferidos com a base
+
+Ao ler a petição, o Claude manda ao IntellexIA os benefícios citados e o que a petição diz de cada um: CPF, NIT, espécie, DIB, DCB, nascimento, CNPJ, vigência, nome e CAT. O IntellexIA procura cada número na **Central de contestações** e no **cálculo FAP** do escritório e compara campo a campo, sem IA e com qualquer pontuação ou formato de data. Nada do que chega fica gravado.
+
+- **Divergência** (CPF de outra pessoa, B91 na petição e B94 na base, DIB diferente, número que não existe) vira achado, com o valor da petição e o da base.
+- **Alertas da base** valem mesmo quando os dados conferem: benefício **já excluído do cálculo** no recálculo (a contestação ganhou), **fora do cálculo** do estabelecimento, **não contestado** na vigência, já **deferido**, ou **indeferido nas duas instâncias**.
+- O nome só é conferido com o que já foi **revelado** ou cadastrado; a consulta paga nunca é feita aqui.
+
+A mesma conferência serve fora da revisão: peça ao Claude *"confira esses NBs"* com uma lista ou uma planilha, ou use a rota `POST /fap/beneficios/conferir` da API.
+
 ### Planilha de benefícios pelo Claude
 
 Anexe a planilha de benefícios (**.xlsx ou .csv**) junto com a petição, ou peça na conversa: *"confira se os benefícios da planilha foram citados na petição"*. A conferência é a **mesma da tela** (seção *Benefícios da Planilha x Documento*), sem IA: o Claude recebe do IntellexIA o programa da checagem e roda com os arquivos anexados — nada sai da conversa. O resultado aparece numa tabela, com os benefícios **não citados primeiro**.

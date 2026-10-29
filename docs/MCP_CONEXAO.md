@@ -78,6 +78,7 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `listar_rotatividade_fap` | Taxas de rotatividade contestadas |
 | `listar_beneficios_fap` | Lista benefícios (filtros: CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência, status na 1ª/2ª instância) |
 | `detalhar_beneficio` | Detalhes completos de um benefício |
+| `conferir_dados_beneficios` | Lista de benefícios (número + o que a petição/planilha diz: CPF, NIT, espécie, DIB, DCB, nascimento, CNPJ, vigência, nome, CAT) contra a Central e o cálculo FAP, sem IA e sem gravar a entrada — `conferencia_beneficios_service`. Divergências campo a campo + alertas da base (excluído do cálculo, fora do cálculo sincronizado, não contestado, deferido, indeferido nas duas). Mesmo handler da rota `POST /api/v1/fap/beneficios/conferir` |
 | `listar_beneficios_calculo_fap` | Benefícios e CATs do cálculo FAP (contestados ou não), com CPF inteiro e filtro por situação e contestado |
 | `resumo_beneficios_calculo_fap` | Contagens do cálculo FAP: por tipo, excluídos, não contestados e cruzamento |
 | `resumo_fap` | Estatísticas agregadas de contestações e benefícios, com cruzamento tipo × status por instância |
@@ -149,7 +150,7 @@ Exemplos de uso no Claude:
 | Ferramenta | Módulo exigido no IntellexIA |
 |---|---|
 | `consultar_base_conhecimento`, `pesquisar_base_conhecimento` | Base de Conhecimento |
-| `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `listar_beneficios_calculo_fap`, `resumo_beneficios_calculo_fap`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel`, `buscar_por_segurado`, `revelar_nome_segurado` | Painel FAP |
+| `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `conferir_dados_beneficios`, `listar_beneficios_calculo_fap`, `resumo_beneficios_calculo_fap`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel`, `buscar_por_segurado`, `revelar_nome_segurado` | Painel FAP |
 | `listar_cats_fap`, `listar_massas_salariais_fap`, `listar_vinculos_fap`, `listar_rotatividade_fap` | Painel de Contestações |
 | `listar_processos`, `detalhar_processo`, `pesquisar_jurisprudencia`, `detalhar_decisao`, `panorama_jurisprudencia`, `valores_de_filtro_jurisprudencia`, `decisoes_parecidas`, `exportar_jurisprudencia_excel` | Painel de Processos |
 | `revisar_peticao_inicial`, `conferir_revisao_peticao`, `conferir_planilha_beneficios`, `gravar_revisao_peticao`, `mudar_status_peticao`, `listar_peticoes_revisao`, `detalhar_revisao`, `historico_revisoes_peticao`, `comparar_versoes_peticao`, `ler_manual_revisor`, `versoes_manual_revisor`, `auditoria_revisor` | Revisor de Petições |

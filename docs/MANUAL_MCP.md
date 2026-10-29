@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **71 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **72 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -92,6 +92,7 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `detalhar_contestacao` | Detalhe de uma contestação | Contestação completa + **benefícios vinculados** + alterações recentes + **link do PDF** | FAP Web |
 | `listar_beneficios_fap` | Benefícios contestados | Benefícios com filtros ricos (**empresa por nome**, **grupo empresarial**, **protocolo da contestação**, **resultado na 1ª e na 2ª instância**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) e o status em cada instância | FAP Web |
 | `detalhar_beneficio` | Detalhe de um benefício | Todos os campos de um benefício, incluindo justificativas, pareceres e decisões de julgamento | Sistema |
+| `conferir_dados_beneficios` | Conferir dados de benefícios | Confere **vários benefícios de uma vez** (os de uma petição, planilha ou e-mail) contra a Central e o cálculo FAP: CPF, NIT, espécie, DIB, DCB, nascimento, CNPJ, vigência, nome e CAT, com qualquer pontuação; aponta **divergências** e **alertas** — já excluído do cálculo, fora do cálculo, não contestado, deferido, indeferido nas duas instâncias. Sem IA; nada fica salvo | Sistema |
 | `listar_beneficios_calculo_fap` | Benefícios do cálculo FAP | Benefícios (B91–B94) e CATs do **cálculo do FAP**, contestados ou não, com CPF e nascimento inteiros; filtros por vigência, empresa, grupo, CNPJ, CPF, NIT, número, tipo, situação (**conta** ou **excluído** do cálculo) e **contestado** (por vigência) | FAP Web |
 | `resumo_beneficios_calculo_fap` | Resumo do cálculo FAP | Contagens do cálculo em uma chamada: total, por tipo, excluídos, não contestados e o cruzamento tipo × situação × contestado | FAP Web |
 | `listar_procuracoes_fap` | Procurações eletrônicas | Procurações eletrônicas com situação e vigência | FAP Web |

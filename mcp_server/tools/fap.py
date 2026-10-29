@@ -1083,6 +1083,25 @@ def fap_filter_values_handler(law_firm_id: int) -> dict:
     }
 
 
+# ── Conferência de dados de benefícios (petição × base) ───────────────────────
+
+
+def conferir_dados_beneficios_handler(law_firm_id: int, beneficios) -> dict:
+    """O que a petição diz de cada benefício × Central e cálculo FAP do escritório.
+
+    Também é a rota POST /api/v1/fap/beneficios/conferir. A regra mora em
+    ``conferencia_beneficios_service``; aqui só a entrada inválida vira ToolError.
+    """
+    from fastmcp.exceptions import ToolError
+
+    from app.services import conferencia_beneficios_service as svc
+
+    try:
+        return svc.conferir(law_firm_id, beneficios)
+    except ValueError as e:
+        raise ToolError(str(e)) from e
+
+
 # ── Revelar nome do segurado (consulta paga por CPF) ──────────────────────────
 
 
