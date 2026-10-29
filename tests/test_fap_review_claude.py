@@ -581,8 +581,29 @@ def _limpar(firm_id, user_id):
     db.session.commit()
 
 
+def test_etapas_na_descricao_das_ferramentas():
+    """O Claude monta a lista de tarefas ao ler a descrição da ferramenta, antes
+    da parte 1 das instruções (teste em homologação, 29/10/2026): as etapas têm
+    de estar lá, com os mesmos nomes das instruções."""
+    import ast
+    print('\n0) Etapas na descrição das ferramentas')
+    arvore = ast.parse((Path(__file__).resolve().parent.parent / 'mcp_server' / 'server.py').read_text(encoding='utf-8'))
+    docs = {f.name: ast.get_docstring(f) or '' for f in ast.walk(arvore) if isinstance(f, ast.FunctionDef)}
+    comuns = ['1. Ler as instruções do revisor', '4. Conferir o resultado no IntellexIA',
+              '5. Mostrar os achados e perguntar se grava']
+    for nome, proprias in (('revisar_peticao_inicial', ['2. Ler a petição', '3. Revisar']),
+                           ('comparar_versoes_peticao', ['2. Ler as duas versões', '3. Comparar as versões'])):
+        etapas = comuns[:1] + proprias + comuns[1:]
+        doc = docs.get(nome, '')
+        check(f'{nome}: as cinco etapas, na ordem, na descrição',
+              all(e in doc for e in etapas) and [doc.index(e) for e in etapas] == sorted(doc.index(e) for e in etapas))
+        instr = claude_svc._ADAPTACAO + claude_svc._ETAPAS['revisao' if nome.startswith('revisar') else 'comparacao']
+        check(f'{nome}: mesmos nomes das instruções', all(e in instr for e in etapas))
+
+
 def main():
     test_montagem_sem_llm()
+    test_etapas_na_descricao_das_ferramentas()
     with app.app_context():
         firm = LawFirm.query.order_by(LawFirm.id).first()
         user = User.query.filter(User.law_firm_id == firm.id).order_by(User.id).first()

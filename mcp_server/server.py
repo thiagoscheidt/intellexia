@@ -1975,17 +1975,20 @@ def revisar_peticao_inicial(
     inteiros: consulte-os por termo em ler_manual_revisor(tipo="casos_referencia",
     termo=...) quando precisar. A petição não vai para o IntellexIA.
 
-    Fluxo:
-    1. Se o usuário informou a petição (Id Wrike), passe 'identificador_documento'
-       ou 'peticao_id': as instruções vêm com os pontos de atenção dela. Se você
-       a encontrou por conta própria (ex.: pelo nome da empresa), PERGUNTE ao
-       usuário se é ela antes de usar. Petição nova, não confirmada, ou pedido
-       de revisão sem histórico: chame sem.
-    2. As instruções vêm em partes: chame com parte=1, 2, ... até 'total_partes'
-       e leia todas antes de começar. Avise o usuário que leva alguns minutos.
-    3. Revise e mande o JSON para conferir_revisao_peticao. Mostre ao usuário o
-       que a conferência devolver e pergunte se ele quer gravar.
-    4. Só se ele disser que sim: gravar_revisao_peticao.
+    Petição: se o usuário informou (Id Wrike), passe 'identificador_documento'
+    ou 'peticao_id' — as instruções vêm com os pontos de atenção dela. Se você
+    a encontrou por conta própria (ex.: pelo nome da empresa), PERGUNTE ao
+    usuário se é ela antes de usar. Petição nova, não confirmada, ou pedido de
+    revisão sem histórico: chame sem.
+
+    Etapas — se for montar lista de tarefas ou progresso, use exatamente estas
+    cinco, com estes nomes, e avise o usuário que leva alguns minutos:
+    1. Ler as instruções do revisor — parte=1, 2, ... até 'total_partes'.
+    2. Ler a petição — o anexo inteiro, com tabelas e imagens.
+    3. Revisar — seguindo as instruções lidas.
+    4. Conferir o resultado no IntellexIA — o JSON vai para conferir_revisao_peticao.
+    5. Mostrar os achados e perguntar se grava — gravar_revisao_peticao só se
+       o usuário disser que sim.
 
     Para duas versões (original × revisada), use comparar_versoes_peticao.
 
@@ -2218,11 +2221,18 @@ def comparar_versoes_peticao(
     """Instruções do Revisor para VOCÊ comparar duas versões de uma petição aqui na conversa.
 
     Use quando o usuário anexar a versão original e a revisada e perguntar "a
-    v2 corrigiu o que o revisor apontou?". Funciona como revisar_peticao_inicial:
-    as instruções do agente do escritório vêm em partes (leia todas), você
-    compara os dois anexos, manda o JSON para conferir_revisao_peticao com
-    modo="comparacao", mostra o resultado e só grava (gravar_revisao_peticao)
-    se o usuário quiser. Para uma versão só, use revisar_peticao_inicial.
+    v2 corrigiu o que o revisor apontou?". Funciona como revisar_peticao_inicial,
+    inclusive na escolha da petição. Para uma versão só, use revisar_peticao_inicial.
+
+    Etapas — se for montar lista de tarefas ou progresso, use exatamente estas
+    cinco, com estes nomes, e avise o usuário que leva alguns minutos:
+    1. Ler as instruções do revisor — parte=1, 2, ... até 'total_partes'.
+    2. Ler as duas versões — os dois anexos inteiros, com tabelas e imagens.
+    3. Comparar as versões — o que a revisada corrigiu e o que ficou pendente.
+    4. Conferir o resultado no IntellexIA — o JSON vai para
+       conferir_revisao_peticao com modo="comparacao".
+    5. Mostrar os achados e perguntar se grava — gravar_revisao_peticao só se
+       o usuário disser que sim.
 
     Args:
         identificador_documento: Id Wrike da petição, se o usuário informou. Opcional.
