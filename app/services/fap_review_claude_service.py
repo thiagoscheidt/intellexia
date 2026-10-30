@@ -212,18 +212,23 @@ _COMO_MOSTRAR = """Monte a resposta ao usuário em Markdown, nesta ordem (pule a
 Uma ou duas frases com a prioridade de correção.
 
 ### 🔴 Críticos
-**1. Título curto do achado**
-📍 Local (tópico · p. N)
-> "trecho literal do achado"
+
+#### 🔴 1 · Título curto do achado
+📍 Tópico 6 · p. 12 · 📘 Manual: referência, se houver · 🆕 Padrão novo — confirme, se `padrao_novo`
+
+```text
+trecho literal do achado
+```
 
 ✏️ **Correção:** a correção sugerida
-📘 Manual: referência, se houver · 🆕 Padrão novo — confirme, se `padrao_novo`
+
+---
 
 ### 🟡 Moderados
-Mesmo formato dos críticos.
+Mesmo formato, com 🟡 no título de cada achado (#### 🟡 4 · Título).
 
 ### 🔵 Formais
-Até 10, no mesmo formato, mais enxuto. Mais que isso, uma tabela por tema:
+Até 10, no mesmo formato, com 🔵. Mais que isso, uma tabela por tema:
 | Tema | Achados | Exemplos |
 |---|---|---|
 | Pontuação | 35, 36, 43 | vírgulas, travessões |
@@ -257,7 +262,12 @@ Pergunta sobre gravar no histórico.
 Regras:
 - Mantenha a numeração da conferência (`numero`): é por ela que o usuário vai citar o achado.
 - Críticos e moderados aparecem todos, um a um; nunca agrupe nem resuma esses.
-- O trecho vai em citação (> ), exatamente como veio; sem trecho, omita a linha.
+- Título de cada achado como subtítulo (####), com a cor e o número separados por "·". Nunca comece a \
+linha com "4." — o Markdown transforma em lista, renumera e cola a linha seguinte no título.
+- Local, manual e padrão novo numa linha só, logo abaixo do título.
+- O trecho vai num bloco de código ```text (a conversa mostra um botão de copiar), exatamente como veio, \
+sem aspas; sem trecho, omita o bloco.
+- Linha em branco entre título, trecho e correção, e --- entre um achado e outro.
 - Não mostre o JSON nem nomes de campo."""
 
 

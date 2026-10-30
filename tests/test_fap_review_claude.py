@@ -271,8 +271,13 @@ def test_conferencia(firm_id, user_id, petition):
     como = r.get('como_mostrar', '')
     check('traz o modelo de apresentação com as cores por gravidade',
           all(i in como for i in ('🔴', '🟡', '🔵')) and 'Documentos em falta' in como, como[:200])
-    check('modelo manda manter a numeração da conferência e o trecho literal em citação',
-          'numeração' in como and '> ' in como)
+    # Trecho em bloco de código: no claude.ai ele ganha botão de copiar (pedido de 29/10/2026).
+    check('modelo manda manter a numeração da conferência e o trecho em bloco de código',
+          'numeração' in como and '```text' in como and '> "' not in como)
+    # "4. Pedidos duplicados" no começo da linha vira lista numerada: o Markdown
+    # renumera e cola a linha do local no título.
+    check('título do achado é subtítulo, nunca "N." no começo da linha',
+          '#### 🔴 1 · ' in como and '**1. ' not in como)
     check('próximo passo manda seguir o modelo de apresentação', 'como_mostrar' in r.get('proximo_passo', ''))
     novo = claude_svc.conferir(firm_id, user_id, _resultado([_achado('Padrão fora do manual', is_new_pattern=True)]),
                                'revisao')
