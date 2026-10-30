@@ -108,7 +108,8 @@ lista de conferir_dados_beneficios em beneficios_conferidos; se voltarem avisos 
 mande de novo antes de seguir.
 5. Mostrar os achados e perguntar se grava — mostre o que a conferência devolveu e pergunte se o \
 usuário quer gravar no IntellexIA; só chame gravar_revisao_peticao se ele disser que sim. Gravada, \
-anexe os arquivos à revisão seguindo "envio_dos_arquivos" da resposta."""
+anexe os arquivos à revisão seguindo "envio_dos_arquivos" da resposta e pergunte se algum achado não foi \
+pertinente (triar_achados_revisao)."""
 
 _FONTE = {
     MODO_REVISAO: ('A petição é o arquivo anexado nesta conversa. Sem anexo, peça o arquivo ao usuário '
@@ -820,7 +821,9 @@ def _envio_dos_arquivos(execution: FapReviewExecution) -> dict:
     return {
         'envio_dos_arquivos': _arquivos.envio_para_o_claude(execution),
         'proximo_passo': ('Mostre a mensagem_para_usuario. Depois anexe os arquivos à revisão seguindo '
-                          '"envio_dos_arquivos": uma tentativa com o curl e, se falhar, o link para o usuário.'),
+                          '"envio_dos_arquivos": uma tentativa com o curl e, se falhar, o link para o usuário. '
+                          'Por fim, pergunte se algum achado não foi pertinente e registre a resposta com '
+                          'triar_achados_revisao (revisao_id desta gravação).'),
     }
 
 

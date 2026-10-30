@@ -379,16 +379,8 @@ _normalize_finding_field = _svc.normalize_finding_field
 # _build_finding_fingerprint -> app/services/fap_review_service.py (fonte única, usada também pelo MCP)
 _build_finding_fingerprint = _svc.build_finding_fingerprint
 
-def _get_ignored_finding_fingerprints(law_firm_id: int, law_firm_document_identifier: str) -> set[str]:
-    """Retorna fingerprints de achados marcados como não úteis para o documento."""
-    if not law_firm_document_identifier:
-        return set()
-
-    rows = FapReviewIgnoredFinding.query.filter_by(
-        law_firm_id=law_firm_id,
-        law_firm_document_identifier=law_firm_document_identifier,
-    ).with_entities(FapReviewIgnoredFinding.finding_fingerprint).all()
-    return {str(row[0]) for row in rows if row and row[0]}
+# _get_ignored_finding_fingerprints -> app/services/fap_review_service.py (fonte única, usada também pelo MCP)
+_get_ignored_finding_fingerprints = _svc.ignored_finding_fingerprints
 
 
 def _build_prior_attention_points(
@@ -1727,34 +1719,8 @@ def lawyer_stats():
 
 
 def _get_execution_triage_state(execution, law_firm_id: int) -> dict:
-    """Estado consolidado da triagem de uma execução (fonte para tela e endpoints)."""
-    payload = _load_execution_result_payload(execution)
-    findings = payload.get('findings') or []
-    total_findings = len(findings) if isinstance(findings, list) else 0
-
-    checked_indices = {
-        row.finding_index
-        for row in FapReviewFindingCheck.query.filter_by(execution_id=execution.id).all()
-    }
-
-    ignored_indices: set[int] = set()
-    if execution.law_firm_document_identifier and total_findings:
-        ignored_fingerprints = _get_ignored_finding_fingerprints(
-            law_firm_id=law_firm_id,
-            law_firm_document_identifier=execution.law_firm_document_identifier,
-        )
-        ignored_indices = {
-            index
-            for index, finding in enumerate(findings, start=1)
-            if _build_finding_fingerprint(finding) in ignored_fingerprints
-        }
-
-    return {
-        'total_findings': total_findings,
-        'checked_indices': checked_indices,
-        'ignored_indices': ignored_indices,
-        'complete': _svc.is_triage_complete(total_findings, checked_indices, ignored_indices),
-    }
+    """Estado consolidado da triagem de uma execução (regra no serviço, fonte única com o MCP)."""
+    return _svc.triage_state(execution)
 
 
 @fap_review_bp.route('/revision/<int:execution_id>/findings/<int:finding_index>/check', methods=['POST'])
@@ -1769,37 +1735,14 @@ def revision_finding_check(execution_id: int, finding_index: int):
         law_firm_id=law_firm_id,
     ).first_or_404()
 
-    if _svc.is_execution_superseded(execution):
-        return jsonify({'error': 'Esta revisão foi substituída por uma versão mais recente — triagem encerrada.'}), 409
-
-    payload = _load_execution_result_payload(execution)
-    findings = payload.get('findings') or []
-    if finding_index < 1 or finding_index > len(findings):
-        return jsonify({'error': 'Ponto de atenção não encontrado nesta revisão.'}), 404
-
     request_payload = request.get_json(silent=True) or {}
     checked = bool(request_payload.get('checked'))
 
-    existing = FapReviewFindingCheck.query.filter_by(
-        execution_id=execution.id,
-        finding_index=finding_index,
-    ).first()
-
     try:
-        if checked and not existing:
-            db.session.add(FapReviewFindingCheck(
-                law_firm_id=law_firm_id,
-                execution_id=execution.id,
-                finding_index=finding_index,
-                created_by_id=user_id,
-            ))
-        elif not checked and existing:
-            db.session.delete(existing)
-
-        # Triar achados significa que o usuário está revisando a petição
-        _svc.mark_petition_in_user_review(execution.petition)
-
-        db.session.commit()
+        _svc.set_finding_checked(execution, finding_index, checked, user_id=user_id)
+    except _svc.TriageRefused as refused:
+        db.session.rollback()
+        return jsonify({'error': str(refused)}), refused.status_http
     except Exception as error:
         db.session.rollback()
         current_app.logger.error(f'Erro ao persistir check do ponto de atenção: {error}')
@@ -1887,63 +1830,21 @@ def revision_complete_triage(execution_id: int):
         law_firm_id=law_firm_id,
     ).first_or_404()
 
-    petition = execution.petition
-    if not petition:
-        return jsonify({'error': 'Esta revisão não está vinculada a uma petição.'}), 400
-
-    if _svc.is_execution_superseded(execution):
-        return jsonify({'error': 'Esta revisão foi substituída por uma versão mais recente — conclua a triagem na revisão atual.'}), 409
-
     request_payload = request.get_json(silent=True) or {}
     outcome = str(request_payload.get('outcome') or '').strip()
-    new_status = _svc.TRIAGE_OUTCOME_STATUSES.get(outcome)
-    if not new_status:
-        return jsonify({'error': 'Desfecho de triagem inválido.'}), 400
 
-    if new_status in _svc.APPROVAL_STATUSES and _svc.is_claude_review(execution):
-        return jsonify({'error': _svc.CLAUDE_REVIEW_APPROVAL_BLOCK}), 403
-
-    if petition.workflow_status in _svc.NEW_REVISION_BLOCKED_STATUSES:
-        return jsonify({'error': 'Esta petição está travada para triagem. Um administrador pode reabri-la.'}), 403
-
-    # Gate no servidor: não confia no estado renderizado na tela
-    triage = _get_execution_triage_state(execution, law_firm_id)
-    if not triage['complete']:
-        pending = triage['total_findings'] - len(
-            (triage['checked_indices'] | triage['ignored_indices'])
-            & set(range(1, triage['total_findings'] + 1))
-        )
-        return jsonify({
-            'error': f'Ainda há {pending} ponto(s) de atenção sem triagem. '
-                     'Marque cada um como revisado ou não pertinente antes de concluir.'
-        }), 400
-
-    old_status = petition.workflow_status
     try:
-        if petition.workflow_status != new_status:
-            petition.workflow_status = new_status
-            petition.status_changed_at = datetime.now()
-            petition.updated_at = datetime.now()
-        db.session.commit()
+        _svc.complete_triage(execution, outcome, user_id=session.get('user_id'))
+    except _svc.TriageRefused as refused:
+        db.session.rollback()
+        return jsonify({'error': str(refused)}), refused.status_http
     except Exception as error:
         db.session.rollback()
         current_app.logger.error(f'Erro ao concluir triagem da execução {execution_id}: {error}')
         return jsonify({'error': 'Não foi possível concluir a triagem.'}), 500
 
-    outcome_labels = {
-        'new_version': 'Triagem concluída: usuário vai enviar nova versão',
-        'final_version': 'Triagem concluída: versão final aguardando aprovação do revisor',
-    }
-    _log_audit(
-        law_firm_id,
-        'revision_triage_completed',
-        'petition',
-        petition.id,
-        outcome_labels[outcome],
-        old_value=old_status,
-        new_value=new_status,
-    )
-
+    petition = execution.petition
+    new_status = petition.workflow_status
     redirect_url = None
     if outcome == 'new_version':
         redirect_url = url_for('fap_review.revision', petition_id=petition.id)
@@ -1967,86 +1868,18 @@ def revision_finding_feedback(execution_id: int, finding_index: int):
         law_firm_id=law_firm_id,
     ).first_or_404()
 
-    if not execution.law_firm_document_identifier:
-        return jsonify({'error': 'Esta revisão não possui identificador de documento para persistir feedback.'}), 400
-
-    if _svc.is_execution_superseded(execution):
-        return jsonify({'error': 'Esta revisão foi substituída por uma versão mais recente — use a revisão atual.'}), 409
-
-    try:
-        payload = json.loads(execution.result_json or '{}')
-    except json.JSONDecodeError:
-        return jsonify({'error': 'Resultado da revisão inválido para registrar feedback.'}), 400
-
-    findings = payload.get('findings') or []
-    if finding_index < 1 or finding_index > len(findings):
-        return jsonify({'error': 'Ponto de atenção não encontrado nesta revisão.'}), 404
-
-    finding = findings[finding_index - 1]
-    finding_fingerprint = _build_finding_fingerprint(finding)
-    if not finding_fingerprint:
-        return jsonify({'error': 'Não foi possível identificar o ponto de atenção selecionado.'}), 400
-
     request_payload = request.get_json(silent=True) or {}
     dismissed = bool(request_payload.get('dismissed'))
 
-    existing_feedback = FapReviewIgnoredFinding.query.filter_by(
-        law_firm_id=law_firm_id,
-        law_firm_document_identifier=execution.law_firm_document_identifier,
-        finding_fingerprint=finding_fingerprint,
-    ).first()
-
-    description = str(finding.get('description') or '').strip()
-    audit_action = None
-    audit_description = None
-
     try:
-        if dismissed:
-            if not existing_feedback:
-                db.session.add(FapReviewIgnoredFinding(
-                    law_firm_id=law_firm_id,
-                    law_firm_document_identifier=execution.law_firm_document_identifier,
-                    source_execution_id=execution.id,
-                    created_by_id=user_id,
-                    finding_fingerprint=finding_fingerprint,
-                    finding_description=description,
-                ))
-            audit_action = 'revision_finding_dismissed'
-            audit_description = f'Ponto marcado como não útil: {description[:200]}'
-        elif existing_feedback:
-            db.session.delete(existing_feedback)
-            audit_action = 'revision_finding_dismiss_undone'
-            audit_description = f'Ponto voltou a ser considerado no histórico: {description[:200]}'
-
-        # Triar achados significa que o usuário está revisando a petição
-        petition_status_changed = _svc.mark_petition_in_user_review(execution.petition)
-
-        db.session.commit()
+        _svc.set_finding_dismissed(execution, finding_index, dismissed, user_id=user_id)
+    except _svc.TriageRefused as refused:
+        db.session.rollback()
+        return jsonify({'error': str(refused)}), refused.status_http
     except Exception as error:
         db.session.rollback()
         current_app.logger.error(f'Erro ao persistir feedback do ponto de atenção: {error}')
         return jsonify({'error': 'Não foi possível salvar o feedback do ponto de atenção.'}), 500
-
-    try:
-        if audit_action and audit_description:
-            _log_audit(
-                law_firm_id,
-                audit_action,
-                'execution',
-                execution.id,
-                audit_description,
-            )
-        if petition_status_changed:
-            _log_audit(
-                law_firm_id,
-                'petition_status_updated',
-                'petition',
-                execution.petition.id,
-                'Status alterado para Em revisão ao triar pontos de atenção',
-                new_value='in_review',
-            )
-    except Exception as audit_error:
-        current_app.logger.warning(f'Feedback salvo, mas falha ao registrar auditoria: {audit_error}')
 
     return jsonify({
         'success': True,

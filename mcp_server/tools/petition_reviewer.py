@@ -102,6 +102,23 @@ def _status_pedido(texto: str) -> str | None:
     return None
 
 
+def _usuario_do_revisor(law_firm_id: int, user_id: int | None):
+    """Usuário relido do banco, ativo e com o Revisor — ou None.
+
+    O token do MCP guarda um retrato das permissões de quando foi autorizado;
+    o que muda a petição confere o estado de agora.
+    """
+    from app.models import User
+    from app.utils.permissions import has_module_permission
+
+    user = User.query.get(user_id) if user_id else None
+    if (not user or not user.is_active or user.law_firm_id != law_firm_id
+            or not user.law_firm or not user.law_firm.is_active
+            or not has_module_permission("fap_review", user.role, user.module_permissions)):
+        return None
+    return user
+
+
 def change_status_handler(
     law_firm_id: int,
     user_id: int | None,
@@ -115,14 +132,11 @@ def change_status_handler(
     um retrato das permissões de quando foi autorizado, e um admin rebaixado
     continuaria aprovando.
     """
-    from app.models import FapReviewPetition, User
+    from app.models import FapReviewPetition
     from app.services import fap_review_service as svc
-    from app.utils.permissions import has_module_permission
 
-    user = User.query.get(user_id) if user_id else None
-    if (not user or not user.is_active or user.law_firm_id != law_firm_id
-            or not user.law_firm or not user.law_firm.is_active
-            or not has_module_permission("fap_review", user.role, user.module_permissions)):
+    user = _usuario_do_revisor(law_firm_id, user_id)
+    if not user:
         return {"erro": "Seu usuário não tem acesso ao Revisor de Petições neste escritório."}
 
     codigo = _status_pedido(novo_status)
@@ -163,4 +177,106 @@ def change_status_handler(
     else:
         resposta["mensagem_para_usuario"] = (
             f'A petição "{petition.title}" passou de "{rotulo.get(anterior, anterior)}" para "{rotulo[codigo]}".')
+    return resposta
+
+
+_DESFECHOS = {"nova_versao": "new_version", "versao_final": "final_version"}
+
+
+def triage_findings_handler(
+    law_firm_id: int,
+    user_id: int | None,
+    revisao_id: int | None = None,
+    peticao_id: int | None = None,
+    identificador: str | None = None,
+    pertinentes: list | None = None,
+    nao_pertinentes: list | None = None,
+    demais_pertinentes: bool = False,
+    concluir: str | None = None,
+) -> dict:
+    """Triagem dos achados de uma revisão gravada, com as regras da tela (fap_review_service).
+
+    Sem 'revisao_id', usa a revisão atual da petição (por id ou Id Wrike).
+    """
+    from app.models import FapReviewExecution, FapReviewPetition
+    from app.services import fap_review_service as svc
+
+    user = _usuario_do_revisor(law_firm_id, user_id)
+    if not user:
+        return {"erro": "Seu usuário não tem acesso ao Revisor de Petições neste escritório."}
+
+    if revisao_id:
+        execution = FapReviewExecution.query.filter_by(
+            id=revisao_id, law_firm_id=law_firm_id, execution_type="revision").first()
+    else:
+        query = FapReviewPetition.query.filter_by(law_firm_id=law_firm_id)
+        if peticao_id:
+            petition = query.filter_by(id=peticao_id).first()
+        elif (identificador or "").strip():
+            petition = query.filter_by(office_document_identifier=identificador.strip()).first()
+        else:
+            return {"erro": "Informe a revisão ('revisao_id', de gravar_revisao_peticao) ou a petição "
+                            "('peticao_id' ou o Id Wrike em 'identificador')."}
+        execution = (FapReviewExecution.query.get(petition.latest_revision_id)
+                     if petition and petition.latest_revision_id else None)
+    if not execution:
+        return {"erro": "Revisão não encontrada neste escritório."}
+
+    desfecho = None
+    if concluir:
+        import unicodedata
+
+        chave = unicodedata.normalize("NFKD", str(concluir)).encode("ascii", "ignore").decode()
+        desfecho = _DESFECHOS.get("_".join(chave.lower().replace("_", " ").split()))
+        if not desfecho:
+            return {"erro": f'Desfecho "{concluir}" não existe. Use "nova_versao" (a petição volta para '
+                            'ajustes) ou "versao_final" (vai para aprovação).'}
+
+    try:
+        if pertinentes or nao_pertinentes or demais_pertinentes:
+            svc.triage_findings(execution, pertinentes=pertinentes, nao_pertinentes=nao_pertinentes,
+                                demais_pertinentes=bool(demais_pertinentes), user_id=user.id, via="via Claude")
+        elif not desfecho:
+            return {"erro": "Diga quais achados foram pertinentes e quais não foram, ou como concluir a triagem."}
+        if desfecho:
+            svc.complete_triage(execution, desfecho, user_id=user.id, via="via Claude")
+    except svc.TriageRefused as e:
+        from app.models import db
+        db.session.rollback()
+        return {"erro": str(e), "revisao_id": execution.id}
+
+    estado = svc.triage_state(execution)
+    total = estado["total_findings"]
+    nao = sorted(estado["ignored_indices"])
+    sim = sorted(estado["checked_indices"] - estado["ignored_indices"])
+    pendentes = sorted(set(range(1, total + 1)) - estado["checked_indices"] - estado["ignored_indices"])
+    petition = execution.petition
+    rotulo = svc.PETITION_WORKFLOW_STATUSES
+    resposta = {
+        "revisao_id": execution.id,
+        "numero_revisao": execution.revision_number,
+        "titulo": petition.title if petition else None,
+        "total_achados": total,
+        "pertinentes": sim,
+        "nao_pertinentes": nao,
+        "pendentes": pendentes,
+        "triagem_completa": estado["complete"],
+        "status": petition.workflow_status if petition else None,
+        "status_descricao": rotulo.get(petition.workflow_status) if petition else None,
+    }
+    if desfecho:
+        resposta["triagem_concluida"] = True
+        resposta["mensagem_para_usuario"] = (
+            f'Triagem concluída: a petição "{petition.title}" está em "{rotulo[petition.workflow_status]}".')
+    elif pendentes:
+        resposta["mensagem_para_usuario"] = (
+            f'Marquei {len(sim)} como pertinente(s) e {len(nao)} como não pertinente(s). '
+            f'Faltam os achados {", ".join(map(str, pendentes))}.')
+    else:
+        resposta["mensagem_para_usuario"] = (
+            f'Todos os {total} achados foram triados ({len(nao)} não pertinente(s), que não voltam nas '
+            'próximas revisões desta petição).')
+        resposta["proximo_passo"] = (
+            'Pergunte se o usuário quer concluir a triagem: nova versão (a petição volta para ajustes) ou '
+            'versão final (vai para aprovação). Só chame com concluir se ele escolher.')
     return resposta

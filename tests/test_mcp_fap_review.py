@@ -20,11 +20,15 @@ Cobre:
   11. mudar_status_peticao: as regras da tela (aprovar, devolver e reabrir só
       admin; revisão feita no Claude não vai para aprovação por não-admin),
       papel relido do banco, status pelo código ou pelo nome, auditoria
+  12. triar_achados_revisao: pertinente / não pertinente em lote, "o resto
+      está ok", conclusão da triagem com as regras da tela, recusas que não
+      gravam nada pela metade, e a tela continuando com o mesmo código
 
 As regras do serviço (partes, contrato, saneador, origem) estão em
 tests/test_fap_review_claude.py. Os dados criados são removidos ao final.
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -36,6 +40,8 @@ from app.models import (
     FapReviewAuditLog,
     FapReviewDraft,
     FapReviewExecution,
+    FapReviewFindingCheck,
+    FapReviewIgnoredFinding,
     FapReviewPetition,
     LawFirm,
     User,
@@ -45,6 +51,7 @@ from mcp_server.tools.petition_reviewer import (
     confer_review_handler,
     review_instructions_handler,
     save_review_handler,
+    triage_findings_handler,
 )
 from mcp_server.tools.petition_review_read import (
     get_review_detail_handler,
@@ -62,7 +69,8 @@ _falhas = []
 IDENT = '990000000037'
 IDENT_COMPARA = '990000000039'
 IDENT_STATUS = '990000000046'
-IDENTS = (IDENT, IDENT_COMPARA, IDENT_STATUS)
+IDENT_TRIAGEM = '990000000048'
+IDENTS = (IDENT, IDENT_COMPARA, IDENT_STATUS, IDENT_TRIAGEM)
 
 
 def check(nome: str, condicao: bool, detalhe: str = '') -> None:
@@ -483,18 +491,142 @@ def test_mudar_status(law_firm_id, primeiro):
     check('a tela recusa status inválido', resp.status_code == 400, str(resp.status_code))
 
 
+def test_triagem(law_firm_id, primeiro):
+    print('\n12) triar_achados_revisao')
+    from app.services import fap_review_service as svc
+    user = User.query.filter(User.law_firm_id == law_firm_id, User.is_active.is_(True)).order_by(User.id).first()
+    check('gravar manda perguntar a pertinência dos achados',
+          'triar_achados_revisao' in (primeiro.get('proximo_passo') or ''), primeiro.get('proximo_passo', '')[:200])
+
+    findings = [
+        {'category': 'CAT-1', 'severity': 'CRÍTICO', 'description': 'Falta fundamentar o NTEP', 'location': 'Item 3'},
+        {'category': 'CAT-2', 'severity': 'MODERADO', 'description': 'Pedido duplicado', 'location': 'Pedidos'},
+        {'category': 'FORMAL', 'severity': 'FORMAL', 'description': 'Numeração de páginas ausente'},
+    ]
+    petition = FapReviewPetition(law_firm_id=law_firm_id, created_by_id=user.id, title='Triagem MCP',
+                                 office_document_identifier=IDENT_TRIAGEM, workflow_status='new')
+    db.session.add(petition)
+    db.session.flush()
+    execution = FapReviewExecution(
+        law_firm_id=law_firm_id, user_id=user.id, petition_id=petition.id, execution_type='revision',
+        status='completed', revision_number=1, law_firm_document_identifier=IDENT_TRIAGEM,
+        review_origin='claude', result_json=json.dumps({'findings': findings}))
+    db.session.add(execution)
+    db.session.flush()
+    petition.latest_revision_id = execution.id
+    petition.revision_count = 1
+    db.session.commit()
+
+    def marcados():
+        return ({c.finding_index for c in FapReviewFindingCheck.query.filter_by(execution_id=execution.id)},
+                {i.finding_fingerprint for i in FapReviewIgnoredFinding.query.filter_by(
+                    law_firm_id=law_firm_id, law_firm_document_identifier=IDENT_TRIAGEM)})
+
+    # Recusas antes de gravar: nada pode ficar pela metade.
+    r = triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id, pertinentes=[1], nao_pertinentes=[9])
+    check('número inexistente: erro com o total de achados', 'erro' in r and '3' in r['erro'], str(r)[:200])
+    r = triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id, pertinentes=[2], nao_pertinentes=[2])
+    check('mesmo achado nas duas listas: erro', 'erro' in r, str(r)[:200])
+    check('nada gravado nas recusas', marcados() == (set(), set()), str(marcados()))
+    check('sem decisão nenhuma: erro', 'erro' in triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id))
+    check('revisão de outro escritório: não encontrada', 'erro' in triage_findings_handler(
+        99999, user.id, revisao_id=execution.id, pertinentes=[1]))
+
+    r = triage_findings_handler(law_firm_id, user.id, identificador=IDENT_TRIAGEM, pertinentes=[1],
+                                nao_pertinentes=['2'])
+    check('pelo Id Wrike acha a última revisão', r.get('revisao_id') == execution.id, str(r)[:200])
+    check('1 pertinente, 2 não pertinente, 3 pendente',
+          r.get('pertinentes') == [1] and r.get('nao_pertinentes') == [2] and r.get('pendentes') == [3]
+          and r.get('triagem_completa') is False, str(r)[:300])
+    checks, ignorados = marcados()
+    check('pertinente vira "revisado" da tela', checks == {1}, str(checks))
+    check('não pertinente guarda a impressão digital para as próximas revisões',
+          ignorados == {svc.build_finding_fingerprint(findings[1])}, str(ignorados))
+    db.session.refresh(petition)
+    check('triar põe a petição em revisão, como na tela', petition.workflow_status == 'in_review',
+          petition.workflow_status)
+    check('auditoria do não pertinente via Claude', FapReviewAuditLog.query.filter_by(
+        entity_type='execution', entity_id=execution.id, action='revision_finding_dismissed').filter(
+        FapReviewAuditLog.change_description.like('%Claude%')).count() == 1)
+
+    r = triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id, concluir='nova_versao')
+    check('concluir com achado pendente: erro com os pendentes', 'erro' in r and '3' in r['erro'], str(r)[:200])
+
+    r = triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id, demais_pertinentes=True)
+    check('"o resto está ok" marca só os pendentes', r.get('pertinentes') == [1, 3]
+          and r.get('nao_pertinentes') == [2] and r.get('triagem_completa') is True, str(r)[:300])
+
+    r = triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id, pertinentes=[2])
+    checks, ignorados = marcados()
+    check('voltar a ser pertinente desfaz o não pertinente', checks == {1, 2, 3} and not ignorados
+          and r.get('nao_pertinentes') == [], str(r)[:300])
+    triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id, nao_pertinentes=[2])
+    checks, ignorados = marcados()
+    check('não pertinente tira o "revisado"', checks == {1, 3} and len(ignorados) == 1, str(checks))
+
+    r = triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id, concluir='versao_final')
+    check('revisão feita no Claude não conclui como versão final', 'erro' in r and 'Claude' in r['erro'],
+          str(r)[:200])
+    r = triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id, concluir='qualquer')
+    check('desfecho inválido: erro com os válidos', 'erro' in r and 'nova_versao' in r['erro'], str(r)[:200])
+    r = triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id, concluir='nova_versao')
+    db.session.refresh(petition)
+    check('concluir como nova versão: aguardando ajustes', r.get('status') == 'awaiting_adjustments'
+          and petition.workflow_status == 'awaiting_adjustments', str(r)[:200])
+    check('auditoria da conclusão via Claude', FapReviewAuditLog.query.filter_by(
+        entity_type='petition', entity_id=petition.id, action='revision_triage_completed').filter(
+        FapReviewAuditLog.change_description.like('%Claude%')).count() == 1)
+
+    # A tela continua com o mesmo código: rotas respondem e recusam como antes.
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['user_id'] = user.id
+        sess['law_firm_id'] = law_firm_id
+    resp = client.post(f'/fap-review/revision/{execution.id}/findings/1/check', json={'checked': False})
+    check('tela: desmarcar revisado', resp.status_code == 200 and marcados()[0] == {3}, str(resp.status_code))
+    resp = client.post(f'/fap-review/revision/{execution.id}/findings/2/dismiss-feedback', json={'dismissed': False})
+    check('tela: desfazer não pertinente', resp.status_code == 200 and not marcados()[1], str(resp.status_code))
+    resp = client.post(f'/fap-review/revision/{execution.id}/findings/7/check', json={'checked': True})
+    check('tela: achado inexistente 404', resp.status_code == 404, str(resp.status_code))
+    resp = client.post(f'/fap-review/revision/{execution.id}/complete-triage', json={'outcome': 'new_version'})
+    check('tela: concluir com pendentes 400', resp.status_code == 400, str(resp.status_code))
+
+    # Revisão substituída por uma mais nova: triagem encerrada nos dois canais.
+    nova = FapReviewExecution(
+        law_firm_id=law_firm_id, user_id=user.id, petition_id=petition.id, execution_type='revision',
+        status='completed', revision_number=2, law_firm_document_identifier=IDENT_TRIAGEM,
+        result_json=json.dumps({'findings': findings[:1]}))
+    db.session.add(nova)
+    db.session.flush()
+    petition.latest_revision_id = nova.id
+    db.session.commit()
+    r = triage_findings_handler(law_firm_id, user.id, revisao_id=execution.id, pertinentes=[1])
+    check('revisão substituída: erro', 'erro' in r and 'substituída' in r['erro'], str(r)[:200])
+    resp = client.post(f'/fap-review/revision/{execution.id}/findings/1/check', json={'checked': True})
+    check('tela: revisão substituída 409', resp.status_code == 409, str(resp.status_code))
+    r = triage_findings_handler(law_firm_id, user.id, identificador=IDENT_TRIAGEM, pertinentes=[1])
+    check('pelo Id Wrike vai para a revisão atual', r.get('revisao_id') == nova.id
+          and r.get('triagem_completa') is True, str(r)[:200])
+    check('usuário de outro escritório: recusado', 'erro' in triage_findings_handler(
+        law_firm_id, 999999, revisao_id=nova.id, pertinentes=[1]))
+
+
 def _limpar(law_firm_id):
     petitions = FapReviewPetition.query.filter(
         FapReviewPetition.law_firm_id == law_firm_id,
         FapReviewPetition.office_document_identifier.in_(IDENTS)).all()
     FapReviewDraft.query.filter(FapReviewDraft.law_firm_id == law_firm_id,
                                 FapReviewDraft.identifier.in_(IDENTS)).delete(synchronize_session=False)
+    FapReviewIgnoredFinding.query.filter(
+        FapReviewIgnoredFinding.law_firm_id == law_firm_id,
+        FapReviewIgnoredFinding.law_firm_document_identifier.in_(IDENTS)).delete(synchronize_session=False)
     for p in petitions:
         p.latest_revision_id = None
         db.session.flush()
         FapReviewDraft.query.filter_by(petition_id=p.id).delete(synchronize_session=False)
         for e in FapReviewExecution.query.filter_by(petition_id=p.id).all():
             FapReviewDraft.query.filter_by(saved_execution_id=e.id).delete(synchronize_session=False)
+            FapReviewFindingCheck.query.filter_by(execution_id=e.id).delete(synchronize_session=False)
             FapReviewAuditLog.query.filter_by(entity_type='execution', entity_id=e.id).delete()
             db.session.delete(e)
         db.session.flush()
@@ -522,6 +654,7 @@ def main():
             test_gate_admin()
             test_comparacao_e_recusas(firm.id, user.id)
             test_mudar_status(firm.id, primeiro)
+            test_triagem(firm.id, primeiro)
         finally:
             db.session.rollback()
             _limpar(firm.id)

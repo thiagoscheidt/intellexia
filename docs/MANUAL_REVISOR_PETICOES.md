@@ -288,7 +288,7 @@ Com a IA conectada (veja o manual **"Conectar sua IA"**), o Claude revisa a peti
 2. Se a petição já existe no Revisor, diga o **Id Wrike**, ou deixe o Claude encontrá-la pelo nome da empresa: ele pergunta se é ela antes de usar o histórico. Assim ele revisa com os pontos de atenção da última revisão. Para petição nova, não precisa de Id nessa hora.
 3. O Claude lê as instruções, revisa e mostra os **achados na conversa**. Leva alguns minutos, e ele vai dizendo em que etapa está, sempre nesta ordem: **Ler as instruções do revisor** → **Ler a petição** → **Revisar** → **Conferir o resultado no IntellexIA** → **Mostrar os achados e perguntar se grava**. Na comparação de versões, a 2ª e a 3ª etapas são **Ler as duas versões** e **Comparar as versões**. O resultado vem separado por gravidade (🔴 crítico, 🟡 moderado, 🔵 formal), com a numeração da conferência, o local e o trecho de cada achado; formais em grande quantidade são agrupados por tema. Cada achado traz o **tópico e a página**. No PDF, a página é a do próprio arquivo. No **DOCX**, que não tem página fixa, o Claude converte o arquivo para PDF no ambiente dele e usa essa paginação: ela pode diferir em uma página da que o Word mostra, e o Claude avisa isso no topo. Se o ambiente dele não permitir a conversão, ele indica só o tópico. O trecho citado é sempre literal e vem num quadro com botão de copiar, para colar no Ctrl+F do Word.
 4. Antes de mostrar, o resultado passa pelo **mesmo saneador da tela**: sai achado duplicado, a contagem de dias entre DCB e DIB é corrigida e o que a equipe já marcou como **não pertinente** vem marcado.
-5. No fim, o Claude **pergunta se você quer gravar** no histórico do Revisor. Se disser que não, nada fica gravado. Se disser que sim, a revisão entra como a próxima revisão da petição; para petição nova, ele pede o Id Wrike.
+5. No fim, o Claude **pergunta se você quer gravar** no histórico do Revisor. Se disser que não, nada fica gravado. Se disser que sim, a revisão entra como a próxima revisão da petição; para petição nova, ele pede o Id Wrike. Gravada, ele pergunta quais achados não foram pertinentes (veja *Triar os achados pelo Claude*).
 
 A revisão em si não depende de enviar a petição ao IntellexIA: o Claude lê o arquivo que você anexou na conversa.
 
@@ -331,7 +331,15 @@ Peça ao Claude, por exemplo: "manda a petição 4387120543 para aguardando ajus
 - aprovar, devolver para ajustes e reabrir continuam **só para administradores**;
 - se a última revisão foi **Feita no Claude**, quem não é administrador não manda para aprovação. Antes, faça uma revisão pela tela.
 
-A mudança fica na auditoria do Revisor como feita via Claude. A triagem dos pontos (revisado / não pertinente) continua sendo na tela.
+A mudança fica na auditoria do Revisor como feita via Claude.
+
+### Triar os achados pelo Claude
+
+Depois de gravar, o Claude pergunta se algum achado não foi pertinente. Responda como falaria, por exemplo: *"o 4 e o 12 não são pertinentes, o resto está ok"*. Ele registra a mesma triagem da tela, com os números da conferência:
+- **pertinente** é o **✓ Marcar como revisado** da tela;
+- **não pertinente** é o **✕ Não pertinente**: o ponto não volta nas próximas revisões da petição. Dizer depois que ele é pertinente desfaz o descarte.
+
+Com todos os achados triados, ele pergunta se você quer **concluir a triagem**: nova versão (a petição vai para *Aguardando ajustes*) ou versão final. A versão final continua recusada quando a revisão foi **Feita no Claude**. A triagem vale também para revisões já gravadas: diga o Id Wrike. Fica na auditoria como feita via Claude.
 
 > [!INFO] **Quem revisa é o Claude da sua conversa.** A revisão gasta o limite do **seu plano do Claude**, não o do IntellexIA, e a qualidade acompanha o modelo escolhido: prefira Sonnet ou Opus. As instruções do Revisor são longas, então faça **uma revisão por conversa**.
 

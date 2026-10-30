@@ -105,6 +105,7 @@ from mcp_server.tools.petition_reviewer import (
     review_instructions_handler,
     save_review_handler,
     spreadsheet_script_handler,
+    triage_findings_handler,
 )
 from mcp_server.tools.petition_review_read import (
     get_review_detail_handler,
@@ -2234,7 +2235,8 @@ def revisar_peticao_inicial(
     4. Conferir o resultado no IntellexIA — o JSON vai para conferir_revisao_peticao,
        com a lista de conferir_dados_beneficios em beneficios_conferidos.
     5. Mostrar os achados e perguntar se grava — gravar_revisao_peticao só se
-       o usuário disser que sim; gravada, anexe os arquivos (envio_dos_arquivos).
+       o usuário disser que sim; gravada, anexe os arquivos (envio_dos_arquivos)
+       e pergunte se algum achado não foi pertinente (triar_achados_revisao).
 
     A revisão é feita por você, com o arquivo que o usuário anexou: esta
     ferramenta devolve as instruções do agente revisor do escritório
@@ -2407,8 +2409,8 @@ def mudar_status_peticao(
       está aguardando aprovação ou aprovada são só de administrador;
     - se a última revisão da petição foi feita no Claude, quem não é admin não
       manda para aprovação: antes é preciso uma revisão pela tela do Revisor.
-    Recusada, explique o motivo ao usuário com a mensagem de 'erro'. Não
-    conclui a triagem dos achados (isso continua na tela).
+    Recusada, explique o motivo ao usuário com a mensagem de 'erro'. Para
+    triar os achados ou concluir a triagem, use triar_achados_revisao.
 
     Status: new (Nova), in_review (Em revisão), awaiting_adjustments
     (Aguardando ajustes), awaiting_approval (Aguardando aprovação),
@@ -2429,6 +2431,61 @@ def mudar_status_peticao(
     with app.app_context():
         return change_status_handler(
             claims["law_firm_id"], claims.get("user_id"), novo_status, peticao_id, identificador,
+        )
+
+
+@mcp.tool()
+def triar_achados_revisao(
+    revisao_id: int | None = None,
+    peticao_id: int | None = None,
+    identificador: str | None = None,
+    pertinentes: list[int | str] | None = None,
+    nao_pertinentes: list[int | str] | None = None,
+    demais_pertinentes: bool = False,
+    concluir: str | None = None,
+) -> dict:
+    """Registra quais achados de uma revisão gravada foram pertinentes — a triagem da tela, pela conversa.
+
+    Use depois de gravar_revisao_peticao (ou numa revisão já gravada), com o
+    que o usuário disser: "o 4 e o 12 não são pertinentes, o resto está ok"
+    vira nao_pertinentes=[4, 12] e demais_pertinentes=True. Os números são
+    os da conferência / da tela da revisão. Não decida por conta própria
+    quais achados foram pertinentes: só registre o que o usuário disser.
+
+    - Pertinente = "Marcar como revisado" da tela.
+    - Não pertinente = o achado não volta nas próximas revisões desta
+      petição (mesmo Id Wrike). Mandar um número como pertinente desfaz.
+    - Triar põe a petição "Em revisão", como na tela.
+
+    Concluir a triagem (só se o usuário pedir, com todos os achados
+    triados): concluir="nova_versao" (a petição vai para "Aguardando
+    ajustes") ou "versao_final" (vai para aprovação — recusada quando a
+    revisão foi feita no Claude, como na tela). Pode vir junto com a
+    triagem, na mesma chamada.
+
+    Revisão substituída por outra mais nova não aceita triagem. Um número
+    errado recusa a chamada inteira, sem gravar nada pela metade.
+
+    Args:
+        revisao_id: Id da revisão (o 'revisao_id' de gravar_revisao_peticao). Sem ele, usa a revisão atual da petição.
+        peticao_id: Alternativa — o id da petição no Revisor.
+        identificador: Alternativa — o Id Wrike da petição.
+        pertinentes: Números dos achados pertinentes.
+        nao_pertinentes: Números dos achados não pertinentes.
+        demais_pertinentes: True marca como pertinente todo achado ainda não triado.
+        concluir: "nova_versao" ou "versao_final", para concluir a triagem.
+
+    Returns:
+        'pertinentes', 'nao_pertinentes', 'pendentes' (números),
+        'triagem_completa', 'status' da petição e 'mensagem_para_usuario';
+        'triagem_concluida' quando concluiu; 'proximo_passo' quando falta
+        só concluir. Recusa: 'erro'.
+    """
+    claims = require_module("fap_review")
+    with app.app_context():
+        return triage_findings_handler(
+            claims["law_firm_id"], claims.get("user_id"), revisao_id, peticao_id, identificador,
+            pertinentes, nao_pertinentes, demais_pertinentes, concluir,
         )
 
 
@@ -2532,7 +2589,8 @@ def comparar_versoes_peticao(
        conferir_revisao_peticao com modo="comparacao" e a lista de
        conferir_dados_beneficios em beneficios_conferidos.
     5. Mostrar os achados e perguntar se grava — gravar_revisao_peticao só se
-       o usuário disser que sim; gravada, anexe os arquivos (envio_dos_arquivos).
+       o usuário disser que sim; gravada, anexe os arquivos (envio_dos_arquivos)
+       e pergunte se algum achado não foi pertinente (triar_achados_revisao).
 
     Use quando o usuário anexar a versão original e a revisada e perguntar "a
     v2 corrigiu o que o revisor apontou?". Funciona como revisar_peticao_inicial,

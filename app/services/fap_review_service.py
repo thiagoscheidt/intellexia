@@ -22,8 +22,8 @@ from sqlalchemy import func
 
 from app.agents.fap_review.finding_sanitizer import fingerprint_achado
 from app.models import (
-    db, FapReviewAuditLog, FapReviewExecution, FapReviewPetition,
-    FapReviewPromptVersion, FapReviewReferenceVersion,
+    db, FapReviewAuditLog, FapReviewExecution, FapReviewFindingCheck, FapReviewIgnoredFinding,
+    FapReviewPetition, FapReviewPromptVersion, FapReviewReferenceVersion,
 )
 from app.models import User as _Usuario
 
@@ -304,6 +304,251 @@ def is_triage_complete(total_findings: int, checked_indices: set[int],
         return True
     triaged = {i for i in (checked_indices | ignored_indices) if 1 <= i <= total_findings}
     return len(triaged) >= total_findings
+
+
+# ── Triagem dos achados ─────────────────────────────────────────────
+# Fonte única dos botões "Marcar como revisado", "Não pertinente" e "Concluir
+# triagem" da tela de resultado e da ferramenta `triar_achados_revisao` do MCP.
+# "Revisado" vale só para a execução; "não pertinente" vale para o documento
+# (Id Wrike): o achado com a mesma impressão digital não volta nas próximas revisões.
+
+TRIAGE_SUPERSEDED = ('Esta revisão foi substituída por uma versão mais recente — '
+                     'a triagem é feita na revisão atual.')
+TRIAGE_OUTCOME_LABELS = {
+    'new_version': 'Triagem concluída: usuário vai enviar nova versão',
+    'final_version': 'Triagem concluída: versão final aguardando aprovação do revisor',
+}
+
+
+class TriageRefused(StatusChangeRefused):
+    """Triagem recusada, com a mensagem para o usuário e o status HTTP."""
+
+
+def ignored_finding_fingerprints(law_firm_id: int, law_firm_document_identifier: str) -> set[str]:
+    """Impressões digitais dos achados marcados como não pertinentes no documento."""
+    if not law_firm_document_identifier:
+        return set()
+    rows = FapReviewIgnoredFinding.query.filter_by(
+        law_firm_id=law_firm_id,
+        law_firm_document_identifier=law_firm_document_identifier,
+    ).with_entities(FapReviewIgnoredFinding.finding_fingerprint).all()
+    return {str(row[0]) for row in rows if row and row[0]}
+
+
+def _triage_findings_list(execution: FapReviewExecution) -> list:
+    findings = load_execution_result_payload(execution).get('findings') or []
+    return findings if isinstance(findings, list) else []
+
+
+def triage_state(execution: FapReviewExecution) -> dict:
+    """Estado da triagem de uma execução: revisados, não pertinentes e se está completa."""
+    findings = _triage_findings_list(execution)
+    total = len(findings)
+    checked = {row.finding_index for row in FapReviewFindingCheck.query.filter_by(execution_id=execution.id)}
+    ignored: set[int] = set()
+    if execution.law_firm_document_identifier and total:
+        fingerprints = ignored_finding_fingerprints(execution.law_firm_id, execution.law_firm_document_identifier)
+        ignored = {i for i, finding in enumerate(findings, start=1)
+                   if build_finding_fingerprint(finding) in fingerprints}
+    return {
+        'total_findings': total,
+        'checked_indices': checked,
+        'ignored_indices': ignored,
+        'complete': is_triage_complete(total, checked, ignored),
+    }
+
+
+def _triage_open(execution: FapReviewExecution) -> list:
+    if is_execution_superseded(execution):
+        raise TriageRefused(TRIAGE_SUPERSEDED, 409)
+    return _triage_findings_list(execution)
+
+
+def _finding_at(findings: list, finding_index: int) -> dict:
+    if finding_index < 1 or finding_index > len(findings):
+        raise TriageRefused('Ponto de atenção não encontrado nesta revisão.', 404)
+    return findings[finding_index - 1]
+
+
+def _set_checked(execution, finding_index: int, checked: bool, user_id: int | None) -> None:
+    existing = FapReviewFindingCheck.query.filter_by(execution_id=execution.id, finding_index=finding_index).first()
+    if checked and not existing:
+        db.session.add(FapReviewFindingCheck(law_firm_id=execution.law_firm_id, execution_id=execution.id,
+                                             finding_index=finding_index, created_by_id=user_id))
+    elif not checked and existing:
+        db.session.delete(existing)
+
+
+def _set_dismissed(execution, finding: dict, dismissed: bool, user_id: int | None) -> str | None:
+    """Grava ou desfaz o "não pertinente". Devolve a ação de auditoria, ou None se nada mudou."""
+    fingerprint = build_finding_fingerprint(finding)
+    if not fingerprint:
+        raise TriageRefused('Não foi possível identificar o ponto de atenção selecionado.', 400)
+    existing = FapReviewIgnoredFinding.query.filter_by(
+        law_firm_id=execution.law_firm_id,
+        law_firm_document_identifier=execution.law_firm_document_identifier,
+        finding_fingerprint=fingerprint,
+    ).first()
+    if dismissed:
+        if not existing:
+            db.session.add(FapReviewIgnoredFinding(
+                law_firm_id=execution.law_firm_id,
+                law_firm_document_identifier=execution.law_firm_document_identifier,
+                source_execution_id=execution.id,
+                created_by_id=user_id,
+                finding_fingerprint=fingerprint,
+                finding_description=str(finding.get('description') or '').strip(),
+            ))
+        return 'revision_finding_dismissed'
+    if existing:
+        db.session.delete(existing)
+        return 'revision_finding_dismiss_undone'
+    return None
+
+
+def _audit_triage(execution, user_id: int | None, dismiss_audits: list[tuple[str, dict]],
+                  petition_status_changed: bool, via: str = '') -> None:
+    """Auditoria depois do commit: falhar aqui não desfaz a triagem já gravada."""
+    sufixo = f' ({via})' if via else ''
+    try:
+        for action, finding in dismiss_audits:
+            description = str(finding.get('description') or '').strip()[:200]
+            texto = (f'Ponto marcado como não útil: {description}' if action == 'revision_finding_dismissed'
+                     else f'Ponto voltou a ser considerado no histórico: {description}')
+            log_audit(execution.law_firm_id, user_id, action, 'execution', execution.id, texto + sufixo)
+        if petition_status_changed:
+            log_audit(execution.law_firm_id, user_id, 'petition_status_updated', 'petition', execution.petition.id,
+                      'Status alterado para Em revisão ao triar pontos de atenção' + sufixo, new_value='in_review')
+    except Exception as error:  # noqa: BLE001
+        db.session.rollback()
+        logger.warning('Triagem salva, mas falha ao registrar auditoria: %s', error)
+
+
+def set_finding_checked(execution: FapReviewExecution, finding_index: int, checked: bool, *,
+                        user_id: int | None) -> None:
+    """"Marcar como revisado" de um achado (e desfazer). Levanta TriageRefused."""
+    _finding_at(_triage_open(execution), finding_index)
+    _set_checked(execution, finding_index, checked, user_id)
+    # Triar achados significa que o usuário está revisando a petição
+    mark_petition_in_user_review(execution.petition)
+    db.session.commit()
+
+
+def set_finding_dismissed(execution: FapReviewExecution, finding_index: int, dismissed: bool, *,
+                          user_id: int | None, via: str = '') -> None:
+    """"Não pertinente" de um achado (e desfazer), para as próximas revisões do documento."""
+    if not execution.law_firm_document_identifier:
+        raise TriageRefused('Esta revisão não possui identificador de documento para persistir feedback.', 400)
+    finding = _finding_at(_triage_open(execution), finding_index)
+    action = _set_dismissed(execution, finding, dismissed, user_id)
+    status_changed = mark_petition_in_user_review(execution.petition)
+    db.session.commit()
+    _audit_triage(execution, user_id, [(action, finding)] if action else [], status_changed, via)
+
+
+def _numeros_da_triagem(valores, total: int) -> set[int]:
+    numeros = set()
+    for valor in valores or []:
+        try:
+            numero = int(str(valor).strip())
+        except (TypeError, ValueError):
+            raise TriageRefused(f'"{valor}" não é número de achado.', 400) from None
+        if numero < 1 or numero > total:
+            raise TriageRefused(f'Não existe o achado {numero}: esta revisão tem {total} achado(s).', 400)
+        numeros.add(numero)
+    return numeros
+
+
+def triage_findings(execution: FapReviewExecution, *, pertinentes=None, nao_pertinentes=None,
+                    demais_pertinentes: bool = False, user_id: int | None, via: str = '') -> dict:
+    """Triagem em lote: pertinente = "revisado"; não pertinente = não volta nas próximas revisões.
+
+    Confere tudo antes de gravar — um número errado não deixa a triagem pela
+    metade. ``demais_pertinentes`` marca como revisado o que ainda não foi
+    triado ("o resto está ok"). Devolve o estado da triagem depois de gravar.
+    """
+    findings = _triage_open(execution)
+    total = len(findings)
+    if not total:
+        raise TriageRefused('Esta revisão não tem pontos de atenção para triar.', 400)
+    sim = _numeros_da_triagem(pertinentes, total)
+    nao = _numeros_da_triagem(nao_pertinentes, total)
+    if sim & nao:
+        repetidos = ', '.join(map(str, sorted(sim & nao)))
+        raise TriageRefused(f'O achado {repetidos} está como pertinente e como não pertinente: escolha um.', 400)
+    if not (sim or nao or demais_pertinentes):
+        raise TriageRefused('Diga quais achados foram pertinentes e quais não foram.', 400)
+    if nao and not execution.law_firm_document_identifier:
+        raise TriageRefused('Esta revisão não tem Id Wrike: o "não pertinente" não tem onde ser guardado.', 400)
+
+    if demais_pertinentes:
+        state = triage_state(execution)
+        triados = state['checked_indices'] | state['ignored_indices'] | sim | nao
+        sim |= set(range(1, total + 1)) - triados
+
+    dismiss_audits = []
+    for numero in sorted(nao):
+        action = _set_dismissed(execution, findings[numero - 1], True, user_id)
+        _set_checked(execution, numero, False, user_id)
+        dismiss_audits.append((action, findings[numero - 1]))
+    db.session.flush()
+    for numero in sorted(sim):
+        action = _set_dismissed(execution, findings[numero - 1], False, user_id)
+        _set_checked(execution, numero, True, user_id)
+        if action:
+            dismiss_audits.append((action, findings[numero - 1]))
+    status_changed = mark_petition_in_user_review(execution.petition)
+    db.session.commit()
+    _audit_triage(execution, user_id, dismiss_audits, status_changed, via)
+    if sim:
+        try:
+            log_audit(execution.law_firm_id, user_id, 'revision_findings_checked', 'execution', execution.id,
+                      f'{len(sim)} ponto(s) de atenção marcados como revisados' + (f' ({via})' if via else ''))
+        except Exception as error:  # noqa: BLE001
+            db.session.rollback()
+            logger.warning('Triagem salva, mas falha ao registrar auditoria: %s', error)
+    return triage_state(execution)
+
+
+def complete_triage(execution: FapReviewExecution, outcome: str, *, user_id: int | None,
+                    via: str = '') -> str:
+    """Conclui a triagem: nova versão ou versão final para aprovação. Devolve o status anterior.
+
+    Mesmas travas da tela: revisão atual, desfecho válido, revisão feita no
+    Claude não vai para aprovação, petição travada não muda e todo achado tem
+    de estar triado. Levanta TriageRefused.
+    """
+    petition = execution.petition
+    if not petition:
+        raise TriageRefused('Esta revisão não está vinculada a uma petição.', 400)
+    _triage_open(execution)
+    new_status = TRIAGE_OUTCOME_STATUSES.get(str(outcome or '').strip())
+    if not new_status:
+        raise TriageRefused('Desfecho de triagem inválido.', 400)
+    if new_status in APPROVAL_STATUSES and is_claude_review(execution):
+        raise TriageRefused(CLAUDE_REVIEW_APPROVAL_BLOCK, 403)
+    if petition.workflow_status in NEW_REVISION_BLOCKED_STATUSES:
+        raise TriageRefused('Esta petição está travada para triagem. Um administrador pode reabri-la.', 403)
+
+    state = triage_state(execution)
+    if not state['complete']:
+        pendentes = (set(range(1, state['total_findings'] + 1))
+                     - state['checked_indices'] - state['ignored_indices'])
+        raise TriageRefused(
+            f'Ainda há {len(pendentes)} ponto(s) de atenção sem triagem '
+            f'({", ".join(map(str, sorted(pendentes)))}). '
+            'Marque cada um como revisado ou não pertinente antes de concluir.', 400)
+
+    old_status = petition.workflow_status
+    if old_status != new_status:
+        petition.workflow_status = new_status
+        petition.status_changed_at = datetime.now()
+        petition.updated_at = datetime.now()
+    db.session.commit()
+    log_audit(execution.law_firm_id, user_id, 'revision_triage_completed', 'petition', petition.id,
+              TRIAGE_OUTCOME_LABELS[str(outcome).strip()] + (f' ({via})' if via else ''),
+              old_value=old_status, new_value=new_status)
+    return old_status
 
 
 def count_pending_review_queues(law_firm_id: int) -> dict:
