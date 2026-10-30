@@ -97,6 +97,8 @@ def test_amostra_da_api(c, a, tokens):
         '/fap/empresas': '', '/fap/contestacoes': '', '/fap/beneficios': '?limite=1',
         '/fap/beneficios/{id}': b0.id, '/fap/resumo': '?empresa=teste', '/fap/filtros': '',
         '/fap/procuracoes': '', '/fap/calculo/beneficios': '', '/fap/calculo/resumo': '',
+        '/fap/calculo/ranking': '?agrupar_por=estabelecimento', '/fap/calculo/cruzamento-vigencias': '',
+        '/fap/calculo/estabelecimento': '?cnpj=33592510000154',
         '/segurados': '?cpf=12345678909', '/jurisprudencia': '?limite=1', '/jurisprudencia/panorama': '',
         '/jurisprudencia/filtros': '', '/jurisprudencia/{id}': d.id, '/processos': '',
         '/processos/{id}': p.id, '/numero-processo/{numero}': '5001234-56.2024.4.04.7000',
@@ -219,6 +221,7 @@ def test_amostra_local():
     ids['/jurisprudencia/{id}/parecidas'] = ids['/jurisprudencia/{id}']
     proc = db.session.get(JudicialProcess, ids['/processos/{id}']) if ids['/processos/{id}'] else None
     b = Benefit.query.filter_by(law_firm_id=fid).filter(Benefit.insured_nit.isnot(None)).first()
+    est = FapCalculoItem.query.filter_by(law_firm_id=fid).order_by(FapCalculoItem.id).first()
     # Número de processo na pergunta = busca textual direta, sem a IA escolher o modo.
     kb_num = (KnowledgeBase.query.filter_by(law_firm_id=fid, is_active=True)
               .filter(KnowledgeBase.lawsuit_number.isnot(None)).first())
@@ -226,6 +229,7 @@ def test_amostra_local():
         '/segurados': {'nit': b.insured_nit} if b else None,
         '/base-conhecimento/pesquisa': ({'pergunta': kb_num.lawsuit_number, 'modo_busca': 'textual'}
                                         if kb_num else None),
+        '/fap/calculo/estabelecimento': ({'cnpj': est.cnpj} if est else None),
         '/fap/beneficios': {'limite': '200'}, '/fap/calculo/beneficios': {'limite': '200'},
         '/fap/contestacoes': {'limite': '200'}, '/jurisprudencia': {'limite': '200'},
         '/processos': {'limite': '200'},

@@ -14,6 +14,7 @@ descartáveis, removidos no fim.
 import json
 import os
 import sys
+from decimal import Decimal
 from datetime import date, datetime
 from pathlib import Path
 
@@ -22,8 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from main import app
 from app.blueprints import public_api
 from app.models import (
-    db, ApiToken, Benefit, FapCompany, JudicialProcess, JurisprudenceDecision, LawFirm, User,
-    UserMcpCall,
+    db, ApiToken, Benefit, FapCalculoEstabelecimento, FapCalculoItem, FapCompany, JudicialProcess,
+    JurisprudenceDecision, LawFirm, User, UserMcpCall,
 )
 from app.services import api_token_service
 from app.services.public_api_catalogo import ROTAS, para_api
@@ -46,7 +47,8 @@ def _cleanup():
         firm = LawFirm.query.filter_by(cnpj=cnpj).first()
         if not firm:
             continue
-        for modelo in (ApiToken, UserMcpCall, Benefit, FapCompany, JurisprudenceDecision, JudicialProcess):
+        for modelo in (ApiToken, UserMcpCall, Benefit, FapCalculoItem, FapCalculoEstabelecimento, FapCompany,
+                       JurisprudenceDecision, JudicialProcess):
             modelo.query.filter_by(law_firm_id=firm.id).delete()
         User.query.filter_by(law_firm_id=firm.id).delete()
         db.session.delete(firm)
@@ -68,6 +70,13 @@ def _setup():
           for i, (t, s) in enumerate((('B91', 'indeferido'), ('B91', 'deferido'), ('B94', None)))],
         Benefit(law_firm_id=b.id, benefit_number='993100009', benefit_type='B91',
                 employer_cnpj='11.222.333/0001-81'),
+        # cálculo FAP: o mesmo NB excluído em 2025 e contando em 2026
+        *[FapCalculoItem(law_firm_id=a.id, ano_vigencia=ano, cnpj='33592510000154', cnpj_raiz='33592510',
+                         tipo='B91', identificador='993100777', estado_atual=estado, total_pago=Decimal('10.50'))
+          for ano, estado in ((2025, 'EXCLUIDO'), (2026, 'ORIGINAL'))],
+        FapCalculoEstabelecimento(law_firm_id=a.id, ano_vigencia=2026, cnpj='33592510000154',
+                                  cnpj_raiz='33592510', calculo_atual_id=10, calculo_original_id=10,
+                                  calculo_atual_tipo='CALCULO_ORIGINAL', situacao='ok'),
     ])
     usuarios = {}
     for papel, modulos in (('lawyer', None), ('restrito', ['api', 'dashboard']),
@@ -121,6 +130,19 @@ def test_paridade(c, a, token):
                                                                    None, None, None, None, 5, 0)),
         ('/api/v1/fap/calculo/resumo',
          lambda: fap_calculo.resumo_beneficios_calculo_fap_handler(a.id, None, None, None, None, None)),
+        ('/api/v1/fap/calculo/beneficios?tipo=B91,B94&ordem=total_pago&situacao=conta',
+         lambda: fap_calculo.listar_beneficios_calculo_fap_handler(
+             a.id, None, None, None, None, None, None, None, ['B91', 'B94'], 'conta', None, 50, 0,
+             ordem='total_pago')),
+        ('/api/v1/fap/calculo/resumo?contestado=false&situacao=excluido',
+         lambda: fap_calculo.resumo_beneficios_calculo_fap_handler(
+             a.id, None, None, None, None, None, situacao='excluido', contestado=False)),
+        ('/api/v1/fap/calculo/ranking?agrupar_por=vigencia',
+         lambda: fap_calculo.ranking_calculo_fap_handler(a.id, 'vigencia')),
+        ('/api/v1/fap/calculo/cruzamento-vigencias',
+         lambda: fap_calculo.cruzamento_vigencias_calculo_fap_handler(a.id)),
+        ('/api/v1/fap/calculo/estabelecimento?cnpj=33.592.510/0001-54',
+         lambda: fap_calculo.detalhar_estabelecimento_calculo_fap_handler(a.id, '33.592.510/0001-54')),
         ('/api/v1/segurados?cpf=12345678909',
          lambda: insights.buscar_por_segurado_handler(
              a.id, User.query.filter_by(email='lawyer__test_api_rotas@example.com').one().get_module_permissions(),

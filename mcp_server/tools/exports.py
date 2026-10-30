@@ -199,3 +199,53 @@ def export_contestacoes_excel_handler(law_firm_id: int, mcp_public_url: str, **f
     if total > MAX_EXPORT_ROWS:
         result["aviso"] = f"Resultado truncado em {MAX_EXPORT_ROWS} linhas (total: {total})."
     return result
+
+
+_ROTULOS_CALCULO = (
+    # (filtro, rótulo na planilha)
+    ("vigencia", "Vigência"), ("grupo", "Grupo"), ("empresa", "Empresa"),
+    ("cnpj", "Estabelecimento"), ("tipo", "Tipo"), ("situacao", "No cálculo atual"),
+    ("contestado", "Contestado"), ("cpf", "CPF"), ("nit", "NIT"), ("numero", "NB / nº CAT"),
+    ("nome", "Segurado"), ("cnpj_divergente", "CNPJ atribuído ≠ original"),
+    ("ausente_no_calculo_atual", "Ausente no cálculo atual"), ("inicio_de", "Início a partir de"),
+    ("inicio_ate", "Início até"), ("cessacao_de", "Cessação a partir de"),
+    ("cessacao_ate", "Cessação até"), ("com_obito", "Com óbito"), ("ordem", "Ordem"),
+)
+
+
+def _rotulo_calculo(valor) -> str:
+    if isinstance(valor, bool):
+        return "Sim" if valor else "Não"
+    if isinstance(valor, (list, tuple)):
+        return ", ".join(map(str, valor))
+    return {"conta": "Conta", "excluido": "Excluído"}.get(str(valor), str(valor))
+
+
+def export_calculo_excel_handler(law_firm_id: int, mcp_public_url: str, **filtros) -> dict:
+    """Exporta os benefícios do cálculo FAP com a planilha do "Exportar Excel" da tela."""
+    from itertools import islice
+
+    from app.services import fap_calculo_export_service
+    from app.services import fap_calculo_query_service as svc
+    from mcp_server.tools.fap_calculo import _consulta, _ordem
+
+    ordem = _ordem(filtros.pop("ordem", None))
+    query = _consulta(law_firm_id, **filtros)
+    contadores = svc.contadores(query, law_firm_id=law_firm_id)
+    total = contadores["total"]
+    if not total:
+        return {"erro": "Nenhum item do cálculo FAP encontrado com esses filtros.", "total_linhas": 0}
+
+    rotulos = [(rotulo, _rotulo_calculo(filtros[chave] if chave != "ordem" else ordem))
+               for chave, rotulo in _ROTULOS_CALCULO
+               if (filtros.get(chave) not in (None, "", []) if chave != "ordem" else ordem)]
+    linhas = min(total, MAX_EXPORT_ROWS)
+    itens = islice(svc.todos(query, law_firm_id=law_firm_id, ordem=ordem), MAX_EXPORT_ROWS)
+    workbook = fap_calculo_export_service.montar_planilha(itens, rotulos or [("Filtros", "Nenhum")], contadores)
+
+    rel_path = _save_workbook(workbook, law_firm_id, "beneficios_calculo_fap")
+    result = _download_result(rel_path, mcp_public_url, linhas)
+    if total > MAX_EXPORT_ROWS:
+        result["aviso"] = (f"Resultado truncado em {MAX_EXPORT_ROWS} linhas (total: {total}). "
+                           "Filtre por vigência ou empresa e exporte em partes.")
+    return result

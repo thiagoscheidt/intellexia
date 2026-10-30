@@ -165,6 +165,28 @@ GRUPO = Param('grupo', 'string', 'Grupo empresarial cadastrado (nomes em /fap/fi
 STATUS_1A = Param('status_1a_instancia', 'string',
                   'Resultado na 1ª instância: deferido, indeferido, em_analise ou pendente.')
 STATUS_2A = Param('status_2a_instancia', 'string', 'Resultado na 2ª instância (recurso), mesmos valores.')
+CALC_VIGENCIA = Param('vigencia', 'integer', 'Ano de vigência.')
+CALC_TIPO = Param('tipo', 'lista', 'B91, B92, B93, B94 ou CAT — um ou vários (B91,B94).')
+CALC_SITUACAO = Param('situacao', 'string', 'conta (no cálculo) ou excluido (tirado no recálculo).')
+CALC_CONTESTADO = Param('contestado', 'boolean', 'true = existe na Central na mesma vigência.')
+CALC_SEGURADO = (
+    Param('cpf', 'string', 'CPF do segurado.'),
+    Param('nit', 'string', 'NIT do segurado.'),
+    Param('numero', 'string', 'Número do benefício ou da CAT.'),
+)
+CALC_CNPJ_DIVERGENTE = Param('cnpj_divergente', 'boolean', 'true = atribuído a CNPJ diferente do original.')
+CALC_EXTRA = (
+    Param('nome', 'string', 'Nome do segurado (só nomes já revelados).'),
+    CALC_CNPJ_DIVERGENTE,
+    Param('ausente_no_calculo_atual', 'boolean', 'true = saiu num recálculo mais novo.'),
+    Param('inicio_de', 'string', 'Início do benefício a partir de (AAAA-MM-DD).'),
+    Param('inicio_ate', 'string', 'Início do benefício até (AAAA-MM-DD).'),
+    Param('cessacao_de', 'string', 'Cessação a partir de (AAAA-MM-DD).'),
+    Param('cessacao_ate', 'string', 'Cessação até (AAAA-MM-DD).'),
+    Param('com_obito', 'boolean', 'true = só com data de óbito; false = só sem.'),
+)
+CALC_ORDEM = Param('ordem', 'string', 'padrao, total_pago, valor_mensal, meses_contabilizacao, '
+                   'data_inicio ou data_cessacao (do maior para o menor).')
 
 
 # ── adaptadores: API → handler do MCP ────────────────────────────────────────
@@ -208,17 +230,44 @@ def _contestacao(ctx, p):
     return r
 
 
+_FILTROS_CALCULO_EXTRA = ('nome', 'cnpj_divergente', 'ausente_no_calculo_atual', 'inicio_de',
+                          'inicio_ate', 'cessacao_de', 'cessacao_ate', 'com_obito')
+
+
 def _calculo_lista(ctx, p):
     from mcp_server.tools.fap_calculo import listar_beneficios_calculo_fap_handler
     return listar_beneficios_calculo_fap_handler(
         ctx.law_firm_id, p['vigencia'], p['empresa'], p['grupo'], p['cnpj'], p['cpf'], p['nit'],
-        p['numero'], p['tipo'], p['situacao'], p['contestado'], p['limite'], p['deslocamento'])
+        p['numero'], p['tipo'], p['situacao'], p['contestado'], p['limite'], p['deslocamento'],
+        ordem=p['ordem'], **{k: p[k] for k in _FILTROS_CALCULO_EXTRA})
 
 
 def _calculo_resumo(ctx, p):
     from mcp_server.tools.fap_calculo import resumo_beneficios_calculo_fap_handler
     return resumo_beneficios_calculo_fap_handler(
-        ctx.law_firm_id, p['vigencia'], p['empresa'], p['grupo'], p['cnpj'], p['tipo'])
+        ctx.law_firm_id, p['vigencia'], p['empresa'], p['grupo'], p['cnpj'], p['tipo'],
+        situacao=p['situacao'], contestado=p['contestado'], cpf=p['cpf'], nit=p['nit'],
+        numero=p['numero'], **{k: p[k] for k in _FILTROS_CALCULO_EXTRA})
+
+
+def _calculo_ranking(ctx, p):
+    from mcp_server.tools.fap_calculo import ranking_calculo_fap_handler
+    return ranking_calculo_fap_handler(
+        ctx.law_firm_id, p['agrupar_por'], p['ordenar_por'], p['vigencia'], p['empresa'], p['grupo'],
+        p['cnpj'], p['tipo'], p['situacao'], p['contestado'], p['cnpj_divergente'], p['limite'],
+        p['deslocamento'])
+
+
+def _calculo_cruzamento(ctx, p):
+    from mcp_server.tools.fap_calculo import cruzamento_vigencias_calculo_fap_handler
+    return cruzamento_vigencias_calculo_fap_handler(
+        ctx.law_firm_id, p['vigencia'], p['empresa'], p['grupo'], p['cnpj'], p['tipo'], p['criterio'],
+        p['ordem'], p['limite'], p['deslocamento'])
+
+
+def _calculo_estabelecimento(ctx, p):
+    from mcp_server.tools.fap_calculo import detalhar_estabelecimento_calculo_fap_handler
+    return detalhar_estabelecimento_calculo_fap_handler(ctx.law_firm_id, p['cnpj'], p['vigencia'])
 
 
 def _segurados(ctx, p):
@@ -376,22 +425,39 @@ ROTAS: tuple[Rota, ...] = (
         resposta=C.PROCURACOES, grupo='fap'),
     Rota('GET', '/fap/calculo/beneficios', 'fap_panel',
          'Benefícios e CATs do cálculo FAP (Consulta do portal), contestados ou não.', (
-             Param('vigencia', 'integer', 'Ano de vigência.'),
-             EMPRESA, GRUPO, CNPJ,
-             Param('cpf', 'string', 'CPF do segurado.'),
-             Param('nit', 'string', 'NIT do segurado.'),
-             Param('numero', 'string', 'Número do benefício ou da CAT.'),
-             Param('tipo', 'string', 'B91, B92, B93, B94 ou CAT.'),
-             Param('situacao', 'string', 'conta (no cálculo) ou excluido (tirado no recálculo).'),
-             Param('contestado', 'boolean', 'true = existe na Central na mesma vigência.'),
-             _limite(50), DESLOCAMENTO,
+             CALC_VIGENCIA, EMPRESA, GRUPO, CNPJ, *CALC_SEGURADO, CALC_TIPO, CALC_SITUACAO,
+             CALC_CONTESTADO, *CALC_EXTRA, CALC_ORDEM, _limite(50), DESLOCAMENTO,
          ), _calculo_lista, resposta=C.CALCULO_BENEFICIOS, grupo='fap'),
     Rota('GET', '/fap/calculo/resumo', 'fap_panel',
-         'Contagens do cálculo FAP: tipo × situação × contestado.', (
-             Param('vigencia', 'integer', 'Ano de vigência.'),
-             EMPRESA, GRUPO, CNPJ,
-             Param('tipo', 'string', 'B91, B92, B93, B94 ou CAT.'),
+         'Contagens do cálculo FAP: tipo × situação × contestado, com as somas de total pago.', (
+             CALC_VIGENCIA, EMPRESA, GRUPO, CNPJ, *CALC_SEGURADO, CALC_TIPO, CALC_SITUACAO,
+             CALC_CONTESTADO, *CALC_EXTRA,
          ), _calculo_resumo, resposta=C.CALCULO_RESUMO, grupo='fap'),
+    Rota('GET', '/fap/calculo/ranking', 'fap_panel',
+         'Contagens do cálculo FAP por empresa, estabelecimento, vigência ou grupo, do maior para o menor.', (
+             Param('agrupar_por', 'string', 'empresa (padrão), estabelecimento, vigencia ou grupo.'),
+             Param('ordenar_por', 'string',
+                   'total, conta, excluidos, contestados, nao_contestados, conta_nao_contestados, '
+                   'total_pago, total_pago_nao_contestado, total_pago_excluido ou '
+                   'total_pago_conta_nao_contestado (padrão).'),
+             CALC_VIGENCIA, EMPRESA, GRUPO, CNPJ, CALC_TIPO, CALC_SITUACAO, CALC_CONTESTADO,
+             CALC_CNPJ_DIVERGENTE, _limite(20), DESLOCAMENTO,
+         ), _calculo_ranking, resposta=C.CALCULO_RANKING, grupo='fap'),
+    Rota('GET', '/fap/calculo/cruzamento-vigencias', 'fap_panel',
+         'Itens que contam sem contestação numa vigência e foram excluídos (ou contestados) em outra.', (
+             Param('vigencia', 'integer', 'Vigência onde o item ainda conta sem contestação.'),
+             EMPRESA, GRUPO, CNPJ, CALC_TIPO,
+             Param('criterio', 'string', 'excluido (padrão), contestado ou qualquer — o que aconteceu '
+                   'na outra vigência.'),
+             CALC_ORDEM, _limite(50), DESLOCAMENTO,
+         ), _calculo_cruzamento, resposta=C.CALCULO_CRUZAMENTO, grupo='fap'),
+    Rota('GET', '/fap/calculo/estabelecimento', 'fap_panel',
+         'Um estabelecimento no cálculo FAP: cálculo atual e original, protocolo, histórico, '
+         'contadores e os itens excluídos e ausentes.', (
+             Param('cnpj', 'string', 'CNPJ do estabelecimento (14 dígitos, com ou sem pontuação).',
+                   obrigatorio=True),
+             Param('vigencia', 'integer', 'Ano de vigência (padrão: a mais recente).'),
+         ), _calculo_estabelecimento, detalhe=True, resposta=C.CALCULO_ESTABELECIMENTO, grupo='fap'),
     # ── Segurados ────────────────────────────────────────────────────────────
     Rota('GET', '/segurados', 'fap_panel',
          'Visão de um segurado: benefícios, CATs, processos e o cálculo FAP. Informe cpf, nit ou nome.', (

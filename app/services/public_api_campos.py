@@ -338,18 +338,78 @@ CALCULO_BENEFICIOS = envelope(*CALCULO_ITEM)
 
 _CONTA = _o('conta', 'Itens que contam no cálculo.', _i('contestado', 'Contestados.'),
             _i('nao_contestado', 'Não contestados.'))
-CALCULO_RESUMO = (
+_CONTADORES_CALCULO = (
     _i('total', 'Itens no recorte.'),
     _m('por_tipo', 'Itens por tipo (B91...CAT).'),
+    _i('conta', 'Itens que contam no cálculo atual.'),
     _i('excluidos', 'Itens tirados no recálculo (contestação ganha).'),
     _i('nao_contestados', 'Itens sem contestação na Central.'),
     _i('contestados', 'Itens com contestação na Central.'),
+    _i('conta_nao_contestados', 'Itens que ainda contam e ninguém contestou.'),
     _t('total_pago', 'Soma do total pago, em reais (decimal em texto, ex.: "1234.56").'),
     _t('total_pago_nao_contestado', 'Soma do total pago dos não contestados (decimal em texto).'),
     _t('total_pago_excluido', 'Soma do total pago dos excluídos (decimal em texto).'),
+    _t('total_pago_conta_nao_contestado',
+       'Soma do total pago dos que ainda contam e ninguém contestou (decimal em texto).'),
     _m('cruzamento', 'Por tipo (chave = B91...CAT): situação × contestado.',
        _CONTA, _o('excluido', 'Itens excluídos do cálculo.', _i('contestado', 'Contestados.'),
                   _i('nao_contestado', 'Não contestados.'))),
+)
+CALCULO_RESUMO = _CONTADORES_CALCULO
+
+CALCULO_RANKING = envelope(
+    _t('cnpj_raiz', 'Raiz do CNPJ (agrupar_por empresa ou estabelecimento).', opcional=True),
+    _t('empresa_nome', 'Nome da empresa (agrupar_por empresa ou estabelecimento).', opcional=True),
+    _t('cnpj', 'CNPJ do estabelecimento (agrupar_por estabelecimento).', opcional=True),
+    _i('ano_vigencia', 'Vigência (agrupar_por vigencia).', opcional=True),
+    _t('grupo_chave', 'Chave do grupo empresarial (agrupar_por grupo).', opcional=True),
+    _t('grupo_nome', 'Nome do grupo; "Sem grupo" para raiz sem grupo (agrupar_por grupo).', opcional=True),
+    *_CONTADORES_CALCULO,
+    extra=(_t('agrupado_por', 'Agrupamento usado.'), _t('ordenado_por', 'Métrica da ordem.')),
+)
+
+_OUTRAS_VIGENCIAS = _l(
+    'outras_vigencias', 'O mesmo número nas outras vigências do cálculo.',
+    _i('ano_vigencia', 'Vigência.'), _t('cnpj', 'CNPJ do estabelecimento ali.'),
+    _t('estado_atual', 'Situação ali no cálculo atual (EXCLUIDO, ORIGINAL...).'),
+    _t('situacao', 'conta ou excluido.'), _b('contestado', 'Contestado na Central naquela vigência.'))
+CALCULO_CRUZAMENTO = envelope(
+    *CALCULO_ITEM, _OUTRAS_VIGENCIAS,
+    extra=(_t('criterio', 'O que aconteceu na outra vigência: excluido, contestado ou qualquer.'),
+           _t('total_pago', 'Soma do total pago do recorte inteiro (decimal em texto).'),
+           _m('por_tipo', 'Itens do recorte inteiro por tipo.')),
+)
+
+_ITEM_RESUMIDO = (
+    _ID, _t('tipo', 'B91...CAT.'), _t('identificador', 'NB ou nº da CAT.'), _t('cpf', 'CPF.'),
+    _t('nit', 'NIT.'), _t('segurado_nome', 'Nome revelado, se houver.'), _n('total_pago', 'Total pago.'),
+    _d('data_inicio', 'Início.'), _d('data_cessacao', 'Cessação.'),
+    _t('estado_original', 'Situação no cálculo original.'), _t('estado_atual', 'Situação no cálculo atual.'),
+    _i('calculo_id', 'Cálculo de onde veio o item.'), _b('contestado', 'Contestado na Central.'),
+    _i('beneficio_central_id', 'id do benefício na Central, se contestado.'),
+    _i('cat_central_id', 'id da CAT na Central, se contestada.'),
+)
+CALCULO_ESTABELECIMENTO = (
+    _t('cnpj', 'CNPJ do estabelecimento.'),
+    _t('cnpj_raiz', 'Raiz do CNPJ.'),
+    _t('empresa_nome', 'Nome da empresa.'),
+    _i('ano_vigencia', 'Vigência mostrada.'),
+    _l('vigencias_disponiveis', 'Vigências com cálculo deste estabelecimento.', de='inteiro'),
+    _t('situacao', 'Resultado da última leitura do portal (ok, sem_calculo, erro).'),
+    _d('lido_em', 'Última leitura do portal (UTC).'),
+    _o('calculo_atual', 'Cálculo atual no portal.', _i('id', 'Cálculo no portal.'),
+       _t('tipo', 'Código do tipo.'), _t('rotulo', 'Tipo por extenso.'), _t('data', 'Data (DD/MM/AAAA).')),
+    _i('calculo_original_id', 'Cálculo original no portal.'),
+    _b('recalculado', 'O cálculo atual não é o original.'),
+    _t('protocolo', 'Protocolo da contestação ou "Processo Judicial nº ...".'),
+    _l('historico', 'Cálculos do estabelecimento nessa vigência.',
+       _i('id', 'Cálculo no portal.'), _t('tipo', 'Código do tipo.'), _t('rotulo', 'Tipo por extenso.'),
+       _t('data', 'Data (DD/MM/AAAA).')),
+    _o('contadores', 'Os contadores do resumo para este estabelecimento e vigência.', *_CONTADORES_CALCULO),
+    _o('excluidos', 'Itens excluídos do cálculo (até 50, maiores primeiro).',
+       _i('total', 'Quantos no total.'), _l('itens', 'Itens.', *_ITEM_RESUMIDO)),
+    _o('ausentes_no_calculo_atual', 'Itens que saíram num recálculo mais novo (até 50).',
+       _i('total', 'Quantos no total.'), _l('itens', 'Itens.', *_ITEM_RESUMIDO)),
 )
 
 SEGURADOS = (

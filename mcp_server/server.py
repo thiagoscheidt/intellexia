@@ -70,7 +70,10 @@ from mcp_server.tools.fap import (
     conferir_dados_beneficios_handler,
 )
 from mcp_server.tools.fap_calculo import (
+    cruzamento_vigencias_calculo_fap_handler,
+    detalhar_estabelecimento_calculo_fap_handler,
     listar_beneficios_calculo_fap_handler,
+    ranking_calculo_fap_handler,
     resumo_beneficios_calculo_fap_handler,
 )
 from mcp_server.tools.disputes import (
@@ -82,6 +85,7 @@ from mcp_server.tools.disputes import (
 from mcp_server.tools.exports import (
     build_download_response,
     export_benefits_excel_handler,
+    export_calculo_excel_handler,
     export_contestacoes_excel_handler,
 )
 from mcp_server.tools.process_panel import (
@@ -893,18 +897,32 @@ def listar_beneficios_calculo_fap(
     cpf: str | None = None,
     nit: str | None = None,
     numero: str | None = None,
-    tipo: str | None = None,
+    tipo: str | list[str] | None = None,
     situacao: str | None = None,
     contestado: bool | None = None,
     limite: int = 50,
     deslocamento: int = 0,
+    nome: str | None = None,
+    cnpj_divergente: bool | None = None,
+    ausente_no_calculo_atual: bool | None = None,
+    inicio_de: str | None = None,
+    inicio_ate: str | None = None,
+    cessacao_de: str | None = None,
+    cessacao_ate: str | None = None,
+    com_obito: bool | None = None,
+    ordem: str | None = None,
 ) -> dict:
     """Lista os benefícios (B91/B92/B93/B94) e CATs que entraram no CÁLCULO do FAP.
 
     É a base da Consulta do FAP no portal, sincronizada por vigência: traz tudo
     que o portal usou no cálculo, tenha o escritório contestado ou não. Para
     benefícios JÁ contestados (status por instância, justificativas) use
-    listar_beneficios_fap. Para apenas contar, use resumo_beneficios_calculo_fap.
+    listar_beneficios_fap. Para apenas contar, use resumo_beneficios_calculo_fap;
+    para saber ONDE estão (por empresa/estabelecimento), ranking_calculo_fap;
+    para planilha, exportar_calculo_fap_excel.
+
+    "Os maiores não contestados que ainda contam" = situacao="conta",
+    contestado=false, ordem="total_pago".
 
     Cada item traz consulta_cpf_receita (quando há CPF e nascimento) é o link da
     situação cadastral do CPF na Receita Federal, já preenchido — a pessoa só
@@ -921,7 +939,7 @@ def listar_beneficios_calculo_fap(
         cpf: CPF do segurado — vem inteiro, com ou sem pontuação.
         nit: NIT do segurado.
         numero: Número do benefício (NB) ou da CAT.
-        tipo: B91, B92, B93, B94 ou CAT.
+        tipo: B91, B92, B93, B94 ou CAT — um ou vários ("B91,B94" ou lista).
         situacao: "conta" (entra no cálculo) ou "excluido" (o portal tirou do
             cálculo no recálculo — foi excluído, por exemplo, por contestação
             deferida).
@@ -930,12 +948,27 @@ def listar_beneficios_calculo_fap(
             vigência conta como não contestado aqui.
         limite: Máximo de registros por página (padrão 50).
         deslocamento: Pula os N primeiros (paginação); repasse o 'proximo_deslocamento'.
+        nome: Nome (ou parte) do segurado. Só acha quem já teve o nome revelado
+            (o FAP não informa nome).
+        cnpj_divergente: true = o portal atribuiu o item a um CNPJ diferente do
+            original (cnpj_atribuido ≠ cnpj_original) — possível erro de estabelecimento.
+        ausente_no_calculo_atual: true = o item saiu num recálculo mais novo do
+            estabelecimento (veio de um cálculo que não é mais o atual).
+        inicio_de / inicio_ate: Início do benefício (DIB) entre essas datas (AAAA-MM-DD).
+        cessacao_de / cessacao_ate: Cessação (DCB) entre essas datas (AAAA-MM-DD).
+        com_obito: true = só itens com data de óbito; false = só sem.
+        ordem: "padrao" (vigência, CNPJ, tipo, número), "total_pago",
+            "valor_mensal", "meses_contabilizacao", "data_inicio" ou
+            "data_cessacao" — estes do maior/mais recente para o menor.
     """
     claims = require_module("fap_panel")
     with app.app_context():
         return listar_beneficios_calculo_fap_handler(
             claims["law_firm_id"], vigencia, empresa, grupo, cnpj, cpf, nit, numero,
-            tipo, situacao, contestado, limite, deslocamento,
+            tipo, situacao, contestado, limite, deslocamento, nome=nome,
+            cnpj_divergente=cnpj_divergente, ausente_no_calculo_atual=ausente_no_calculo_atual,
+            inicio_de=inicio_de, inicio_ate=inicio_ate, cessacao_de=cessacao_de,
+            cessacao_ate=cessacao_ate, com_obito=com_obito, ordem=ordem,
         )
 
 
@@ -945,27 +978,163 @@ def resumo_beneficios_calculo_fap(
     empresa: str | None = None,
     grupo: str | None = None,
     cnpj: str | None = None,
-    tipo: str | None = None,
+    tipo: str | list[str] | None = None,
+    situacao: str | None = None,
+    contestado: bool | None = None,
+    cpf: str | None = None,
+    nit: str | None = None,
+    numero: str | None = None,
+    nome: str | None = None,
+    cnpj_divergente: bool | None = None,
+    ausente_no_calculo_atual: bool | None = None,
+    inicio_de: str | None = None,
+    inicio_ate: str | None = None,
+    cessacao_de: str | None = None,
+    cessacao_ate: str | None = None,
+    com_obito: bool | None = None,
 ) -> dict:
     """Contagens dos benefícios e CATs do cálculo FAP, em uma chamada.
 
-    Devolve total, total por tipo, quantos foram excluídos do cálculo, quantos
-    não foram contestados e o cruzamento tipo × situação (conta/excluido) ×
+    Devolve total, total por tipo, quantos contam e quantos foram excluídos do
+    cálculo, contestados e não contestados, os que ainda contam sem contestação
+    (conta_nao_contestados), o total pago (geral, não contestado, excluído e
+    "conta e não contestado") e o cruzamento tipo × situação (conta/excluido) ×
     contestado/nao_contestado. "Contestado" é por vigência (mesmo número e mesma
-    vigência na Central). Use para "quantos B91 excluídos da Vale em 2023 não
-    contestamos?" antes de listar.
+    vigência na Central). Aceita os mesmos filtros de listar_beneficios_calculo_fap,
+    então os totais batem com a lista e com a tela. Use para "quantos B91
+    excluídos da Vale em 2023 não contestamos?" antes de listar.
 
     Args:
         vigencia: Ano da vigência FAP (ex: 2023).
         empresa: Nome (ou parte) da empresa FAP.
         grupo: Grupo empresarial cadastrado.
         cnpj: CNPJ do estabelecimento ou raiz, com ou sem pontuação.
-        tipo: B91, B92, B93, B94 ou CAT.
+        tipo: B91, B92, B93, B94 ou CAT — um ou vários ("B91,B94" ou lista).
+        situacao: "conta" ou "excluido".
+        contestado: true/false (por vigência).
+        cpf, nit, numero, nome, cnpj_divergente, ausente_no_calculo_atual,
+        inicio_de, inicio_ate, cessacao_de, cessacao_ate, com_obito: como em
+            listar_beneficios_calculo_fap.
     """
     claims = require_module("fap_panel")
     with app.app_context():
         return resumo_beneficios_calculo_fap_handler(
-            claims["law_firm_id"], vigencia, empresa, grupo, cnpj, tipo)
+            claims["law_firm_id"], vigencia, empresa, grupo, cnpj, tipo,
+            situacao=situacao, contestado=contestado, cpf=cpf, nit=nit, numero=numero,
+            nome=nome, cnpj_divergente=cnpj_divergente,
+            ausente_no_calculo_atual=ausente_no_calculo_atual, inicio_de=inicio_de,
+            inicio_ate=inicio_ate, cessacao_de=cessacao_de, cessacao_ate=cessacao_ate,
+            com_obito=com_obito)
+
+
+@mcp.tool()
+def ranking_calculo_fap(
+    agrupar_por: str = "empresa",
+    ordenar_por: str | None = None,
+    vigencia: int | None = None,
+    empresa: str | None = None,
+    grupo: str | None = None,
+    cnpj: str | None = None,
+    tipo: str | list[str] | None = None,
+    situacao: str | None = None,
+    contestado: bool | None = None,
+    cnpj_divergente: bool | None = None,
+    limite: int = 20,
+    deslocamento: int = 0,
+) -> dict:
+    """Ranking do cálculo FAP: os contadores do resumo, um bloco por empresa,
+    estabelecimento, vigência ou grupo, do maior para o menor.
+
+    Responde ONDE está o volume: "quais empresas têm mais valor pago que ainda
+    conta e não contestamos em 2026?" (agrupar_por="empresa", vigencia=2026) ou
+    "dentro do Santander, quais estabelecimentos concentram os B91?"
+    (agrupar_por="estabelecimento", empresa="Santander", tipo="B91").
+    Cada bloco traz total, conta, excluidos, contestados, nao_contestados,
+    conta_nao_contestados, as somas de total pago (texto decimal) e o cruzamento
+    tipo × situação × contestado — os mesmos números de resumo_beneficios_calculo_fap.
+
+    Args:
+        agrupar_por: "empresa" (raiz do CNPJ), "estabelecimento" (CNPJ 14),
+            "vigencia" ou "grupo" (grupo empresarial; raiz sem grupo vai em "Sem grupo").
+        ordenar_por: total, conta, excluidos, contestados, nao_contestados,
+            conta_nao_contestados, total_pago, total_pago_nao_contestado,
+            total_pago_excluido ou total_pago_conta_nao_contestado (padrão — o
+            valor que ainda pesa no cálculo e ninguém contestou).
+        vigencia: Ano da vigência FAP (ex: 2023).
+        empresa: Nome (ou parte) da empresa FAP.
+        grupo: Grupo empresarial cadastrado (nomes em valores_de_filtro_fap).
+        cnpj: CNPJ do estabelecimento (14 dígitos) ou raiz de 8, com ou sem pontuação.
+        tipo: B91, B92, B93, B94 ou CAT — um ou vários ("B91,B94" ou lista).
+        situacao: "conta" (entra no cálculo) ou "excluido" (tirado no recálculo).
+        contestado: true/false, por vigência (mesmo número e vigência na Central).
+        cnpj_divergente: true = só itens atribuídos a CNPJ diferente do original.
+        limite: Blocos por página (padrão 20).
+        deslocamento: Pula os N primeiros blocos; repasse o 'proximo_deslocamento'.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return ranking_calculo_fap_handler(
+            claims["law_firm_id"], agrupar_por, ordenar_por, vigencia, empresa, grupo, cnpj,
+            tipo, situacao, contestado, cnpj_divergente, limite, deslocamento)
+
+
+@mcp.tool()
+def cruzamento_vigencias_calculo_fap(
+    vigencia: int | None = None,
+    empresa: str | None = None,
+    grupo: str | None = None,
+    cnpj: str | None = None,
+    tipo: str | list[str] | None = None,
+    criterio: str | None = None,
+    ordem: str | None = None,
+    limite: int = 50,
+    deslocamento: int = 0,
+) -> dict:
+    """Benefícios e CATs que AINDA CONTAM e NÃO foram contestados numa vigência,
+    mas que, em OUTRA vigência, foram excluídos do cálculo (ou contestados).
+
+    O período-base de vigências vizinhas se sobrepõe, então o mesmo benefício
+    entra em mais de um cálculo. Excluído numa vigência quer dizer que a
+    contestação ganhou ali — é o candidato mais forte a contestar na outra.
+    Cada item traz 'outras_vigencias' (ano, CNPJ, situação e se foi contestado
+    em cada uma); a resposta traz o total pago e a contagem por tipo do recorte
+    inteiro. É um indício para o advogado avaliar, não uma conclusão: a decisão
+    de uma vigência não vale automaticamente para a outra.
+
+    Args:
+        vigencia: Vigência onde o item ainda conta sem contestação (ex: 2026).
+        empresa: Nome (ou parte) da empresa FAP.
+        grupo: Grupo empresarial cadastrado.
+        cnpj: CNPJ do estabelecimento (14) ou raiz (8).
+        tipo: B91, B92, B93, B94 ou CAT — um ou vários.
+        criterio: "excluido" (padrão — excluído do cálculo em outra vigência),
+            "contestado" (contestado na Central em outra vigência) ou "qualquer".
+        ordem: Como em listar_beneficios_calculo_fap (padrão "total_pago").
+        limite: Máximo de registros por página (padrão 50).
+        deslocamento: Pula os N primeiros (paginação); repasse o 'proximo_deslocamento'.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return cruzamento_vigencias_calculo_fap_handler(
+            claims["law_firm_id"], vigencia, empresa, grupo, cnpj, tipo, criterio, ordem,
+            limite, deslocamento)
+
+
+@mcp.tool()
+def detalhar_estabelecimento_calculo_fap(cnpj: str, vigencia: int | None = None) -> dict:
+    """Um estabelecimento no cálculo FAP: cálculo atual e original, se foi
+    recalculado, o protocolo (da contestação ou "Processo Judicial nº ..."), o
+    histórico de recálculos, os contadores do resumo e os itens excluídos e os
+    que saíram do cálculo atual (até 50 de cada, maiores primeiro).
+
+    Args:
+        cnpj: CNPJ do estabelecimento (14 dígitos), com ou sem pontuação.
+        vigencia: Ano da vigência. Sem ele, a mais recente; a resposta lista as
+            vigências disponíveis.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return detalhar_estabelecimento_calculo_fap_handler(claims["law_firm_id"], cnpj, vigencia)
 
 
 @mcp.tool()
@@ -1129,6 +1298,52 @@ def exportar_beneficios_excel(
             cnpj=cnpj, status=status, request_type=tipo_pedido, benefit_type=tipo_beneficio,
             fap_contestation_topic=topico_contestacao, segurado=segurado, nit=nit, cpf=cpf,
             numero_beneficio=numero_beneficio, ano_vigencia=ano_vigencia, empresa=empresa,
+        )
+
+
+@mcp.tool()
+def exportar_calculo_fap_excel(
+    vigencia: int | None = None,
+    empresa: str | None = None,
+    grupo: str | None = None,
+    cnpj: str | None = None,
+    cpf: str | None = None,
+    nit: str | None = None,
+    numero: str | None = None,
+    tipo: str | list[str] | None = None,
+    situacao: str | None = None,
+    contestado: bool | None = None,
+    nome: str | None = None,
+    cnpj_divergente: bool | None = None,
+    ausente_no_calculo_atual: bool | None = None,
+    inicio_de: str | None = None,
+    inicio_ate: str | None = None,
+    cessacao_de: str | None = None,
+    cessacao_ate: str | None = None,
+    com_obito: bool | None = None,
+    ordem: str | None = None,
+) -> dict:
+    """Exporta os benefícios e CATs do CÁLCULO FAP para Excel (XLSX) e retorna o link.
+
+    É a mesma planilha do botão "Exportar Excel" da tela Benefícios do cálculo
+    FAP. Use quando o usuário pedir muitos registros ou uma planilha — em vez de
+    listar tudo no chat. Aceita os mesmos filtros de listar_beneficios_calculo_fap,
+    até 50.000 linhas (acima disso, filtre por vigência ou empresa). O link expira
+    em 1 hora.
+
+    Returns:
+        Dicionário com 'arquivo', 'total_linhas', 'url_download' e 'validade_minutos'.
+        Apresente o url_download ao usuário como link clicável.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return export_calculo_excel_handler(
+            claims["law_firm_id"], MCP_PUBLIC_URL,
+            vigencia=vigencia, empresa=empresa, grupo=grupo, cnpj=cnpj, cpf=cpf, nit=nit,
+            numero=numero, tipo=tipo, situacao=situacao, contestado=contestado, nome=nome,
+            cnpj_divergente=cnpj_divergente, ausente_no_calculo_atual=ausente_no_calculo_atual,
+            inicio_de=inicio_de, inicio_ate=inicio_ate, cessacao_de=cessacao_de,
+            cessacao_ate=cessacao_ate, com_obito=com_obito, ordem=ordem,
         )
 
 
@@ -2536,6 +2751,34 @@ def analise_risco_empresa(nome_empresa: str) -> str:
         "próximo ciclo).\n"
         "Baseie tudo nos números reais retornados; deixe claro quando a amostra for pequena "
         "demais para conclusão firme."
+    )
+
+
+@mcp.prompt(name="oportunidades_calculo_fap", description="O que ainda dá para contestar no cálculo FAP de uma empresa: onde está o valor, os maiores itens e o que já ganhamos em outra vigência")
+def oportunidades_calculo_fap(nome_empresa: str, vigencia: str = "") -> str:
+    vig = f", vigencia={vigencia}" if vigencia else ""
+    recorte = f"na vigência {vigencia}" if vigencia else "em todas as vigências sincronizadas"
+    return (
+        f"Levante as oportunidades de contestação no cálculo FAP da empresa \"{nome_empresa}\" "
+        f"{recorte}, em português:\n"
+        f"1. Chame resumo_beneficios_calculo_fap com empresa=\"{nome_empresa}\"{vig} para o "
+        "panorama: total, excluídos, contestados e conta_nao_contestados com o "
+        "total_pago_conta_nao_contestado (o que ainda pesa no cálculo e ninguém contestou).\n"
+        f"2. Chame ranking_calculo_fap com agrupar_por=\"estabelecimento\", empresa=\"{nome_empresa}\"{vig} "
+        "para ver em quais estabelecimentos esse valor se concentra.\n"
+        f"3. Chame listar_beneficios_calculo_fap com empresa=\"{nome_empresa}\"{vig}, situacao=\"conta\", "
+        "contestado=false, ordem=\"total_pago\" e limite=20 para os maiores itens sem contestação.\n"
+        f"4. Chame cruzamento_vigencias_calculo_fap com empresa=\"{nome_empresa}\"{vig} para os itens "
+        "que foram excluídos do cálculo em outra vigência e aqui seguem contando sem contestação.\n"
+        f"5. Chame listar_beneficios_calculo_fap com empresa=\"{nome_empresa}\"{vig}, situacao=\"conta\" "
+        "e cnpj_divergente=true para os atribuídos a um CNPJ diferente do original.\n"
+        "6. Entregue: **Panorama** (números-chave), **Onde está o valor** (tabela dos "
+        "estabelecimentos), **Maiores itens sem contestação**, **Já ganhamos em outra vigência**, "
+        "**CNPJ atribuído diferente** e **Próximos passos**. Ofereça exportar_calculo_fap_excel "
+        "com os mesmos filtros para a lista completa.\n"
+        "Use só os números retornados. Os itens dos passos 4 e 5 são indícios para o advogado "
+        "avaliar, não conclusões: diga isso no texto. Se a empresa não aparecer, confira o nome "
+        "com listar_empresas_fap antes de concluir que não há dados."
     )
 
 

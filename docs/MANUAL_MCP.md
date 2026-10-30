@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **72 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **76 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -93,8 +93,11 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `listar_beneficios_fap` | Benefícios contestados | Benefícios com filtros ricos (**empresa por nome**, **grupo empresarial**, **protocolo da contestação**, **resultado na 1ª e na 2ª instância**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) e o status em cada instância | FAP Web |
 | `detalhar_beneficio` | Detalhe de um benefício | Todos os campos de um benefício, incluindo justificativas, pareceres e decisões de julgamento | Sistema |
 | `conferir_dados_beneficios` | Conferir dados de benefícios | Confere **vários benefícios de uma vez** (os de uma petição, planilha ou e-mail) contra a Central e o cálculo FAP: CPF, NIT, espécie, DIB, DCB, nascimento, CNPJ, vigência, nome e CAT, com qualquer pontuação; aponta **divergências** e **alertas** — já excluído do cálculo, fora do cálculo, não contestado, deferido, indeferido nas duas instâncias. Sem IA; nada fica salvo | Sistema |
-| `listar_beneficios_calculo_fap` | Benefícios do cálculo FAP | Benefícios (B91–B94) e CATs do **cálculo do FAP**, contestados ou não, com CPF e nascimento inteiros; filtros por vigência, empresa, grupo, CNPJ, CPF, NIT, número, tipo, situação (**conta** ou **excluído** do cálculo) e **contestado** (por vigência) | FAP Web |
-| `resumo_beneficios_calculo_fap` | Resumo do cálculo FAP | Contagens do cálculo em uma chamada: total, por tipo, excluídos, não contestados e o cruzamento tipo × situação × contestado | FAP Web |
+| `listar_beneficios_calculo_fap` | Benefícios do cálculo FAP | Benefícios (B91–B94) e CATs do **cálculo do FAP**, contestados ou não, com CPF e nascimento inteiros; filtros por vigência, empresa, grupo, CNPJ, CPF, NIT, número, **um ou vários tipos**, situação (**conta** ou **excluído** do cálculo), **contestado** (por vigência), **nome do segurado** (já revelado), **CNPJ atribuído diferente do original**, **ausente no cálculo atual**, datas de início e cessação e óbito; **ordena** por total pago, valor mensal, meses contabilizados ou datas | FAP Web |
+| `resumo_beneficios_calculo_fap` | Resumo do cálculo FAP | Contagens do cálculo em uma chamada, com **os mesmos filtros da lista**: total, por tipo, que contam, excluídos, contestados, **que ainda contam sem contestação**, as somas de total pago e o cruzamento tipo × situação × contestado | FAP Web |
+| `ranking_calculo_fap` | Ranking do cálculo FAP | **Onde está o volume**: os contadores do resumo por **empresa**, **estabelecimento**, **vigência** ou **grupo**, do maior para o menor — por padrão, pelo valor pago que ainda conta no cálculo e ninguém contestou | FAP Web |
+| `cruzamento_vigencias_calculo_fap` | Cruzamento entre vigências | Itens que **ainda contam sem contestação** numa vigência e que, em **outra vigência**, foram **excluídos do cálculo** (contestação ganha) ou contestados — com a situação do mesmo número em cada vigência | FAP Web |
+| `detalhar_estabelecimento_calculo_fap` | Estabelecimento no cálculo FAP | Um CNPJ numa vigência: cálculo atual e original, **protocolo** (da contestação ou do processo judicial), histórico de recálculos, contadores e os itens **excluídos** e os que **saíram do cálculo atual** | FAP Web |
 | `listar_procuracoes_fap` | Procurações eletrônicas | Procurações eletrônicas com situação e vigência | FAP Web |
 | `valores_de_filtro_fap` | Filtros do FAP | Códigos e valores válidos para filtros (**grupos empresariais**, situações, instâncias, tópicos, motivos) — a IA consulta antes de filtrar | Sistema |
 
@@ -131,6 +134,7 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 |---|---|---|---|
 | `exportar_beneficios_excel` | Benefícios em Excel | Planilha **idêntica à do sistema** (33 colunas) com os benefícios filtrados, até 50 mil linhas | Relatório |
 | `exportar_contestacoes_excel` | Contestações em Excel | Planilha oficial das contestações, com links dos PDFs | Relatório |
+| `exportar_calculo_fap_excel` | Cálculo FAP em Excel | A mesma planilha do "Exportar Excel" da tela **Benefícios do cálculo FAP**, com os filtros e a ordem da lista do cálculo, até 50 mil linhas | Relatório |
 
 > [!ALERTA] O link de download expira em **1 hora**. Peça a exportação de novo se o link vencer.
 
@@ -299,6 +303,7 @@ digite `/` e procure por `intellexia`; no Claude Desktop / claude.ai, eles ficam
 | `resumir_decisao` | Resume uma decisão/parecer FAP: resultado, fundamentação, efeito no FAP e próximos passos |
 | `email_cliente` | Redige um e-mail ao cliente explicando o resultado do FAP em linguagem simples |
 | `analise_risco_empresa` | Onde concentrar esforço: tópicos com mais chance de deferimento para uma empresa |
+| `oportunidades_calculo_fap` | O que ainda dá para contestar no cálculo FAP de uma empresa: onde está o valor, os maiores itens sem contestação, o que já foi excluído em outra vigência e os atribuídos a CNPJ diferente |
 | `corrigir_peticao` | Pega a revisão já feita e devolve, achado a achado, o trecho reescrito pronto para colar |
 | `pronto_para_protocolo` | Veredito objetivo: a petição pode ser protocolada? (críticos em aberto + documentos faltantes) |
 | `devolutiva_ao_advogado` | Transforma os achados em uma devolutiva construtiva para quem redigiu |
