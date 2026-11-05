@@ -1128,8 +1128,17 @@
                                 <strong class="text-danger">Principais Riscos Jurídicos</strong>
                             </div>
                             <ul class="mb-0 ps-4">
+                                {% set risk_refs = result_data.executive_summary.main_legal_risks_findings or [] %}
                                 {% for risk in result_data.executive_summary.main_legal_risks %}
-                                <li class="small">{{ risk }}</li>
+                                <li class="small">{{ risk }}
+                                    {# RPI-38: de que achado vem o risco (revisões antigas não têm). #}
+                                    {% if risk_refs|length > loop.index0 and risk_refs[loop.index0] %}
+                                    <span class="text-body-secondary">—
+                                        {{ 'achados' if risk_refs[loop.index0]|length > 1 else 'achado' }}
+                                        {% for n in risk_refs[loop.index0] %}<a href="#ponto-{{ n }}" class="text-danger">{{ n }}</a>{{ ', ' if not loop.last }}{% endfor %}
+                                    </span>
+                                    {% endif %}
+                                </li>
                                 {% endfor %}
                             </ul>
                         </div>

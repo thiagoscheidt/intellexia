@@ -619,6 +619,15 @@ def _achado_para_exibir(numero: int, achado: dict, ignorados: set[str]) -> dict:
     return item
 
 
+def _riscos_para_exibir(resumo: dict) -> list:
+    """Cada risco com os números dos achados que o sustentam (RPI-38)."""
+    textos = resumo.get('main_legal_risks') or []
+    refs = resumo.get('main_legal_risks_findings') or []
+    if not refs:
+        return textos
+    return [{'risco': t, 'achados': refs[i] if i < len(refs) else []} for i, t in enumerate(textos)]
+
+
 def _exibicao(payload: dict, ignorados: set[str]) -> dict:
     resumo = payload.get('executive_summary') or {}
     exibicao = {
@@ -629,7 +638,7 @@ def _exibicao(payload: dict, ignorados: set[str]) -> dict:
             'criticos': resumo.get('critical_findings'),
             'moderados': resumo.get('moderate_findings'),
             'formais': resumo.get('formal_findings'),
-            'riscos': resumo.get('main_legal_risks') or [],
+            'riscos': _riscos_para_exibir(resumo),
             'prioridade_de_correcao': resumo.get('correction_priority'),
         },
         'descartados_pelo_saneador': [
@@ -772,6 +781,15 @@ def conferir(law_firm_id: int, user_id: int, resultado_json, modo: str = MODO_RE
         resposta['dados_beneficios'] = {k: dados_beneficios[k] for k in _TOTAIS_DOS_DADOS}
     if aviso_beneficios:
         resposta['aviso_beneficios'] = aviso_beneficios
+    resumo_bruto = dados.get('executive_summary') if isinstance(dados, dict) else None
+    riscos_brutos = resumo_bruto.get('main_legal_risks') if isinstance(resumo_bruto, dict) else None
+    fora = (len(riscos_brutos) if isinstance(riscos_brutos, list) else 0) - len(exibicao['resumo']['riscos'])
+    if fora > 0:
+        # Informativo: não pede reenvio (o resumo não é cobrado, ver CHAVES_DO_CONTRATO).
+        resposta['riscos_fora_do_resumo'] = (
+            f'{fora} risco(s) do resumo executivo ficaram de fora: cada risco precisa apontar em "findings" '
+            'os números dos achados que o sustentam, e risco apoiado só em achado que conclui estar correto '
+            'não entra. Não cite esses riscos ao usuário.')
     if erros:
         resposta['avisos'] = [str(e)[:300] for e in erros]
         resposta['formato_esperado'] = formato_esperado(modo)

@@ -119,6 +119,33 @@ def _achado_se_declara_sem_problema(achado: dict) -> str | None:
     return 'o próprio achado declara que a razão social está consistente'
 
 
+# ── RPI-38: achado que conclui estar certo não sustenta risco ───────────
+# Não descarta o achado (a conclusão pode ajudar quem revisa); só impede que
+# ele apareça como base de um "risco jurídico" no resumo executivo. Caso real:
+# revisão 175, o único achado sobre índices concluía que o par estava correto
+# e o resumo listava "possível erro de índices".
+
+_CONCLUSAO_CORRETO = re.compile(
+    r'(?:\b(?:est[aá]|est[aã]o|permanece|permanecem|mant[eé]m-se)\s+corret[oa]s?\b'
+    r'|\bn[aã]o\s+h[aá]\s+(?:erro|diverg[eê]ncia|inconsist[eê]ncia)'
+    r'|\bsem\s+(?:erro|diverg[eê]ncia|inconsist[eê]ncia)s?\b'
+    r'|\bnenhuma\s+corre[cç][aã]o\b|\bn[aã]o\s+(?:requer|exige|precisa\s+de)\s+corre[cç][aã]o'
+    r'|\bnada\s+a\s+corrigir\b)')
+# "Verificar se o valor está correto" é pergunta, não conclusão.
+_DUVIDA = re.compile(r'\b(?:se|verificar|verifique|confirmar|confirme|conferir|confira|checar|cheque|avaliar|avalie|revisar|revise)\b')
+
+
+def achado_conclui_correto(achado: dict) -> bool:
+    """O próprio achado conclui que o ponto está certo ("o cálculo está correto")."""
+    if not isinstance(achado, dict):
+        return False
+    texto = ' '.join(normalizar_campo(achado.get(c)) for c in ('description', 'correction'))
+    for frase in re.split(r'[.;!?]', texto):
+        m = _CONCLUSAO_CORRETO.search(frase)
+        if m and not _DUVIDA.search(frase[:m.start()]):
+            return True
+    return False
+
 # ── R3 ──────────────────────────────────────────────────────────────────
 # RPI-07: transcrição de sentença, doutrina e texto de lei não são corrigidos
 # na peça em elaboração — são reproduzidos como estão. O prompt também orienta

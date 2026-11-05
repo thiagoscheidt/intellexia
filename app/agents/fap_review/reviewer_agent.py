@@ -27,7 +27,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from app.agents.core.file_agent import FileAgent
-from app.agents.fap_review.finding_sanitizer import sanear
+from app.agents.fap_review.finding_sanitizer import achado_conclui_correto, fingerprint_achado, sanear
 from app.models import AgentTokenUsage
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
 from app.services.token_usage_service import TokenUsageService
@@ -87,6 +87,9 @@ class ExecutiveSummary(BaseModel):
     moderate_findings: int = Field(..., description="Quantidade de achados moderados")
     formal_findings: int = Field(..., description="Quantidade de achados formais")
     main_legal_risks: list[str] = Field(default_factory=list, description="Principais riscos jurídicos")
+    # RPI-38: para cada risco, os números (1, 2, ...) dos achados desta revisão
+    # que o sustentam, na numeração final da lista. Risco sem achado não fica.
+    main_legal_risks_findings: list[list[int]] = Field(default_factory=list)
     correction_priority: str = Field(..., description="Prioridade de correção")
 
 
@@ -184,7 +187,7 @@ class FapPetitionReviewerAgent:
   "missing_documents": [
     {"document_type": "tipo de documento obrigatório ausente", "thesis": "tese relacionada ou null", "manual_reference": "referência do manual ou null"}
   ],
-  "executive_summary": {"total_findings": 0, "critical_findings": 0, "moderate_findings": 0, "formal_findings": 0, "main_legal_risks": ["risco jurídico"], "correction_priority": "prioridade de correção"}
+  "executive_summary": {"total_findings": 0, "critical_findings": 0, "moderate_findings": 0, "formal_findings": 0, "main_legal_risks": [{"risk": "risco jurídico", "findings": [1, 3]}], "correction_priority": "prioridade de correção"}
 }"""
 
     _OUTPUT_SCHEMA_COMPARATIVE = """{
@@ -194,7 +197,7 @@ class FapPetitionReviewerAgent:
   "findings": [
     {"category": "categoria do achado (ex.: CAT-1 a CAT-6, CRITICAL, MODERATE, FORMAL)", "severity": "CRÍTICO | MODERADO | FORMAL", "description": "descrição do achado", "location": "localização na petição ou null", "location_excerpt": "trecho LITERAL curto (10 a 30 palavras) COPIADO EXATAMENTE do texto do documento onde o problema está — sem parafrasear; null se não houver trecho específico", "correction": "sugestão de correção ou null", "manual_reference": "seção do manual relacionada ou null", "is_new_pattern": false}
   ],
-  "executive_summary": {"total_findings": 0, "critical_findings": 0, "moderate_findings": 0, "formal_findings": 0, "main_legal_risks": ["risco jurídico"], "correction_priority": "prioridade de correção"}
+  "executive_summary": {"total_findings": 0, "critical_findings": 0, "moderate_findings": 0, "formal_findings": 0, "main_legal_risks": [{"risk": "risco jurídico", "findings": [1, 3]}], "correction_priority": "prioridade de correção"}
 }"""
 
     def __init__(self, 
@@ -343,6 +346,12 @@ Em TODA revisão, independentemente de outras regras e antes de qualquer outra a
 5. Se NÃO houver divergência, NÃO crie achado sobre razão social. A consistência do nome deve permanecer silenciosa e não pode aparecer em findings, resumo executivo ou alertas.
 Exemplos de erros típicos: "WHIRLPOOL" grafado como "WHIRPOOL"; "AMBEV S.A." como "AMBEV SA"; nome com letra acentuada vs. sem acento.
 Esta verificação NÃO PODE ser omitida em nenhuma hipótese.
+
+RESUMO EXECUTIVO — RISCOS JURÍDICOS:
+Cada item de main_legal_risks indica em "findings" os números dos achados (a posição na lista
+"findings" desta resposta, começando em 1) que sustentam aquele risco. Não liste risco que não
+corresponda a pelo menos um achado da lista, nem risco apoiado só em achado em que você concluiu que
+o ponto está correto. O resumo é lido sozinho: um risco ali leva a pessoa a corrigir a petição.
 
 CITAÇÃO DIRETA — NÃO AUDITAR:
 Trechos entre aspas duplas são transcrição: sentença, acórdão, doutrina ou texto de lei
@@ -820,9 +829,10 @@ INSTRUÇÕES DO PROJETO:
         if comparativa:
             comparative_changes = cls._parse_comparative_changes(
                 result_dict.get('comparative_changes', []), parse_errors)
+            posicoes: list = []
             findings = cls._parse_findings(
                 result_dict.get('findings', []), parse_errors,
-                documento_texto=documento_texto, descartes=sanitizer_discards)
+                documento_texto=documento_texto, descartes=sanitizer_discards, posicoes=posicoes)
             cls._ensure_output_parsed(
                 result_dict,
                 parsed_items=len(comparative_changes) + len(findings),
@@ -840,14 +850,15 @@ INSTRUÇÕES DO PROJETO:
                 new_patterns=[],
                 sanitizer_discards=sanitizer_discards,
                 executive_summary=cls._build_executive_summary(
-                    result_dict.get('executive_summary', {}), findings),
+                    result_dict.get('executive_summary', {}), findings, posicoes),
             )
             return result, parse_errors
 
         theses = cls._parse_theses(result_dict.get('theses', []), parse_errors)
+        posicoes: list = []
         findings = cls._parse_findings(
             result_dict.get('findings', []), parse_errors,
-            documento_texto=documento_texto, descartes=sanitizer_discards)
+            documento_texto=documento_texto, descartes=sanitizer_discards, posicoes=posicoes)
         missing_documents = cls._parse_missing_documents(
             result_dict.get('missing_documents', []), parse_errors)
         cls._ensure_output_parsed(
@@ -867,7 +878,7 @@ INSTRUÇÕES DO PROJETO:
             missing_documents=missing_documents,
             sanitizer_discards=sanitizer_discards,
             executive_summary=cls._build_executive_summary(
-                result_dict.get('executive_summary', {}), findings),
+                result_dict.get('executive_summary', {}), findings, posicoes),
             new_patterns=[],
         )
         return result, parse_errors
@@ -904,14 +915,31 @@ INSTRUÇÕES DO PROJETO:
     @classmethod
     def _parse_findings(cls, data: list, parse_errors: list[str] | None = None,
                         documento_texto: str = '',
-                        descartes: list[dict] | None = None) -> list[FindingItem]:
+                        descartes: list[dict] | None = None,
+                        posicoes: list | None = None) -> list[FindingItem]:
         """Parse lista de achados, já saneada.
 
         O saneamento vive em `finding_sanitizer` (função pura) e não aqui: assim
         os casos do briefing viram teste sem instanciar o agente nem chamar o
         modelo. O que foi descartado sobe em `descartes` para aparecer no debug.
         """
-        mantidos, removidos = sanear(data if isinstance(data, list) else [], documento_texto)
+        # A posição original (1, 2, ...) acompanha o achado pelo saneamento: é por
+        # ela que os riscos do resumo apontam os achados (RPI-38).
+        brutos = [{**a, '_posicao': n} if isinstance(a, dict) else a
+                  for n, a in enumerate(data if isinstance(data, list) else [], start=1)]
+        mantidos, removidos = sanear(brutos, documento_texto)
+        # Repetição (R2) juntada ao ponto que ficou: risco que apontava a cópia
+        # continua sustentado pelo original.
+        posicao_mantida = {fingerprint_achado(m): m.get('_posicao') for m in mantidos if isinstance(m, dict)}
+        apelidos: dict = {}
+        for removido in removidos:
+            achado = removido.get('achado')
+            if not isinstance(achado, dict):
+                continue
+            original = posicao_mantida.get(fingerprint_achado(achado)) if removido.get('regra') == 'R2' else None
+            if original is not None and achado.get('_posicao') is not None:
+                apelidos.setdefault(original, set()).add(achado['_posicao'])
+            achado.pop('_posicao', None)
         if descartes is not None:
             descartes.extend(removidos)
         for removido in removidos:
@@ -920,7 +948,16 @@ INSTRUÇÕES DO PROJETO:
             correcao = mantido.get('sanitizer_fix') if isinstance(mantido, dict) else None
             if correcao:
                 print(f"[FapReviewer] achado corrigido ({correcao['regra']}): {correcao['motivo']}")
-        return cls._parse_model_items(mantidos, FindingItem, "finding", parse_errors)
+        itens = []
+        for mantido in mantidos:
+            posicao = mantido.pop('_posicao', None) if isinstance(mantido, dict) else None
+            lido = cls._parse_model_items([mantido], FindingItem, "finding", parse_errors)
+            if lido:
+                itens.append(lido[0])
+                if posicoes is not None:
+                    # Conjunto: a posição do achado mais as das repetições juntadas a ele.
+                    posicoes.append(({posicao} | apelidos.get(posicao, set())) if posicao is not None else set())
+        return itens
 
 
     @classmethod
@@ -985,6 +1022,9 @@ INSTRUÇÕES DO PROJETO:
             data = {}
         data = {'total_findings': 0, 'critical_findings': 0, 'moderate_findings': 0,
                 'formal_findings': 0, 'correction_priority': 'N/A', **data}
+        # Os riscos vêm como objetos ({"risk", "findings"}) e são montados à
+        # parte, em `_riscos_com_achados`: aqui só atrapalhariam a validação.
+        data = {k: v for k, v in data.items() if k not in ('main_legal_risks', 'main_legal_risks_findings')}
         try:
             return ExecutiveSummary(**data)
         except Exception:
@@ -996,8 +1036,45 @@ INSTRUÇÕES DO PROJETO:
                 correction_priority="N/A"
             )
 
+    @staticmethod
+    def _riscos_com_achados(brutos, findings: list[FindingItem],
+                            posicoes: list | None) -> tuple[list[str], list[list[int]]]:
+        """Riscos que apontam achados desta revisão, com a numeração final (RPI-38).
+
+        O modelo numera pela lista que ele escreveu; o saneador pode tirar
+        achados dela, então a posição original é convertida para a da lista
+        mantida. Fica de fora: risco em texto solto (não diz de que achado
+        vem), risco cujos achados foram descartados e risco apoiado só em
+        achado que conclui que o ponto está correto.
+        """
+        if posicoes is None or len(posicoes) != len(findings):
+            posicoes = [{n} for n in range(1, len(findings) + 1)]
+        numero_final = {orig: n for n, origens in enumerate(posicoes, start=1) for orig in origens}
+        textos: list[str] = []
+        refs: list[list[int]] = []
+        for bruto in brutos if isinstance(brutos, list) else []:
+            if not isinstance(bruto, dict):
+                continue
+            texto = ' '.join(str(bruto.get('risk') or bruto.get('risco') or bruto.get('text') or '').split())
+            nums = bruto.get('findings', bruto.get('achados'))
+            nums = nums if isinstance(nums, list) else [nums]
+            suporte = set()
+            for n in nums:
+                try:
+                    n = int(str(n).strip())
+                except (TypeError, ValueError):
+                    continue
+                final = numero_final.get(n)
+                if final and not achado_conclui_correto(findings[final - 1].model_dump()):
+                    suporte.add(final)
+            if texto and suporte:
+                textos.append(texto)
+                refs.append(sorted(suporte))
+        return textos, refs
+
     @classmethod
-    def _build_executive_summary(cls, data: dict, findings: list[FindingItem]) -> ExecutiveSummary:
+    def _build_executive_summary(cls, data: dict, findings: list[FindingItem],
+                                 posicoes: list | None = None) -> ExecutiveSummary:
         """Resumo executivo com totais recontados dos achados efetivamente mantidos.
 
         O modelo conta os próprios achados, mas o saneamento (ex.: falso positivo
@@ -1010,8 +1087,9 @@ INSTRUÇÕES DO PROJETO:
         Documento em falta não sustenta risco: ele já tem seção própria.
         """
         summary = cls._parse_executive_summary(data)
-        if not findings:
-            summary.main_legal_risks = []
+        brutos = data.get('main_legal_risks') if isinstance(data, dict) else None
+        summary.main_legal_risks, summary.main_legal_risks_findings = cls._riscos_com_achados(
+            brutos, findings, posicoes)
         severities = [str(f.severity or "").strip().upper() for f in findings]
         summary.total_findings = len(findings)
         summary.critical_findings = sum(1 for s in severities if s == "CRÍTICO")

@@ -158,15 +158,50 @@ def test_executive_summary_counts_recomputed():
     ])
     # Modelo contou 1 crítico que o filtro de falso-positivo descartou
     model_summary = {"total_findings": 4, "critical_findings": 1, "moderate_findings": 2,
-                     "formal_findings": 1, "main_legal_risks": ["risco X"],
+                     "formal_findings": 1, "main_legal_risks": [{"risk": "risco X", "findings": [2]}],
                      "correction_priority": "Alta"}
     summary = agent._build_executive_summary(model_summary, findings)
     check("total recontado", summary.total_findings == 3, f"(obteve {summary.total_findings})")
     check("críticos recontados", summary.critical_findings == 0)
     check("moderados recontados", summary.moderate_findings == 2)
     check("formais recontados", summary.formal_findings == 1)
-    check("riscos preservados", summary.main_legal_risks == ["risco X"])
+    check("riscos preservados, com o achado que os sustenta",
+          summary.main_legal_risks == ["risco X"] and summary.main_legal_risks_findings == [[2]])
     check("prioridade preservada", summary.correction_priority == "Alta")
+
+
+
+def test_riscos_so_com_achado():
+    print("[6b] RPI-38: risco do resumo só com achado correspondente")
+    f = lambda d, sev="MODERADO": {"category": "CAT-1", "severity": sev, "description": d,
+                                   "location": "Tabela", "correction": "Ajustar", "manual_reference": "3.3"}
+    dados = {
+        "theses": [], "missing_documents": [],
+        "findings": [f("Contagem do par Joelson: 37 dias, o correto é 38.", "CRÍTICO"),
+                     f("O índice do par Leonardo da Costa está correto."),
+                     f("Contagem do par Joelson: 37 dias, o correto é 38.", "CRÍTICO"),
+                     f("CNPJ da tabela diverge da qualificação.")],
+        "executive_summary": {"main_legal_risks": [
+            {"risk": "Erro de contagem no par Joelson", "findings": [3]},
+            {"risk": "Possível erro de índices no par Joelson", "findings": [2]},
+            {"risk": "Inconsistência na grafia do CNPS", "findings": []},
+            "Risco em texto solto, sem achado",
+            {"risk": "CNPJ errado na tabela", "findings": ["4", 99]},
+        ], "correction_priority": "Alta"},
+    }
+    r, _ = FapPetitionReviewerAgent.montar_resultado(dados, comparativa=False, revisao_focada=False)
+    es = r.executive_summary
+    check("achado repetido sai, os outros ficam", len(r.findings) == 3)
+    check("ficam só os riscos com achado", es.main_legal_risks == ["Erro de contagem no par Joelson",
+                                                                   "CNPJ errado na tabela"], str(es.main_legal_risks))
+    check("número do achado convertido para a lista final (repetição -> original; 4 -> 3)",
+          es.main_legal_risks_findings == [[1], [3]], str(es.main_legal_risks_findings))
+    check("risco apoiado só em achado que conclui estar correto sai",
+          "Possível erro de índices no par Joelson" not in es.main_legal_risks)
+    check("prioridade preservada", es.correction_priority == "Alta")
+    check("sem achados, sem riscos", FapPetitionReviewerAgent.montar_resultado(
+        {**dados, "findings": [f("O cálculo está correto.")]}, comparativa=False, revisao_focada=False
+    )[0].executive_summary.main_legal_risks == [])
 
 
 def test_no_json_raises():
@@ -187,6 +222,7 @@ if __name__ == '__main__':
     test_all_items_rejected_raises()
     test_valid_items_do_not_raise()
     test_executive_summary_counts_recomputed()
+    test_riscos_so_com_achado()
     test_no_json_raises()
     print(f"\nResultado: {PASSED} ok, {FAILED} falhas")
     sys.exit(1 if FAILED else 0)

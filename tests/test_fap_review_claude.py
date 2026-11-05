@@ -310,11 +310,19 @@ def test_conferencia(firm_id, user_id, petition):
           and r['resumo']['prioridade_de_correcao'] == 'Corrigir primeiro a tabela de benefícios.',
           str(r)[:300])
     r = claude_svc.conferir(firm_id, user_id,
-                            _resultado(executive_summary={'main_legal_risks': ['Perda do benefício B91'],
+                            _resultado(executive_summary={'main_legal_risks': [
+                                {'risk': 'Perda do benefício B91', 'findings': [1]}],
                                                           'correction_priority': 'Tabela'}), 'revisao')
     check('resumo sem as contagens: riscos e prioridade não se perdem',
-          r.get('resumo', {}).get('riscos') == ['Perda do benefício B91']
+          r.get('resumo', {}).get('riscos') == [{'risco': 'Perda do benefício B91', 'achados': [1]}]
           and r['resumo']['prioridade_de_correcao'] == 'Tabela', str(r)[:300])
+    r = claude_svc.conferir(firm_id, user_id,
+                            _resultado(executive_summary={'main_legal_risks': [
+                                'Risco sem achado', {'risk': 'Falta o NTEP', 'findings': [1]}],
+                                'correction_priority': 'Alta'}), 'revisao')
+    check('RPI-38: risco sem achado sai e a conferência avisa, sem pedir reenvio',
+          r.get('resumo', {}).get('riscos') == [{'risco': 'Falta o NTEP', 'achados': [1]}]
+          and 'riscos_fora_do_resumo' in r and not r.get('avisos'), str(r)[:300])
     r = claude_svc.conferir(firm_id, user_id, _resultado(findings='nada'), 'revisao')
     check('findings que não é lista: erro', 'erro' in r)
     r = claude_svc.conferir(firm_id, user_id, _resultado([_achado('ok'), {'description': 'sem gravidade'}]),

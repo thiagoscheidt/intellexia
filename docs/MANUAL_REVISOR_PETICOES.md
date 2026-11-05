@@ -153,6 +153,8 @@ Lista os documentos que, segundo o manual, deveriam acompanhar as teses da peti�
 
 Totais por gravidade, **Principais Riscos Jurídicos** e **Prioridade de Correção** (ALTA / MÉDIA / BAIXA).
 
+Cada risco jurídico indica de qual achado ele vem: clique no número para ir até o ponto de atenção. Risco que não corresponde a nenhum achado da revisão não aparece no resumo, nem o que se apoia só num achado em que o próprio Revisor concluiu que o ponto está correto. Revisões gravadas antes dessa mudança mostram os riscos sem o número do achado.
+
 ### Alterações Identificadas (só na Análise Comparativa)
 
 Quando você envia a segunda versão, a IA compara original × revisado e lista cada alteração: trecho original, trecho corrigido, o motivo da correção e se o padrão **já existe no manual** ou é novo.
