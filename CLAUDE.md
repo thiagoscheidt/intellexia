@@ -350,8 +350,21 @@ fonte única da tela e do MCP.
 - **Skill do Claude** entra (`.zip`/`SKILL.md`) e sai (`<nome>/SKILL.md` + anexos)
   no formato dele, **só com arquivos de texto**: script compartilhado rodaria na
   máquina dos colegas. Nada do upload vai a disco.
-- **"Abrir no Claude" copia e abre `claude.ai/new?q=`**: o `q` não é documentado
-  na web e já parou de preencher (2025) — a cópia é a garantia.
+- **"Abrir no Claude" manda só a linha que chama o item** (`Use o item "X" da
+  Biblioteca de IA do IntellexIA (<comando>):`, com os campos preenchidos), e o
+  Claude busca o texto pelo `usar_prompt` — pedido do escritório em 27/10/2026:
+  o texto inteiro na caixa confundia, disparava o aviso de segurança do Claude e
+  podia ser apagado sem querer. Depende do conector ativo; o "Copiar" continua
+  com o texto completo. O uso é contado pelo `usar_prompt`, não pelo botão. A
+  linha é montada em `prompt_library.js` (`linhaDoItem`) e em `biblioteca_rapida.js`.
+  O `q` não é documentado na web e já parou de preencher (2025) — a cópia é a garantia.
+- **Ferramenta citada para proibir não conta como usada**: `ferramentas_proibidas`
+  (negação antes do nome na mesma frase: "não chame X", "nunca use X"; espelhada
+  no JS do editor) e `prompt_library_items.ferramentas_ignoradas` (JSON; NULL =
+  automático, lista = escolha feita clicando no selo da ferramenta no editor;
+  `database/add_prompt_library_ferramentas_ignoradas_column.py`). É só exibição
+  e o "usa dados do IntellexIA": o Claude enxerga todas as ferramentas do
+  conector de qualquer jeito, quem proíbe é o texto do item.
 - Teste: `tests/test_prompt_library.py`.
 
 ### Integração Comunica PJe (DJEN)

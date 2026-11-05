@@ -3863,6 +3863,9 @@ class PromptLibraryItem(db.Model):
     anexos_json = db.Column(db.Text(16777215), nullable=True)                    # [{"nome", "conteudo"}]
     area = db.Column(db.String(30), nullable=False, default='geral')
     usa_intellexia = db.Column(db.Boolean, nullable=False, default=False)
+    # Ferramentas citadas no texto que o item NÃO usa (JSON). NULL = automático:
+    # fica de fora a citada só em frase de proibição ("não chame X").
+    ferramentas_ignoradas = db.Column(db.Text, nullable=True)
     visibilidade = db.Column(db.String(12), nullable=False, default='pessoal')   # pessoal | escritorio
 
     recomendado = db.Column(db.Boolean, nullable=False, default=False)

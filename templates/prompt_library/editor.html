@@ -69,6 +69,7 @@
               </div>
               <div class="mt-2 small" id="plbCamposDetectados"></div>
               <div class="mt-2 small" id="plbFerramentasCitadas"></div>
+              <input type="hidden" name="ferramentas_ignoradas" id="plbFerramentasIgnoradas" value="[]">
             </div>
           </div></div>
 
@@ -176,6 +177,7 @@
 
 {{ modal_ferramentas('plbEscolherFerramenta', 'inserir', ferramentas) }}
 <script type="application/json" id="plbMapaFerramentas">{{ mapa_ferramentas|tojson }}</script>
+<script type="application/json" id="plbIgnoradasIniciais">{{ ferramentas_ignoradas|tojson }}</script>
 {% endblock %}
 
 {% block extra_js %}
@@ -239,25 +241,67 @@
     var citadasBox = document.getElementById('plbFerramentasCitadas');
     var usa = document.getElementById('plbUsa');
     function citadas() {
-      var texto = corpo.value + ' ' + Array.prototype.map.call(
-        document.querySelectorAll('textarea[name="anexo_conteudo"]'), function (t) { return t.value; }).join(' ');
+      var texto = textoTodo();
       return nomes.map(function (n) {
         var m = new RegExp('(^|[^\\w])' + n + '(?![\\w])').exec(texto);
         return m ? [m.index, n] : null;
       }).filter(Boolean).sort(function (a, b) { return a[0] - b[0]; }).map(function (x) { return x[1]; });
     }
+    // Citada só em frase de proibição ("não chame X") começa desmarcada.
+    // Espelho de _NEGACAO_FERRAMENTA em prompt_library_service — mexeu num, mexa no outro.
+    var NEGACAO_FERRAMENTA = /(^|[^\p{L}])(n[ãa]o|nunca|jamais|sem|evite|proibid[oa]s?|vedad[oa]s?)\s+(?:[\p{L}\p{N}_]+\s+){0,2}?(us[ea]r?|cham[ea]r?|acion[ea]r?|utiliz[ea]r?|execut[ea]r?|rod[ea]r?|dispar[ea]r?|invo(?:car|que|ca))(?!\p{L})/iu;
+    function proibida(texto, nome) {
+      var re = new RegExp('(^|[^\\w])' + nome + '(?![\\w])', 'g');
+      var m, alguma = false;
+      while ((m = re.exec(texto))) {
+        var pos = m.index + m[1].length;
+        var antes = texto.slice(0, pos);
+        var inicio = Math.max(antes.lastIndexOf('.'), antes.lastIndexOf(';'), antes.lastIndexOf('!'),
+                              antes.lastIndexOf('?'), antes.lastIndexOf('\n')) + 1;
+        if (!NEGACAO_FERRAMENTA.test(antes.slice(inicio))) return false;
+        alguma = true;
+      }
+      return alguma;
+    }
+    function textoTodo() {
+      return corpo.value + ' ' + Array.prototype.map.call(
+        document.querySelectorAll('textarea[name="anexo_conteudo"]'), function (t) { return t.value; }).join(' ');
+    }
+    // nome -> true (usa) | false (não usa). Sem escolha, decide a frase.
+    var escolha = {};
+    var iniciais = JSON.parse(document.getElementById('plbIgnoradasIniciais').textContent || 'null');
+    if (iniciais) {
+      citadas().forEach(function (n) { escolha[n] = iniciais.indexOf(n) < 0; });
+    }
+    var campoIgnoradas = document.getElementById('plbFerramentasIgnoradas');
+
     function mostrarCitadas() {
       var lista = citadas();
+      var texto = textoTodo();
+      var usadas = lista.filter(function (n) {
+        return n in escolha ? escolha[n] : !proibida(texto, n);
+      });
+      campoIgnoradas.value = JSON.stringify(lista.filter(function (n) { return usadas.indexOf(n) < 0; }));
       citadasBox.innerHTML = '';
       if (!lista.length) return;
-      citadasBox.appendChild(document.createTextNode('Ferramentas que o roteiro chama: '));
+      citadasBox.appendChild(document.createTextNode('Ferramentas que o roteiro chama (clique para marcar ou desmarcar): '));
       var modulos = [];
       var semAcesso = [];
       lista.forEach(function (n) {
-        var s = document.createElement('span');
-        s.className = 'plb-selo plb-selo-dado me-1';
-        s.textContent = n;
-        citadasBox.appendChild(s);
+        var usa_ = usadas.indexOf(n) >= 0;
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'plb-selo me-1 border-0 ' + (usa_ ? 'plb-selo-dado' : 'text-body-secondary bg-body-secondary text-decoration-line-through');
+        b.setAttribute('aria-pressed', usa_ ? 'true' : 'false');
+        b.title = usa_ ? 'Usada por este item. Clique para desmarcar.'
+                       : 'Citada, mas este item não usa (ex.: o texto manda não chamar). Clique para marcar.';
+        var ic = document.createElement('i');
+        ic.className = 'bi ' + (usa_ ? 'bi-check2' : 'bi-slash-circle') + ' me-1';
+        b.appendChild(ic);
+        b.appendChild(document.createTextNode(n));
+        b.addEventListener('click', function () { escolha[n] = !usa_; mostrarCitadas(); });
+        citadasBox.appendChild(b);
+        if (!usa_) return;
         if (mapa[n].modulo && modulos.indexOf(mapa[n].modulo) < 0) modulos.push(mapa[n].modulo);
         if (!mapa[n].acesso) semAcesso.push(n);
       });
@@ -274,7 +318,7 @@
         alerta.textContent = 'Você não tem acesso a ' + semAcesso.join(', ') + ' — o roteiro vai falhar para você nesse passo.';
         citadasBox.appendChild(alerta);
       }
-      if (usa && !usa.checked) usa.checked = true;
+      if (usadas.length && usa && !usa.checked) usa.checked = true;
     }
     corpo.addEventListener('input', mostrarCitadas);
     document.getElementById('plbAnexos').addEventListener('input', mostrarCitadas);
@@ -286,6 +330,7 @@
     var voltarAoTexto = false;
     // O card do modal avisa qual ferramenta (static/js/prompt_library_ferramentas.js).
     document.addEventListener('plb:inserir-ferramenta', function (e) {
+      escolha[e.detail] = true;  // inserida pelo botão: a pessoa quer usar
       var linha = 'Chame a ferramenta ' + e.detail + ' do IntellexIA para ';
       var ini = cursor ? cursor[0] : corpo.value.length;
       var fim = cursor ? cursor[1] : corpo.value.length;

@@ -57,6 +57,8 @@ O Claude escolhe a ferramenta sozinho. Mas um agente que diz **qual ferramenta c
 
 Abaixo do texto, o editor mostra as ferramentas que o roteiro chama e os módulos que elas usam. Citar uma ferramenta já marca "Usa os dados do IntellexIA", e o card mostra quantas o roteiro chama.
 
+Ferramenta citada só para proibir ("não chame `revisar_peticao_inicial`") já aparece **desmarcada**, riscada, e não entra na conta. Para corrigir o que o editor entendeu, clique na ferramenta: ela alterna entre usada e não usada. Desmarcar só muda o que a Biblioteca mostra; quem garante que o Claude não chama a ferramenta é o texto do item.
+
 > [!ALERTA] Cada ferramenta respeita as permissões de quem usa o item. Um agente do escritório que consulta o Diário Oficial dá "acesso negado" para quem não tem esse módulo. O editor avisa quais módulos o roteiro usa, e as ferramentas que você não acessa aparecem em cinza, com cadeado.
 
 ---
@@ -82,7 +84,9 @@ Abaixo do texto, o editor mostra as ferramentas que o roteiro chama e os módulo
 |---|---|
 | :btn-primary[Copiar] | Copia o texto, com os anexos, para você colar no Claude |
 | :btn-primary[Preencher e copiar] | Aparece quando o prompt tem campos: você preenche, vê como fica e copia o texto pronto |
-| :btn-outline-secondary[Abrir no Claude] | Abre uma conversa nova no Claude e copia o texto. Se ele não aparecer escrito na conversa, cole com Ctrl+V |
+| :btn-outline-secondary[Abrir no Claude] | Abre uma conversa nova no Claude só com uma linha que chama o item, como `Use o item "Resumo de sentença" da Biblioteca de IA do IntellexIA (escritorio_prompt_resumo_sentenca):`. Escreva seu pedido depois dela e envie: o Claude busca as instruções pelo conector, sem que elas apareçam na caixa de mensagem. Campo que você não preencheu, o Claude pergunta |
+
+> [!INFO] O **Abrir no Claude** depende do conector do IntellexIA ativo na conversa: sem ele, o Claude não acha o item. Nesse caso, use **Copiar** e cole o texto completo.
 
 No :claude: **Claude**, com o conector do IntellexIA, cada item também vira **comando pronto**:
 

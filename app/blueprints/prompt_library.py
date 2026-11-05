@@ -83,6 +83,9 @@ def _dados_do_form() -> dict:
         'visibilidade': request.form.get('visibilidade', 'pessoal'),
         'usa_intellexia': request.form.get('usa_intellexia') == '1',
         'anexos': [{'nome': n, 'conteudo': c} for n, c in zip(nomes, conteudos)],
+        # JSON das citadas desmarcadas no editor; sem o campo, fica o que estava.
+        **({'ferramentas_ignoradas': request.form.get('ferramentas_ignoradas') or '[]'}
+           if 'ferramentas_ignoradas' in request.form else {}),
     }
 
 
@@ -90,11 +93,15 @@ def _editor(item=None, dados: dict | None = None, erro: str | None = None, achad
     if dados is None:
         dados = ({'titulo': item.titulo, 'comando': item.slug, 'descricao': item.descricao or '', 'corpo': item.corpo,
                   'tipo': item.tipo, 'area': item.area, 'visibilidade': item.visibilidade,
-                  'usa_intellexia': item.usa_intellexia, 'anexos': svc.anexos(item)}
+                  'usa_intellexia': item.usa_intellexia, 'anexos': svc.anexos(item),
+                  'ferramentas_ignoradas': svc.serializar(item, _usuario())['ferramentas_ignoradas']}
                  if item else {'titulo': '', 'comando': '', 'descricao': '', 'corpo': '', 'tipo': 'prompt', 'area': 'geral',
                                'visibilidade': 'pessoal', 'usa_intellexia': False, 'anexos': []})
     user = _usuario()
     ferramentas = svc.cards_ferramentas(user)
+    ignoradas = dados.get('ferramentas_ignoradas')
+    if isinstance(ignoradas, str):  # volta do formulário com erro: JSON do campo escondido
+        ignoradas = svc._lista_json(ignoradas)
     return render_template(
         'prompt_library/editor.html', item=item, dados=dados, erro=erro, achados=achados or [],
         ferramentas=ferramentas,
@@ -104,6 +111,8 @@ def _editor(item=None, dados: dict | None = None, erro: str | None = None, achad
         tipos=svc.TIPOS, tipo_icone=svc.TIPO_ICONE, areas=svc.AREAS, visibilidades=svc.VISIBILIDADES,
         pode_compartilhar=item is None or item.owner_id == user.id,
         prefixo_comando=svc.prefixo_comando,
+        # None = o editor decide sozinho (proibidas ficam de fora); lista = escolha feita.
+        ferramentas_ignoradas=ignoradas,
     ), status
 
 

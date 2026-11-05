@@ -280,6 +280,30 @@ def test_ferramentas(us):
     check('comandos do IntellexIA também mostram as ferramentas',
           'resumo_fap' in svc.prompt_do_sistema('analise_empresa')['ferramentas'])
 
+    print('\n7c. Ferramenta citada para proibir')
+    texto = ('Use resumo_fap e pesquisar_jurisprudencia.\nNão chame revisar_peticao_inicial nem estatisticas_revisor.\n'
+             'Se não achar, chame listar_beneficios_fap. Nunca use gravar_revisao_peticao sem confirmar; '
+             'chame gravar_revisao_peticao só se o usuário pedir.')
+    check('proibidas: só as que aparecem apenas em frase de "não chame"',
+          svc.ferramentas_proibidas(texto) == ['revisar_peticao_inicial', 'estatisticas_revisor'],
+          str(svc.ferramentas_proibidas(texto)))
+    r = svc.criar(colega, {'titulo': 'Revisor que proíbe', 'corpo': texto, 'tipo': 'agente'})
+    ser = svc.serializar(r, colega)
+    check('automático: proibidas ficam fora das usadas do card',
+          'revisar_peticao_inicial' not in ser['ferramentas'] and 'listar_beneficios_fap' in ser['ferramentas']
+          and ser['ferramentas_ignoradas'] == ['revisar_peticao_inicial', 'estatisticas_revisor']
+          and r.ferramentas_ignoradas is None, str(ser['ferramentas']))
+    svc.editar(r, colega, {'ferramentas_ignoradas': '["resumo_fap", "nao_citada"]'})
+    ser = svc.serializar(r, colega)
+    check('escolha do editor vale e guarda só as citadas',
+          'resumo_fap' not in ser['ferramentas'] and 'revisar_peticao_inicial' in ser['ferramentas']
+          and svc._lista_json(r.ferramentas_ignoradas) == ['resumo_fap'])
+    v = r.versao
+    svc.editar(r, colega, {'ferramentas_ignoradas': '[]'})
+    check('mudar só as ferramentas não cria versão', r.versao == v)
+    so_proibe = svc.criar(colega, {'titulo': 'Só proíbe', 'corpo': 'Nunca chame estatisticas_revisor aqui.'})
+    check('só ferramenta proibida não marca "usa dados do IntellexIA"', not so_proibe.usa_intellexia)
+
 
 def test_tela(us, p):
     print('\n8. Tela /prompts')
@@ -323,6 +347,16 @@ def test_tela(us, p):
     html = c.get('/prompts/novo?ferramenta=listar_beneficios_fap').get_data(as_text=True)
     check('"Usar num agente": editor de agente com a ferramenta no texto',
           'Novo agente' in html and 'Chame a ferramenta listar_beneficios_fap do IntellexIA para' in html)
+    check('editor manda as ferramentas desmarcadas', 'name="ferramentas_ignoradas"' in html
+          and 'id="plbIgnoradasIniciais"' in html)
+    r = c.post('/prompts/novo', data={'titulo': 'Agente desmarca', 'corpo': 'Chame resumo_fap e listar_beneficios_fap.',
+                                      'tipo': 'agente', 'visibilidade': 'pessoal',
+                                      'ferramentas_ignoradas': '["listar_beneficios_fap"]'})
+    desm = PromptLibraryItem.query.filter_by(owner_id=colega.id, titulo='Agente desmarca').first()
+    check('desmarcar pela tela grava', r.status_code == 302 and desm
+          and svc.serializar(desm, colega)['ferramentas'] == ['resumo_fap'])
+    html = c.get(f'/prompts/{desm.id}/editar').get_data(as_text=True)
+    check('editor reabre com a escolha', '["listar_beneficios_fap"]' in html)
     check('editor tem o "Inserir ferramenta"', 'Inserir ferramenta do IntellexIA' in html and 'data-fm-inserir="resumo_fap"' in html)
     html = c.get('/prompts/novo?ferramenta=nao_existe').get_data(as_text=True)
     check('ferramenta desconhecida é ignorada', 'nao_existe' not in html)

@@ -157,9 +157,13 @@
 
   var campos = document.getElementById('brCampos');
   var previa = document.getElementById('brPrevia');
-  function preenchido() {
+  function valores() {
     var v = {};
     campos.querySelectorAll('input').forEach(function (x) { v[x.name] = x.value.trim(); });
+    return v;
+  }
+  function preenchido() {
+    var v = valores();
     return preenchendo.texto.replace(CAMPO, function (m, nome) { return v[nome] ? v[nome] : m; });
   }
   function abrirPreencher(i) {
@@ -185,11 +189,17 @@
   }
   document.getElementById('brVoltar').addEventListener('click', function () { vista('lista'); busca.focus(); });
   document.getElementById('brCopiar').addEventListener('click', function () { copiarTexto(preenchendo, preenchido()); });
+  // Mesmo comportamento da tela da biblioteca (prompt_library.js, linhaDoItem):
+  // só a linha que chama o item; o texto o Claude busca pelo conector.
   document.getElementById('brClaude').addEventListener('click', function () {
-    var t = preenchido();
-    var q = encodeURIComponent(t);
-    window.open('https://claude.ai/new' + (q.length <= 12000 ? '?q=' + q : ''), '_blank', 'noopener');
-    copiar(t).then(function () { contarUso(preenchendo); avisar('Texto copiado. Se não aparecer no Claude, cole com Ctrl+V.'); });
+    var v = valores();
+    var dados = Object.keys(v).filter(function (k) { return v[k]; }).map(function (k) { return k + ': ' + v[k]; });
+    var linha = 'Use o item "' + preenchendo.titulo + '" da Biblioteca de IA do IntellexIA (' + preenchendo.comando + ')'
+      + (dados.length ? ', com ' + dados.join('; ') : '') + ':\n\n';
+    window.open('https://claude.ai/new?q=' + encodeURIComponent(linha), '_blank', 'noopener');
+    var dica = ' O conector do IntellexIA precisa estar ativo na conversa; sem ele, use Copiar.';
+    copiar(linha).then(function () { avisar('Abri o Claude com o comando do item: escreva seu pedido depois dele.' + dica); },
+      function () { avisar('Abri o Claude com o comando do item: escreva seu pedido depois dele.' + dica); });
   });
 
   // ── abrir ──────────────────────────────────────────────────────────────

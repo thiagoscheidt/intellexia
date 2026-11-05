@@ -183,16 +183,29 @@
     });
   }
 
-  function abrirClaude(id, texto) {
-    var q = encodeURIComponent(texto);
-    var url = 'https://claude.ai/new' + (q.length <= 12000 ? '?q=' + q : '');
+  // O Claude abre só com uma linha que chama o item; as instruções ele busca
+  // pelo conector (usar_prompt), sem aparecer na caixa de mensagem. O texto
+  // inteiro colado ali confundia (onde escrever o pedido?), trazia o aviso de
+  // segurança do Claude e podia ser apagado sem querer.
+  function linhaDoItem(id, valores) {
+    var d = textos[id];
+    var linha = 'Use o item "' + d.titulo + '" da Biblioteca de IA do IntellexIA (' + d.comando + ')';
+    var dados = Object.keys(valores || {}).filter(function (k) { return valores[k]; })
+      .map(function (k) { return k + ': ' + valores[k]; });
+    if (dados.length) linha += ', com ' + dados.join('; ');
+    return linha + ':\n\n';
+  }
+
+  function abrirClaude(id, valores) {
+    var linha = linhaDoItem(id, valores);
     // Abre já, no clique (pop-up bloqueado se esperar a cópia); a cópia é a garantia.
-    window.open(url, '_blank', 'noopener');
-    copiar(texto).then(function () {
-      registrarUso(id);
-      avisar('Texto copiado. Se não aparecer no Claude, cole com Ctrl+V.');
+    // O uso é contado pelo usar_prompt, quando o Claude busca o item.
+    window.open('https://claude.ai/new?q=' + encodeURIComponent(linha), '_blank', 'noopener');
+    var dica = ' O conector do IntellexIA precisa estar ativo na conversa; sem ele, use Copiar para levar o texto completo.';
+    copiar(linha).then(function () {
+      avisar('Abri o Claude com o comando do item: escreva seu pedido depois dele (se não aparecer, cole com Ctrl+V).' + dica);
     }, function () {
-      avisar('Abri o Claude, mas não consegui copiar o texto. Use o botão Copiar.', 'warning');
+      avisar('Abri o Claude com o comando do item: escreva seu pedido depois dele.' + dica);
     });
   }
 
@@ -201,9 +214,8 @@
     if (b) { var id = b.dataset.copiar; copiarTexto(id, textos[id].texto); return; }
     b = e.target.closest('[data-abrir-claude]');
     if (b) {
-      var idc = b.dataset.abrirClaude;
-      if (textos[idc].campos.length) { abrirPreencher(idc); return; }
-      abrirClaude(idc, textos[idc].texto);
+      // Campo que faltar o Claude pergunta (usar_prompt avisa quais faltam).
+      abrirClaude(b.dataset.abrirClaude, {});
       return;
     }
     b = e.target.closest('[data-preencher]');
@@ -222,10 +234,15 @@
   var previa = document.getElementById('plbPrevia');
   var preenchendo = null;
 
-  function textoPreenchido() {
-    var d = textos[preenchendo];
+  function valoresPreenchidos() {
     var valores = {};
     camposBox.querySelectorAll('input').forEach(function (i) { valores[i.name] = i.value.trim(); });
+    return valores;
+  }
+
+  function textoPreenchido() {
+    var d = textos[preenchendo];
+    var valores = valoresPreenchidos();
     return d.texto.replace(/\{\{\s*([\p{L}_][\p{L}\p{N}_]{0,59})\s*\}\}/gu, function (m, nome) {
       return valores[nome] ? valores[nome] : m;
     });
@@ -274,7 +291,7 @@
     copiarTexto(preenchendo, textoPreenchido());
   });
   document.getElementById('plbPreencherClaude').addEventListener('click', function () {
-    abrirClaude(preenchendo, textoPreenchido());
+    abrirClaude(preenchendo, valoresPreenchidos());
   });
 
   // ── favoritos ──────────────────────────────────────────────────────────

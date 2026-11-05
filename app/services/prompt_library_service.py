@@ -305,10 +305,17 @@ def _validar(dados: dict, atual=None) -> dict:
         lista_anexos = _limpar_anexos(dados.get('anexos'))
     else:
         lista_anexos = anexos(atual) if atual else []
+    if 'ferramentas_ignoradas' in dados:
+        ignoradas = _lista_json(dados.get('ferramentas_ignoradas'))
+    else:
+        ignoradas = _lista_json(atual.ferramentas_ignoradas) if atual else None
+    usadas, ignoradas_citadas = ferramentas_do_texto(_texto_com_anexos(corpo, lista_anexos), ignoradas)
     # Citar uma ferramenta do conector já é usar os dados do IntellexIA.
-    usa = bool(usa) or bool(ferramentas_citadas(corpo + ' ' + ' '.join(a['conteudo'] for a in lista_anexos)))
+    usa = bool(usa) or bool(usadas)
     return {'titulo': titulo, 'corpo': corpo, 'descricao': descricao or None, 'tipo': tipo, 'area': area,
-            'visibilidade': visibilidade, 'usa_intellexia': usa, 'anexos': lista_anexos}
+            'visibilidade': visibilidade, 'usa_intellexia': usa, 'anexos': lista_anexos,
+            # Só guarda escolha explícita; automático continua automático.
+            'ferramentas_ignoradas': None if ignoradas is None else json.dumps(ignoradas_citadas, ensure_ascii=False)}
 
 
 def _validar_com_comando(dados: dict, law_firm_id: int, atual=None) -> dict:
@@ -345,6 +352,7 @@ def criar(user: User, dados: dict, confirmar_dados: bool = False) -> PromptLibra
         law_firm_id=user.law_firm_id, owner_id=user.id, tipo=v['tipo'], titulo=v['titulo'],
         slug=v['slug'], descricao=v['descricao'], corpo=v['corpo'],
         anexos_json=_anexos_json(v['anexos']), area=v['area'], usa_intellexia=v['usa_intellexia'],
+        ferramentas_ignoradas=v['ferramentas_ignoradas'],
         visibilidade=v['visibilidade'], versao=1, usos=0, created_at=agora, updated_at=agora)
     db.session.add(item)
     db.session.flush()
@@ -363,6 +371,7 @@ def editar(item, user: User, dados: dict, confirmar_dados: bool = False) -> Prom
     item.titulo, item.descricao, item.corpo = v['titulo'], v['descricao'], v['corpo']
     item.anexos_json = _anexos_json(v['anexos'])
     item.tipo, item.area, item.usa_intellexia = v['tipo'], v['area'], v['usa_intellexia']
+    item.ferramentas_ignoradas = v['ferramentas_ignoradas']
     _mudar_visibilidade(item, v['visibilidade'])
     item.updated_at = _agora()
     if mudou:
@@ -497,6 +506,8 @@ def serializar(item, user: User, favs: set[int] | None = None, autores: dict | N
     autor = (autores or {}).get(item.owner_id) if autores is not None else item.owner
     rotulo, icone, cor = AREAS.get(item.area, AREAS['geral'])
     lista_anexos = anexos(item)
+    usadas, ignoradas = ferramentas_do_texto(_texto_com_anexos(item.corpo, lista_anexos),
+                                             _lista_json(item.ferramentas_ignoradas))
     return {
         'id': item.id,
         'tipo': item.tipo,
@@ -507,7 +518,8 @@ def serializar(item, user: User, favs: set[int] | None = None, autores: dict | N
         'corpo': item.corpo,
         'texto': texto_para_copiar(item.corpo, lista_anexos),
         'campos': campos(item.corpo),
-        'ferramentas': ferramentas_citadas(item.corpo + ' ' + ' '.join(a['conteudo'] for a in lista_anexos)),
+        'ferramentas': usadas,
+        'ferramentas_ignoradas': ignoradas,
         'anexos': [a['nome'] for a in lista_anexos],
         'area': item.area,
         'area_rotulo': rotulo,
@@ -598,7 +610,7 @@ def prompts_do_sistema() -> list[dict]:
             'id': 'sistema:' + nome, 'sistema': True, 'tipo': 'agente', 'tipo_rotulo': 'Agente',
             'tipo_icone': TIPO_ICONE['agente'], 'titulo': nome.replace('_', ' ').capitalize(),
             'descricao': kw.get('description') or '', 'corpo': corpo, 'texto': corpo, 'campos': campos(corpo),
-            'ferramentas': ferramentas_citadas(corpo),
+            'ferramentas': ferramentas_do_texto(corpo, None)[0],
             'anexos': [], 'area': area, 'area_rotulo': rotulo, 'area_icone': icone, 'area_cor': cor,
             'usa_intellexia': True, 'visibilidade': 'sistema', 'recomendado': False, 'versao': 1, 'usos': 0,
             'comando': nome, 'meu': False, 'pode_editar': False, 'favorito': False, 'autor': 'IntellexIA',
@@ -745,6 +757,57 @@ def ferramentas_citadas(texto: str | None) -> list[str]:
         if m:
             achadas.append((m.start(), nome))
     return [n for _, n in sorted(achadas)]
+
+
+# "Não chame X", "nunca use X e Y", "sem acionar X", "proibido usar X": a
+# negação vem antes da ferramenta, na mesma frase. Espelhada em
+# templates/prompt_library/editor.html (NEGACAO_FERRAMENTA) — mexeu numa, mexa na outra.
+_NEGACAO_FERRAMENTA = re.compile(
+    r'(?<![^\W\d_])(?:n[ãa]o|nunca|jamais|sem|evite|proibid[oa]s?|vedad[oa]s?)\s+(?:\w+\s+){0,2}?'
+    r'(?:us[ea]r?|cham[ea]r?|acion[ea]r?|utiliz[ea]r?|execut[ea]r?|rod[ea]r?|dispar[ea]r?|invo(?:car|que|ca))'
+    r'(?![^\W\d_])', re.IGNORECASE)
+_FIM_DE_FRASE = re.compile(r'[.;!?\n]')
+
+
+def ferramentas_proibidas(texto: str | None) -> list[str]:
+    """Citadas no texto só em frase que manda NÃO usar ("não chame X").
+
+    Basta uma menção fora de proibição para a ferramenta contar como usada:
+    "chame X; nunca chame X sem confirmar" usa X.
+    """
+    texto = texto or ''
+    proibidas = []
+    for nome in ferramentas_citadas(texto):
+        mencoes = [m.start() for m in re.finditer(r'(?<![\w])' + re.escape(nome) + r'(?![\w])', texto)]
+        if mencoes and all(_em_proibicao(texto, pos) for pos in mencoes):
+            proibidas.append(nome)
+    return proibidas
+
+
+def _em_proibicao(texto: str, pos: int) -> bool:
+    inicio = max((m.end() for m in _FIM_DE_FRASE.finditer(texto, 0, pos)), default=0)
+    return bool(_NEGACAO_FERRAMENTA.search(texto[inicio:pos]))
+
+
+def _lista_json(valor) -> list[str] | None:
+    if valor is None:
+        return None
+    try:
+        lista = json.loads(valor) if isinstance(valor, str) else valor
+    except ValueError:
+        return None
+    return [str(n) for n in lista] if isinstance(lista, list) else None
+
+
+def ferramentas_do_texto(texto: str, ignoradas: list[str] | None) -> tuple[list[str], list[str]]:
+    """(usadas, ignoradas) entre as citadas. ``ignoradas=None`` = automático."""
+    citadas = ferramentas_citadas(texto)
+    fora = set(ferramentas_proibidas(texto) if ignoradas is None else ignoradas)
+    return [n for n in citadas if n not in fora], [n for n in citadas if n in fora]
+
+
+def _texto_com_anexos(corpo: str, lista_anexos: list[dict]) -> str:
+    return corpo + ' ' + ' '.join(a['conteudo'] for a in lista_anexos)
 
 
 # ── skill do Claude (SKILL.md) ───────────────────────────────────────────────
