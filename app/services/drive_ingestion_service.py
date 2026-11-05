@@ -59,7 +59,10 @@ SITUACOES = {
     'falhou': ('Falhou', 'danger'),
     'erro': ('Erro no envio', 'danger'),
     'removido': ('Removido da base', 'light'),
+    'triagem': ('Escolha o destino', 'warning'),
 }
+# Rótulo do registro que a importação automática deixa para escolha manual.
+ROTULO_TRIAGEM = 'Importação automática'
 
 
 class EnvioRecusado(Exception):
@@ -109,7 +112,9 @@ def _situacoes(law_firm_id: int, registros: list[DriveIngestion]) -> dict[int, d
     saida = {}
     for r in registros:
         situacao, erro, link = 'removido', None, None
-        if r.status == DriveIngestion.STATUS_ERRO:
+        if r.destination == DriveIngestion.DEST_TRIAGEM:
+            situacao, erro = 'triagem', r.error_message
+        elif r.status == DriveIngestion.STATUS_ERRO:
             situacao, erro = 'erro', r.error_message
         elif r.destination == DriveIngestion.DEST_PECA_MODELO and r.target_id in pecas:
             p = pecas[r.target_id]
@@ -137,7 +142,9 @@ def _situacoes(law_firm_id: int, registros: list[DriveIngestion]) -> dict[int, d
                 link = ('knowledge_base.details', {'file_id': k.id})
         rotulo, cor = SITUACOES[situacao]
         saida[r.id] = {
-            'id': r.id, 'destino': r.destination, 'destino_rotulo': DESTINOS.get(r.destination, r.destination),
+            'id': r.id, 'destino': r.destination,
+            'destino_rotulo': DESTINOS.get(r.destination) or (
+                ROTULO_TRIAGEM if r.destination == DriveIngestion.DEST_TRIAGEM else r.destination),
             'situacao': situacao, 'situacao_rotulo': rotulo, 'cor': cor, 'erro': erro, 'link': link,
             # Sem pessoa: quem enviou foi a importação automática (drive_peticao_service).
             'enviado_em': r.created_at, 'quem': r.created_by.name if r.created_by else 'importação automática',
@@ -146,8 +153,9 @@ def _situacoes(law_firm_id: int, registros: list[DriveIngestion]) -> dict[int, d
 
 
 def _ativo(envio: dict) -> bool:
-    """Envio que ainda ocupa o destino (erro e item removido liberam)."""
-    return envio['situacao'] not in ('erro', 'removido')
+    """Envio que ainda ocupa o destino (erro e item removido liberam; a triagem
+    é só um aviso, não ocupa destino nenhum)."""
+    return envio['situacao'] not in ('erro', 'removido', 'triagem')
 
 
 # ── Tela ──────────────────────────────────────────────────────────────
@@ -194,6 +202,9 @@ def painel(law_firm_id: int, *, drive=None) -> dict:
         vistos.add(item['id'])
         tipo = gdrive.tipo_do_arquivo(item.get('mimeType'))
         envios = envios_por_arquivo.get(item['id'], [])
+        if any(_ativo(e) for e in envios):
+            # Já foi para alguma base: o aviso de "escolha o destino" perdeu o sentido.
+            envios = [e for e in envios if e['situacao'] != 'triagem']
         ocupados = {e['destino'] for e in envios if _ativo(e)}
         destinos = [{
             'chave': chave, 'rotulo': rotulo,
@@ -270,11 +281,14 @@ def _para_peca_modelo(law_firm_id, caminho, nome, sha, file_id, tipo, user_id, i
     return peca.id, 'Peça-modelo criada; a leitura e a indexação rodam em segundo plano.'
 
 
-def _para_decisao(law_firm_id, caminho, nome, tipo, user_id, **_):
+def _para_decisao(law_firm_id, caminho, nome, tipo, user_id, iniciar_leitura=True, **_):
+    """``iniciar_leitura=False`` só enfileira: script que termina mata a thread
+    da leitura no meio, então quem roda em script lê a fila ele mesmo."""
     if not nome.lower().endswith('.pdf'):
         nome = f'{nome}.pdf'
     try:
-        upload = envios_jurisprudencia.receber_baixado(law_firm_id, caminho, nome, user_id)
+        upload = envios_jurisprudencia.receber_baixado(law_firm_id, caminho, nome, user_id,
+                                                        iniciar=iniciar_leitura)
     except envios_jurisprudencia.ArquivoRecusado as erro:
         raise EnvioRecusado(str(erro)) from erro
     if upload.status == JurisprudenceUpload.STATUS_REVIEW:

@@ -2,7 +2,11 @@ Você lê uma PETIÇÃO PROTOCOLADA por um escritório de advocacia em ação ju
 
 ## Campos
 
-- **eh_peticao**: true se o documento é uma peça processual do escritório (petição, recurso, manifestação, memoriais…). false se for outra coisa (decisão judicial, documento de teste, anexo, procuração, comprovante isolado).
+- **tipo_documento**: o que o documento é.
+  - "peticao": peça processual do escritório (petição, recurso, manifestação, memoriais, embargos de declaração opostos pela empresa…).
+  - "decisao": pronunciamento do juízo ou do tribunal — sentença, acórdão, decisão monocrática, decisão em embargos de declaração, decisão de admissibilidade de recurso. Embargos de declaração **opostos pela empresa** são "peticao"; a **decisão que os julga** é "decisao".
+  - "outro": qualquer outra coisa (documento de teste, anexo, procuração, comprovante isolado, peça da parte contrária).
+  Quando não for "peticao", deixe os demais campos vazios.
 - **peca**: o tipo da peça, em CAIXA ALTA, usando PREFERENCIALMENTE um destes nomes, exatamente como estão, quando se aplicarem:
 {pecas_referencia}
   Se nenhum servir, use um nome curto no mesmo estilo. O nome do arquivo costuma trazer o tipo ("ED" = EMBARGOS DE DECLARAÇÃO; "Manif. Docs. INSS" = MANIF. DOCS INSS), mas o texto da peça manda quando os dois divergirem.

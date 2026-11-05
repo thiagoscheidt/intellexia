@@ -412,8 +412,21 @@ O escritório compartilha com `intellexia-drive@intellexia-503416.iam.gserviceac
   vem de `lote.processo_do_texto` (o rotulado após o endereçamento — a peça
   cita precedentes); o da IA só vale se a regra não achar e o número estiver
   no texto. O que já veio pelo lote (mesmo id do Drive no link) só é
-  **registrado** em `drive_ingestions`, sem IA. Documento que a IA diz não ser
-  petição e PDF sem texto ficam com erro na tela, para escolha manual. Falha
+  **registrado** em `drive_ingestions`, sem IA. **Decisões vão para a
+  Jurisprudência** (o escritório compartilha a pasta de decisões também): até
+  05/11/2026 o importador só conhecia petição e as ~130 decisões ficaram
+  paradas como "Base de Conhecimento · Erro no envio". Agora o **nome decide
+  primeiro** (`tipo_pelo_nome`: SENTENÇA/SETENÇA/ACÓRDÃO/DECISÃO/DECRESP sem
+  "PROTOCOLO", que toda petição do escritório traz e vence — "ED ao Acórdão _
+  PROTOCOLO" é petição), sem a leitura da petição; o resto o agente classifica
+  em `tipo_documento` (`peticao`/`decisao`/`outro`). A decisão entra pela
+  `_para_decisao` do "Ingerir em…" **só enfileirada** e o próprio script a lê
+  (`ler_decisoes`): a thread que a tela dispara morreria com o script. Só
+  `outro` e PDF sem texto ficam para a pessoa, num registro de destino
+  `triagem` ("Importação automática · Escolha o destino") — nunca como erro de
+  uma base para a qual nada foi enviado. `--reabrir-recusados` apaga as
+  recusas da importação automática (`created_by` vazio; envio de pessoa fica)
+  para a rodada reclassificar. Falha
   **passageira** (Drive fora, limite do provedor, Qdrant/Meilisearch sem
   conexão) não é registrada: a próxima rodada tenta de novo e **retoma o mesmo
   registro** da Base. Na tela, o envio aparece como "importação automática"
@@ -1157,7 +1170,7 @@ FapReview.revision [POST]
 | `communication_monitor_service`        | Monitoramento de Processos: sincronização por OAB e por caderno (dedup por hash da API), descoberta de processos (`origin='comunica_auto'` + triagem), explicação IA com cache (`explain_communication`), queries da tela e das tools MCP — fonte única |
 | `google_drive_client`                  | Google Drive pela conta de serviço — todo acesso autenticado isolado aqui: token JWT, listagem, metadados, download/exportação conferidos (ver seção "Integração Google Drive") |
 | `drive_ingestion_service`              | Tela do Google Drive: lista ao vivo do que foi compartilhado + envio a peça-modelo, decisão ou Base de Conhecimento pelas portas que cada base já usa |
-| `drive_peticao_service`                | Importação automática das petições protocoladas do Drive: ficha pelo `PeticaoProtocoladaAgent` no formato do lote .md, gravação pelas funções do lote, registro em `drive_ingestions` — ver seção "Integração Google Drive" |
+| `drive_peticao_service`                | Importação automática do Drive: petição protocolada pela ficha do `PeticaoProtocoladaAgent` no formato do lote .md (gravação pelas funções do lote), decisão para a fila da Jurisprudência (lida no próprio script), o resto em triagem; registro em `drive_ingestions` — ver seção "Integração Google Drive" |
 | `lote_md_import_service`               | Lote de Markdown do escritório (`decisoes/` + `peticoes_protocoladas/`, cada uma com `_INDICE_*.csv`) → Jurisprudência, Peças-modelo e Base de Conhecimento pelas portas de cada base. Arquivo entra **como veio** (cópia byte a byte, nome original); a ligação sai do CSV — "PDF de origem" = `nome_arquivo` do Banco Mestre, "Link" = `source_drive_file_id`. Impugnação vai às Peças-modelo **e** à Base. A Base é indexada pelo próprio lote e já entra concluída, com categoria e tags do CSV — **não passa pelo `process_knowledge_base`**, que pediria extração à IA e ligaria petição protocolada a processo judicial (criando processo/cliente). O "Link" do CSV vai para `knowledge_base.source_url` (`database/add_knowledge_base_source_url_column.py`): botão "Abrir original no Drive" no detalhe e `url_original` nas tools MCP da Base. `planejar` só lê, `executar` grava; rodar de novo pula o que já entrou, retoma peça/arquivo interrompido no meio e só completa o link do que entrou sem ele. Script: `scripts/importar_lote_md.py` (pasta padrão `instance/importacao/lote_md/`) |
 | `inlabs_client`                        | Cliente HTTP do INLABS (Imprensa Nacional) — todo acesso isolado aqui: login, cookie de sessão, montagem de URL, retry com teto, timeout e relogin transparente |
 | `dou_xml_parser`                       | XML do DOU → dicts. Função pura, sem rede/banco/Flask — a peça que muda se a Imprensa Nacional alterar o schema |

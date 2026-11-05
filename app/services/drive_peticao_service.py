@@ -20,24 +20,35 @@ que já existe — sem baixar, sem IA) e ``executar`` grava. Cada arquivo vira:
 - **pular**: a tela do Drive já tem registro dele (importado, ou recusado e
   esperando alguém escolher o destino à mão).
 
-Documento que a IA diz não ser petição (decisão, teste, anexo) não entra em
-base nenhuma: fica registrado com erro na tela, para alguém decidir. Falha
-passageira (rede, Drive fora, limite do provedor de IA) não é registrada — a
-próxima rodada tenta de novo.
+O escritório também compartilha as **decisões** (sentença, acórdão, decisão em
+ED…), e essas vão para a fila da Base de Jurisprudência, que tem a leitura
+própria. O nome do arquivo decide primeiro (``tipo_pelo_nome``: palavra de
+decisão e sem "PROTOCOLO" — as petições do escritório sempre trazem), sem
+gastar a leitura da petição; o que o nome não resolve, o agente classifica
+(``tipo_documento``). A fila é lida aqui mesmo (``ler_decisoes``), porque a
+thread que a tela usaria morre junto com o script.
+
+Só o que não é petição nem decisão (teste, anexo) fica para a pessoa: registro
+de **triagem** na tela ("Importação automática · Escolha o destino"), sem fingir
+que foi mandado a uma base. Falha passageira (rede, Drive fora, limite do
+provedor de IA) não é registrada — a próxima rodada tenta de novo.
 """
 from __future__ import annotations
 
 import os
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from flask import current_app
 
-from app.models import DriveIngestion, ImpugnacaoReferenceModel, KnowledgeBase, User, db
+from app.models import DriveIngestion, ImpugnacaoReferenceModel, JurisprudenceUpload, KnowledgeBase, User, db
 from app.services import ai_model_settings_service
 from app.services import drive_ingestion_service as telas
 from app.services import google_drive_client as gdrive
+from app.services import jurisprudence_upload_service as envios_jurisprudencia
 from app.services import jurisprudence_normalizer as norm
 from app.services import lote_md_import_service as lote
 from app.services.jurisprudence_upload_service import id_do_drive
@@ -46,7 +57,37 @@ from app.services.lote_md_import_service import CATEGORIA_BASE, processo_do_text
 REGISTRAR, IMPORTAR, PULAR = 'registrar', 'importar', 'pular'
 DESTINO_BASE = DriveIngestion.DEST_BASE_CONHECIMENTO
 DESTINO_PECA = DriveIngestion.DEST_PECA_MODELO
+DESTINO_DECISAO = DriveIngestion.DEST_DECISAO
+DESTINO_TRIAGEM = DriveIngestion.DEST_TRIAGEM
 TIPOS_ACEITOS = ('pdf', 'docx', 'gdoc')
+PETICAO, DECISAO, OUTRO = 'peticao', 'decisao', 'outro'
+
+# Como o escritório nomeia as decisões no Drive: "Sentença", "SENTENÇAED2",
+# "SETENÇA" (sic), "Acórdão", "ACÓRDÃOSTJINT", "Decisão monocrática",
+# "DECRESP"/"DECRESPED" (decisão em REsp). Comparado sem acento e em caixa alta.
+_DECISAO_NO_NOME = re.compile(r'(?<![A-Z])(SENTENCA|SETENCA|ACORDAO|DECISAO|DECRESP)')
+# As petições protocoladas sempre trazem "PROTOCOLO" — e uma delas pode citar a
+# decisão que ataca ("ED ao Acórdão _ PROTOCOLO.pdf"), por isso ele vence.
+_PETICAO_NO_NOME = re.compile(r'PROTOCOLO')
+# Registro antigo de "não é petição" (antes de as decisões terem rota):
+# ``reabrir_recusados`` o apaga para a próxima rodada classificar de novo.
+_PREFIXO_RECUSA = 'Não importado automaticamente:'
+
+
+def _sem_acento(texto: str) -> str:
+    return ''.join(c for c in unicodedata.normalize('NFKD', texto or '') if not unicodedata.combining(c)).upper()
+
+
+def tipo_pelo_nome(nome: str) -> Optional[str]:
+    """``'decisao'`` quando o nome diz que é decisão; None quando não resolve.
+
+    Nunca diz "petição" pelo nome: a petição precisa da ficha do agente de
+    qualquer jeito, e só ele separa a petição de um documento de teste.
+    """
+    nome = _sem_acento(nome)
+    if _PETICAO_NO_NOME.search(nome):
+        return None
+    return DECISAO if _DECISAO_NO_NOME.search(nome) else None
 
 
 def texto_do_pdf(caminho: str) -> str:
@@ -103,8 +144,12 @@ def ficha(law_firm_id: int, caminho: str, meta: dict, *, agente=None,
         if digitos_ia and digitos_ia in no_texto:
             processo, origem_processo = norm.formatar_cnj(digitos_ia), 'ia'
 
+    tipo = lido.get('tipo_documento')
+    if tipo not in (PETICAO, DECISAO, OUTRO):
+        tipo = PETICAO if lido.get('eh_peticao') else OUTRO
     return {
-        'eh_peticao': bool(lido.get('eh_peticao')),
+        'tipo': tipo,
+        'eh_peticao': tipo == PETICAO,
         'processo': processo,
         'origem_processo': origem_processo if processo else None,
         'autora': (lido.get('autora') or '').strip(),
@@ -137,6 +182,7 @@ class Plano:
     motivo: str = ''
     kb_id: Optional[int] = None
     peca_id: Optional[int] = None
+    upload_id: Optional[int] = None  # fila da Jurisprudência
     resultado: str = ''
     ok: Optional[bool] = None
     extra: dict = field(default_factory=dict)
@@ -194,7 +240,8 @@ def planejar(law_firm_id: int, *, drive=None) -> list[Plano]:
             planos.append(Plano(meta, REGISTRAR, 'já está na base (veio pelo lote .md)',
                                 kb_id=kb_por_drive.get(fid), peca_id=pecas_por_drive.get(fid)))
         else:
-            planos.append(Plano(meta, IMPORTAR, 'novo: ler com IA e gravar'))
+            planos.append(Plano(meta, IMPORTAR, 'novo: decisão pelo nome → Jurisprudência'
+                                if tipo_pelo_nome(meta.get('name')) == DECISAO else 'novo: ler com IA e gravar'))
     return planos
 
 
@@ -207,11 +254,48 @@ def _registrar(law_firm_id: int, plano: Plano, *, sha=None) -> None:
                       target_id=plano.peca_id, sha=sha)
 
 
+def _triagem(law_firm_id: int, plano: Plano, motivo: str, *, sha=None) -> None:
+    """Deixa o arquivo para a pessoa escolher o destino — sem fingir envio a uma base."""
+    telas._gravar(law_firm_id, plano.meta['id'], DESTINO_TRIAGEM, plano.nome, None, sha=sha,
+                  erro=f'{_PREFIXO_RECUSA} {motivo}. Escolha o destino em "Ingerir em…".')
+
+
+def _enviar_decisao(law_firm_id: int, plano: Plano, caminho: str, nome: str, sha: str, usuario: User) -> None:
+    """Enfileira na Base de Jurisprudência, pela mesma porta do "Ingerir em…".
+
+    Só enfileira: a leitura é do ``ler_decisoes``, no mesmo script.
+    """
+    tipo = gdrive.tipo_do_arquivo(plano.meta.get('mimeType'))
+    motivo = telas.motivo_indisponivel(DESTINO_DECISAO, tipo)
+    if motivo:
+        _triagem(law_firm_id, plano, f'é decisão, mas {motivo[0].lower()}{motivo[1:].rstrip(".")}', sha=sha)
+        plano.ok, plano.resultado = False, f'decisão em formato que a Jurisprudência não lê ({motivo})'
+        return
+    try:
+        upload_id, mensagem = telas._para_decisao(
+            law_firm_id=law_firm_id, caminho=caminho, nome=nome, tipo=tipo, user_id=usuario.id,
+            iniciar_leitura=False)
+    except telas.EnvioRecusado as erro:
+        db.session.rollback()
+        telas._gravar(law_firm_id, plano.meta['id'], DESTINO_DECISAO, plano.nome, None, erro=str(erro))
+        plano.ok, plano.resultado = False, f'Jurisprudência recusou: {erro}'
+        return
+    telas._gravar(law_firm_id, plano.meta['id'], DESTINO_DECISAO, plano.nome, None,
+                  target_id=upload_id, sha=sha)
+    plano.upload_id = upload_id
+    plano.ok, plano.resultado = True, f'Jurisprudência #{upload_id}: {mensagem}'
+
+
 def _importar(law_firm_id: int, plano: Plano, usuario: User, drive, agente) -> None:
     pasta = os.path.join(telas.PASTA_TEMPORARIA, str(law_firm_id))
     caminho = None
     try:
         caminho, nome, sha = drive.baixar(plano.meta['id'], pasta, meta=plano.meta)
+        if tipo_pelo_nome(plano.nome) == DECISAO:
+            # O nome resolve: sem a leitura da petição, direto para a fila.
+            _enviar_decisao(law_firm_id, plano, caminho, nome, sha, usuario)
+            return
+
         retomando_kb, retomando_peca = plano.kb_id, plano.peca_id
         mesmo = (KnowledgeBase.query.filter_by(law_firm_id=law_firm_id, file_hash=sha, is_active=True)
                  .filter(KnowledgeBase.id != (retomando_kb or 0)).first())
@@ -224,11 +308,13 @@ def _importar(law_firm_id: int, plano: Plano, usuario: User, drive, agente) -> N
 
         dados = ficha(law_firm_id, caminho, plano.meta, agente=agente)
         plano.extra = dados
-        if not dados['eh_peticao']:
-            motivo = dados['observacao'] or 'o conteúdo não é de petição protocolada'
-            telas._gravar(law_firm_id, plano.meta['id'], DESTINO_BASE, plano.nome, None,
-                          erro=f'Não importado automaticamente: {motivo}. Escolha o destino à mão.')
-            plano.ok, plano.resultado = False, f'não é petição ({motivo}); deixado para escolha manual'
+        if dados['tipo'] == DECISAO:
+            _enviar_decisao(law_firm_id, plano, caminho, nome, sha, usuario)
+            return
+        if dados['tipo'] != PETICAO:
+            motivo = dados['observacao'] or 'não é petição protocolada nem decisão'
+            _triagem(law_firm_id, plano, motivo.rstrip('.'), sha=sha)
+            plano.ok, plano.resultado = False, f'nem petição nem decisão ({motivo}); deixado para escolha manual'
             return
 
         item = lote.Item(origem='peticao', acao=lote.BASE_CONHECIMENTO, arquivo=nome, linha=0,
@@ -266,7 +352,10 @@ def _passageira(erro: Exception) -> bool:
 
 def executar(law_firm_id: int, planos: list[Plano], *, drive=None, agente=None,
              limite: Optional[int] = None) -> list[Plano]:
-    """Grava o que ``planejar`` decidiu. Um arquivo com problema não para os outros."""
+    """Grava o que ``planejar`` decidiu. Um arquivo com problema não para os outros.
+
+    As decisões ficam na fila da Jurisprudência: ``ler_decisoes`` as lê depois.
+    """
     from app.agents.drive.peticao_protocolada_agent import ExtracaoFalhou, SemTexto
 
     drive = drive or gdrive.cliente()
@@ -289,8 +378,7 @@ def executar(law_firm_id: int, planos: list[Plano], *, drive=None, agente=None,
             _importar(law_firm_id, plano, usuario, drive, agente)
         except SemTexto as erro:
             db.session.rollback()
-            telas._gravar(law_firm_id, plano.meta['id'], DESTINO_BASE, plano.nome, None,
-                          erro=f'Não importado automaticamente: {erro}')
+            _triagem(law_firm_id, plano, str(erro).rstrip('.'))
             plano.ok, plano.resultado = False, str(erro)
         except (gdrive.DriveErro, ExtracaoFalhou) as erro:
             # Passageiro (Drive fora, limite do provedor, IA sem resposta): sem
@@ -305,7 +393,61 @@ def executar(law_firm_id: int, planos: list[Plano], *, drive=None, agente=None,
                 plano.ok, plano.resultado = False, f'tentará de novo (serviço indisponível): {erro}'
                 continue
             current_app.logger.exception(f'[DrivePeticao] {plano.meta.get("id")}')
-            telas._gravar(law_firm_id, plano.meta['id'], DESTINO_BASE, plano.nome, None,
-                          erro=f'Falha na importação automática: {erro}')
+            _triagem(law_firm_id, plano, f'falha na importação automática ({erro})')
             plano.ok, plano.resultado = False, f'falhou: {erro}'
     return planos
+
+
+def ler_decisoes(law_firm_id: int, planos: list[Plano], *, agente=None) -> list[Plano]:
+    """Lê, aqui mesmo, as decisões que ``executar`` pôs na fila da Jurisprudência.
+
+    Síncrono de propósito: a thread que a tela dispara morreria com o script.
+    O que falhar fica "falhou" na fila (a tela da Jurisprudência tem "tentar de
+    novo") e o ``scripts/process_jurisprudence_uploads.py`` retoma o que um
+    restart deixar "na fila".
+    """
+    usuario = usuario_da_importacao(law_firm_id)
+    for plano in planos:
+        if not plano.upload_id:
+            continue
+        try:
+            upload = envios_jurisprudencia.processar(law_firm_id, plano.upload_id,
+                                                     user_id=usuario.id if usuario else None, agente=agente)
+        except Exception as erro:
+            db.session.rollback()
+            current_app.logger.exception(f'[DrivePeticao] leitura da decisão {plano.upload_id}')
+            plano.ok, plano.resultado = False, f'Jurisprudência #{plano.upload_id}: leitura falhou ({erro})'
+            continue
+        if upload is None:
+            continue
+        rotulo = {
+            JurisprudenceUpload.STATUS_DONE: 'decisão lida',
+            JurisprudenceUpload.STATUS_REVIEW: 'em "revisar" (duplicata)',
+            JurisprudenceUpload.STATUS_FAILED: f'leitura falhou ({upload.error_message})',
+        }.get(upload.status, upload.status)
+        plano.ok = upload.status != JurisprudenceUpload.STATUS_FAILED
+        plano.resultado = f'Jurisprudência #{plano.upload_id}: {rotulo}'
+    return planos
+
+
+def reabrir_recusados(law_firm_id: int) -> int:
+    """Apaga as recusas da importação automática, para a próxima rodada reclassificar.
+
+    Antes de as decisões terem rota, todo PDF que não era petição ficava com
+    erro em "Base de Conhecimento" e o ``planejar`` não olhava mais para ele.
+    Só mexe no que a importação automática gravou (``created_by`` vazio): o
+    que uma pessoa enviou ou recusou fica como está. Devolve quantos reabriu.
+    """
+    recusas = DriveIngestion.query.filter(
+        DriveIngestion.law_firm_id == law_firm_id,
+        DriveIngestion.created_by_id.is_(None),
+        db.or_(
+            DriveIngestion.destination == DESTINO_TRIAGEM,
+            db.and_(DriveIngestion.destination == DESTINO_BASE,
+                    DriveIngestion.status == DriveIngestion.STATUS_ERRO,
+                    DriveIngestion.error_message.like(f'{_PREFIXO_RECUSA}%')),
+        ))
+    total = recusas.count()
+    recusas.delete(synchronize_session=False)
+    db.session.commit()
+    return total

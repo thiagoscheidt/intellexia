@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Literal, Optional
 
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
@@ -38,7 +38,8 @@ MAX_CARACTERES = 120_000
 
 
 class PeticaoExtraida(BaseModel):
-    eh_peticao: bool = Field(description='Peça processual do escritório?')
+    tipo_documento: Literal['peticao', 'decisao', 'outro'] = Field(
+        description='peticao = peça do escritório; decisao = sentença, acórdão ou decisão; outro = o resto.')
     peca: str = Field(default='', description='Tipo da peça, CAIXA ALTA, vocabulário do índice.')
     autora: str = Field(default='', description='EMPRESA (VIGÊNCIAS), CAIXA ALTA.')
     tribunal: str = Field(default='', description='TRF-1..TRF-6, STJ ou STF.')

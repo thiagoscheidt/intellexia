@@ -22,7 +22,8 @@ import fitz
 from main import app
 from app.agents.drive import peticao_protocolada_agent as agente_mod
 from app.models import (
-    db, DriveIngestion, ImpugnacaoReferenceModel, KnowledgeBase, LawFirm, User, UserPageVisit,
+    db, DriveIngestion, ImpugnacaoReferenceModel, JurisprudenceUpload, KnowledgeBase, LawFirm, User,
+    UserPageVisit,
 )
 from app.services import drive_peticao_service as svc
 from app.services import lote_md_import_service as lote
@@ -87,7 +88,7 @@ class Agente:
         return f
 
 
-FICHA = dict(eh_peticao=True, peca='IMPUGNAÇÃO À CONTESTAÇÃO', autora='EMPRESA TESTE LTDA. (2024)',
+FICHA = dict(tipo_documento='peticao', peca='IMPUGNAÇÃO À CONTESTAÇÃO', autora='EMPRESA TESTE LTDA. (2024)',
              tribunal='TRF-4', orgao_julgador='1ª Vara Federal de Campo Mourão/PR', data_protocolo='09/10/2026',
              processo='', teses='DA PRESCRIÇÃO. OBS.: SÚMULA 625/STJ INAPLICÁVEL', observacao='')
 
@@ -119,6 +120,8 @@ def run():
         {'id': 'IDTESTE000000000000000001', 'name': 'TESTE - Documento fictício.pdf', 'mimeType': 'application/pdf'},
         {'id': 'IDSCAN0000000000000000001', 'name': 'Escaneado _ PROTOCOLO.pdf', 'mimeType': 'application/pdf'},
         {'id': 'IDFORA0000000000000000001', 'name': 'Fora do ar _ PROTOCOLO.pdf', 'mimeType': 'application/pdf'},
+        {'id': 'IDDECNOME0000000000000001', 'name': '12_08_2026 - SENTENÇAED2 - TESTE - 5002755-68.2026.4.04.7010.pdf', 'mimeType': 'application/pdf'},
+        {'id': 'IDDECIA000000000000000001', 'name': 'Evento 33 - Doc.pdf', 'mimeType': 'application/pdf'},
         {'id': 'IDPASTA000000000000000001', 'name': 'Uma pasta', 'mimeType': 'application/vnd.google-apps.folder'},
     ]
     for a in arquivos[:-1]:
@@ -129,7 +132,8 @@ def run():
     agente = Agente({
         arquivos[0]['name']: FICHA,
         arquivos[1]['name']: {**FICHA, 'peca': 'EMBARGOS DE DECLARAÇÃO'},
-        arquivos[3]['name']: {**FICHA, 'eh_peticao': False, 'observacao': 'documento de teste'},
+        arquivos[3]['name']: {**FICHA, 'tipo_documento': 'outro', 'observacao': 'documento de teste'},
+        arquivos[7]['name']: {**FICHA, 'tipo_documento': 'decisao'},
         arquivos[4]['name']: FICHA,
         arquivos[5]['name']: FICHA,
     })
@@ -154,6 +158,8 @@ def run():
         check('o que veio pelo lote: registrar', acoes['IDLOTE000000000000000001'] == svc.REGISTRAR)
         check('novos: importar', acoes['IDNOVO0000000000000000001'] == svc.IMPORTAR)
         check('planejar não chama a IA', agente.chamadas == [])
+        check('decisão pelo nome: planejada para a Jurisprudência',
+              'Jurisprudência' in next(p.motivo for p in planos if p.meta['id'] == 'IDDECNOME0000000000000001'))
 
         print('\n2. Executar')
         svc.executar(firm.id, planos, drive=drive, agente=agente)
@@ -185,12 +191,53 @@ def run():
         r = regs.get(('IDLOTE000000000000000001', svc.DESTINO_BASE))
         check('veio pelo lote: registrado apontando para o existente, sem IA',
               r and r.target_id == do_lote.id and 'Contrarrazões - Lote _ PROTOCOLO.pdf' not in agente.chamadas)
-        r = regs.get(('IDTESTE000000000000000001', svc.DESTINO_BASE))
-        check('não é petição: não entra na base e fica com erro na tela',
-              r and r.status == DriveIngestion.STATUS_ERRO and 'Escolha o destino' in r.error_message
+        r = regs.get(('IDTESTE000000000000000001', svc.DESTINO_TRIAGEM))
+        check('nem petição nem decisão: triagem na tela, não "Base de Conhecimento"',
+              r and 'Escolha o destino' in r.error_message
+              and ('IDTESTE000000000000000001', svc.DESTINO_BASE) not in regs
               and not KnowledgeBase.query.filter_by(law_firm_id=firm.id, original_filename='TESTE - Documento fictício.pdf').count())
-        r = regs.get(('IDSCAN0000000000000000001', svc.DESTINO_BASE))
-        check('PDF escaneado: erro registrado (não tenta toda hora)', r and r.status == DriveIngestion.STATUS_ERRO)
+        r = regs.get(('IDSCAN0000000000000000001', svc.DESTINO_TRIAGEM))
+        check('PDF escaneado: triagem registrada (não tenta toda hora)', r is not None)
+
+        dec_nome = por_id['IDDECNOME0000000000000001']
+        r = regs.get(('IDDECNOME0000000000000001', svc.DESTINO_DECISAO))
+        up = db.session.get(JurisprudenceUpload, dec_nome.upload_id) if dec_nome.upload_id else None
+        check('decisão pelo nome: na fila da Jurisprudência, sem a leitura da petição',
+              up is not None and up.status == JurisprudenceUpload.STATUS_QUEUED
+              and r and r.target_id == up.id and r.status == DriveIngestion.STATUS_ENVIADO
+              and arquivos[6]['name'] not in agente.chamadas, str(up and up.status))
+        check('decisão pelo nome: não entra na Base', not KnowledgeBase.query.filter(
+            KnowledgeBase.law_firm_id == firm.id, KnowledgeBase.source_url.like('%IDDECNOME%')).count())
+        dec_ia = por_id['IDDECIA000000000000000001']
+        check('decisão que só a IA reconhece: também vai para a Jurisprudência',
+              dec_ia.upload_id and ('IDDECIA000000000000000001', svc.DESTINO_DECISAO) in regs
+              and arquivos[7]['name'] in agente.chamadas)
+
+        from app.agents.jurisprudence.decision_extractor_agent import ExtracaoFalhou as FalhaDecisao
+
+        class LeitorDeDecisao:
+            model_name = 'falso'
+
+            def __init__(self):
+                self.lidos = []
+
+            def extrair(self, caminho, **_):
+                self.lidos.append(caminho)
+                raise FalhaDecisao('leitura de teste')
+        leitor = LeitorDeDecisao()
+        svc.ler_decisoes(firm.id, planos, agente=leitor)
+        db.session.expire_all()
+        check('ler_decisoes lê a fila no próprio script', len(leitor.lidos) == 2, str(len(leitor.lidos)))
+        check('… e a falha fica na fila da Jurisprudência (tentar de novo de lá)',
+              db.session.get(JurisprudenceUpload, dec_nome.upload_id).status == JurisprudenceUpload.STATUS_FAILED
+              and 'leitura falhou' in dec_nome.resultado)
+
+        from app.services import drive_ingestion_service as telas_drive
+        sit = telas_drive._situacoes(firm.id, [regs[('IDTESTE000000000000000001', svc.DESTINO_TRIAGEM)]])
+        s0 = list(sit.values())[0]
+        check('tela: triagem aparece como "Importação automática · Escolha o destino"',
+              s0['destino_rotulo'] == 'Importação automática' and s0['situacao_rotulo'] == 'Escolha o destino'
+              and not telas_drive._ativo(s0))
         check('Drive fora do ar: nada registrado (tenta na próxima)',
               ('IDFORA0000000000000000001', svc.DESTINO_BASE) not in regs)
 
@@ -200,8 +247,9 @@ def run():
         drive.falhar.clear()
         planos2 = svc.planejar(firm.id, drive=drive)
         a2 = {p.meta['id']: p.acao for p in planos2}
-        check('já importados e já recusados: pular', all(a2[i] == svc.PULAR for i in (
-            'IDNOVO0000000000000000001', 'IDLOTE000000000000000001', 'IDTESTE000000000000000001')))
+        check('já importados, decisões e triagem: pular', all(a2[i] == svc.PULAR for i in (
+            'IDNOVO0000000000000000001', 'IDLOTE000000000000000001', 'IDTESTE000000000000000001',
+            'IDDECNOME0000000000000001', 'IDDECIA000000000000000001')))
         check('o que falhou por Drive fora volta a importar', a2['IDFORA0000000000000000001'] == svc.IMPORTAR)
         svc.executar(firm.id, planos2, drive=drive, agente=agente)
         check('só o que faltava foi lido', len(agente.chamadas) == chamadas_antes + 1, str(agente.chamadas[chamadas_antes:]))
@@ -234,7 +282,31 @@ def run():
         check('agora registrado na tela', DriveIngestion.query.filter_by(
             law_firm_id=firm.id, drive_file_id='IDQDRANT00000000000000001', target_id=kb_falho.id).count() == 1)
 
-        print('\n5. Tela do Drive mostra "importação automática"')
+        print('\n5. Reabrir as recusas antigas ("não é petição" em Base de Conhecimento)')
+        antiga = DriveIngestion(law_firm_id=firm.id, drive_file_id='IDANTIGA00000000000000001',
+                                destination=svc.DESTINO_BASE, file_name='Acórdão - ANTIGA.pdf',
+                                status=DriveIngestion.STATUS_ERRO,
+                                error_message='Não importado automaticamente: o conteúdo não é de petição '
+                                              'protocolada. Escolha o destino à mão.')
+        manual = DriveIngestion(law_firm_id=firm.id, drive_file_id='IDMANUAL00000000000000001',
+                                destination=svc.DESTINO_BASE, file_name='x.pdf', created_by_id=admin.id,
+                                status=DriveIngestion.STATUS_ERRO,
+                                error_message='Não importado automaticamente: algo')
+        db.session.add_all([antiga, manual])
+        db.session.commit()
+        reabertos = svc.reabrir_recusados(firm.id)
+        restantes = {(r.drive_file_id, r.destination) for r in DriveIngestion.query.filter_by(law_firm_id=firm.id)}
+        check('reabre a recusa antiga e a triagem da importação automática',
+              ('IDANTIGA00000000000000001', svc.DESTINO_BASE) not in restantes
+              and ('IDTESTE000000000000000001', svc.DESTINO_TRIAGEM) not in restantes, str(reabertos))
+        check('… sem tocar no envio de uma pessoa nem no que foi importado',
+              ('IDMANUAL00000000000000001', svc.DESTINO_BASE) in restantes
+              and ('IDNOVO0000000000000000001', svc.DESTINO_BASE) in restantes
+              and ('IDDECNOME0000000000000001', svc.DESTINO_DECISAO) in restantes)
+        a5 = {p.meta['id']: p.acao for p in svc.planejar(firm.id, drive=drive)}
+        check('a próxima rodada planeja de novo o que foi reaberto', a5['IDTESTE000000000000000001'] == svc.IMPORTAR)
+
+        print('\n6. Tela do Drive mostra "importação automática"')
         from app.services import drive_ingestion_service as telas
         sit = telas._situacoes(firm.id, [regs[('IDNOVO0000000000000000001', svc.DESTINO_BASE)]])
         check('quem = importação automática', list(sit.values())[0]['quem'] == 'importação automática')
@@ -254,6 +326,10 @@ def _cleanup(firm):
         if p.file_path and os.path.exists(p.file_path):
             os.remove(p.file_path)
     DriveIngestion.query.filter_by(law_firm_id=firm.id).delete()
+    for u in JurisprudenceUpload.query.filter_by(law_firm_id=firm.id).all():
+        if u.file_path and os.path.exists(u.file_path):
+            os.remove(u.file_path)
+    JurisprudenceUpload.query.filter_by(law_firm_id=firm.id).delete()
     ImpugnacaoReferenceModel.query.filter_by(law_firm_id=firm.id).delete()
     KnowledgeBase.query.filter_by(law_firm_id=firm.id).delete()
     for u in User.query.filter_by(law_firm_id=firm.id).all():

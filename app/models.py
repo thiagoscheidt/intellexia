@@ -5047,6 +5047,9 @@ class DriveIngestion(db.Model):
     DEST_PECA_MODELO = 'peca_modelo'
     DEST_DECISAO = 'decisao'
     DEST_BASE_CONHECIMENTO = 'base_conhecimento'
+    # Não é base: a importação automática não soube para onde mandar e deixou
+    # para a pessoa escolher (documento de teste, anexo…). Ver drive_peticao_service.
+    DEST_TRIAGEM = 'triagem'
 
     STATUS_ENVIADO = 'enviado'
     STATUS_ERRO = 'erro'

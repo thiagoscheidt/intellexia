@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
-"""Importa para as bases as petições protocoladas compartilhadas pelo Google Drive.
+"""Importa para as bases as petições e decisões compartilhadas pelo Google Drive.
 
 O escritório compartilha cada PDF com a conta de serviço; este script lista o
-que está compartilhado e, para o que ainda não entrou, lê a ficha com IA e
-grava como o lote .md: Base de Conhecimento ("Petições protocoladas", indexada
-no Qdrant e no Meilisearch, com o link do Drive) e, se for impugnação, também
-Peças-modelo. O que já veio pelo lote só é registrado na tela do Drive.
+que está compartilhado e, para o que ainda não entrou:
+
+- petição protocolada: lê a ficha com IA e grava como o lote .md — Base de
+  Conhecimento ("Petições protocoladas", indexada no Qdrant e no Meilisearch,
+  com o link do Drive) e, se for impugnação, também Peças-modelo;
+- decisão (sentença, acórdão, decisão em ED…): fila da Base de Jurisprudência,
+  lida aqui mesmo, no fim da rodada;
+- o resto (teste, anexo): fica na tela do Drive para alguém escolher o destino.
+
+O que já veio pelo lote só é registrado na tela do Drive.
 Ver app/services/drive_peticao_service.py.
 
 Sem --gravar só confere (lista o Drive e mostra o que faria — sem baixar e sem IA).
@@ -13,6 +19,12 @@ Sem --gravar só confere (lista o Drive e mostra o que faria — sem baixar e se
     uv run python scripts/importar_peticoes_drive.py
     uv run python scripts/importar_peticoes_drive.py --gravar
     uv run python scripts/importar_peticoes_drive.py --gravar --limite 3
+
+Uma vez, depois de atualizar (as decisões compartilhadas antes de 05/11/2026
+ficaram paradas como "não é petição"): --reabrir-recusados apaga essas recusas
+da importação automática e a mesma rodada as classifica de novo. Envio feito
+por uma pessoa não é tocado.
+    uv run python scripts/importar_peticoes_drive.py --gravar --reabrir-recusados
 
 No cron, de hora em hora (seguro rodar de novo: o que já entrou é pulado):
     0 * * * * cd /sites/intellexia && uv run python scripts/importar_peticoes_drive.py --gravar
@@ -36,6 +48,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--gravar', action='store_true', help='grava de fato (sem ele, só confere)')
     parser.add_argument('--limite', type=int, help='lê com IA no máximo N arquivos novos nesta rodada')
+    parser.add_argument('--reabrir-recusados', action='store_true',
+                        help='reclassifica o que a importação automática deixou para escolha manual (só com --gravar)')
     args = parser.parse_args()
 
     TRAVA.parent.mkdir(exist_ok=True)
@@ -52,6 +66,11 @@ def main() -> int:
             if not gdrive.configurado() or not law_firm_id:
                 print('Google Drive não configurado (GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE / GOOGLE_DRIVE_LAW_FIRM_ID).')
                 return 0
+            if args.reabrir_recusados:
+                if not args.gravar:
+                    print('--reabrir-recusados só vale com --gravar (sem ele nada é apagado).')
+                    return 1
+                print(f'{svc.reabrir_recusados(law_firm_id)} recusa(s) da importação automática reaberta(s).')
             try:
                 planos = svc.planejar(law_firm_id)
             except gdrive.DriveErro as erro:
@@ -69,6 +88,10 @@ def main() -> int:
                 return 0
 
             svc.executar(law_firm_id, planos, limite=args.limite)
+            decisoes = sum(1 for p in planos if p.upload_id)
+            if decisoes:
+                print(f'Lendo {decisoes} decisão(ões) na fila da Jurisprudência…')
+                svc.ler_decisoes(law_firm_id, planos)
             for p in planos:
                 if p.acao != svc.PULAR:
                     marca = {True: '✓', False: '✗', None: '·'}[p.ok]
