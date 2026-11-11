@@ -265,7 +265,7 @@
             </div>
             <div class="modal-body">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <small class="text-muted">Últimos <span id="mcpDays">30</span> dias, agregado por função. Os argumentos das chamadas não são registrados.</small>
+                    <small class="text-muted">Últimos <span id="mcpDays">30</span> dias, agregado por função. Prompts, agentes e skills da Biblioteca de IA contam pelo nome do item, digitados com "/" ou abertos pelo Claude. Os argumentos das chamadas não são registrados.</small>
                     <select id="mcpDaysSelect" class="form-select form-select-sm" style="width:auto;">
                         <option value="7">7 dias</option>
                         <option value="30" selected>30 dias</option>
@@ -409,10 +409,20 @@ document.addEventListener('DOMContentLoaded', function () {
                     var tipo = f.kind === 'prompt'
                         ? '<span class="badge text-bg-light border ms-1">comando</span>'
                         : (f.kind === 'api' ? '<span class="badge text-bg-light border ms-1">API</span>' : '');
+                    var funcao = '<code>' + escapeHtml(f.name) + '</code>' + tipo;
+                    // Item da Biblioteca de IA (ou comando do IntellexIA): título e
+                    // tipo na frente, o comando embaixo. Pessoal vem sem título.
+                    if (f.item) {
+                        var origem = { escritorio: 'Escritório', pessoal: 'Pessoal', sistema: 'IntellexIA' }[f.item.origem] || '';
+                        var rotulo = f.item.origem === 'sistema' ? f.item.tipo_rotulo : f.item.tipo_rotulo + ' · ' + origem;
+                        funcao = (f.item.titulo ? '<div class="fw-semibold">' + escapeHtml(f.item.titulo) + '</div>' : '') +
+                            '<span class="badge text-bg-light border me-1">' + escapeHtml(rotulo) + '</span>' +
+                            '<code class="small">' + escapeHtml(f.name) + '</code>';
+                    }
                     var erroTitulo = f.last_error ? ' title="Último erro: ' + escapeHtml(f.last_error) + '"' : '';
                     var tr = document.createElement('tr');
                     tr.innerHTML =
-                        '<td><code>' + escapeHtml(f.name) + '</code>' + tipo + '</td>' +
+                        '<td>' + funcao + '</td>' +
                         '<td class="text-center">' + f.calls + '</td>' +
                         '<td class="text-center"' + erroTitulo + '>' +
                             (f.errors ? '<span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">' + f.errors + '</span>' : '0') +

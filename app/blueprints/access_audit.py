@@ -2,7 +2,7 @@
 Dashboard admin de atividade de usuários: último login, telas acessadas,
 usuários online agora. Admin-only (módulo admin_users).
 """
-from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, flash
+from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, flash, current_app
 from functools import wraps
 
 from datetime import datetime
@@ -104,6 +104,15 @@ def user_mcp(user_id):
     days = request.args.get('days', 30, type=int)
     days = max(1, min(days, 365))
     funcoes = access_audit_service.get_user_mcp_functions(law_firm_id, user_id, days=days)
+    # Comandos (digitados com "/" ou pedidos pelo usar_prompt): de qual item da
+    # Biblioteca de IA, ou do IntellexIA, e de que tipo.
+    from app.services import prompt_library_service
+    try:
+        itens = prompt_library_service.descrever_comandos(
+            law_firm_id, user_id, [f['name'] for f in funcoes if f['kind'] == 'prompt'])
+    except Exception:
+        current_app.logger.exception('Falha ao descrever comandos da Biblioteca (ignorada)')
+        itens = {}
     return jsonify({
         "user": {"id": user.id, "name": user.name, "email": user.email},
         "days": days,
@@ -116,5 +125,6 @@ def user_mcp(user_id):
             # Gravado em UTC; format_datetime_sp converte para São Paulo.
             "last_called_at": format_datetime_sp(f['last_called_at']),
             "last_error": f['last_error'],
+            "item": itens.get(f['name']) if f['kind'] == 'prompt' else None,
         } for f in funcoes],
     })

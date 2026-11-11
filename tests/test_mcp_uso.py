@@ -23,7 +23,7 @@ from fastmcp.exceptions import ToolError
 
 from main import app
 from app.models import (
-    db, LawFirm, McpOAuthClient, McpOAuthToken, User, UserMcpCall, UserPageVisit,
+    db, LawFirm, McpOAuthClient, McpOAuthToken, PromptLibraryItem, User, UserMcpCall, UserPageVisit,
 )
 from app.services import access_audit_service as svc
 
@@ -74,6 +74,7 @@ def _setup():
 def _cleanup(firm):
     McpOAuthToken.query.filter_by(law_firm_id=firm.id).delete()
     UserMcpCall.query.filter_by(law_firm_id=firm.id).delete()
+    PromptLibraryItem.query.filter_by(law_firm_id=firm.id).delete()
     for u in User.query.filter_by(law_firm_id=firm.id).all():
         UserPageVisit.query.filter_by(user_id=u.id).delete()
         db.session.delete(u)
@@ -177,6 +178,62 @@ def test_middleware(firm, users):
         usage_log.get_access_token = original
 
 
+def _item(firm, dono, titulo, slug, tipo, visibilidade):
+    from datetime import datetime
+    agora = datetime.utcnow()
+    item = PromptLibraryItem(law_firm_id=firm.id, owner_id=dono.id, tipo=tipo, titulo=titulo, slug=slug,
+                             corpo='Faça a triagem.', visibilidade=visibilidade, created_at=agora, updated_at=agora)
+    db.session.add(item)
+    db.session.commit()
+    return item
+
+
+def test_biblioteca(firm, users):
+    print('\n3b. Prompts, agentes e skills da Biblioteca de IA')
+    from mcp_server import usage_log
+
+    u = users[0]
+    _item(firm, u, 'Triagem de intimação', 'triagem', 'agente', 'escritorio')
+    _item(firm, u, 'Meu rascunho secreto', 'rascunho', 'skill', 'pessoal')
+    claims = {'user_id': u.id, 'law_firm_id': firm.id}
+    original = usage_log.get_access_token
+    usage_log.get_access_token = lambda: SimpleNamespace(claims=claims)
+    try:
+        mw = usage_log.UsoMcpMiddleware(app)
+
+        def usar(nome):
+            return SimpleNamespace(message=SimpleNamespace(name='usar_prompt', arguments={'nome': nome, 'campos': {'cpf': '12345678909'}}))
+
+        async def ok(_):
+            return 'texto'
+
+        async def falha(_):
+            raise ToolError('Não achei')
+
+        asyncio.run(mw.on_call_tool(usar('escritorio_agente_triagem'), ok))
+        asyncio.run(mw.on_call_tool(usar('escritorio_agente_triagem'), ok))
+        asyncio.run(mw.on_call_tool(usar('meu_skill_rascunho'), ok))
+        # O mesmo item digitado com "/" (prompts/get) cai na mesma linha.
+        ctx_barra = SimpleNamespace(message=SimpleNamespace(name='escritorio_agente_triagem', arguments={}))
+        asyncio.run(mw.on_get_prompt(ctx_barra, ok))
+        try:
+            asyncio.run(mw.on_call_tool(usar('nome_que_o_claude_inventou'), falha))
+        except ToolError:
+            pass
+        db.session.rollback()
+        linhas = {(l.kind, l.name): l for l in UserMcpCall.query.filter_by(user_id=u.id).all()}
+        item = linhas.get(('prompt', 'escritorio_agente_triagem'))
+        check('usar_prompt conta como o item, junto com o "/"', item is not None and item.calls == 3,
+              str({k: v.calls for k, v in linhas.items()}))
+        check('item pessoal também conta', ('prompt', 'meu_skill_rascunho') in linhas)
+        erro = linhas.get(('tool', 'usar_prompt'))
+        check('nome com erro fica como usar_prompt', erro is not None and (erro.calls, erro.errors) == (1, 1))
+        check('nome inventado não é gravado', not any('inventou' in n for _, n in linhas))
+        check('campos do item não são gravados', not any('12345678909' in (l.last_error or '') for l in linhas.values()))
+    finally:
+        usage_log.get_access_token = original
+
+
 def test_tela(firm, users):
     print('\n4. Tela de Atividade de Usuários')
     admin = users[0]
@@ -194,6 +251,14 @@ def test_tela(firm, users):
     check('detalhe por JSON', nomes['resumo_fap']['calls'] == 3 and nomes['dou_do_dia']['kind'] == 'prompt', str(j)[:300])
     check('coluna mostra o uso da API de hoje', 'API: 2 chamadas hoje' in html)
     check('modal identifica chamada da API', "f.kind === 'api'" in html)
+    agente = nomes.get('escritorio_agente_triagem', {}).get('item') or {}
+    check('item do escritório com título e tipo',
+          (agente.get('titulo'), agente.get('tipo_rotulo'), agente.get('origem')) == ('Triagem de intimação', 'Agente', 'escritorio'),
+          str(agente))
+    pessoal = nomes.get('meu_skill_rascunho', {}).get('item') or {}
+    check('item pessoal sem título (nem o admin vê)', pessoal.get('tipo') == 'skill' and pessoal.get('titulo') is None,
+          str(pessoal))
+    check('ferramenta comum sem item', nomes['resumo_fap'].get('item') is None)
     outro = LawFirm.query.filter(LawFirm.id != firm.id).first()
     if outro:
         alheio = User.query.filter_by(law_firm_id=outro.id).first()
@@ -210,6 +275,7 @@ def main() -> int:
             test_conexao(firm, users)
             test_api(firm, users)
             test_middleware(firm, users)
+            test_biblioteca(firm, users)
             test_tela(firm, users)
         finally:
             db.session.rollback()

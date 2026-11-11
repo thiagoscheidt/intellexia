@@ -639,6 +639,43 @@ def prompt_do_sistema(nome: str) -> dict | None:
     return next((i for i in prompts_do_sistema() if i['comando'] == nome), None)
 
 
+def descrever_comandos(law_firm_id: int, user_id: int, nomes) -> dict[str, dict]:
+    """``{comando: {tipo, tipo_rotulo, origem, titulo}}`` para a auditoria de uso do MCP.
+
+    Lê o item pelo nome do comando como ele foi gravado em ``user_mcp_calls``,
+    inclusive arquivado (o uso aconteceu). Item **pessoal** não mostra o título:
+    pessoal é só do dono, nem o admin vê — fica o tipo e o nome do comando,
+    que já está na linha. Comando que não casa com nada (prefixo trocado
+    depois, item apagado) fica de fora e a tela mostra só o nome.
+    """
+    saida: dict[str, dict] = {}
+    sistema = {i['comando']: i for i in prompts_do_sistema()}
+    for nome in set(nomes or ()):
+        if nome in sistema:
+            saida[nome] = {'tipo': 'agente', 'tipo_rotulo': 'Comando do IntellexIA', 'origem': 'sistema',
+                           'titulo': sistema[nome]['titulo']}
+            continue
+        for vis in ('escritorio', 'pessoal'):
+            achou = False
+            for tipo, rotulo in TIPOS.items():
+                prefixo = prefixo_comando(vis, tipo)
+                if not nome.startswith(prefixo):
+                    continue
+                q = PromptLibraryItem.query.filter_by(law_firm_id=law_firm_id, visibilidade=vis, tipo=tipo,
+                                                      slug=nome[len(prefixo):])
+                if vis == 'pessoal':
+                    q = q.filter_by(owner_id=user_id)
+                item = q.order_by(PromptLibraryItem.arquivado_em.isnot(None), PromptLibraryItem.id.desc()).first()
+                if item is not None:
+                    saida[nome] = {'tipo': tipo, 'tipo_rotulo': rotulo, 'origem': vis,
+                                   'titulo': item.titulo if vis == 'escritorio' else None}
+                achou = True
+                break
+            if achou:
+                break
+    return saida
+
+
 # ── ferramentas do conector (o que o Claude consegue consultar) ──────────────
 
 _cache_modulos: dict = {'mtime': None, 'mapa': {}}
