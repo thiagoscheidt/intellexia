@@ -530,6 +530,89 @@ def test_fila():
     check('fila é por escritório', up.painel(2)['linhas'] == [])
 
 
+def test_embargos():
+    print('\n7a. Embargos lidos como sentença (Drive, 12/11/2026)')
+    from app.models import JurisprudenceUpload as U, JurisprudenceDecision as D
+    from app.services import jurisprudence_upload_service as up
+    from app.agents.jurisprudence.decision_extractor_agent import JurisprudenceDecisionExtractorAgent
+
+    for nome in ('13_08_2025 - SENTENÇAED2 - MARCOPOLO - 5010916-38.2024.4.04.pdf',
+                 '28_02_2022 - ACÓRDÃOEDSTJ - HIGISERV.pdf', '14_10_2026 - Decisão ED - Dana.pdf',
+                 'Evento 33 - Decisão ED.pdf', '16.09.2026 - SENTENÇA ED - HAVAN.pdf',
+                 '03_11_2026 - Acórdão ED  - EBS.pdf', 'EMBARGOS DE DECLARAÇÃO - X.pdf'):
+        check(f'nome de ED reconhecido: {nome}', norm.embargos_pelo_nome(nome))
+    for nome in ('13_12_2023 - SENTENÇA - UNIMED.pdf', '29_07_2026 - ACÓRDÃO AG. INTERNO - ASTER.pdf',
+                 '09_06_2026 - DECRESP - KONECTA.pdf', 'SENTENÇA - EDITORA ABRIL.pdf',
+                 '29_04_2024 - ACÓRDÃOSTFINT - SANETRAN.pdf', 'SENTENÇA - EDP ENERGIA.pdf'):
+        check(f'nome sem ED não confunde: {nome}', not norm.embargos_pelo_nome(nome))
+    check('classe "Embargos de Declaração em …" é ED',
+          norm.embargos_pela_classe('EMBARGOS DE DECLARAÇÃO EM PROCEDIMENTO COMUM'))
+    check('classe "Procedimento Comum" não é ED', not norm.embargos_pela_classe('Procedimento Comum'))
+
+    processo = '5010916-38.2024.4.04.7205'
+    sentenca = {**DADOS_PDF, 'processo': processo, 'tipo_documento': 'SENTENCA', 'orgao_julgador': '1ª Vara',
+                'classe_processual': 'Procedimento Comum', 'data_julgamento': '30/05/2025'}
+
+    def ler(nome, dados):
+        with app.test_request_context():
+            up.disparar = lambda *a, **k: None
+            ids, _ = up.receber(1, [_pdf(nome)], user_id=1)
+        agente = JurisprudenceDecisionExtractorAgent(model_name='fake', llm_factory=_FakeLLM(dados, False).fabrica)
+        return up.processar(1, ids[0], agente=agente)
+
+    u = ler('30_05_2025 - SENTENÇA - MARCOPOLO.pdf', sentenca)
+    check('a sentença entra', u.status == 'done' and u.decision.tipo_documento == 'sentenca')
+
+    ed1 = ler('07_07_2025 - SENTENÇAED1 - MARCOPOLO.pdf', {**sentenca, 'data_julgamento': '07/07/2025'})
+    check('ED com cabeçalho de sentença vira embargos, não "Revisar"',
+          ed1.status == 'done' and ed1.decision.tipo_documento == 'embargos', (ed1.status, ed1.decision_id))
+    check('a leitura original fica registrada',
+          ed1.extracted_json.get('tipo_documento_lido') == 'SENTENCA'
+          and ed1.extracted_json.get('tipo_documento_ajuste') == 'nome do arquivo', ed1.extracted_json)
+
+    ed2 = ler('13_08_2025 - SENTENÇAED2 - MARCOPOLO.pdf', {**sentenca, 'data_julgamento': '13/08/2025'})
+    check('ED2 do mesmo processo é outra decisão', ed2.status == 'done' and ed2.decision_id != ed1.decision_id)
+
+    de_novo = ler('13_08_2025 - SENTENÇAED2 - MARCOPOLO (1).pdf', {**sentenca, 'data_julgamento': '13/08/2025'})
+    check('o mesmo ED compartilhado de novo vai para "Revisar"',
+          de_novo.status == 'review' and de_novo.duplicate_of_id == ed2.decision_id)
+
+    pela_classe = ler('Evento 39 - Decisão.pdf', {**sentenca, 'data_julgamento': '20/09/2025',
+                                                  'classe_processual': 'Embargos de Declaração em Procedimento Comum'})
+    check('sem ED no nome, a classe processual decide',
+          pela_classe.status == 'done' and pela_classe.decision.tipo_documento == 'embargos'
+          and pela_classe.extracted_json.get('tipo_documento_ajuste') == 'classe processual')
+
+    # O que já estava parado em "Revisar" antes da correção: lido como sentença
+    # e marcado como duplicata da sentença do processo.
+    with app.test_request_context():
+        ids, _ = up.receber(1, [_pdf('29_08_2025 - SENTENÇAED3 - MARCOPOLO.pdf')], user_id=1)
+    parado = db.session.get(U, ids[0])
+    parado.status = U.STATUS_REVIEW
+    parado.extracted_json = {**sentenca, 'data_julgamento': '29/08/2025'}
+    parado.duplicate_of_id = u.decision_id
+    sentenca_avulsa = ler('SENTENÇA - OUTRA.pdf', {**sentenca, 'processo': '5000001-00.2025.4.04.7200'})
+    with app.test_request_context():
+        ids_s, _ = up.receber(1, [_pdf('SENTENÇA - OUTRA (2).pdf')], user_id=1)
+    sentenca_parada = db.session.get(U, ids_s[0])
+    sentenca_parada.status = U.STATUS_REVIEW
+    sentenca_parada.extracted_json = {**sentenca, 'processo': '5000001-00.2025.4.04.7200', 'data_julgamento': '01/06/2025'}
+    sentenca_parada.duplicate_of_id = sentenca_avulsa.decision_id
+    db.session.commit()
+
+    simulado = up.reclassificar_embargos_em_revisao(1)
+    check('simulação só lista o ED', [i['upload_id'] for i in simulado] == [parado.id], simulado)
+    check('simulação diz que vai para a base', simulado and simulado[0]['destino'] == 'base')
+    check('simulação não grava', db.session.get(U, parado.id).status == U.STATUS_REVIEW)
+
+    up.reclassificar_embargos_em_revisao(1, gravar=True)
+    parado = db.session.get(U, parado.id)
+    check('ED parado vira decisão de embargos', parado.status == 'done' and parado.decision.tipo_documento == 'embargos')
+    check('sentença parada continua em "Revisar"', db.session.get(U, sentenca_parada.id).status == U.STATUS_REVIEW)
+    check('quatro EDs da MARCOPOLO na base', D.query.filter_by(
+        law_firm_id=1, processo_digits='50109163820244047205', tipo_documento='embargos').count() == 4)
+
+
 def _pdf_com_texto(paginas):
     import fitz
     doc = fitz.open()
@@ -975,6 +1058,7 @@ def main():
         test_correcao_manual()
         test_agente()
         test_fila()
+        test_embargos()
         test_indice()
         test_geracao()
     test_rotas_ctx()

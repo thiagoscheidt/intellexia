@@ -823,7 +823,15 @@ e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
   decisões processadas duas vezes pela ferramenta anterior; a segunda é pulada.
   No PDF, mesmo processo e instância vai para "revisar" com a leitura guardada
   em `extracted_json`, e o advogado decide (manter, substituir, guardar as
-  duas) — nunca descartar em silêncio.
+  duas) — nunca descartar em silêncio. **Embargos só são duplicata com a mesma
+  data**: um processo tem ED1, ED2, ED3, o ED da sentença e o do acórdão.
+- **ED julgado na vara vem com cabeçalho "SENTENÇA"** e a IA segue o cabeçalho
+  (44 de 87 itens em "Revisar" na homologação, 12/11/2026). O tipo é corrigido
+  depois da leitura (`jurisprudence_upload_service.tipo_corrigido`) pelo nome do
+  arquivo do escritório ("Decisão ED", "SENTENÇAED1", "ACÓRDÃOEDSTJ") e pela
+  classe processual lida ("Embargos de Declaração em …"); a leitura original
+  fica em `tipo_documento_lido`. O que já estava parado se reaplica sem reler o
+  PDF: `scripts/reclassificar_embargos_jurisprudencia.py` (simula por padrão).
 - **Correção manual sobrevive ao reprocessamento**: o campo editado entra em
   `manual_fields_json` e `atualizar_da_ia` não o sobrescreve.
 - **Teses: texto livre + correspondência curada.** A decisão guarda a tese como

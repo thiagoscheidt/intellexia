@@ -227,6 +227,23 @@ def tipo_documento(valor) -> Optional[str]:
     return TIPO_OUTRA
 
 
+# Nome do arquivo como o escritório nomeia: "SENTENÇAED1", "ACÓRDÃOEDSTJ",
+# "Decisão ED", "Acórdão ED". O ED colado ou separado do tipo, seguido de
+# número, tribunal ou qualquer coisa que não seja letra ("EDITORA" não casa).
+_ED_NO_NOME = re.compile(
+    r'(?:SENTENCA|SETENCA|ACORDAO|DECISAO)\s*ED(?=\d|STJ|STF|[^A-Z]|$)|\bEMBARGOS\b')
+
+
+def embargos_pelo_nome(nome) -> bool:
+    """O nome do arquivo diz que é decisão em embargos de declaração."""
+    return bool(_ED_NO_NOME.search(sem_acento(nome or '').upper()))
+
+
+def embargos_pela_classe(classe) -> bool:
+    """A classe processual lida é "Embargos de Declaração em …"."""
+    return chave(classe).startswith('EMBARGOS DE DECLARACAO')
+
+
 def resultado(valor) -> Optional[str]:
     k = chave(valor)
     if not k:

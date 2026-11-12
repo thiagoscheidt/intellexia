@@ -223,6 +223,7 @@ def processar(law_firm_id: int, upload_id: int, *, user_id: Optional[int] = None
         return _falhou(upload, 'Erro inesperado na leitura. Tente de novo; se persistir, avise o suporte.')
 
     upload.model_used = getattr(agente, 'model_name', modelo)
+    lido = tipo_corrigido(lido, upload.original_filename)
     upload.extracted_json = _serializavel(lido)
     resolvedor = svc.ResolvedorDeTeses(law_firm_id)
 
@@ -232,10 +233,14 @@ def processar(law_firm_id: int, upload_id: int, *, user_id: Optional[int] = None
                             ementa_modo=lido.get('ementa_modo'), extraction_model=upload.model_used)
         return _concluiu(upload, upload.decision)
 
+    return _registrar_leitura(upload, lido, resolvedor)
+
+
+def _registrar_leitura(upload: JurisprudenceUpload, lido: dict,
+                       resolvedor: 'svc.ResolvedorDeTeses') -> JurisprudenceUpload:
+    """Leitura nova pronta: vai para "Revisar" se parece duplicata, senão vira decisão."""
     campos = svc.normalizar_registro(lido)
-    exata = svc.mesma_decisao(law_firm_id, campos['processo_digits'], campos['tipo_documento'],
-                              campos['data_julgamento'])
-    parecida = exata or svc.mesma_instancia(law_firm_id, campos['processo_digits'], campos['tipo_documento'])
+    parecida = _duplicata(upload.law_firm_id, campos)
     if parecida is not None:
         upload.status = JurisprudenceUpload.STATUS_REVIEW
         upload.duplicate_of_id = parecida.id
@@ -245,13 +250,81 @@ def processar(law_firm_id: int, upload_id: int, *, user_id: Optional[int] = None
         return upload
 
     decisao = svc.criar_decisao(
-        law_firm_id, lido, source=JurisprudenceDecision.SOURCE_PDF, resolvedor=resolvedor,
+        upload.law_firm_id, lido, source=JurisprudenceDecision.SOURCE_PDF, resolvedor=resolvedor,
         user_id=upload.created_by_id, pdf_path=upload.file_path,
         original_filename=upload.original_filename, extraction_model=upload.model_used,
         ementa_modo=lido.get('ementa_modo'),
     )
     db.session.flush()
     return _concluiu(upload, decisao)
+
+
+def _duplicata(law_firm_id: int, campos: dict) -> Optional[JurisprudenceDecision]:
+    """Decisão da base que esta leitura parece repetir.
+
+    Mesmo processo, instância e data é a mesma decisão. Mesmo processo e
+    instância com outra data vai para o advogado decidir — menos em embargos:
+    um processo tem ED1, ED2, ED3, o ED da sentença e o do acórdão, cada um uma
+    decisão (em homologação, a ED2 da MARCOPOLO caía em "Revisar" contra a ED1).
+    """
+    exata = svc.mesma_decisao(law_firm_id, campos['processo_digits'], campos['tipo_documento'],
+                              campos['data_julgamento'])
+    if exata is not None or campos['tipo_documento'] == norm.TIPO_EMBARGOS:
+        return exata
+    return svc.mesma_instancia(law_firm_id, campos['processo_digits'], campos['tipo_documento'])
+
+
+def tipo_corrigido(lido: dict, nome_arquivo: Optional[str]) -> dict:
+    """Embargos de declaração lidos como sentença ou acórdão voltam a ser embargos.
+
+    O ED julgado na vara costuma vir sob o cabeçalho "SENTENÇA", e a IA segue o
+    cabeçalho (Aurora, Cidade Sorriso, Dana: 44 de 87 itens em "Revisar" na
+    homologação em 12/11/2026). O nome do arquivo do escritório ("Decisão ED",
+    "SENTENÇAED1") e a classe processual lida ("Embargos de Declaração em …")
+    decidem. A leitura original fica em ``tipo_documento_lido``.
+    """
+    if not isinstance(lido, dict) or norm.tipo_documento(lido.get('tipo_documento')) == norm.TIPO_EMBARGOS:
+        return lido
+    if norm.embargos_pelo_nome(nome_arquivo):
+        motivo = 'nome do arquivo'
+    elif norm.embargos_pela_classe(lido.get('classe_processual')):
+        motivo = 'classe processual'
+    else:
+        return lido
+    return {**lido, 'tipo_documento': 'EMBARGOS DE DECLARACAO',
+            'tipo_documento_lido': lido.get('tipo_documento'), 'tipo_documento_ajuste': motivo}
+
+
+def reclassificar_embargos_em_revisao(law_firm_id: int, *, gravar: bool = False) -> list[dict]:
+    """Reaplica ``tipo_corrigido`` nos itens parados em "Revisar", sem reler o PDF.
+
+    A leitura está guardada em ``extracted_json``. Só mexe em quem o tipo muda;
+    o que continua parecendo duplicata fica em "Revisar", agora contra a decisão
+    certa. Sem ``gravar``, só diz o que faria.
+    """
+    resultado = []
+    resolvedor = svc.ResolvedorDeTeses(law_firm_id) if gravar else None
+    pendentes = (JurisprudenceUpload.query
+                 .filter_by(law_firm_id=law_firm_id, status=JurisprudenceUpload.STATUS_REVIEW)
+                 .order_by(JurisprudenceUpload.id).all())
+    for upload in pendentes:
+        lido = upload.extracted_json
+        ajustado = tipo_corrigido(lido, upload.original_filename)
+        if ajustado is lido:
+            continue
+        campos = svc.normalizar_registro(ajustado)
+        parecida = _duplicata(law_firm_id, campos)
+        item = {'upload_id': upload.id, 'arquivo': upload.original_filename,
+                'de': lido.get('tipo_documento'), 'motivo': ajustado['tipo_documento_ajuste'],
+                'destino': 'revisar' if parecida else 'base',
+                'parecida_id': parecida.id if parecida else None}
+        resultado.append(item)
+        if not gravar:
+            continue
+        upload.extracted_json = _serializavel(ajustado)
+        _registrar_leitura(upload, ajustado, resolvedor)
+        item['decision_id'] = upload.decision_id
+    return resultado
 
 
 def _serializavel(lido: dict) -> dict:
