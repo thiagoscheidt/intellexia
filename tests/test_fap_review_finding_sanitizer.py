@@ -453,20 +453,23 @@ def test_r4_nao_mexe_quando_o_numero_ja_esta_certo():
           mantidos and mantidos[0].get('sanitizer_fix') is None)
 
 
-def test_r4_descarta_quando_o_intervalo_derruba_a_tese():
-    print('\n29. R4 — intervalo real não sustenta o restabelecimento')
+def test_r4_acima_de_60_vira_conferencia():
+    print('\n29. R4 — acima de 60 dias: conferência, nunca erro (RPI-36)')
 
-    # 01/01/2020 → 01/06/2020 são 151 dias: não é restabelecimento.
-    insustentavel = achado(
+    # 01/01/2020 → 01/06/2020 são 151 dias: não é restabelecimento, mas desde a
+    # RPI-36 o par fica para a equipe conferir em vez de sumir.
+    acima = achado(
         description='Restabelecimento: DCB 01/01/2020 e DIB 01/06/2020, '
                     'intervalo inferior a 60 dias.',
     )
-    mantidos, descartes = sanear([insustentavel], '')
-    check('achado é descartado', len(mantidos) == 0 and len(descartes) == 1)
-    check('regra é R4', descartes and descartes[0]['regra'] == 'R4')
-    check('motivo traz o intervalo real',
-          descartes and '151' in descartes[0]['motivo'],
-          descartes[0]['motivo'] if descartes else '')
+    mantidos, descartes = sanear([acima], '')
+    check('achado é mantido', len(mantidos) == 1 and len(descartes) == 0)
+    contagem = mantidos[0].get('contagem_dias') if mantidos else {}
+    check('marcado como conferência', contagem.get('conferencia') is True, str(contagem))
+    check('gravidade cai para FORMAL', mantidos and mantidos[0]['severity'] == 'FORMAL')
+    check('motivo traz o intervalo real', '151 dias' in contagem.get('motivo', ''),
+          contagem.get('motivo'))
+    check('motivo explica o acima de 60', 'acima de 60' in contagem.get('motivo', ''))
 
 
 def test_r4_so_atua_em_achado_da_tese_dos_60_dias():
@@ -498,6 +501,100 @@ def test_r4_precisa_de_exatamente_duas_datas():
     mantidos3, _ = sanear([tres], '')
     check('três datas: intacto (ambíguo)',
           mantidos3 and mantidos3[0]['description'] == original3)
+
+
+# ── R4 — RPI-36: a conta no achado, 1 dia de tolerância, 58+ para conferência ──
+
+def _par(descricao, documento='', **kw):
+    mantidos, descartes = sanear([achado(category='CAT-2', description=descricao, **kw)], documento)
+    return (mantidos[0] if mantidos else None), descartes
+
+
+def test_r4_mostra_a_conta():
+    print('\n41. RPI-36 — a conta do par vai no achado')
+    a, _ = _par('Restabelecimento: DCB 22/12/2017 e DIB 22/01/2018, 30 dias de intervalo.')
+    contagem = (a or {}).get('contagem_dias') or {}
+    check('conta no formato DIB − DCB − 1',
+          contagem.get('conta') == '22/01/2018 − 22/12/2017 − 1 = 30 dias', contagem.get('conta'))
+    check('não é conferência', not contagem.get('conferencia'))
+    check('gravidade mantida', a and a['severity'] == 'CRÍTICO')
+    check('dias e datas registrados',
+          contagem.get('dias') == 30 and contagem.get('dcb') == '22/12/2017'
+          and contagem.get('dib') == '22/01/2018', str(contagem))
+
+    um, _ = _par('Restabelecimento: DCB 01/01/2020 e DIB 03/01/2020.')
+    check('singular em 1 dia',
+          ((um or {}).get('contagem_dias') or {}).get('conta') == '03/01/2020 − 01/01/2020 − 1 = 1 dia')
+
+
+def test_r4_caso_giassi_peticao_certa():
+    print('\n42. RPI-36 — caso GIASSI: a petição segue a regra, o achado sai')
+    doc = 'Joelson: DCB em 31/01/2022 e DIB em 10/03/2022, intervalo de 37 dias.'
+    a, descartes = _par('Restabelecimento (Joelson): entre a DCB de 31/01/2022 e a DIB de '
+                        '10/03/2022 há 38 dias, e não 37 dias como consta na petição.', doc)
+    check('achado descartado', a is None and len(descartes) == 1)
+    check('regra R4', descartes and descartes[0]['regra'] == 'R4')
+    check('motivo traz a conta', descartes and '10/03/2022 − 31/01/2022 − 1 = 37 dias'
+          in descartes[0]['motivo'], descartes[0]['motivo'] if descartes else '')
+
+    extenso = 'Joelson: DCB 31/01/2022, DIB 10/03/2022, intervalo de 37 (trinta e sete) dias.'
+    a, descartes = _par('Restabelecimento: DCB 31/01/2022 e DIB 10/03/2022 — são 38 dias, '
+                        'não 37 dias.', extenso)
+    check('número por extenso na petição também conta', a is None and len(descartes) == 1)
+
+
+def test_r4_um_dia_de_diferenca_e_conferencia():
+    print('\n43. RPI-36 — 1 dia de diferença: mostra a conta, não aponta erro')
+    doc = 'Joelson: DCB em 31/01/2022 e DIB em 10/03/2022, intervalo de 36 dias.'
+    a, descartes = _par('Restabelecimento: entre a DCB de 31/01/2022 e a DIB de 10/03/2022 '
+                        'há 37 dias, e não 36 dias como consta.', doc)
+    contagem = (a or {}).get('contagem_dias') or {}
+    check('mantido', a is not None and not descartes)
+    check('vira conferência', contagem.get('conferencia') is True, str(contagem))
+    check('gravidade FORMAL', a and a['severity'] == 'FORMAL')
+    check('motivo fala em proposital', 'proposital' in contagem.get('motivo', ''))
+
+    # Um número só, e ele é o da petição: não pode ser "corrigido" no texto.
+    a, _ = _par('Restabelecimento: a petição informa 36 dias entre a DCB de 31/01/2022 '
+                'e a DIB de 10/03/2022.', doc)
+    check('número da petição não é reescrito', a and '36 dias' in a['description'],
+          a and a['description'])
+    check('e também vira conferência',
+          ((a or {}).get('contagem_dias') or {}).get('conferencia') is True)
+
+    # Sem a petição para conferir, 1 dia de diferença entre os números citados
+    # continua sendo conferência — quem quer que esteja certo, não é erro.
+    a, _ = _par('Restabelecimento: DCB 31/01/2022 e DIB 10/03/2022, 36 dias; o correto é 37 dias.')
+    check('sem documento também é conferência',
+          ((a or {}).get('contagem_dias') or {}).get('conferencia') is True)
+
+
+def test_r4_dois_dias_de_diferenca_e_erro():
+    print('\n44. RPI-36 — 2 dias ou mais de diferença continua erro')
+    doc = 'Joelson: DCB em 31/01/2022 e DIB em 10/03/2022, intervalo de 35 dias.'
+    a, descartes = _par('Restabelecimento: entre a DCB de 31/01/2022 e a DIB de 10/03/2022 '
+                        'há 37 dias, e não 35 dias como consta.', doc)
+    contagem = (a or {}).get('contagem_dias') or {}
+    check('mantido', a is not None and not descartes)
+    check('não é conferência', not contagem.get('conferencia'))
+    check('gravidade mantida', a and a['severity'] == 'CRÍTICO')
+    check('com a conta', contagem.get('conta') == '10/03/2022 − 31/01/2022 − 1 = 37 dias')
+
+
+def test_r4_58_a_60_dias_conferencia():
+    print('\n45. RPI-36 — 58, 59 e 60 dias: conferência; 60 é restabelecimento')
+    for dib, dias in (('30/04/2023', 59), ('01/05/2023', 60), ('29/04/2023', 58)):
+        a, descartes = _par(f'Restabelecimento: DCB 01/03/2023 e DIB {dib}, fora do prazo.')
+        contagem = (a or {}).get('contagem_dias') or {}
+        check(f'{dias} dias: mantido como conferência',
+              a is not None and not descartes and contagem.get('conferencia') is True
+              and contagem.get('dias') == dias, str(contagem))
+        check(f'{dias} dias: não diz que passou do limite',
+              'acima de 60' not in contagem.get('motivo', ''))
+
+    a, _ = _par('Restabelecimento: DCB 01/03/2023 e DIB 25/04/2023, 54 dias.')
+    check('57 dias ou menos não é conferência',
+          not ((a or {}).get('contagem_dias') or {}).get('conferencia'))
 
 
 # ── R7 — FB-02: petição x anexo/planilha divergindo só na formatação ─────
@@ -584,9 +681,14 @@ def main() -> int:
     test_dias_entre_beneficios_bordas()
     test_r4_corrige_o_numero_de_dias()
     test_r4_nao_mexe_quando_o_numero_ja_esta_certo()
-    test_r4_descarta_quando_o_intervalo_derruba_a_tese()
+    test_r4_acima_de_60_vira_conferencia()
     test_r4_so_atua_em_achado_da_tese_dos_60_dias()
     test_r4_precisa_de_exatamente_duas_datas()
+    test_r4_mostra_a_conta()
+    test_r4_caso_giassi_peticao_certa()
+    test_r4_um_dia_de_diferenca_e_conferencia()
+    test_r4_dois_dias_de_diferenca_e_erro()
+    test_r4_58_a_60_dias_conferencia()
 
     test_r7_razao_social_so_pontuacao_contra_anexo()
     test_r7_nit_formatado_contra_digitos()

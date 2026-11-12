@@ -963,6 +963,13 @@ def translate_finding_category(category: str | None) -> str:
     return str(category or 'Sem categoria').strip() or 'Sem categoria'
 
 
+def is_conference_finding(finding: dict) -> bool:
+    """RPI-36: achado só de conferência (par DCB/DIB de 58 dias ou mais, ou 1 dia
+    de diferença) — aparece na revisão, mas não é erro e não pesa na pontuação."""
+    contagem = finding.get('contagem_dias') if isinstance(finding, dict) else None
+    return isinstance(contagem, dict) and contagem.get('conferencia') is True
+
+
 def build_lawyer_statistics(law_firm_id: int) -> dict:
     """Consolida score e métricas dos advogados a partir do histórico de revisões.
 
@@ -1048,6 +1055,8 @@ def build_lawyer_statistics(law_firm_id: int) -> dict:
         petition_history['latest_at'] = execution.created_at or execution.updated_at
 
         for finding in findings:
+            if is_conference_finding(finding):
+                continue
             severity = normalize_finding_severity(finding.get('severity'))
             category = translate_finding_category(finding.get('category') or 'SEM_CATEGORIA')
 
@@ -1077,6 +1086,8 @@ def build_lawyer_statistics(law_firm_id: int) -> dict:
             petition_history = lawyer_stats[user_id]['petition_history'].get(petition_key)
 
             for finding in findings:
+                if is_conference_finding(finding):
+                    continue
                 fingerprint = build_finding_fingerprint(finding)
                 if not fingerprint:
                     continue

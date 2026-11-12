@@ -125,6 +125,8 @@ O coração da revisão. Cada ponto traz:
 | **Referência do Manual** | A seção do manual do escritório que fundamenta o apontamento. |
 | **Padrão Novo** | Sinaliza quando o caso não está previsto no manual (candidato a Treinamento). |
 
+> [!INFO] **Intervalo entre DCB e DIB (restabelecimento).** Quando o ponto trata de um par de benefícios, o **sistema** refaz a conta e a mostra no ponto — por exemplo, **10/03/2022 − 31/01/2022 − 1 = 37 dias**. Contam-se só os dias entre as duas datas, sem a DCB e sem a DIB; é restabelecimento com até 60 dias, 60 incluído. Se a IA errou a conta, o número é corrigido; se a petição já traz a conta certa e a IA apontou outra, o ponto não aparece. Dois casos ficam com o selo **CONFERIR** no lugar da gravidade — não são erro e **não contam na pontuação** do advogado: pares com **58 dias ou mais** (inclusive acima de 60, quando o benefício normalmente nem entra na petição) e diferença de **1 dia** entre a petição e a conta, que pode ser proposital.
+
 ### Triagem dos pontos (revisado / não pertinente)
 
 Cada ponto de atenção tem dois botões no canto do card, e **toda marcação é salva no sistema** — o progresso vale em qualquer navegador e fica visível para a equipe:

@@ -1695,7 +1695,11 @@
                                 <div class="finding-header-content">
                                     <p class="finding-header-title">Ponto de Atenção {{ loop.index }}</p>
                                     <div class="d-flex flex-wrap align-items-center gap-1">
-                                        {% if finding.severity == 'CRÍTICO' %}
+                                        {% if finding.contagem_dias and finding.contagem_dias.conferencia %}
+                                        <span class="sev-badge sev-badge-formal" title="Só para conferência: não é erro e não conta na pontuação">
+                                            <i class="bi bi-calculator"></i> CONFERIR
+                                        </span>
+                                        {% elif finding.severity == 'CRÍTICO' %}
                                         <span class="sev-badge sev-badge-critical">
                                             <i class="bi bi-exclamation-triangle-fill"></i> CRÍTICO
                                         </span>
@@ -1753,6 +1757,16 @@
                                     <span>Intervalo recalculado pelo sistema: <strong>{{
                                         finding.sanitizer_fix.para }} dias</strong> no lugar de {{
                                         finding.sanitizer_fix.de }}. {{ finding.sanitizer_fix.motivo }}.</span>
+                                </div>
+                                {% endif %}
+
+                                {% if finding.contagem_dias and finding.contagem_dias.conta %}
+                                <div class="finding-fix-note">
+                                    <i class="bi bi-calculator"></i>
+                                    <span>Conta do intervalo entre DCB e DIB: <strong>{{ finding.contagem_dias.conta }}</strong>
+                                        (contam-se só os dias entre as duas datas).
+                                        {% if finding.contagem_dias.conferencia %}<br>{{ finding.contagem_dias.aviso or 'Só para conferência, não é erro' }}. Não conta na pontuação.{% endif %}
+                                    </span>
                                 </div>
                                 {% endif %}
 

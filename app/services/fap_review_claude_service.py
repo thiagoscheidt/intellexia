@@ -612,6 +612,11 @@ def _achado_para_exibir(numero: int, achado: dict, ignorados: set[str]) -> dict:
     correcao = achado.get('sanitizer_fix')
     if isinstance(correcao, dict) and correcao.get('motivo'):
         item['corrigido_pelo_saneador'] = correcao['motivo']
+    contagem = achado.get('contagem_dias')
+    if isinstance(contagem, dict) and contagem.get('conta'):
+        item['conta_dos_dias'] = contagem['conta']
+        if contagem.get('conferencia'):
+            item['so_conferencia'] = contagem.get('motivo') or True
     if _svc.build_finding_fingerprint(achado) in ignorados:
         item['ja_marcado_nao_pertinente'] = True
     if achado.get('is_new_pattern'):

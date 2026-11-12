@@ -18,7 +18,9 @@ Regras implementadas até aqui (remessa R02):
 
 A R4 é a única que **corrige** em vez de descartar. A correção não pode ser
 silenciosa pelo mesmo motivo do descarte, então fica gravada no próprio achado,
-em ``sanitizer_fix``, onde o advogado a lê junto do apontamento.
+em ``sanitizer_fix``, onde o advogado a lê junto do apontamento. Desde a RPI-36
+ela também grava a conta do par (``contagem_dias``) e rebaixa para conferência
+— fora da pontuação — o par de 58 dias ou mais e a diferença de 1 dia.
 """
 
 from __future__ import annotations
@@ -230,11 +232,19 @@ def _achado_dentro_de_citacao(achado: dict, documento: str,
 
 
 # ── R4 ──────────────────────────────────────────────────────────────────
-# RPI-10: o intervalo entre a DCB do benefício anterior e a DIB do seguinte,
-# sem contar o dia da cessação. LLM fazendo aritmética de data erra, e o aceite
-# do briefing é numérico — por isso quem conta é o código.
+# RPI-10/RPI-36: o intervalo entre a DCB do benefício anterior e a DIB do
+# seguinte, contando só os dias entre as duas datas (DIB − DCB − 1). LLM fazendo
+# aritmética de data erra, e o aceite é numérico — por isso quem conta é o código.
+# A conta vai no achado (``contagem_dias``) para o advogado refazê-la.
 
 LIMITE_RESTABELECIMENTO = 60
+
+# RPI-36: de 58 dias para cima (inclusive acima de 60) o par é só conferido —
+# perto do limite a conta decide a tese, e quem decide é a equipe, não o Revisor.
+INICIO_CONFERENCIA = 58
+
+# RPI-36: 1 dia de diferença em relação à conta pode ser proposital.
+TOLERANCIA_DIAS = 1
 
 _DATA_BR = re.compile(r'\b(\d{2})/(\d{2})/(\d{4})\b')
 _QUANTIDADE_DE_DIAS = re.compile(r'\b(\d{1,4})\s*dias?\b', re.IGNORECASE)
@@ -266,11 +276,11 @@ def _para_data(valor: Any) -> date | None:
 def dias_entre_beneficios(dcb: Any, dib: Any) -> int | None:
     """Dias entre a cessação de um benefício e o início do seguinte.
 
-    O dia da cessação não conta: ``(DIB − DCB) − 1``. É a fórmula que satisfaz
-    os dois exemplos do aceite — 22/12/2017 → 22/01/2018 dá 30, e 01/01/2020 →
-    02/01/2020 dá 0. A frase do documento de feedbacks ("não contar o primeiro
-    dia e contar o último") daria 31 no primeiro caso, contradizendo o próprio
-    exemplo de quem a escreveu; seguimos os exemplos.
+    Contam-se só os dias entre as duas datas, sem a DCB e sem a DIB:
+    ``(DIB − DCB) − 1``. Regra do escritório confirmada com a área de benefícios
+    em 05/11/2026 (RPI-36), a mesma dos exemplos da RPI-10 — 22/12/2017 →
+    22/01/2018 dá 30, 01/01/2020 → 02/01/2020 dá 0 e 31/01/2022 → 10/03/2022
+    dá 37 (caso GIASSI). É restabelecimento com até 60 dias, 60 incluído.
 
     Devolve ``None`` quando não há como calcular — data ilegível, ou DIB
     anterior à DCB, que é dado inconsistente e não intervalo negativo.
@@ -281,52 +291,113 @@ def dias_entre_beneficios(dcb: Any, dib: Any) -> int | None:
     return max(0, (fim - inicio).days - 1)
 
 
-def _recalcular_intervalo(achado: dict) -> tuple[str, dict | None, str | None]:
-    """Confere o intervalo citado no achado contra o que as datas dizem.
+def conta_dos_dias(dcb: date, dib: date, dias: int) -> str:
+    """A conta como o advogado a refaz à mão: ``10/03/2022 − 31/01/2022 − 1 = 37 dias``."""
+    return f'{dib:%d/%m/%Y} − {dcb:%d/%m/%Y} − 1 = {dias} {"dia" if dias == 1 else "dias"}'
+
+
+def _dias_no_documento(documento: str, dias: int) -> bool:
+    """O documento traz "N dias" (ou "N (extenso) dias")?"""
+    padrao = rf'(?<![\d.,/]){dias}\s*(?:\([^)]{{0,40}}\)\s*)?dias?\b'
+    return bool(re.search(padrao, documento, re.IGNORECASE))
+
+
+def _com_conta(achado: dict, contagem: dict) -> dict:
+    ajustado = dict(achado)
+    ajustado['contagem_dias'] = contagem
+    return ajustado
+
+
+def _como_conferencia(achado: dict, contagem: dict, aviso: str) -> dict:
+    """RPI-36: o par fica para conferência — aparece com a conta, mas não é erro.
+
+    A gravidade cai para FORMAL (nunca conta como crítico no resumo) e a marca
+    ``contagem_dias.conferencia`` tira o achado da pontuação do advogado.
+    """
+    ajustado = _com_conta(achado, {**contagem, 'conferencia': True, 'aviso': aviso,
+                                   'motivo': f"{contagem['conta']}. {aviso}"})
+    ajustado['severity'] = 'FORMAL'
+    return ajustado
+
+
+def _aplicar_r4(achado: dict, documento: str) -> tuple[dict | None, str | None]:
+    """Recalcula o intervalo do par DCB/DIB citado no achado.
 
     Returns:
-        ``(acao, correcao, motivo)`` — ``acao`` é ``'manter'``, ``'corrigir'``
-        ou ``'descartar'``.
+        ``(achado, None)`` — o achado como deve seguir (com a conta em
+        ``contagem_dias`` quando há par calculável, e o número corrigido quando
+        o modelo errou a conta), ou ``(None, motivo)`` quando a própria petição
+        segue a regra e o achado aponta erro que não existe.
     """
     texto = ' '.join(normalizar_campo(achado.get(campo)) for campo in _CAMPOS_COM_TEXTO)
     if not any(termo in texto for termo in _TESE_DOS_60_DIAS):
-        return 'manter', None, None
+        return achado, None
 
     datas = {_para_data(f'{d}/{m}/{a}') for d, m, a in _DATA_BR.findall(texto)}
     datas.discard(None)
     if len(datas) != 2:
         # Uma data só não fecha intervalo; três ou mais não dizem qual par é o
         # da tese. Nos dois casos, chutar é pior que não mexer.
-        return 'manter', None, None
+        return achado, None
 
     dcb, dib = sorted(datas)
     real = dias_entre_beneficios(dcb, dib)
     if real is None:
-        return 'manter', None, None
+        return achado, None
 
-    if real > LIMITE_RESTABELECIMENTO:
-        return 'descartar', None, (
-            f'entre a DCB de {dcb:%d/%m/%Y} e a DIB de {dib:%d/%m/%Y} há {real} dias, '
-            f'acima dos {LIMITE_RESTABELECIMENTO} que caracterizam restabelecimento'
-        )
+    conta = conta_dos_dias(dcb, dib, real)
+    contagem = {'regra': 'R4', 'dcb': f'{dcb:%d/%m/%Y}', 'dib': f'{dib:%d/%m/%Y}',
+                'dias': real, 'conta': conta}
+
+    if real >= INICIO_CONFERENCIA:
+        aviso = (f'Com {INICIO_CONFERENCIA} dias ou mais o par fica para '
+                 f'conferência, não é erro')
+        if real > LIMITE_RESTABELECIMENTO:
+            aviso += (f'; acima de {LIMITE_RESTABELECIMENTO} dias não é restabelecimento '
+                       f'e o benefício normalmente não entra na petição — se entrou, a '
+                       f'equipe avalia caso a caso')
+        return _como_conferencia(achado, contagem, aviso), None
+
+    aviso_um_dia = (f'A diferença de {TOLERANCIA_DIAS} dia em relação a esta '
+                     f'conta pode ser proposital: fica para conferência, não é erro')
 
     # O limite legal citado no próprio texto não é o intervalo alegado.
     citados = {int(n) for n in _QUANTIDADE_DE_DIAS.findall(texto)}
     citados.discard(LIMITE_RESTABELECIMENTO)
-    if len(citados) != 1:
-        return 'manter', None, None
 
-    alegado = citados.pop()
-    if alegado == real:
-        return 'manter', None, None
+    if len(citados) == 1:
+        alegado = next(iter(citados))
+        if alegado == real:
+            return _com_conta(achado, contagem), None
+        if (documento and _dias_no_documento(documento, alegado)
+                and not _dias_no_documento(documento, real)):
+            # O número citado é o da petição, não a conta do modelo.
+            if abs(alegado - real) <= TOLERANCIA_DIAS:
+                return _como_conferencia(achado, contagem, aviso_um_dia), None
+            return _com_conta(achado, contagem), None
+        # RPI-10: o modelo errou a conta — o apontamento vale, o número não.
+        correcao = {
+            'regra': 'R4',
+            'de': alegado,
+            'para': real,
+            'motivo': (f'entre a DCB de {dcb:%d/%m/%Y} e a DIB de {dib:%d/%m/%Y} há '
+                       f'{real} dias, não {alegado} — contam-se só os dias entre as '
+                       f'duas datas'),
+        }
+        return _com_conta(_aplicar_correcao_de_dias(achado, correcao), contagem), None
 
-    return 'corrigir', {
-        'regra': 'R4',
-        'de': alegado,
-        'para': real,
-        'motivo': (f'entre a DCB de {dcb:%d/%m/%Y} e a DIB de {dib:%d/%m/%Y} há '
-                   f'{real} dias, não {alegado} — o dia da cessação não conta'),
-    }, None
+    if len(citados) == 2 and real in citados:
+        outro = next(iter(citados - {real}))
+        if (documento and _dias_no_documento(documento, real)
+                and not _dias_no_documento(documento, outro)):
+            # Caso GIASSI (RPI-36): a petição traz a conta certa e o modelo
+            # aponta outra.
+            return None, (f'a petição traz {real} dias, que é a conta pela regra '
+                          f'({conta}); o achado apontava {outro}')
+        if abs(outro - real) <= TOLERANCIA_DIAS:
+            return _como_conferencia(achado, contagem, aviso_um_dia), None
+
+    return _com_conta(achado, contagem), None
 
 
 def _aplicar_correcao_de_dias(achado: dict, correcao: dict) -> dict:
@@ -445,12 +516,11 @@ def sanear(achados: list, documento_texto: str = '') -> tuple[list, list[dict]]:
             descartes.append({'regra': 'R7', 'motivo': motivo, 'achado': achado})
             continue
 
-        acao, correcao, motivo = _recalcular_intervalo(achado)
-        if acao == 'descartar':
+        ajustado, motivo = _aplicar_r4(achado, documento)
+        if ajustado is None:
             descartes.append({'regra': 'R4', 'motivo': motivo, 'achado': achado})
             continue
-        if acao == 'corrigir':
-            achado = _aplicar_correcao_de_dias(achado, correcao)
+        achado = ajustado
 
         marca = fingerprint_achado(achado)
         if marca and marca in vistos:

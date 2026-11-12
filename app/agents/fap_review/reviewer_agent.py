@@ -56,6 +56,13 @@ class FindingItem(BaseModel):
                     "Fica no achado, e não na lista de descartes, porque o apontamento "
                     "continua valendo — só o número estava errado.",
     )
+    contagem_dias: Optional[dict] = Field(
+        None,
+        description="Conta do par DCB/DIB refeita pelo saneador (R4, RPI-36): dcb, dib, dias, "
+                    "conta e, quando o par é só para conferência (58 dias ou mais, ou 1 dia "
+                    "de diferença), conferencia=True e o motivo. Achado de conferência fica "
+                    "fora da pontuação do advogado.",
+    )
 
 
 class MissingDocument(BaseModel):
