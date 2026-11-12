@@ -28,6 +28,20 @@
 .jur-page .exito .desfavoravel { background: var(--jur-des); }
 .jur-page a.exito-legenda { text-decoration: none; color: var(--bs-body-color); }
 .jur-page a.exito-legenda:hover { text-decoration: underline; }
+/* placar por órgão julgador */
+.jur-page a.orgao-linha { display: grid; grid-template-columns: minmax(0, 1fr) 30% 6.5rem; align-items: center; gap: .75rem;
+  padding: .3rem .4rem; border-radius: 6px; text-decoration: none; color: var(--bs-body-color); font-size: .85rem; }
+.jur-page a.orgao-linha:hover { background: var(--jur-soft); }
+.jur-page a.orgao-linha.on { background: var(--jur-acc-soft); font-weight: 600; }
+.jur-page .orgao-nome { min-width: 0; overflow-wrap: anywhere; }
+.jur-page .exito-mini { height: 8px; }
+.jur-page .exito-mini > span { display: block; height: 100%; }
+.jur-page .orgao-n { text-align: right; font-size: .78rem; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+@media (max-width: 575.98px) {
+  .jur-page a.orgao-linha { grid-template-columns: minmax(0, 1fr) 6.5rem; }
+  .jur-page a.orgao-linha .exito-mini { grid-column: 1 / -1; grid-row: 2; }
+}
+
 .jur-page .dot { display: inline-block; width: .65rem; height: .65rem; border-radius: 50%; margin-right: .3rem; }
 
 /* facetas */

@@ -310,6 +310,10 @@ def decision_detail_handler(decision_id: int, law_firm_id: int, app_public_url: 
 
 # ── 3. panorama_jurisprudencia ────────────────────────────────────────
 
+# Vara ou turma, do que mais decidiu ao que menos. A base inteira tem ~140;
+# recortado por tese ou tribunal cabe folgado.
+ORGAOS_NO_PANORAMA = 40
+
 def jurisprudence_overview_handler(law_firm_id: int, app_public_url: str | None = None, **filtros) -> dict:
     """ "Como tem decidido": resultado por tribunal e por instância, viradas no
     acórdão e as favoráveis mais recentes — sobre o recorte dos filtros."""
@@ -358,6 +362,13 @@ def jurisprudence_overview_handler(law_firm_id: int, app_public_url: str | None 
         'como_tem_decidido': _como_tem_decidido(r['exito']),
         'por_tribunal': tabela(lambda d: d.tribunal),
         'por_instancia': tabela(lambda d: norm.TIPO_LABELS.get(d.tipo_documento or '')),
+        'por_orgao_julgador': [
+            {'grupo': o['orgao'], 'decisoes': o['n'],
+             **{e['rotulo_longo']: e['n'] for e in o['resultados'] if e['n']},
+             **({'não informado': o['sem_resultado']} if o['sem_resultado'] else {})}
+            for o in r['por_orgao'][:ORGAOS_NO_PANORAMA]
+        ],
+        'total_orgaos_julgadores': len(r['por_orgao']),
         'viradas_no_acordao': viradas[:10],
         'total_viradas': len(viradas),
         'favoraveis_mais_recentes': [_item(d, app_public_url) for d in a_favor],

@@ -177,6 +177,12 @@ def test_detalhe_e_panorama():
     p = jurisprudence_overview_handler(1, APP_URL, teses_originais=['acidente de trajeto'])
     check('panorama conta o recorte', p['decisoes'] == 3 and p['processos'] == 2, (p['decisoes'], p['processos']))
     check('panorama por tribunal', p['por_tribunal'][0]['grupo'] == 'TRF4' and p['por_tribunal'][0]['decisoes'] == 3)
+    check('panorama por órgão julgador, com o tribunal na frente',
+          p['por_orgao_julgador'] and p['por_orgao_julgador'][0]['grupo'].startswith('TRF4 · ')
+          and p['total_orgaos_julgadores'] == len(p['por_orgao_julgador']), p['por_orgao_julgador'])
+    check('órgão traz a contagem por resultado',
+          all(sum(v for k, v in o.items() if k not in ('grupo', 'decisoes')) == o['decisoes']
+              for o in p['por_orgao_julgador']), p['por_orgao_julgador'])
     check('panorama acha a virada no acórdão', p['total_viradas'] == 1 and p['viradas_no_acordao'][0]['acordao_id'] == acordao.id)
     check('favoráveis mais recentes, sem desfavorável',
           [i['resultado'] for i in p['favoraveis_mais_recentes']] == ['Favorável', 'Parcialmente favorável'])

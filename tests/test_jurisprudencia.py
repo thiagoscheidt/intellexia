@@ -310,6 +310,21 @@ def test_busca():
     check('por decisão: um cartão por decisão', len(r['cartoes']) == r['total'])
     check('trecho escapa HTML do texto', '&lt;b&gt;' in s.trecho('x <b> trajeto', [['trajeto']]))
 
+    # Placar por órgão julgador (card do Placar de teses).
+    check('órgão leva o tribunal na frente', s.orgao_da_decisao('TRF4', '1ª Turma') == 'TRF4 · 1ª Turma')
+    check('sem órgão não vira grupo', s.orgao_da_decisao('TRF4', '  ') is None)
+    r = buscar()
+    turma = next((k for k in r['facetas']['orgao'] if k.startswith('TRF4 · ') and k.endswith('Turma')), None)
+    check('faceta de órgão julgador', turma is not None, r['facetas']['orgao'])
+    check('placar por órgão soma as decisões com órgão',
+          sum(o['n'] for o in r['por_orgao']) == sum(r['facetas']['orgao'].values()), r['por_orgao'])
+    check('placar do órgão soma o próprio total',
+          all(sum(e['n'] for e in o['resultados']) + o['sem_resultado'] == o['n'] for o in r['por_orgao']))
+    r = buscar(orgao=turma)
+    check('filtro por órgão', r['total'] == r['facetas']['orgao'][turma] and [o['orgao'] for o in r['por_orgao']] == [turma],
+          (r['total'], r['por_orgao']))
+    check('faceta de órgão é disjuntiva', len(r['facetas']['orgao']) > 1, r['facetas']['orgao'])
+
 
 def test_tese_original():
     """Dois campos de tese: a original (como veio) e a do catálogo.

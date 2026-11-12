@@ -162,7 +162,7 @@ As decisões FAP do escritório (sentenças, acórdãos e embargos) — as mesma
 |---|---|---|---|
 | `pesquisar_jurisprudencia` | Pesquisar jurisprudência | Pesquisa por palavras (com sinônimos), expressão entre aspas ou **número do processo**, com filtros de tese, tribunal, resultado e instância; traz a **citação pronta** e o trecho encontrado. Também busca no **inteiro teor** | Sistema |
 | `detalhar_decisao` | Detalhe de uma decisão | Tudo de uma decisão: motivo, ementa, fundamentos, argumentos acolhidos e rejeitados, precedentes e as outras peças do mesmo processo | Sistema |
-| `panorama_jurisprudencia` | Chance de êxito por tese | "Qual a chance da tese X no TRF4?": resultados por tribunal e instância, processos que **viraram no acórdão** e as favoráveis mais recentes | Cálculo |
+| `panorama_jurisprudencia` | Chance de êxito por tese | "Qual a chance da tese X no TRF4?": resultados por tribunal, instância e **órgão julgador** (vara ou turma), processos que **viraram no acórdão** e as favoráveis mais recentes | Cálculo |
 | `decisoes_parecidas` | Decisões parecidas | Decisões que discutem o mesmo ponto com outras palavras, por semelhança de conteúdo | IA |
 | `valores_de_filtro_jurisprudencia` | Filtros da jurisprudência | Teses, tribunais, instâncias e resultados que existem na base, com contagem — a IA consulta antes de filtrar | Sistema |
 | `exportar_jurisprudencia_excel` | Jurisprudência em Excel | Planilha com as decisões filtradas (teses, resultado, fundamentos, ementa, citação e link), até 50 mil linhas | Relatório |

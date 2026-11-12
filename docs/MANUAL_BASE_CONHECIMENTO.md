@@ -72,7 +72,8 @@ filtros marcados.
   com palavras diferentes continuam separadas. Como a lista é longa, há um campo
   para procurar dentro dela.
 - **Resultado** (sempre do ponto de vista da empresa), **Tribunal**,
-  **Instância**, **UF de origem**, **Vigência FAP** e **Julgada entre**.
+  **Órgão julgador** (vara ou turma), **Instância**, **UF de origem**,
+  **Vigência FAP** e **Julgada entre**.
 
 > [!INFO] O filtro de **vigência** pega a decisão cujo período inclui o ano: uma
 > decisão sobre "2017 a 2021" aparece quando você escolhe 2019.
@@ -81,6 +82,11 @@ filtros marcados.
 
 - **Como tem decidido** — a barra no topo mostra quantas decisões do recorte
   foram favoráveis, parciais e desfavoráveis. Clicar numa faixa filtra.
+- **Por órgão julgador** — logo abaixo, o mesmo placar separado por vara ou
+  turma, do órgão que mais decidiu ao que menos (favorável / parcialmente /
+  desfavorável). O tribunal vem na frente do nome porque a 1ª Turma do TRF3 e a
+  do TRF4 são órgãos diferentes. Clicar num órgão filtra por ele; combinado com
+  uma tese, mostra como cada vara ou turma tem julgado aquela tese.
 - **Um cartão por processo** — sentença, acórdão e embargos do mesmo processo
   aparecem juntos, na ordem. Instância que não está na base aparece como
   lacuna.

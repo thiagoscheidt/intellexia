@@ -5,7 +5,7 @@
 {% block title %}Jurisprudência · Base de Conhecimento - IntellexIA{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/jurisprudence.css') }}">
+<link rel="stylesheet" href="{{ static_versionado('css/jurisprudence.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/process_knowledge.css') }}">
 {% endblock %}
 
@@ -113,7 +113,7 @@
         <button type="submit" class="btn btn-primary"><i class="bi bi-search me-1"></i>Buscar</button>
       </div>
     </div>
-    {% for chave in ['tese', 'tese_livre', 'resultado', 'tribunal', 'tipo', 'uf', 'vigencia', 'de', 'ate', 'ordem', 'agrupar', 'original'] %}
+    {% for chave in ['tese', 'tese_livre', 'resultado', 'tribunal', 'orgao', 'tipo', 'uf', 'vigencia', 'de', 'ate', 'ordem', 'agrupar', 'original'] %}
       {% for v in request.args.getlist(chave) %}<input type="hidden" name="{{ chave }}" value="{{ v }}">{% endfor %}
     {% endfor %}
   </div>
@@ -151,6 +151,8 @@
       </div>
 
       {{ faceta('Tribunal', 'tribunal', r.facetas.tribunal, None, filtros.tribunais, 6) }}
+      {{ faceta('Órgão julgador', 'orgao', r.facetas.orgao or {}, None, filtros.orgaos, 8, True,
+                'Vara ou turma, com o tribunal na frente: a 1ª Turma do TRF3 e a do TRF4 são órgãos diferentes.') }}
 
       <div class="facet">
         <h6>Instância</h6>
@@ -164,7 +166,7 @@
       </div>
 
       <form method="get" id="form-filtros-extras">
-        {% for chave in ['q', 'tese', 'tese_livre', 'resultado', 'tribunal', 'tipo', 'ordem', 'agrupar', 'original', 'modo'] %}
+        {% for chave in ['q', 'tese', 'tese_livre', 'resultado', 'tribunal', 'orgao', 'tipo', 'ordem', 'agrupar', 'original', 'modo'] %}
           {% for v in request.args.getlist(chave) %}<input type="hidden" name="{{ chave }}" value="{{ v }}">{% endfor %}
         {% endfor %}
         <div class="facet">
@@ -267,6 +269,33 @@
       </div>
       {% endif %}
     </div></div>
+
+    {% if r.total and r.por_orgao %}
+    {% set limite_orgaos = 8 %}
+    <div class="card border-0 shadow-sm mb-3"><div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-2">
+        <strong class="small">Por órgão julgador</strong>
+        <span class="small text-body-secondary">{{ r.por_orgao | length }} {{ 'órgão' if r.por_orgao | length == 1 else 'órgãos' }} no recorte · clique para filtrar</span>
+      </div>
+      <div class="orgaos">
+        {% for o in r.por_orgao %}
+        {% if loop.index == limite_orgaos + 1 %}<div class="collapse" id="mais-orgaos">{% endif %}
+        <a class="orgao-linha {{ 'on' if o.orgao in filtros.orgaos }}" href="{{ alternar('orgao', o.orgao) }}"
+           title="{% for e in o.resultados if e.n %}{{ e.rotulo }} {{ e.n }}{{ ' · ' if not loop.last }}{% endfor %}{% if o.sem_resultado %} · sem resultado {{ o.sem_resultado }}{% endif %}">
+          <span class="orgao-nome">{{ o.orgao }}</span>
+          <span class="exito exito-mini" aria-hidden="true">
+            {% for e in o.resultados if e.n %}<span class="{{ e.resultado }}" style="width: {{ '%.2f' | format(e.pct) }}%"></span>{% endfor %}
+          </span>
+          <span class="orgao-n">{% for e in o.resultados %}<span class="res-{{ e.resultado }}">{{ e.n }}</span>{{ ' / ' if not loop.last }}{% endfor %}</span>
+        </a>
+        {% if loop.last and loop.length > limite_orgaos %}</div>
+        <a class="small" data-bs-toggle="collapse" href="#mais-orgaos" role="button">+ {{ loop.length - limite_orgaos }} órgãos</a>
+        {% endif %}
+        {% endfor %}
+      </div>
+      <div class="small text-body-secondary mt-2">favorável / parcialmente / desfavorável, por decisão</div>
+    </div></div>
+    {% endif %}
 
     {% if r.total %}
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">

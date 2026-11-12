@@ -1574,7 +1574,8 @@ def panorama_jurisprudencia(
 
     Use para perguntas do tipo "qual a chance da tese X no TRF4?": devolve a
     distribuição de resultados (visão da empresa), a mesma distribuição por
-    tribunal e por instância, os processos que VIRARAM no acórdão (sentença
+    tribunal, por instância e por órgão julgador (vara ou turma, com o tribunal
+    na frente — "TRF4 · 2ª Turma"), os processos que VIRARAM no acórdão (sentença
     perdida, acórdão melhor — os precedentes mais fortes) e as decisões
     favoráveis mais recentes com citação pronta.
 
