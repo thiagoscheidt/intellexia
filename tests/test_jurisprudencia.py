@@ -526,10 +526,18 @@ def test_fila():
     check('leitura nova vira decisão', u.status == 'done' and u.decision is not None and u.decision.source == 'pdf')
     check('resultado da IA normalizado', u.decision.resultado == 'favoravel' and u.decision.data_julgamento == date(2026, 3, 21))
 
-    u2 = up.processar(1, ids[1], agente=agente({**DADOS_PDF, 'data_julgamento': '22/03/2026', 'resultado': 'DESFAVORAVEL'}))
-    check('mesmo processo e instância vai para "revisar"', u2.status == 'review' and u2.duplicate_of_id == u.decision_id)
+    u2 = up.processar(1, ids[1], agente=agente({**DADOS_PDF, 'resultado': 'DESFAVORAVEL'}))
+    check('mesmo processo, instância e data vai para "revisar"', u2.status == 'review' and u2.duplicate_of_id == u.decision_id)
     up.resolver_duplicata(1, u2.id, 'guardar_ambas', 1)
     check('"guardar as duas" cria a segunda', D.query.filter_by(law_firm_id=1, processo_digits='50999991120244047200').count() == 2)
+    with app.test_request_context():
+        ids_ag, _ = up.receber(1, [_pdf('29_07_2026 - ACÓRDÃO AG. INTERNO - NOVA.pdf')], user_id=1)
+    agravo = up.processar(1, ids_ag[0], agente=agente({**DADOS_PDF, 'data_julgamento': '29/07/2026'}))
+    check('mesmo processo e instância com outra data é outra decisão (agravo interno da ASTER)',
+          agravo.status == 'done' and agravo.decision_id not in (u.decision_id, None), agravo.status)
+    db.session.delete(agravo)
+    db.session.delete(agravo.decision)
+    db.session.commit()
 
     class _Quebra:
         model_name = 'fake'
@@ -598,34 +606,83 @@ def test_embargos():
           pela_classe.status == 'done' and pela_classe.decision.tipo_documento == 'embargos'
           and pela_classe.extracted_json.get('tipo_documento_ajuste') == 'classe processual')
 
-    # O que já estava parado em "Revisar" antes da correção: lido como sentença
-    # e marcado como duplicata da sentença do processo.
-    with app.test_request_context():
-        ids, _ = up.receber(1, [_pdf('29_08_2025 - SENTENÇAED3 - MARCOPOLO.pdf')], user_id=1)
-    parado = db.session.get(U, ids[0])
-    parado.status = U.STATUS_REVIEW
-    parado.extracted_json = {**sentenca, 'data_julgamento': '29/08/2025'}
-    parado.duplicate_of_id = u.decision_id
-    sentenca_avulsa = ler('SENTENÇA - OUTRA.pdf', {**sentenca, 'processo': '5000001-00.2025.4.04.7200'})
-    with app.test_request_context():
-        ids_s, _ = up.receber(1, [_pdf('SENTENÇA - OUTRA (2).pdf')], user_id=1)
-    sentenca_parada = db.session.get(U, ids_s[0])
-    sentenca_parada.status = U.STATUS_REVIEW
-    sentenca_parada.extracted_json = {**sentenca, 'processo': '5000001-00.2025.4.04.7200', 'data_julgamento': '01/06/2025'}
-    sentenca_parada.duplicate_of_id = sentenca_avulsa.decision_id
-    db.session.commit()
+    # O que já estava parado em "Revisar" antes das correções: ED lido como
+    # sentença, ED de outra data contra outro ED (EBS) e cópias do mesmo
+    # arquivo lidas várias vezes (ASTER).
+    def parar(nome, dados, contra, conteudo=None):
+        from werkzeug.datastructures import FileStorage
+        arquivo = (FileStorage(stream=io.BytesIO(conteudo), filename=nome, content_type='application/pdf')
+                   if conteudo else _pdf(nome))
+        with app.test_request_context():
+            ids, _ = up.receber(1, [arquivo], user_id=1)
+        item = db.session.get(U, ids[0])
+        item.status, item.extracted_json, item.duplicate_of_id = U.STATUS_REVIEW, dados, contra
+        db.session.commit()
+        return item
 
-    simulado = up.reclassificar_embargos_em_revisao(1)
-    check('simulação só lista o ED', [i['upload_id'] for i in simulado] == [parado.id], simulado)
-    check('simulação diz que vai para a base', simulado and simulado[0]['destino'] == 'base')
+    parado = parar('29_08_2025 - SENTENÇAED3 - MARCOPOLO.pdf', {**sentenca, 'data_julgamento': '29/08/2025'},
+                   u.decision_id)
+    ed_outra_data = parar('18_03_2025 - SENTENÇAED1 - MARCOPOLO.pdf',
+                          {**sentenca, 'tipo_documento': 'EMBARGOS DE DECLARACAO', 'data_julgamento': '18/03/2025'},
+                          ed2.decision_id)
+    sentenca_avulsa = ler('SENTENÇA - OUTRA.pdf', {**sentenca, 'processo': '5000001-00.2025.4.04.7200'})
+    sentenca_parada = parar('SENTENÇA - OUTRA (2).pdf', {**sentenca, 'processo': '5000001-00.2025.4.04.7200'},
+                            sentenca_avulsa.decision_id)
+    acordao = ler('06_02_2026 - ACÓRDÃO - MARCOPOLO.pdf',
+                  {**sentenca, 'tipo_documento': 'ACORDAO', 'data_julgamento': '06/02/2026'})
+    copia = b'%PDF-1.4 mesmo agravo ' + os.urandom(8)
+    agravo_data_errada = parar('29_07_2026 - ACÓRDÃO AG. INTERNO - MARCOPOLO SA.pdf',
+                               {**sentenca, 'tipo_documento': 'ACORDAO', 'data_julgamento': '31/07/2026'},
+                               acordao.decision_id, copia)
+    agravo_certo = parar('29_07_2026 - ACÓRDÃO AG. INTERNO - MARCOPOLO.pdf',
+                         {**sentenca, 'tipo_documento': 'ACORDAO', 'data_julgamento': '29/07/2026'},
+                         acordao.decision_id, copia)
+
+    simulado = {i['upload_id']: i for i in up.reavaliar_revisar(1)}
+    check('simulação: ED lido como sentença vai para a base',
+          simulado.get(parado.id, {}).get('destino') == 'base' and simulado[parado.id]['tipo_de'] == 'SENTENCA')
+    check('simulação: ED de outra data vai para a base', simulado.get(ed_outra_data.id, {}).get('destino') == 'base')
+    check('simulação: a sentença repetida não muda', sentenca_parada.id not in simulado, simulado)
     check('simulação não grava', db.session.get(U, parado.id).status == U.STATUS_REVIEW)
 
-    up.reclassificar_embargos_em_revisao(1, gravar=True)
+    up.reavaliar_revisar(1, gravar=True)
     parado = db.session.get(U, parado.id)
     check('ED parado vira decisão de embargos', parado.status == 'done' and parado.decision.tipo_documento == 'embargos')
-    check('sentença parada continua em "Revisar"', db.session.get(U, sentenca_parada.id).status == U.STATUS_REVIEW)
-    check('quatro EDs da MARCOPOLO na base', D.query.filter_by(
-        law_firm_id=1, processo_digits='50109163820244047205', tipo_documento='embargos').count() == 4)
+    check('ED1 de outra data vira decisão (EBS)', db.session.get(U, ed_outra_data.id).status == 'done')
+    check('sentença repetida continua em "Revisar"', db.session.get(U, sentenca_parada.id).status == U.STATUS_REVIEW)
+    certo, errado = db.session.get(U, agravo_certo.id), db.session.get(U, agravo_data_errada.id)
+    check('agravo interno entra pela cópia cuja data bate com o nome',
+          certo.status == 'done' and certo.decision.data_julgamento == date(2026, 7, 29), certo.status)
+    check('a outra cópia do mesmo arquivo fica em "Revisar" contra ela',
+          errado.status == U.STATUS_REVIEW and errado.duplicate_of_id == certo.decision_id,
+          (errado.status, errado.duplicate_of_id))
+    check('cinco EDs da MARCOPOLO na base', D.query.filter_by(
+        law_firm_id=1, processo_digits='50109163820244047205', tipo_documento='embargos').count() == 5)
+
+    # Nome de arquivo de decisão da planilha: repetido mesmo com a data lida um dia antes.
+    planilha = D.query.filter_by(law_firm_id=1, processo_digits='50109163820244047205',
+                                 tipo_documento='sentenca').first()
+    planilha.original_filename = '30_05_2025 - SENTENÇA - MARCOPOLO.pdf'
+    db.session.commit()
+    pelo_nome = ler('30_05_2025 - SENTENÇA - MARCOPOLO.pdf', {**sentenca, 'data_julgamento': '29/05/2025'})
+    check('mesmo nome de arquivo de decisão do processo vai para "Revisar"',
+          pelo_nome.status == U.STATUS_REVIEW and pelo_nome.duplicate_of_id == planilha.id)
+
+    # Já na base com o tipo errado (COAMO, "Decisão ED" gravada como sentença).
+    coamo = ler('04_11_2026 - Decisão ED - COAMO.pdf', {**sentenca, 'processo': '5003509-10.2026.4.04.7010',
+                                                         'data_julgamento': '04/11/2026'})
+    coamo.decision.tipo_documento = 'sentenca'
+    manual = ler('05_11_2026 - Decisão ED - OUTRA.pdf', {**sentenca, 'processo': '5003510-10.2026.4.04.7010',
+                                                          'data_julgamento': '05/11/2026'})
+    manual.decision.tipo_documento = 'sentenca'
+    manual.decision.manual_fields_json = ['tipo_documento']
+    db.session.commit()
+    simulado = up.reclassificar_embargos_na_base(1)
+    check('simulação lista só a decisão sem correção manual',
+          [i['decision_id'] for i in simulado] == [coamo.decision_id], simulado)
+    up.reclassificar_embargos_na_base(1, gravar=True)
+    check('decisão ED gravada como sentença vira embargos', db.session.get(D, coamo.decision_id).tipo_documento == 'embargos')
+    check('tipo corrigido à mão fica', db.session.get(D, manual.decision_id).tipo_documento == 'sentenca')
 
 
 def _pdf_com_texto(paginas):

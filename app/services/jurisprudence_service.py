@@ -125,17 +125,6 @@ def mesma_decisao(law_firm_id: int, processo_digits: Optional[str], tipo: Option
     ).first()
 
 
-def mesma_instancia(law_firm_id: int, processo_digits: Optional[str],
-                    tipo: Optional[str]) -> Optional[JurisprudenceDecision]:
-    """Mesmo processo e instância, qualquer data — caso para o advogado decidir."""
-    if not processo_digits or not tipo:
-        return None
-    return (JurisprudenceDecision.query
-            .filter_by(law_firm_id=law_firm_id, processo_digits=processo_digits, tipo_documento=tipo)
-            .order_by(JurisprudenceDecision.data_julgamento.desc())
-            .first())
-
-
 # ── Teses ──────────────────────────────────────────────────────────────
 
 class ResolvedorDeTeses:

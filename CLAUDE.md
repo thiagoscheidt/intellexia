@@ -821,17 +821,23 @@ e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
   número CNJ: TRF4 70 PR, 71 RS, 72 SC; TRF3 60 MS, 61 SP).
 - **Duplicata = processo (dígitos) + instância + data.** A planilha real tem 6
   decisões processadas duas vezes pela ferramenta anterior; a segunda é pulada.
-  No PDF, mesmo processo e instância vai para "revisar" com a leitura guardada
-  em `extracted_json`, e o advogado decide (manter, substituir, guardar as
-  duas) — nunca descartar em silêncio. **Embargos só são duplicata com a mesma
-  data**: um processo tem ED1, ED2, ED3, o ED da sentença e o do acórdão.
+  No PDF (`jurisprudence_upload_service._duplicata`), repetido é só **o mesmo
+  arquivo** (conteúdo idêntico já lido, ou o nome de arquivo de uma decisão do
+  mesmo processo — a planilha guarda o nome do PDF e a data lida pela IA às
+  vezes erra um dia) **ou a mesma decisão** (processo + instância + data). Vai
+  para "revisar" com a leitura em `extracted_json`, e o advogado decide (manter,
+  substituir, guardar as duas) — nunca descartar em silêncio. **Outra data no
+  mesmo processo e instância é outra decisão e entra**: ED1/ED2/ED3, o agravo
+  interno depois da apelação (pedido do escritório em 13/11/2026; até então ia
+  para "revisar" e ficava fora da base).
 - **ED julgado na vara vem com cabeçalho "SENTENÇA"** e a IA segue o cabeçalho
   (44 de 87 itens em "Revisar" na homologação, 12/11/2026). O tipo é corrigido
   depois da leitura (`jurisprudence_upload_service.tipo_corrigido`) pelo nome do
   arquivo do escritório ("Decisão ED", "SENTENÇAED1", "ACÓRDÃOEDSTJ") e pela
   classe processual lida ("Embargos de Declaração em …"); a leitura original
-  fica em `tipo_documento_lido`. O que já estava parado se reaplica sem reler o
-  PDF: `scripts/reclassificar_embargos_jurisprudencia.py` (simula por padrão).
+  fica em `tipo_documento_lido`. Regra mudou? `scripts/reavaliar_revisar_jurisprudencia.py`
+  (simula por padrão) reaplica as regras atuais ao que está em "Revisar", sem
+  reler o PDF, e corrige o tipo das decisões já gravadas com nome/classe de ED.
 - **Correção manual sobrevive ao reprocessamento**: o campo editado entra em
   `manual_fields_json` e `atualizar_da_ia` não o sobrescreve.
 - **Teses: texto livre + correspondência curada.** A decisão guarda a tese como

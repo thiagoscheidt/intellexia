@@ -240,7 +240,7 @@ def _registrar_leitura(upload: JurisprudenceUpload, lido: dict,
                        resolvedor: 'svc.ResolvedorDeTeses') -> JurisprudenceUpload:
     """Leitura nova pronta: vai para "Revisar" se parece duplicata, senão vira decisão."""
     campos = svc.normalizar_registro(lido)
-    parecida = _duplicata(upload.law_firm_id, campos)
+    parecida = _duplicata(upload, campos)
     if parecida is not None:
         upload.status = JurisprudenceUpload.STATUS_REVIEW
         upload.duplicate_of_id = parecida.id
@@ -259,19 +259,39 @@ def _registrar_leitura(upload: JurisprudenceUpload, lido: dict,
     return _concluiu(upload, decisao)
 
 
-def _duplicata(law_firm_id: int, campos: dict) -> Optional[JurisprudenceDecision]:
-    """Decisão da base que esta leitura parece repetir.
+def _duplicata(upload: JurisprudenceUpload, campos: dict) -> Optional[JurisprudenceDecision]:
+    """Decisão da base que esta leitura repete — o mesmo arquivo ou a mesma decisão.
 
-    Mesmo processo, instância e data é a mesma decisão. Mesmo processo e
-    instância com outra data vai para o advogado decidir — menos em embargos:
-    um processo tem ED1, ED2, ED3, o ED da sentença e o do acórdão, cada um uma
-    decisão (em homologação, a ED2 da MARCOPOLO caía em "Revisar" contra a ED1).
+    Repetido é: (1) o mesmo conteúdo já lido; (2) o nome de arquivo de uma
+    decisão do mesmo processo — a planilha guarda o nome do PDF, e a data lida
+    pela IA às vezes erra um dia; (3) mesmo processo, instância e data.
+
+    Mesmo processo e instância com **outra data é outra decisão**, e entra
+    (pedido do escritório em 13/11/2026): três ED da sentença da EBS, o acórdão
+    do agravo interno da ASTER depois do da apelação. Até então ia para
+    "Revisar" e ficava fora da base.
     """
-    exata = svc.mesma_decisao(law_firm_id, campos['processo_digits'], campos['tipo_documento'],
-                              campos['data_julgamento'])
-    if exata is not None or campos['tipo_documento'] == norm.TIPO_EMBARGOS:
-        return exata
-    return svc.mesma_instancia(law_firm_id, campos['processo_digits'], campos['tipo_documento'])
+    law_firm_id = upload.law_firm_id
+    if upload.file_hash:
+        mesmo_conteudo = (JurisprudenceUpload.query
+                          .filter(JurisprudenceUpload.law_firm_id == law_firm_id,
+                                  JurisprudenceUpload.file_hash == upload.file_hash,
+                                  JurisprudenceUpload.id != upload.id,
+                                  JurisprudenceUpload.decision_id.isnot(None))
+                          .order_by(JurisprudenceUpload.id).first())
+        if mesmo_conteudo is not None and mesmo_conteudo.decision is not None:
+            return mesmo_conteudo.decision
+    processo = campos['processo_digits']
+    if processo and upload.original_filename:
+        chave = _chave_do_arquivo(upload.original_filename)
+        for decisao in (JurisprudenceDecision.query
+                        .filter(JurisprudenceDecision.law_firm_id == law_firm_id,
+                                JurisprudenceDecision.processo_digits == processo,
+                                JurisprudenceDecision.original_filename.isnot(None))
+                        .order_by(JurisprudenceDecision.id)):
+            if _chave_do_arquivo(decisao.original_filename) == chave:
+                return decisao
+    return svc.mesma_decisao(law_firm_id, processo, campos['tipo_documento'], campos['data_julgamento'])
 
 
 def tipo_corrigido(lido: dict, nome_arquivo: Optional[str]) -> dict:
@@ -295,27 +315,45 @@ def tipo_corrigido(lido: dict, nome_arquivo: Optional[str]) -> dict:
             'tipo_documento_lido': lido.get('tipo_documento'), 'tipo_documento_ajuste': motivo}
 
 
-def reclassificar_embargos_em_revisao(law_firm_id: int, *, gravar: bool = False) -> list[dict]:
-    """Reaplica ``tipo_corrigido`` nos itens parados em "Revisar", sem reler o PDF.
+_DATA_NO_NOME = re.compile(r'^\s*(\d{2})[._-](\d{2})[._-](\d{4})')
 
-    A leitura está guardada em ``extracted_json``. Só mexe em quem o tipo muda;
-    o que continua parecendo duplicata fica em "Revisar", agora contra a decisão
-    certa. Sem ``gravar``, só diz o que faria.
+
+def _data_do_nome_confere(upload: JurisprudenceUpload) -> bool:
+    """O nome do arquivo do escritório começa pela data ("29_07_2026 - …") e ela bate com a lida."""
+    m = _DATA_NO_NOME.match(upload.original_filename or '')
+    lida = (upload.extracted_json or {}).get('data_julgamento') or ''
+    return bool(m) and lida.strip() == f'{m.group(1)}/{m.group(2)}/{m.group(3)}'
+
+
+def reavaliar_revisar(law_firm_id: int, *, gravar: bool = False) -> list[dict]:
+    """Passa de novo pelas regras atuais o que está parado em "Revisar", sem reler o PDF.
+
+    A leitura está guardada em ``extracted_json``: corrige o tipo (embargos lidos
+    como sentença) e refaz a busca de repetido. O que não repete nada vira
+    decisão; o que repete continua em "Revisar", agora contra a decisão certa.
+    Cópias do mesmo arquivo lidas mais de uma vez: entra primeiro a cópia cuja
+    data lida bate com a do nome, e as outras ficam como repetidas dela. Sem
+    ``gravar``, só diz o que faria (a simulação não enxerga as decisões que a
+    própria rodada criaria, então pode contar uma cópia a mais como "base").
     """
     resultado = []
     resolvedor = svc.ResolvedorDeTeses(law_firm_id) if gravar else None
     pendentes = (JurisprudenceUpload.query
-                 .filter_by(law_firm_id=law_firm_id, status=JurisprudenceUpload.STATUS_REVIEW)
+                 .filter(JurisprudenceUpload.law_firm_id == law_firm_id,
+                         JurisprudenceUpload.status == JurisprudenceUpload.STATUS_REVIEW,
+                         JurisprudenceUpload.extracted_json.isnot(None))
                  .order_by(JurisprudenceUpload.id).all())
+    pendentes.sort(key=lambda u: not _data_do_nome_confere(u))   # estável: dentro de cada grupo, por id
     for upload in pendentes:
         lido = upload.extracted_json
         ajustado = tipo_corrigido(lido, upload.original_filename)
-        if ajustado is lido:
-            continue
         campos = svc.normalizar_registro(ajustado)
-        parecida = _duplicata(law_firm_id, campos)
+        parecida = _duplicata(upload, campos)
+        if parecida is not None and parecida.id == upload.duplicate_of_id and ajustado is lido:
+            continue
         item = {'upload_id': upload.id, 'arquivo': upload.original_filename,
-                'de': lido.get('tipo_documento'), 'motivo': ajustado['tipo_documento_ajuste'],
+                'tipo_de': lido.get('tipo_documento') if ajustado is not lido else None,
+                'antes': upload.duplicate_of_id,
                 'destino': 'revisar' if parecida else 'base',
                 'parecida_id': parecida.id if parecida else None}
         resultado.append(item)
@@ -324,6 +362,38 @@ def reclassificar_embargos_em_revisao(law_firm_id: int, *, gravar: bool = False)
         upload.extracted_json = _serializavel(ajustado)
         _registrar_leitura(upload, ajustado, resolvedor)
         item['decision_id'] = upload.decision_id
+    resultado.sort(key=lambda i: i['upload_id'])
+    return resultado
+
+
+def reclassificar_embargos_na_base(law_firm_id: int, *, gravar: bool = False) -> list[dict]:
+    """Decisões já na base com nome ou classe de ED e tipo de sentença/acórdão.
+
+    As que entraram antes da correção da leitura (COAMO, "Decisão ED" de
+    04/11/2026, gravada como sentença) e linhas da planilha com "ACÓRDÃOED" no
+    nome e outro tipo. Tipo corrigido à mão não é tocado.
+    """
+    resultado = []
+    for decisao in (JurisprudenceDecision.query
+                    .filter(JurisprudenceDecision.law_firm_id == law_firm_id,
+                            JurisprudenceDecision.tipo_documento != norm.TIPO_EMBARGOS)
+                    .order_by(JurisprudenceDecision.id)):
+        if 'tipo_documento' in (decisao.manual_fields_json or []):
+            continue
+        if norm.embargos_pelo_nome(decisao.original_filename):
+            motivo = 'nome do arquivo'
+        elif norm.embargos_pela_classe(decisao.classe_processual):
+            motivo = 'classe processual'
+        else:
+            continue
+        resultado.append({'decision_id': decisao.id, 'arquivo': decisao.original_filename,
+                          'de': decisao.tipo_documento, 'motivo': motivo})
+        if gravar:
+            decisao.tipo_documento = norm.TIPO_EMBARGOS
+            decisao.search_text = svc.montar_texto_de_busca(decisao)
+    if gravar and resultado:
+        db.session.commit()
+        indice.agendar(law_firm_id, [i['decision_id'] for i in resultado])
     return resultado
 
 
