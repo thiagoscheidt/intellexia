@@ -840,6 +840,30 @@ e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
   reler o PDF, e corrige o tipo das decisões já gravadas com nome/classe de ED.
 - **Correção manual sobrevive ao reprocessamento**: o campo editado entra em
   `manual_fields_json` e `atualizar_da_ia` não o sobrescreve.
+- **Placar de teses (PRC-24 e PRC-25, pedido do escritório em 06/11/2026).**
+  Duas colunas: `tipo_julgamento` (`merito`/`homologacao`/`sem_merito`; NULL =
+  ainda não lida) e `resultado_por_tese_json` (`[{"tese", "resultado"}]`, a tese
+  na grafia de `teses_brutas_json`, resultado `favoravel`/`parcial`/
+  `desfavoravel`/`nao_julgada`) — `database/alter_jurisprudence_decisions_add_placar_columns.py`.
+  A leitura nova devolve os dois; `normalizar_registro` só os grava quando a
+  fonte os traz (a planilha não traz, e reimportar não pode apagar). A conta é
+  `jurisprudence_service.resultado_para_placar`, fonte única da tela ("Como tem
+  decidido" e órgão julgador), do `panorama_jurisprudencia` e da cobertura por
+  tese: homologação e sem mérito ficam fora; com tese no filtro vale o resultado
+  daquela tese (várias teses no recorte: todas ganhas = favorável, todas
+  perdidas = desfavorável, misto = parcial; não julgada não pesa e, sozinha,
+  tira a decisão da conta); decisão ainda sem resultado por tese entra pelo
+  resultado da decisão (`placar.pela_decisao`, a tela avisa). As decisões que
+  já estavam na base são preenchidas por `scripts/preencher_placar_jurisprudencia.py`
+  (simula por padrão), com o `JurisprudenceThesisResultAgent`, que lê o texto e
+  devolve **só** os dois campos para as teses que a decisão já tem — reler com o
+  extrator completo trocaria teses, resultado e ementa e desfaria a
+  correspondência com o catálogo. Texto: `texto_integral` → `pdf_path` → lote de
+  Markdown (`instance/importacao/lote_md/decisoes`, índice CSV: "PDF de origem"
+  = `original_filename` da planilha). A tela manda códigos (`sem_merito`): o
+  normalizador os aceita direto — pela chave, "SEM_MERITO" contém "MERITO" e
+  virava mérito. A geração da impugnação ainda escolhe e rotula a decisão pelo
+  resultado da decisão inteira.
 - **Teses: texto livre + correspondência curada.** A decisão guarda a tese como
   veio; `jurisprudence_theses` liga N:N ao catálogo do painel, que é mais fino
   ("ACIDENTE DE TRAJETO" ↔ Trajeto B91/B92/B93/B94). Nome idêntico ao do

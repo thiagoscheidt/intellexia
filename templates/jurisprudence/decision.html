@@ -159,17 +159,28 @@
 
   <div class="col-lg-4">
     <div class="card border-0 shadow-sm mb-3"><div class="card-body">
-      <div class="mb-3">{{ res_pill(d.resultado, False, 'fs-6') }}</div>
+      <div class="mb-3">{{ res_pill(d.resultado, False, 'fs-6') }}
+        {% if d.tipo_julgamento in ('homologacao', 'sem_merito') %}
+        <span class="badge text-bg-secondary ms-1" title="Não julgou a tese: fica fora do placar.">{{ julgamento_labels[d.tipo_julgamento] }} · fora do placar</span>
+        {% endif %}</div>
       <dl class="dec-meta mb-0">
         <dt>Tribunal · órgão</dt><dd>{{ ' · '.join([d.tribunal, d.orgao_julgador] | select | list) or '—' }}{% if d.uf %} <span class="text-body-secondary">({{ d.uf }})</span>{% endif %}</dd>
         {% if d.relator %}<dt>{{ 'Juiz(a)' if d.tipo_documento == 'sentenca' else 'Relator(a)' }}</dt><dd>{{ d.relator }}</dd>{% endif %}
         {% if d.classe_processual %}<dt>Classe</dt><dd>{{ d.classe_processual }}</dd>{% endif %}
         <dt>Julgado em</dt><dd>{{ d.data_julgamento.strftime('%d/%m/%Y') if d.data_julgamento else '—' }}</dd>
         <dt>Vigência FAP</dt><dd>{{ d.vigencia_texto or '—' }}</dd>
+        <dt>O que julgou</dt><dd>{{ julgamento_labels.get(d.tipo_julgamento) or 'ainda não lido para o placar' }}</dd>
         <dt>Teses</dt>
         <dd>
-          {# Teses originais, exatamente como vieram da decisão. #}
-          {% for original in d.teses_brutas_json or [] %}<a class="tese-chip text-decoration-none" href="{{ url_for('jurisprudence.index', original=original) }}" title="ver as decisões com esta tese">{{ original }}</a>{% else %}—{% endfor %}
+          {# Teses originais, exatamente como vieram da decisão, com o resultado de cada uma. #}
+          {% set por_tese = {} %}
+          {% for i in d.resultado_por_tese_json or [] %}{% set _ = por_tese.update({i.tese: i.resultado}) %}{% endfor %}
+          {% for original in d.teses_brutas_json or [] %}
+          <div class="d-flex flex-wrap align-items-center gap-1 {{ 'mt-1' if not loop.first }}">
+            <a class="tese-chip text-decoration-none" href="{{ url_for('jurisprudence.index', original=original) }}" title="ver as decisões com esta tese">{{ original }}</a>
+            {% if por_tese.get(original) %}<span class="res-pill res-{{ por_tese[original] if por_tese[original] != 'nao_julgada' else 'none' }}">{{ tese_labels[por_tese[original]] }}</span>{% endif %}
+          </div>
+          {% else %}—{% endfor %}
           {% if catalogo %}
           <div class="small text-body-secondary mt-1">no catálogo:
             {% for c in catalogo %}<span class="cat-chip">{{ c.name }}</span>{% endfor %}</div>

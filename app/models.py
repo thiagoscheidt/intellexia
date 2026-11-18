@@ -4944,6 +4944,13 @@ class JurisprudenceDecision(db.Model):
     palavras_chave_json = db.Column(db.JSON)
     teses_brutas_json = db.Column(db.JSON)                 # como vieram da fonte
 
+    # Placar de teses (PRC-24/25): o que a decisão julgou de fato.
+    # merito | homologacao | sem_merito — NULL = ainda não lido.
+    tipo_julgamento = db.Column(db.String(20), index=True)
+    # [{"tese": <grafia de teses_brutas_json>, "resultado": favoravel|parcial|
+    #   desfavoravel|nao_julgada}] — resultado daquela tese para a empresa.
+    resultado_por_tese_json = db.Column(db.JSON)
+
     # Texto normalizado de todos os campos — é nele que a busca procura.
     search_text = db.Column(db.Text)
 

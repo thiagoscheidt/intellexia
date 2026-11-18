@@ -257,6 +257,95 @@ def resultado(valor) -> Optional[str]:
     return None
 
 
+# ── Placar: tipo de julgamento e resultado por tese ───────────────────
+# Pedido do escritório (PRC-24 e PRC-25, 06/11/2026): o resultado da decisão
+# inteira não diz se aquela tese ganhou — uma sentença "parcialmente favorável"
+# pode ter perdido justamente a tese contada —, e homologação do reconhecimento
+# da União entrava como "favorável" e inflava o êxito.
+
+JULGAMENTO_MERITO = 'merito'
+JULGAMENTO_HOMOLOGACAO = 'homologacao'
+JULGAMENTO_SEM_MERITO = 'sem_merito'
+
+JULGAMENTO_LABELS = {
+    JULGAMENTO_MERITO: 'Mérito',
+    JULGAMENTO_HOMOLOGACAO: 'Homologação do reconhecimento',
+    JULGAMENTO_SEM_MERITO: 'Sem resolução de mérito',
+}
+JULGAMENTO_LABELS_CURTOS = {
+    JULGAMENTO_MERITO: 'Mérito',
+    JULGAMENTO_HOMOLOGACAO: 'Homologação',
+    JULGAMENTO_SEM_MERITO: 'Sem mérito',
+}
+# O que não entra no placar: não houve julgamento da tese.
+JULGAMENTOS_FORA_DO_PLACAR = (JULGAMENTO_HOMOLOGACAO, JULGAMENTO_SEM_MERITO)
+
+TESE_NAO_JULGADA = 'nao_julgada'
+TESE_LABELS = {**RESULTADO_LABELS, TESE_NAO_JULGADA: 'Não julgada'}
+TESE_LABELS_CURTOS = {**RESULTADO_LABELS_CURTOS, TESE_NAO_JULGADA: 'Não julgada'}
+
+
+def tipo_julgamento(valor) -> Optional[str]:
+    if valor in JULGAMENTO_LABELS:          # código vindo da tela
+        return valor
+    k = chave(str(valor or '').replace('_', ' '))
+    if not k:
+        return None
+    if 'HOMOLOG' in k or 'RECONHECIMENTO' in k:
+        return JULGAMENTO_HOMOLOGACAO
+    if 'SEM RESOLUCAO' in k or 'SEM MERITO' in k or 'SEM JULGAMENTO' in k or k.startswith('EXTIN'):
+        return JULGAMENTO_SEM_MERITO
+    if 'MERITO' in k:
+        return JULGAMENTO_MERITO
+    return None
+
+
+def resultado_da_tese(valor) -> Optional[str]:
+    if valor in TESE_LABELS:                # código vindo da tela
+        return valor
+    k = chave(str(valor or '').replace('_', ' '))
+    if not k:
+        return None
+    if k.startswith('NAO JULGAD') or k.startswith('NAO APRECIAD') or k.startswith('PREJUDICAD'):
+        return TESE_NAO_JULGADA
+    if k.startswith('ACOLHID'):
+        return RESULTADO_FAVORAVEL
+    if k.startswith('REJEITAD'):
+        return RESULTADO_DESFAVORAVEL
+    return resultado(valor)
+
+
+def resultados_por_tese(valor) -> list[dict]:
+    """[{"tese", "resultado"}] da IA → lista limpa, uma linha por tese (pela chave)."""
+    saida, vistas = [], set()
+    for item in valor or []:
+        if hasattr(item, 'model_dump'):
+            item = item.model_dump()
+        if not isinstance(item, dict):
+            continue
+        tese = re.sub(r'\s+', ' ', str(item.get('tese') or '')).strip()
+        r = resultado_da_tese(item.get('resultado'))
+        if not tese or not r or chave(tese) in vistas:
+            continue
+        vistas.add(chave(tese))
+        saida.append({'tese': tese, 'resultado': r})
+    return saida
+
+
+def combinar_resultados(resultados: list[str]) -> Optional[str]:
+    """Várias teses da mesma decisão no recorte → um resultado: todas
+    favoráveis = favorável, todas desfavoráveis = desfavorável, o resto parcial.
+    Tese não julgada não pesa."""
+    julgados = [r for r in resultados if r in RESULTADO_PESO]
+    if not julgados:
+        return None
+    if all(r == RESULTADO_FAVORAVEL for r in julgados):
+        return RESULTADO_FAVORAVEL
+    if all(r == RESULTADO_DESFAVORAVEL for r in julgados):
+        return RESULTADO_DESFAVORAVEL
+    return RESULTADO_PARCIAL
+
+
 # ── Tribunal, órgão, UF ────────────────────────────────────────────────
 
 _SIGLA = re.compile(r'^(TRF\s?\d|STJ|STF|TST|TNU|TRT\s?\d{1,2}|TJ[A-Z]{2}|CARF|CRPS)\b', re.IGNORECASE)

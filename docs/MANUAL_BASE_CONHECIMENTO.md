@@ -72,8 +72,9 @@ filtros marcados.
   com palavras diferentes continuam separadas. Como a lista é longa, há um campo
   para procurar dentro dela.
 - **Resultado** (sempre do ponto de vista da empresa), **Tribunal**,
-  **Órgão julgador** (vara ou turma), **Instância**, **UF de origem**,
-  **Vigência FAP** e **Julgada entre**.
+  **Órgão julgador** (vara ou turma), **Instância**, **O que foi julgado**
+  (mérito, homologação do reconhecimento ou sem resolução de mérito), **UF de
+  origem**, **Vigência FAP** e **Julgada entre**.
 
 > [!INFO] O filtro de **vigência** pega a decisão cujo período inclui o ano: uma
 > decisão sobre "2017 a 2021" aparece quando você escolhe 2019.
@@ -82,6 +83,18 @@ filtros marcados.
 
 - **Como tem decidido** — a barra no topo mostra quantas decisões do recorte
   foram favoráveis, parciais e desfavoráveis. Clicar numa faixa filtra.
+  É o **placar de teses**:
+  - **Com uma tese no filtro** (do catálogo ou original), conta o **resultado
+    daquela tese** em cada decisão, e não o da decisão inteira — uma sentença
+    "parcialmente favorável" pode ter ganhado uma tese e perdido outra. Com
+    duas teses marcadas, a decisão que ganhou uma e perdeu a outra conta como
+    parcial.
+  - **Homologação do reconhecimento** da União e **extinção sem resolução de
+    mérito** ficam fora da conta: nelas a tese não foi julgada. Decisão que não
+    julgou a tese do filtro também fica fora.
+  - Abaixo da barra aparece o que ficou fora ("Fora da conta: 2 homologações do
+    reconhecimento…") e quantas decisões ainda sem resultado por tese entraram
+    pelo resultado da decisão inteira.
 - **Por órgão julgador** — logo abaixo, o mesmo placar separado por vara ou
   turma, do órgão que mais decidiu ao que menos (favorável / parcialmente /
   desfavorável). O tribunal vem na frente do nome porque a 1ª Turma do TRF3 e a
@@ -89,7 +102,8 @@ filtros marcados.
   uma tese, mostra como cada vara ou turma tem julgado aquela tese.
 - **Um cartão por processo** — sentença, acórdão e embargos do mesmo processo
   aparecem juntos, na ordem. Instância que não está na base aparece como
-  lacuna.
+  lacuna. Decisão que só homologou o reconhecimento ou foi extinta sem mérito
+  leva a etiqueta **Homologação** ou **Sem mérito**.
 - **Virou no acórdão** — selo do processo em que a sentença foi pior para a
   empresa e o acórdão foi melhor. É o precedente mais forte de citar.
 - **Copiar citação** — a referência pronta para colar na peça.
@@ -103,18 +117,22 @@ no topo da lista.
 Abas **Resumo** (por que o resultado e a história do caso), **Ementa**,
 **Argumentos** (os da empresa que foram acolhidos e os rejeitados),
 **Fundamentos** do julgador, **Precedentes** e **PDF**. Ao lado ficam o
-resultado, tribunal, relator, data, vigência, as teses originais e as do
-catálogo, a **citação pronta** e as **decisões parecidas** — as que discutem o
-mesmo ponto, mesmo com outras palavras.
+resultado, tribunal, relator, data, vigência, **o que a decisão julgou**
+(mérito, homologação do reconhecimento ou sem resolução de mérito), as teses
+originais **com o resultado de cada uma** (favorável, parcialmente,
+desfavorável ou não julgada) e as do catálogo, a **citação pronta** e as
+**decisões parecidas** — as que discutem o mesmo ponto, mesmo com outras
+palavras.
 
 > [!ALERTA] Quando a IA não consegue transcrever a ementa, ela guarda um
 > **resumo** e a tela mostra o selo "resumo — não é transcrição". Não cite esse
 > texto entre aspas como se fosse a ementa.
 
 - **Precedentes** que também estão na base viram link para a decisão.
-- :btn-outline-secondary[Corrigir dados] — corrija o que a IA leu errado. O
-  campo corrigido fica protegido: se a decisão for lida de novo pela IA, a sua
-  correção não é sobrescrita.
+- :btn-outline-secondary[Corrigir dados] — corrija o que a IA leu errado,
+  inclusive o que a decisão julgou e o resultado de cada tese. O campo corrigido
+  fica protegido: se a decisão for lida de novo pela IA, a sua correção não é
+  sobrescrita.
 - :btn-outline-secondary[Reprocessar com IA] — lê o PDF de novo. Só funciona com
   o PDF no sistema.
 - **Anexar PDF ou .md** (aba PDF) — para decisões que vieram da planilha sem o

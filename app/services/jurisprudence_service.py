@@ -33,7 +33,7 @@ CAMPOS_EDITAVEIS = (
     'tipo_documento', 'classe_processual', 'resultado', 'motivo_resultado',
     'parte_autora', 'vigencia_texto', 'ementa', 'resumo_executivo',
     'fundamentos_json', 'precedentes_json', 'argumentos_acolhidos_json',
-    'argumentos_rejeitados_json', 'teses_brutas_json',
+    'argumentos_rejeitados_json', 'teses_brutas_json', 'tipo_julgamento', 'resultado_por_tese_json',
 )
 
 _LISTAS = {
@@ -80,6 +80,12 @@ def normalizar_registro(bruto: dict) -> dict:
     }
     for origem, destino in _LISTAS.items():
         campos[destino] = norm.para_lista(bruto.get(origem))
+    # Placar (PRC-24/25): só quem traz o dado o grava. A planilha não tem esses
+    # campos, e reimportar não pode apagar o que a releitura preencheu.
+    if 'tipo_julgamento' in bruto:
+        campos['tipo_julgamento'] = norm.tipo_julgamento(bruto.get('tipo_julgamento'))
+    if 'resultado_por_tese' in bruto:
+        campos['resultado_por_tese_json'] = norm.resultados_por_tese(bruto.get('resultado_por_tese'))
     return campos
 
 
@@ -314,6 +320,49 @@ def teses_por_decisao(law_firm_id: int) -> dict[int, list[int]]:
     for decisao_id, tese_id in linhas:
         resultado.setdefault(decisao_id, []).append(tese_id)
     return resultado
+
+
+def chaves_por_catalogo(law_firm_id: int) -> dict[int, set[str]]:
+    """{judicial_legal_thesis_id: chaves das teses originais ligadas a ela}
+    (grafia mesclada conta pela canônica)."""
+    teses = JurisprudenceThesis.query.filter_by(law_firm_id=law_firm_id).all()
+    por_id = {t.id: t for t in teses}
+    catalogo_da_tese = catalogo_por_tese(law_firm_id)
+    saida: dict[int, set[str]] = {}
+    for t in teses:
+        canonica, passos = t, 0
+        while canonica.merged_into_id and canonica.merged_into_id in por_id and passos < 5:
+            canonica, passos = por_id[canonica.merged_into_id], passos + 1
+        for catalogo_id in catalogo_da_tese.get(canonica.id, []):
+            saida.setdefault(catalogo_id, set()).add(t.key)
+    return saida
+
+
+def resultado_para_placar(julgamento: Optional[str], resultado: Optional[str],
+                          resultado_por_tese, chaves: Optional[set]) -> tuple[Optional[str], str]:
+    """Resultado que a decisão conta no placar e a situação dela.
+
+    Situação: ok | homologacao | sem_merito (fora: não houve julgamento da tese)
+    | tese_nao_julgada (fora: a decisão não decidiu as teses do recorte) |
+    pela_decisao (sem resultado por tese ainda: conta o da decisão inteira).
+    `chaves` None = sem recorte por tese; `resultado_por_tese` é a lista
+    gravada ou um dict chave → resultado.
+    """
+    if julgamento in norm.JULGAMENTOS_FORA_DO_PLACAR:
+        return None, julgamento
+    if chaves is None:
+        return resultado, 'ok'
+    if isinstance(resultado_por_tese, dict):
+        por_tese = resultado_por_tese
+    else:
+        por_tese = {norm.chave(i.get('tese')): i.get('resultado')
+                    for i in (resultado_por_tese or []) if isinstance(i, dict) and norm.chave(i.get('tese'))}
+    if not por_tese:
+        return resultado, 'pela_decisao'
+    combinado = norm.combinar_resultados([por_tese[k] for k in chaves if k in por_tese])
+    if combinado is None:
+        return None, 'tese_nao_julgada'
+    return combinado, 'ok'
 
 
 def contar_teses_pendentes(law_firm_id: int) -> int:

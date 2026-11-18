@@ -70,7 +70,10 @@ def resumo_jurisprudencia(law_firm_id: int) -> dict:
     totais = jur.totais(law_firm_id)
     por_resultado = dict(
         db.session.query(JurisprudenceDecision.resultado, db.func.count())
-        .filter(JurisprudenceDecision.law_firm_id == law_firm_id)
+        .filter(JurisprudenceDecision.law_firm_id == law_firm_id,
+                # homologação e extinção sem mérito não julgaram a tese (PRC-25)
+                db.or_(JurisprudenceDecision.tipo_julgamento.is_(None),
+                       JurisprudenceDecision.tipo_julgamento.notin_(norm.JULGAMENTOS_FORA_DO_PLACAR)))
         .group_by(JurisprudenceDecision.resultado).all()
     )
     com_resultado = sum(n for r, n in por_resultado.items() if r)
@@ -109,10 +112,18 @@ def cobertura_por_tese(law_firm_id: int, pecas: Optional[list] = None) -> list[d
     pecas = pecas if pecas is not None else _pecas_ativas(law_firm_id)
     pecas_por_chave = Counter(k for p in pecas for k in set(p.thesis_catalog_ids or []))
     decisoes = decisoes_por_tese_do_catalogo(law_firm_id, [t.id for t in catalogo])
+    chaves = jur.chaves_por_catalogo(law_firm_id)
 
     linhas = []
     for tese in catalogo:
-        resultados = Counter(d.resultado for d in decisoes.get(tese.id, []) if d.resultado)
+        # O placar daquela tese: resultado dela em cada decisão, sem homologação
+        # nem extinção sem mérito (PRC-24 e PRC-25).
+        resultados = Counter()
+        for d in decisoes.get(tese.id, []):
+            r, _ = jur.resultado_para_placar(d.tipo_julgamento, d.resultado, d.resultado_por_tese_json,
+                                             chaves.get(tese.id, set()))
+            if r:
+                resultados[r] += 1
         total = sum(resultados.values())
         a_favor = resultados[norm.RESULTADO_FAVORAVEL] + resultados[norm.RESULTADO_PARCIAL]
         contra = resultados[norm.RESULTADO_DESFAVORAVEL]

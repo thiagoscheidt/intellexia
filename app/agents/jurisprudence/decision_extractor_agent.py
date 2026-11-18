@@ -47,6 +47,13 @@ _EMENTA_RESUMO = (
 
 TIPOS = Literal['SENTENCA', 'ACORDAO', 'EMBARGOS DE DECLARACAO', 'OUTRA']
 RESULTADOS = Literal['FAVORAVEL', 'PARCIALMENTE FAVORAVEL', 'DESFAVORAVEL']
+RESULTADOS_DA_TESE = Literal['FAVORAVEL', 'PARCIALMENTE FAVORAVEL', 'DESFAVORAVEL', 'NAO JULGADA']
+JULGAMENTOS = Literal['MERITO', 'HOMOLOGACAO DO RECONHECIMENTO', 'SEM RESOLUCAO DE MERITO']
+
+
+class ResultadoDaTese(BaseModel):
+    tese: str = Field(description='Exatamente um dos nomes listados em "teses".')
+    resultado: RESULTADOS_DA_TESE = Field(description='Resultado DESTA tese para a EMPRESA.')
 
 
 class DecisaoExtraida(BaseModel):
@@ -63,6 +70,10 @@ class DecisaoExtraida(BaseModel):
     parte_autora: str = Field(default='', description='Empresa autora.')
     vigencia_fap: str = Field(default='', description='"AAAA a AAAA" ou "AAAA".')
     teses: list[str] = Field(default_factory=list, description='Todas as teses, CAIXA ALTA.')
+    # Opcionais no esquema só para ler respostas antigas; o prompt pede sempre.
+    tipo_julgamento: Optional[JULGAMENTOS] = Field(default=None, description='O que a decisão julgou.')
+    resultado_por_tese: list[ResultadoDaTese] = Field(
+        default_factory=list, description='Uma linha por tese de "teses", com o resultado dela.')
     ementa: str = Field(default='', description='Ver regra da ementa no prompt.')
     fundamentos: list[str] = Field(default_factory=list)
     precedentes: list[str] = Field(default_factory=list)

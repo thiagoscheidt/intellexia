@@ -71,6 +71,11 @@ def _item(decisao, app_public_url, trecho_html=None) -> dict:
         'uf': decisao.uf,
         'data_julgamento': _iso(decisao.data_julgamento),
         'resultado': norm.RESULTADO_LABELS.get(decisao.resultado or '', 'não informado'),
+        'julgamento': norm.JULGAMENTO_LABELS.get(decisao.tipo_julgamento or ''),
+        'resultado_por_tese': [
+            {'tese': i.get('tese'), 'resultado': norm.TESE_LABELS.get(i.get('resultado'), i.get('resultado'))}
+            for i in (decisao.resultado_por_tese_json or []) if isinstance(i, dict)
+        ],
         'vigencia_fap': decisao.vigencia_texto,
         'teses_originais': list(decisao.teses_brutas_json or []),
         'teses_catalogo': _catalogo_da_decisao(decisao),
@@ -326,11 +331,16 @@ def jurisprudence_overview_handler(law_firm_id: int, app_public_url: str | None 
     r = busca.decisoes_filtradas(law_firm_id, f)
     decisoes = list(_decisoes_por_id(law_firm_id, r['ids']).values())
     rotulo = norm.RESULTADO_LABELS
+    # O placar: resultado da tese do recorte em cada decisão, sem homologação
+    # nem extinção sem mérito (as mesmas contas da tela).
+    no_placar = r['resultado_no_placar']
 
     def tabela(chave):
         grupos: dict[str, Counter] = {}
         for d in decisoes:
-            grupos.setdefault(chave(d) or 'não informado', Counter())[rotulo.get(d.resultado or '', 'não informado')] += 1
+            if not no_placar.get(d.id):
+                continue
+            grupos.setdefault(chave(d) or 'não informado', Counter())[rotulo[no_placar[d.id]]] += 1
         return [{'grupo': g, 'decisoes': sum(c.values()), **dict(c)}
                 for g, c in sorted(grupos.items(), key=lambda kv: -sum(kv[1].values()))]
 
@@ -360,6 +370,7 @@ def jurisprudence_overview_handler(law_firm_id: int, app_public_url: str | None 
         'decisoes': r['total'],
         'processos': r['processos'],
         'como_tem_decidido': _como_tem_decidido(r['exito']),
+        'placar': r['placar'],
         'por_tribunal': tabela(lambda d: d.tribunal),
         'por_instancia': tabela(lambda d: norm.TIPO_LABELS.get(d.tipo_documento or '')),
         'por_orgao_julgador': [
@@ -372,8 +383,13 @@ def jurisprudence_overview_handler(law_firm_id: int, app_public_url: str | None 
         'viradas_no_acordao': viradas[:10],
         'total_viradas': len(viradas),
         'favoraveis_mais_recentes': [_item(d, app_public_url) for d in a_favor],
-        'observacao': ('Tese do catálogo só conta decisões cuja tese já foi ligada ao catálogo na '
-                       'correspondência de teses; a tese original conta tudo o que está escrito na decisão.'),
+        'observacao': ('Como tem decidido e as tabelas por tribunal, instância e órgão contam só o que foi '
+                       'julgado: homologação do reconhecimento e extinção sem mérito ficam fora '
+                       '(placar.homologacao, placar.sem_merito). Com tese no filtro, conta o resultado daquela '
+                       'tese em cada decisão, não o da decisão inteira; decisão que ainda não tem resultado por '
+                       'tese entra pelo resultado da decisão (placar.pela_decisao) e a que não julgou a tese '
+                       'fica fora (placar.tese_nao_julgada). Tese do catálogo só conta decisões cuja tese já '
+                       'foi ligada ao catálogo na correspondência de teses.'),
     }
 
 

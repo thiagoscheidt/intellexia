@@ -67,6 +67,35 @@
     <div class="col-12"><label class="form-label">Ementa {{ manual('ementa') }}</label>
       <textarea name="ementa" class="form-control" rows="6">{{ d.ementa or '' }}</textarea></div>
 
+    <div class="col-md-4"><label class="form-label">O que a decisão julgou {{ manual('tipo_julgamento') }}</label>
+      <select name="tipo_julgamento" class="form-select">
+        <option value="" {{ 'selected' if not d.tipo_julgamento }}>Ainda não lido</option>
+        {% for k, v in julgamento_labels.items() %}<option value="{{ k }}" {{ 'selected' if d.tipo_julgamento == k }}>{{ v }}</option>{% endfor %}
+      </select>
+      <div class="form-text">Homologação do reconhecimento e extinção sem mérito ficam fora do placar.</div></div>
+    {% set por_tese = {} %}
+    {% for i in d.resultado_por_tese_json or [] %}{% set _ = por_tese.update({i.tese: i.resultado}) %}{% endfor %}
+    <div class="col-md-8"><label class="form-label">Resultado de cada tese para a empresa {{ manual('resultado_por_tese_json') }}</label>
+      {% if d.teses_brutas_json %}
+      <div class="border rounded p-2">
+        {% for tese in d.teses_brutas_json %}
+        <div class="row g-2 align-items-center {{ 'mt-1' if not loop.first }}">
+          <div class="col-sm-7 small">{{ tese }}<input type="hidden" name="rt_tese" value="{{ tese }}"></div>
+          <div class="col-sm-5">
+            <select name="rt_resultado" class="form-select form-select-sm" aria-label="Resultado de {{ tese }}">
+              <option value="" {{ 'selected' if not por_tese.get(tese) }}>—</option>
+              {% for k, v in tese_labels.items() %}<option value="{{ k }}" {{ 'selected' if por_tese.get(tese) == k }}>{{ v }}</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="form-text">Tese nova ou renomeada no campo "Teses" aparece aqui depois de salvar.</div>
+      {% else %}
+      <div class="form-text">A decisão não tem teses.</div>
+      {% endif %}
+    </div>
+
     <div class="col-md-6"><label class="form-label">Teses {{ manual('teses_brutas_json') }}</label>
       <textarea name="teses" class="form-control" rows="5">{{ linhas(d.teses_brutas_json) }}</textarea></div>
     <div class="col-md-6"><label class="form-label">Precedentes citados {{ manual('precedentes_json') }}</label>

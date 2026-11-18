@@ -45,6 +45,7 @@ class Filtros:
     tribunais: list[str] = field(default_factory=list)
     orgaos: list[str] = field(default_factory=list)     # "TRF4 · 2ª Turma" (orgao_da_decisao)
     tipos: list[str] = field(default_factory=list)
+    julgamentos: list[str] = field(default_factory=list)  # merito | homologacao | sem_merito
     uf: str = ''
     vigencia: Optional[int] = None
     de: Optional[date] = None
@@ -95,6 +96,7 @@ class Filtros:
             tribunais=[t for t in args.getlist('tribunal') if t][:20],
             orgaos=[o.strip() for o in args.getlist('orgao') if o.strip()][:20],
             tipos=[t for t in args.getlist('tipo') if t in norm.TIPO_LABELS],
+            julgamentos=[j for j in args.getlist('julgamento') if j in norm.JULGAMENTO_LABELS],
             uf=(args.get('uf') or '').strip().upper()[:2],
             vigencia=vigencia,
             de=mes('de'),
@@ -107,7 +109,7 @@ class Filtros:
     @property
     def ativos(self) -> bool:
         return bool(self.q or self.catalogo or self.teses or self.originais or self.resultados or self.tribunais
-                    or self.orgaos or self.tipos or self.uf or self.vigencia or self.de or self.ate)
+                    or self.orgaos or self.tipos or self.julgamentos or self.uf or self.vigencia or self.de or self.ate)
 
 
 def orgao_da_decisao(tribunal: Optional[str], orgao: Optional[str]) -> Optional[str]:
@@ -135,6 +137,8 @@ class _Linha:
     teses: set
     catalogo: set
     originais: set
+    julgamento: Optional[str] = None
+    res_tese: dict = field(default_factory=dict)   # chave da tese original → resultado dela
 
     @property
     def grupo(self) -> str:
@@ -155,13 +159,15 @@ def _carregar(law_firm_id: int) -> tuple[list[_Linha], dict[str, str]]:
     catalogo_da_tese = svc.catalogo_por_tese(law_firm_id)
     grafias: dict[str, Counter] = {}
     linhas = []
-    for (d_id, digits, tribunal, orgao, uf, tipo, resultado, data_j, vi, vf, texto, brutas) in db.session.query(
+    for (d_id, digits, tribunal, orgao, uf, tipo, resultado, data_j, vi, vf, texto, brutas,
+         julgamento, por_tese) in db.session.query(
             JurisprudenceDecision.id, JurisprudenceDecision.processo_digits,
             JurisprudenceDecision.tribunal, JurisprudenceDecision.orgao_julgador, JurisprudenceDecision.uf,
             JurisprudenceDecision.tipo_documento, JurisprudenceDecision.resultado,
             JurisprudenceDecision.data_julgamento, JurisprudenceDecision.vigencia_inicio,
             JurisprudenceDecision.vigencia_fim, JurisprudenceDecision.search_text,
-            JurisprudenceDecision.teses_brutas_json,
+            JurisprudenceDecision.teses_brutas_json, JurisprudenceDecision.tipo_julgamento,
+            JurisprudenceDecision.resultado_por_tese_json,
     ).filter(JurisprudenceDecision.law_firm_id == law_firm_id).all():
         teses = set(teses_da_decisao.get(d_id, []))
         catalogo = set()
@@ -173,8 +179,10 @@ def _carregar(law_firm_id: int) -> tuple[list[_Linha], dict[str, str]]:
             if k:
                 originais.add(k)
                 grafias.setdefault(k, Counter())[str(original).strip()] += 1
+        res_tese = {norm.chave(i.get('tese')): i.get('resultado')
+                    for i in (por_tese or []) if isinstance(i, dict) and norm.chave(i.get('tese'))}
         linhas.append(_Linha(d_id, digits, tribunal, orgao_da_decisao(tribunal, orgao), uf, tipo, resultado, data_j, vi, vf,
-                             texto or '', teses, catalogo, originais))
+                             texto or '', teses, catalogo, originais, julgamento, res_tese))
     # Empate na frequência fica com a grafia acentuada: é a forma correta.
     rotulos = {k: max(c.items(), key=lambda kv: (kv[1], kv[0] != norm.sem_acento(kv[0]), kv[0]))[0]
                for k, c in grafias.items()}
@@ -209,6 +217,8 @@ def _passa(linha: _Linha, f: Filtros, exceto: Optional[str] = None) -> bool:
     if exceto != 'orgao' and f.orgaos and linha.orgao not in f.orgaos:
         return False
     if exceto != 'tipo' and f.tipos and linha.tipo not in f.tipos:
+        return False
+    if exceto != 'julgamento' and f.julgamentos and linha.julgamento not in f.julgamentos:
         return False
     if exceto != 'uf' and f.uf and linha.uf != f.uf:
         return False
@@ -313,22 +323,71 @@ def _filtrar(law_firm_id: int, f: Filtros):
     return todas, rotulos, termos, candidatas, finais
 
 
-def _exito(finais: list) -> list[dict]:
-    resultados = _contar(finais, lambda l: l.resultado)
-    total = len(finais)
+# ── Placar (PRC-24 e PRC-25) ──────────────────────────────────────────
+# "Como tem decidido" e o placar por órgão contam o que foi julgado:
+# homologação do reconhecimento e extinção sem mérito ficam fora (não houve
+# julgamento da tese), e com tese no filtro conta o resultado DAQUELA tese em
+# cada decisão, não o da decisão inteira. Decisão ainda sem resultado por tese
+# (não relida) entra pelo resultado da decisão, e a tela diz quantas.
+
+def _chaves_do_recorte(law_firm_id: int, f: Filtros) -> Optional[set]:
+    """Chaves das teses originais filtradas (pela própria original, pela tese
+    da correspondência ou pelo catálogo). None = sem filtro de tese."""
+    if not (f.originais or f.teses or f.catalogo):
+        return None
+    alvo = set(f.originais)
+    if f.teses or f.catalogo:
+        teses = JurisprudenceThesis.query.filter_by(law_firm_id=law_firm_id).all()
+        por_id = {t.id: t for t in teses}
+        catalogo_da_tese = svc.catalogo_por_tese(law_firm_id) if f.catalogo else {}
+        for t in teses:
+            canonica, passos = t, 0
+            while canonica.merged_into_id and canonica.merged_into_id in por_id and passos < 5:
+                canonica, passos = por_id[canonica.merged_into_id], passos + 1
+            if canonica.id in set(f.teses) or set(catalogo_da_tese.get(canonica.id, [])) & set(f.catalogo):
+                alvo.add(t.key)
+    return alvo
+
+
+def resultado_no_placar(linha: _Linha, alvo: Optional[set]) -> tuple[Optional[str], str]:
+    return svc.resultado_para_placar(linha.julgamento, linha.resultado, linha.res_tese, alvo)
+
+
+def _placar(finais: list, alvo: Optional[set]) -> tuple[dict, dict]:
+    """({decision_id: resultado ou None}, resumo do que ficou fora ou foi aproximado)."""
+    resultados, situacoes = {}, Counter()
+    for linha in finais:
+        r, situacao = resultado_no_placar(linha, alvo)
+        resultados[linha.id] = r
+        situacoes[situacao] += 1
+    info = {
+        'por_tese': alvo is not None,
+        'contadas': sum(1 for r in resultados.values() if r),
+        'homologacao': situacoes.get(norm.JULGAMENTO_HOMOLOGACAO, 0),
+        'sem_merito': situacoes.get(norm.JULGAMENTO_SEM_MERITO, 0),
+        'tese_nao_julgada': situacoes.get('tese_nao_julgada', 0),
+        'pela_decisao': situacoes.get('pela_decisao', 0),
+        'sem_placar_lido': sum(1 for l in finais if l.julgamento is None),
+    }
+    return resultados, info
+
+
+def _exito(finais: list, resultados: dict) -> list[dict]:
+    contagem = Counter(resultados.get(l.id) for l in finais if resultados.get(l.id))
+    total = sum(contagem.values())
     return [
-        {'resultado': r, 'rotulo': norm.RESULTADO_LABELS_CURTOS[r], 'n': resultados.get(r, 0),
-         'pct': (100.0 * resultados.get(r, 0) / total) if total else 0}
+        {'resultado': r, 'rotulo': norm.RESULTADO_LABELS_CURTOS[r], 'n': contagem.get(r, 0),
+         'pct': (100.0 * contagem.get(r, 0) / total) if total else 0}
         for r in (norm.RESULTADO_FAVORAVEL, norm.RESULTADO_PARCIAL, norm.RESULTADO_DESFAVORAVEL)
     ]
 
 
-def _por_orgao(finais: list) -> list[dict]:
+def _por_orgao(finais: list, resultados: dict) -> list[dict]:
     """Placar de cada órgão julgador no recorte, do que mais decidiu ao que menos."""
     grupos: dict[str, Counter] = {}
     for linha in finais:
-        if linha.orgao:
-            grupos.setdefault(linha.orgao, Counter())[linha.resultado or 'sem'] += 1
+        if linha.orgao and resultados.get(linha.id):
+            grupos.setdefault(linha.orgao, Counter())[resultados[linha.id]] += 1
     linhas = []
     for orgao, contagem in grupos.items():
         n = sum(contagem.values())
@@ -340,7 +399,7 @@ def _por_orgao(finais: list) -> list[dict]:
                  'pct': 100.0 * contagem.get(r, 0) / n}
                 for r in (norm.RESULTADO_FAVORAVEL, norm.RESULTADO_PARCIAL, norm.RESULTADO_DESFAVORAVEL)
             ],
-            'sem_resultado': contagem.get('sem', 0),
+            'sem_resultado': 0,
         })
     return sorted(linhas, key=lambda l: (-l['n'], l['orgao']))
 
@@ -361,12 +420,15 @@ def decisoes_filtradas(law_firm_id: int, f: Filtros) -> dict:
     quem pagina por conta própria (MCP) ou precisa do conjunto inteiro
     (exportação, panorama). `ids` na ordem da tela."""
     _todas, rotulos, termos, _cand, finais = _filtrar(law_firm_id, f)
+    resultados, placar = _placar(finais, _chaves_do_recorte(law_firm_id, f))
     return {
         'ids': _ids_em_ordem(finais, f.ordem),
         'total': len(finais),
         'processos': len({l.grupo for l in finais}),
-        'exito': _exito(finais),
-        'por_orgao': _por_orgao(finais),
+        'exito': _exito(finais, resultados),
+        'por_orgao': _por_orgao(finais, resultados),
+        'placar': placar,
+        'resultado_no_placar': resultados,
         'termos': termos,
         'rotulos_originais': rotulos,
     }
@@ -384,13 +446,15 @@ def buscar(law_firm_id: int, f: Filtros, por_pagina: int = POR_PAGINA) -> dict:
         'tribunal': _contar([l for l in candidatas if _passa(l, f, 'tribunal')], lambda l: l.tribunal),
         'orgao': _contar([l for l in candidatas if _passa(l, f, 'orgao')], lambda l: l.orgao),
         'tipo': _contar([l for l in candidatas if _passa(l, f, 'tipo')], lambda l: l.tipo),
+        'julgamento': _contar([l for l in candidatas if _passa(l, f, 'julgamento')], lambda l: l.julgamento),
         'uf': _contar([l for l in candidatas if _passa(l, f, 'uf')], lambda l: l.uf),
     }
     anos_vigencia = sorted({a for l in todas if l.vig_ini and l.vig_fim
                             for a in range(l.vig_ini, l.vig_fim + 1)}, reverse=True)
 
     total = len(finais)
-    exito = _exito(finais)
+    resultados, placar = _placar(finais, _chaves_do_recorte(law_firm_id, f))
+    exito = _exito(finais, resultados)
 
     linhas_por_id = {l.id: l for l in finais}
     grupos: dict[str, list[int]] = {}
@@ -417,7 +481,8 @@ def buscar(law_firm_id: int, f: Filtros, por_pagina: int = POR_PAGINA) -> dict:
         'total': total,
         'processos': len(grupos),
         'exito': exito,
-        'por_orgao': _por_orgao(finais),
+        'por_orgao': _por_orgao(finais, resultados),
+        'placar': placar,
         'facetas': facetas,
         'nomes_catalogo': nomes_catalogo,
         'nomes_teses': nomes_teses,
@@ -436,21 +501,8 @@ def _destaque_por_original(law_firm_id: int, f: Filtros):
     Vale para os três filtros de tese: a própria original, a tese da
     correspondência (inclusive grafia mesclada nela) e a tese do catálogo.
     """
-    alvo_original = set(f.originais)
-    if not (f.teses or f.catalogo):
-        return lambda k: k in alvo_original
-    teses = JurisprudenceThesis.query.filter_by(law_firm_id=law_firm_id).all()
-    por_id = {t.id: t for t in teses}
-    catalogo_da_tese = svc.catalogo_por_tese(law_firm_id) if f.catalogo else {}
-    alvo_teses, alvo_catalogo = set(f.teses), set(f.catalogo)
-    marcadas = set()
-    for t in teses:
-        canonica, passos = t, 0
-        while canonica.merged_into_id and canonica.merged_into_id in por_id and passos < 5:
-            canonica, passos = por_id[canonica.merged_into_id], passos + 1
-        if canonica.id in alvo_teses or set(catalogo_da_tese.get(canonica.id, [])) & alvo_catalogo:
-            marcadas.add(t.key)
-    return lambda k: k in alvo_original or k in marcadas
+    alvo = _chaves_do_recorte(law_firm_id, f) or set()
+    return lambda k: k in alvo
 
 
 def virou_no_acordao(trilha: list) -> bool:

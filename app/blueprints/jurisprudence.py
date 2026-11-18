@@ -128,6 +128,7 @@ def index():
         ordens=busca.ORDENS,
         resultado_labels=norm.RESULTADO_LABELS_CURTOS,
         tipo_labels=norm.TIPO_LABELS,
+        julgamento_labels=norm.JULGAMENTO_LABELS,
         envios_ativos=envios.painel(law_firm_id, limite=50)['ativos'],
         alternar=_alternar,
         com=_com,
@@ -205,6 +206,8 @@ def decisao(decision_id):
         catalogo=sorted({c for t in d.theses for c in t.catalog_theses}, key=lambda c: c.name),
         pdf_disponivel=bool(d.pdf_path and os.path.exists(d.pdf_path)),
         em_leitura=em_leitura,
+        julgamento_labels=norm.JULGAMENTO_LABELS,
+        tese_labels=norm.TESE_LABELS_CURTOS,
     )
 
 
@@ -251,7 +254,8 @@ def editar(decision_id):
     d = _decisao(decision_id)
     if request.method == 'GET':
         return render_template('jurisprudence/edit.html', d=d,
-                               resultado_labels=norm.RESULTADO_LABELS, tipo_labels=norm.TIPO_LABELS)
+                               resultado_labels=norm.RESULTADO_LABELS, tipo_labels=norm.TIPO_LABELS,
+                               julgamento_labels=norm.JULGAMENTO_LABELS, tese_labels=norm.TESE_LABELS)
     bruto = {
         'processo': request.form.get('processo'),
         'tribunal': request.form.get('tribunal'),
@@ -272,6 +276,9 @@ def editar(decision_id):
         'precedentes': _lista_do_form('precedentes'),
         'argumentos_acolhidos': _lista_do_form('argumentos_acolhidos'),
         'argumentos_rejeitados': _lista_do_form('argumentos_rejeitados'),
+        'tipo_julgamento': request.form.get('tipo_julgamento'),
+        'resultado_por_tese': [{'tese': t, 'resultado': r} for t, r in
+                               zip(request.form.getlist('rt_tese'), request.form.getlist('rt_resultado')) if r],
     }
     mudaram = svc.corrigir_manualmente(d, bruto, svc.ResolvedorDeTeses(d.law_firm_id))
     db.session.commit()

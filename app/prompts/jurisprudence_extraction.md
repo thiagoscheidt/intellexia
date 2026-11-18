@@ -22,6 +22,12 @@ CAMPOS
 - vigencia_fap: o(s) ano(s) de vigência do FAP questionados. Intervalo "AAAA a AAAA" (ex.: "2019 a 2022") ou o ano sozinho ("2023").
 - teses: todos os fundamentos jurídicos discutidos, cada um curto e em CAIXA ALTA.
 {teses_referencia}
+- tipo_julgamento: o que a decisão julgou de fato.
+  - MERITO: o julgador decidiu o pedido da empresa (acolheu ou rejeitou, no todo ou em parte).
+  - HOMOLOGACAO DO RECONHECIMENTO: a União (ou o INSS) reconheceu a procedência do pedido e o juízo só homologou esse reconhecimento, sem decidir a tese.
+  - SEM RESOLUCAO DE MERITO: extinção sem julgamento do mérito (ilegitimidade, perda do objeto, desistência, coisa julgada, litispendência, inadequação da via etc.).
+  Se a decisão homologa o reconhecimento de parte dos pedidos e julga o restante, é MERITO, e as teses reconhecidas pela União vão como NAO JULGADA em resultado_por_tese.
+- resultado_por_tese: UMA linha para CADA tese listada em "teses", com o nome escrito exatamente igual. Resultado daquela tese **para a empresa**: FAVORAVEL (o pedido ligado à tese foi acolhido), DESFAVORAVEL (rejeitado), PARCIALMENTE FAVORAVEL (acolhido só em parte — por exemplo, alguns benefícios excluídos e outros não) ou NAO JULGADA (a decisão não decidiu aquela tese: prejudicada, não conhecida, homologada pelo reconhecimento da União, ou só mencionada). O resultado da decisão inteira NÃO vale para cada tese: uma sentença parcialmente favorável pode ter ganhado uma tese e perdido outra.
 - ementa: {ementa_regra}
 - fundamentos: os fundamentos efetivamente usados pelo julgador, um por item.
 - precedentes: julgados, temas e repetitivos citados na decisão ("STJ REsp 1.234.567", "TRF4 AC 5029271-50.2020.4.04.7200", "Tema 554/STF").

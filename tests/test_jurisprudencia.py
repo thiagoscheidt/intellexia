@@ -14,6 +14,7 @@ import io
 import os
 import sys
 from datetime import date
+from pathlib import Path
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -685,6 +686,165 @@ def test_embargos():
     check('tipo corrigido à mão fica', db.session.get(D, manual.decision_id).tipo_documento == 'sentenca')
 
 
+def test_placar():
+    print('\n7b. Placar de teses: resultado por tese e homologação fora (PRC-24 e PRC-25)')
+    from werkzeug.datastructures import MultiDict
+    from app.models import JudicialLegalThesis, JurisprudenceDecision as D
+    from app.services import jurisprudence_placar_service as placar
+    from app.services import jurisprudence_search_service as s
+    from app.services import jurisprudence_service as svc
+    from app.services import process_knowledge_service as pk
+    from mcp_server.tools.jurisprudence import jurisprudence_overview_handler
+
+    check('tipo de julgamento normalizado',
+          [norm.tipo_julgamento(x) for x in ('MERITO', 'HOMOLOGACAO DO RECONHECIMENTO', 'SEM RESOLUCAO DE MERITO', '')]
+          == ['merito', 'homologacao', 'sem_merito', None])
+    check('código da tela não vira "mérito"', norm.tipo_julgamento('sem_merito') == 'sem_merito'
+          and norm.resultado_da_tese('nao_julgada') == 'nao_julgada')
+    check('resultado da tese normalizado',
+          [norm.resultado_da_tese(x) for x in ('FAVORAVEL', 'PARCIALMENTE FAVORAVEL', 'DESFAVORAVEL', 'NAO JULGADA')]
+          == ['favoravel', 'parcial', 'desfavoravel', 'nao_julgada'])
+    check('teses do recorte combinadas: uma ganha e outra perde = parcial',
+          norm.combinar_resultados(['favoravel', 'desfavoravel']) == 'parcial')
+    check('tese não julgada não pesa', norm.combinar_resultados(['nao_julgada', 'favoravel']) == 'favoravel')
+
+    db.session.add(JudicialLegalThesis(id=10, law_firm_id=1, key='placar_x', name='PLACAR X DO CATALOGO'))
+    db.session.commit()
+    resolvedor = svc.ResolvedorDeTeses(1)
+
+    def decisao(n, resultado, julgamento, por_tese, teses=('TESE PLACAR X', 'TESE PLACAR Y'), orgao='9ª Turma'):
+        bruto = {'processo': f'50000{n:02d}-11.2024.4.04.7200', 'tribunal': 'TRF4', 'orgao_julgador': orgao,
+                 'data_julgamento': f'{n:02d}/01/2026', 'tipo_documento': 'ACORDAO', 'resultado': resultado,
+                 'teses': list(teses)}
+        if julgamento is not None:
+            bruto['tipo_julgamento'] = julgamento
+            bruto['resultado_por_tese'] = [{'tese': t, 'resultado': r} for t, r in por_tese]
+        return svc.criar_decisao(1, bruto, source='pdf', resolvedor=resolvedor, user_id=1)
+
+    d1 = decisao(1, 'PARCIALMENTE FAVORAVEL', 'MERITO', [('TESE PLACAR X', 'DESFAVORAVEL'), ('TESE PLACAR Y', 'FAVORAVEL')])
+    d2 = decisao(2, 'FAVORAVEL', 'HOMOLOGACAO DO RECONHECIMENTO', [('TESE PLACAR X', 'NAO JULGADA')])
+    d3 = decisao(3, 'FAVORAVEL', 'MERITO', [('TESE PLACAR X', 'FAVORAVEL'), ('TESE PLACAR Y', 'NAO JULGADA')])
+    d4 = decisao(4, 'DESFAVORAVEL', 'MERITO', [('TESE PLACAR Y', 'DESFAVORAVEL'), ('TESE PLACAR X', 'NAO JULGADA')])
+    d5 = decisao(5, 'FAVORAVEL', None, [])                   # ainda não lida para o placar
+    db.session.commit()
+    check('leitura grava tipo de julgamento e resultado por tese',
+          d1.tipo_julgamento == 'merito' and d1.resultado_por_tese_json[0] == {'tese': 'TESE PLACAR X', 'resultado': 'desfavoravel'},
+          (d1.tipo_julgamento, d1.resultado_por_tese_json))
+    check('decisão sem os campos (planilha) fica sem placar', d5.tipo_julgamento is None and d5.resultado_por_tese_json is None)
+
+    def buscar(**kw):
+        return s.buscar(1, s.Filtros.do_request(MultiDict(kw)))
+
+    r = buscar(original='TESE PLACAR X')
+    contagem = {e['resultado']: e['n'] for e in r['exito']}
+    # d1 perdeu a X (desfavorável, embora a decisão seja parcial), d2 é homologação (fora),
+    # d3 ganhou a X, d4 não julgou a X (fora), d5 sem leitura conta pelo resultado da decisão.
+    check('placar da tese: resultado DAQUELA tese em cada decisão',
+          contagem == {'favoravel': 2, 'parcial': 0, 'desfavoravel': 1}, contagem)
+    check('placar diz o que ficou fora e o que foi aproximado',
+          (r['placar']['homologacao'], r['placar']['tese_nao_julgada'], r['placar']['pela_decisao'], r['placar']['por_tese'])
+          == (1, 1, 1, True), r['placar'])
+    check('placar por órgão usa a mesma conta',
+          [o for o in r['por_orgao'] if o['orgao'] == 'TRF4 · 9ª Turma'][0]['n'] == 3, r['por_orgao'])
+    r = buscar(original=['TESE PLACAR X', 'TESE PLACAR Y'])
+    check('duas teses no recorte: uma ganha e outra perde = parcial (d1)',
+          {e['resultado']: e['n'] for e in r['exito']}['parcial'] == 1, r['exito'])
+    r = buscar(julgamento='homologacao')
+    check('filtro "o que foi julgado"', r['total'] == 1 and r['facetas']['julgamento'].get('merito') == 3, r['facetas']['julgamento'])
+
+    # Tese do catálogo: a mesma conta, pelas grafias ligadas a ela.
+    from app.models import JurisprudenceThesis
+    tese_x = JurisprudenceThesis.query.filter_by(law_firm_id=1, key='TESE PLACAR X').first()
+    tese_x.catalog_theses.append(db.session.get(JudicialLegalThesis, 10))
+    db.session.commit()
+    r = buscar(tese='10')
+    check('pela tese do catálogo, o mesmo placar da original',
+          {e['resultado']: e['n'] for e in r['exito']} == {'favoravel': 2, 'parcial': 0, 'desfavoravel': 1}, r['exito'])
+    linha = next(l for l in pk.cobertura_por_tese(1) if l['tese'].id == 10)
+    check('cobertura por tese conta pelo resultado da tese, sem homologação',
+          linha['resultados'] == {'favoravel': 2, 'parcial': 0, 'desfavoravel': 1}, linha['resultados'])
+
+    p = jurisprudence_overview_handler(1, None, teses_catalogo=['PLACAR X DO CATALOGO'])
+    trf4 = next(t for t in p['por_tribunal'] if t['grupo'] == 'TRF4')
+    check('Claude: panorama com o placar da tese', trf4.get('Favorável') == 2 and trf4.get('Desfavorável') == 1
+          and p['placar']['homologacao'] == 1, (trf4, p['placar']))
+
+    # Correção à mão: tipo de julgamento e resultado de uma tese.
+    cliente = app.test_client()
+    with cliente.session_transaction() as sessao:
+        sessao.update(user_id=1, law_firm_id=1, user_role='admin')
+    resposta = cliente.get(f'/process-panel/jurisprudencia/decisao/{d4.id}/editar')
+    check('formulário mostra o resultado de cada tese', resposta.status_code == 200
+          and 'name="rt_resultado"' in resposta.get_data(as_text=True), resposta.status_code)
+    resposta = cliente.get(f'/process-panel/jurisprudencia/decisao/{d1.id}')
+    corpo = resposta.get_data(as_text=True)
+    check('página da decisão mostra o que julgou e o resultado da tese',
+          resposta.status_code == 200 and 'Mérito' in corpo and 'Desfavorável' in corpo, resposta.status_code)
+    resposta = cliente.get('/process-panel/jurisprudencia/?original=TESE+PLACAR+X')
+    corpo = resposta.get_data(as_text=True)
+    check('lista avisa o que ficou fora do placar', resposta.status_code == 200 and 'Fora da conta' in corpo
+          and 'resultado da tese em cada decisão' in corpo, resposta.status_code)
+    mudaram = svc.corrigir_manualmente(d4, {
+        'processo': d4.processo, 'tribunal': d4.tribunal, 'orgao_julgador': d4.orgao_julgador, 'uf': d4.uf,
+        'data_julgamento': d4.data_julgamento.strftime('%d/%m/%Y'), 'tipo_documento': 'ACORDAO',
+        'resultado': 'DESFAVORAVEL', 'teses': list(d4.teses_brutas_json),
+        'tipo_julgamento': 'sem_merito',
+        'resultado_por_tese': [{'tese': 'TESE PLACAR Y', 'resultado': 'parcial'}]}, resolvedor)
+    db.session.commit()
+    check('correção manual do placar', set(mudaram) == {'tipo_julgamento', 'resultado_por_tese_json'}
+          and d4.tipo_julgamento == 'sem_merito', mudaram)
+
+    # Preencher as decisões que já estavam na base: o .md do lote pelo índice CSV.
+    import tempfile
+    pasta = Path(tempfile.mkdtemp())
+    (pasta / '2026-01-05 - ACÓRDÃO - X.md').write_text('# Acórdão\n\nDou provimento: exclui o benefício.', encoding='utf-8')
+    (pasta / '_INDICE_decisoes.csv').write_text(
+        'Arquivo .md;PDF de origem\n2026-01-05 - ACÓRDÃO - X.md;05_01_2026 - ACÓRDÃO - X.pdf\n', encoding='utf-8')
+    d5.original_filename = '05_01_2026 - ACÓRDÃO - X.pdf'
+    db.session.commit()
+
+    class _Agente:
+        chamadas = []
+        def ler(self, *, teses, texto=None, arquivo=None, law_firm_id=None, decision_id=None):
+            self.chamadas.append((decision_id, arquivo))
+            return {'tipo_julgamento': 'MERITO', 'resultado_por_tese': [{'tese': teses[0], 'resultado': 'FAVORAVEL'}]}
+
+    simulado = placar.preencher(1, pastas=[pasta])
+    check('simulação acha o texto da decisão da planilha no lote',
+          simulado['por_origem'].get('lote de Markdown') == 1 and simulado['gravadas'] == 0, simulado)
+    check('simulação não grava', d5.tipo_julgamento is None)
+    agente = _Agente()
+    feito = placar.preencher(1, gravar=True, pastas=[pasta], agente=agente, workers=2)
+    db.session.refresh(d5)
+    check('preenchimento grava o placar da decisão', d5.tipo_julgamento == 'merito'
+          and d5.resultado_por_tese_json == [{'tese': 'TESE PLACAR X', 'resultado': 'favoravel'}],
+          (d5.tipo_julgamento, d5.resultado_por_tese_json, feito))
+    check('só lê quem não tem placar', [c[0] for c in agente.chamadas if c[0] in (d1.id, d3.id)] == [])
+
+    from app.agents.jurisprudence.thesis_result_agent import JurisprudenceThesisResultAgent, PlacarDaDecisao, recortar
+    check('texto longo guarda começo e fim', recortar('a' * 10 + 'b' * 10, 10) .startswith('aaaaa')
+          and recortar('a' * 10 + 'b' * 10, 10).endswith('bbbbb'))
+
+    class _Raw:
+        response_metadata = {}
+        usage_metadata = {}
+
+    class _Llm:
+        def invoke(self, mensagens):
+            return {'raw': None, 'parsed': PlacarDaDecisao(tipo_julgamento='MERITO', resultado_por_tese=[
+                {'tese': 'tese placar x', 'resultado': 'FAVORAVEL'}, {'tese': 'INVENTADA', 'resultado': 'FAVORAVEL'}])}
+    lido = JurisprudenceThesisResultAgent(model_name='fake', llm_factory=lambda: _Llm()).ler(
+        teses=['TESE PLACAR X'], texto='decisão')
+    check('agente devolve só as teses da decisão, na grafia dela',
+          lido['resultado_por_tese'] == [{'tese': 'TESE PLACAR X', 'resultado': 'FAVORAVEL'}], lido)
+
+    for d in (d1, d2, d3, d4, d5):
+        db.session.delete(d)
+    tese_x.catalog_theses.clear()
+    db.session.delete(db.session.get(JudicialLegalThesis, 10))
+    db.session.commit()
+
+
 def _pdf_com_texto(paginas):
     import fitz
     doc = fitz.open()
@@ -1131,6 +1291,7 @@ def main():
         test_agente()
         test_fila()
         test_embargos()
+        test_placar()
         test_indice()
         test_geracao()
     test_rotas_ctx()

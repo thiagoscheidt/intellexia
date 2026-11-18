@@ -1579,6 +1579,11 @@ def panorama_jurisprudencia(
     perdida, acórdão melhor — os precedentes mais fortes) e as decisões
     favoráveis mais recentes com citação pronta.
 
+    É o placar de teses: com tese no filtro, conta o resultado DAQUELA tese em
+    cada decisão (não o da decisão inteira), e homologação do reconhecimento da
+    União e extinção sem mérito ficam fora da conta. O campo "placar" diz quantas
+    ficaram fora e quantas ainda foram contadas pelo resultado da decisão.
+
     Args: os mesmos filtros de pesquisar_jurisprudencia (sem resultado, que é o que se mede).
     """
     claims = require_module("process_panel")
