@@ -13,7 +13,9 @@ De onde vem o texto, nesta ordem:
 3. o lote de Markdown do escritório (`instance/importacao/lote_md/decisoes`),
    pelo índice CSV: "PDF de origem" é o `nome_arquivo` da planilha, a mesma
    chave de `original_filename` — é assim que as 509 da planilha, sem PDF no
-   sistema, ganham texto.
+   sistema, ganham texto;
+4. um arquivo com o mesmo nome enviado à fila de leitura (o PDF que ficou em
+   "Revisar" como repetido da decisão da planilha).
 
 Decisão sem texto em nenhum dos três fica de fora e é contada no relatório.
 A IA roda em paralelo (só rede); o banco só é tocado no fluxo principal.
@@ -58,7 +60,22 @@ def textos_do_lote(pastas: list[Path]) -> dict[str, Path]:
     return mapa
 
 
-def fonte(decisao: JurisprudenceDecision, lote: dict[str, Path]) -> Optional[dict]:
+def arquivos_da_fila(law_firm_id: int) -> dict[str, Path]:
+    """{chave do nome: arquivo} dos envios do escritório que ainda estão no disco."""
+    from app.models import JurisprudenceUpload
+    from app.services import jurisprudence_upload_service as envios
+
+    mapa: dict[str, Path] = {}
+    for nome, caminho in (db.session.query(JurisprudenceUpload.original_filename, JurisprudenceUpload.file_path)
+                          .filter(JurisprudenceUpload.law_firm_id == law_firm_id)
+                          .order_by(JurisprudenceUpload.id).all()):
+        if nome and caminho and os.path.isfile(caminho):
+            mapa.setdefault(envios._chave_do_arquivo(nome), Path(caminho))
+    return mapa
+
+
+def fonte(decisao: JurisprudenceDecision, lote: dict[str, Path],
+          fila: Optional[dict[str, Path]] = None) -> Optional[dict]:
     """{'texto': ...} ou {'arquivo': ...} — de onde ler a decisão."""
     from app.services import jurisprudence_upload_service as envios
 
@@ -67,9 +84,11 @@ def fonte(decisao: JurisprudenceDecision, lote: dict[str, Path]) -> Optional[dic
     if decisao.pdf_path and os.path.isfile(decisao.pdf_path):
         return {'arquivo': decisao.pdf_path, 'origem': 'arquivo anexado'}
     if decisao.original_filename:
-        md = lote.get(envios._chave_do_arquivo(decisao.original_filename))
-        if md is not None:
-            return {'arquivo': str(md), 'origem': 'lote de Markdown'}
+        chave = envios._chave_do_arquivo(decisao.original_filename)
+        if lote.get(chave) is not None:
+            return {'arquivo': str(lote[chave]), 'origem': 'lote de Markdown'}
+        if fila and fila.get(chave) is not None:
+            return {'arquivo': str(fila[chave]), 'origem': 'arquivo da fila de leitura'}
     return None
 
 
@@ -100,6 +119,7 @@ def preencher(law_firm_id: int, *, gravar: bool = False, limite: Optional[int] =
     from app.services import ai_model_settings_service
 
     lote = textos_do_lote(pastas if pastas is not None else [p for p in [pasta_do_lote()] if p])
+    fila = arquivos_da_fila(law_firm_id)
     decisoes = pendentes(law_firm_id, refazer=refazer).all()
     if limite:
         decisoes = decisoes[:limite]
@@ -108,7 +128,7 @@ def preencher(law_firm_id: int, *, gravar: bool = False, limite: Optional[int] =
                  'falhas': [], 'julgamento': {}, 'teses_com_resultado': 0}
     tarefas = []
     for d in decisoes:
-        f = fonte(d, lote)
+        f = fonte(d, lote, fila)
         if f is None:
             relatorio['sem_texto'].append({'id': d.id, 'arquivo': d.original_filename})
             continue
