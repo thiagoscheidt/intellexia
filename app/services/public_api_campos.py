@@ -435,6 +435,25 @@ SEGURADOS = (
     _t('aviso', 'Só na busca por nome: só acha nomes já revelados ou cadastrados.', opcional=True),
 )
 
+PRINT_CONSULTA_FAP = (
+    _t('cnpj', 'Estabelecimento (com pontuação).'),
+    _t('empresa', 'Empresa como o portal mostra ("00.000.000 - NOME").'),
+    _i('vigencia', 'Ano de vigência.'),
+    _t('tela', 'Tela capturada (calculo, B91..., massa_salarial...).'),
+    _t('tela_descricao', 'O que a tela mostra.'),
+    _t('numero', 'NB ou CAT filtrado (só dígitos); null = a tabela inteira.'),
+    _t('calculo', 'Cálculo exibido, como no Histórico do portal ("Cálculo Original 1,0461 30/09/2025").'),
+    _t('fap', 'Cartão do FAP no alto da tela (índice e cálculo vigente).'),
+    _i('linhas', 'Linhas da tabela no print (null na tela do cálculo).'),
+    _t('capturado_em', 'Data e hora da captura (São Paulo, DD/MM/AAAA HH:MM:SS).'),
+    _t('disponivel_ate', 'Até quando a imagem fica guardada.'),
+    _l('imagens', 'Uma ou duas partes; a 2ª é a tabela rolada até as últimas colunas.',
+       _i('parte', '1 ou 2.'),
+       _t('descricao', 'O que a parte mostra.'),
+       _t('url_imagem', 'Imagem PNG (abre no navegador com o login do IntellexIA).')),
+    _t('aviso', 'Tabela cortada em 100 linhas, segunda parte ou sessão parcial do portal.', opcional=True),
+)
+
 REVELAR_NOME = (
     _t('cpf', 'CPF consultado (11 dígitos).'),
     _b('encontrado', 'A consulta achou nome.'),

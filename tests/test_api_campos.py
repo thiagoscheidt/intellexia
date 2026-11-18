@@ -148,6 +148,35 @@ def test_amostra_da_api(c, a, tokens):
         cpf_nome_client.consultar_nome = original
         os.environ.pop('CPF_NOME_API_KEY', None)
 
+    # Print da Consulta do FAP com o navegador substituído: nunca abre o portal.
+    from app.services import fap_portal_print_service as print_svc
+    png = b'\x89PNG\r\n\x1a\n'
+
+    def navegador(pedido, pasta):
+        (pasta / 'tela_1.png').write_bytes(png)
+        return {'ok': True, 'empresa': '33.592.510 - TESTE', 'fap': 'FAP 2026 1,0000', 'calculo': 'Cálculo Original',
+                'linhas': 1, 'linhas_omitidas': 0, 'sessao_parcial': False,
+                'partes': [{'arquivo': str(pasta / 'tela_1.png'), 'descricao': 'colunas iniciais'}]}
+    original_nav, sessao = print_svc._rodar_navegador, os.environ.get('FAP_SYNC_LAW_FIRM_ID')
+    print_svc._rodar_navegador, os.environ['FAP_SYNC_LAW_FIRM_ID'] = navegador, str(a.id)
+    try:
+        r = c.post('/api/v1/fap/consulta/print', json={'cnpj': '33592510000154', 'vigencia': 2026, 'tela': 'B91',
+                                                      'numero': '1234567890'}, headers=h)
+        check('print da Consulta do FAP: 200', r.status_code == 200, f'{r.status_code} {r.get_data(as_text=True)[:200]}')
+        if r.status_code == 200:
+            _conferir('/fap/consulta/print', r.get_json(), ROTA[('POST', '/fap/consulta/print')].resposta)
+        r = c.post('/api/v1/fap/consulta/print', json={'cnpj': '33592510000154', 'vigencia': 2026,
+                                                      'tela': 'massa_salarial', 'numero': '1'}, headers=h)
+        check('print com número na massa salarial: 400', r.status_code == 400, str(r.status_code))
+    finally:
+        print_svc._rodar_navegador = original_nav
+        if sessao is None:
+            os.environ.pop('FAP_SYNC_LAW_FIRM_ID', None)
+        else:
+            os.environ['FAP_SYNC_LAW_FIRM_ID'] = sessao
+        import shutil
+        shutil.rmtree(print_svc.DIR_PRINTS / str(a.id), ignore_errors=True)
+
     r = c.get('/api/v1/eu', headers=h)
     _conferir('/eu', r.get_json(), C.EU)
 

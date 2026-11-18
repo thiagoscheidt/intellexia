@@ -130,6 +130,7 @@ from mcp_server.tools.prompt_library import (
 )
 from mcp_server.tools.numero_processo import search_by_process_number_handler
 from mcp_server.tools.peticao_prints import petition_prints_handler
+from mcp_server.tools.fap_portal_print import fap_portal_print_handler
 from mcp_server.tools.jurisprudence import (
     decision_detail_handler,
     export_jurisprudence_excel_handler,
@@ -636,6 +637,58 @@ def consultar_cpf(cpf: str) -> dict:
     claims = require_module("fap_panel")
     with app.app_context():
         return consultar_cpf_handler(claims["law_firm_id"], claims.get("user_id"), cpf)
+
+
+@mcp.tool()
+def print_consulta_fap(
+    cnpj: str,
+    vigencia: int,
+    tela: str = "calculo",
+    numero: str | None = None,
+    calculo: str = "atual",
+) -> dict:
+    """Tira AGORA o print de uma tela da Consulta do FAP no portal (fap-mps.dataprev.gov.br).
+
+    Abre o portal com a sessão desta instalação, escolhe vigência, empresa e
+    estabelecimento como uma pessoa faria e devolve o link da imagem, para
+    colar na petição. Leva de 20 a 60 segundos. Use quando o usuário pedir um
+    print da tela do FAP ("print do B91 nº X na vigência 2026", "tela da massa
+    salarial"). Para os dados em si, prefira as ferramentas do cálculo FAP
+    (detalhar_estabelecimento_calculo_fap, listar_beneficios_calculo_fap): são imediatas.
+    Para achar um print que o escritório JÁ usou numa petição, use
+    prints_das_peticoes.
+
+    O print sai como o portal mostra, sem carimbo. Diga ao usuário a data e hora
+    da captura ('capturado_em') e de qual cálculo ('calculo'), para a legenda.
+
+    Args:
+        cnpj: CNPJ completo do estabelecimento (14 dígitos, com ou sem pontuação).
+            Precisa estar no Painel FAP ou no cálculo FAP do escritório.
+        vigencia: Ano de vigência do FAP (ex.: 2026).
+        tela: O que mostrar. "calculo" (padrão) = a tela inteira do estabelecimento
+            (FAP, histórico, dados e indicadores do cálculo); "B91", "B92", "B93",
+            "B94" ou "CAT" = a lista desses insumos do cálculo; "beneficios_pagos" =
+            todos os benefícios com espécie; "massa_salarial" e "vinculos" = o
+            detalhamento por competência.
+        numero: NB ou nº da CAT para o print mostrar só aquela linha (filtro do
+            próprio portal). Vale para B91–B94, CAT e beneficios_pagos.
+        calculo: "atual" (padrão) ou "original" (o Cálculo Original do histórico,
+            antes das contestações).
+
+    Returns:
+        'imagens': uma ou duas partes com 'url_imagem' (abre no navegador com o
+        login do IntellexIA; apresente como link clicável). Duas partes = a
+        tabela tem mais colunas do que cabem: a 2ª é a mesma linha rolada até o
+        fim (DIB, DCB, CPF, NIT...). As imagens ficam disponíveis por 7 dias
+        ('disponivel_ate'). 'fap' e 'calculo' dizem o índice e o cálculo exibido.
+        Erro de sessão expirada: alguém do escritório precisa logar de novo no
+        portal FAP — diga isso ao usuário; não tente de novo em seguida.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return fap_portal_print_handler(
+            claims["law_firm_id"], claims.get("user_id"), cnpj, vigencia, tela, numero, calculo,
+            app_public_url=APP_PUBLIC_URL)
 
 
 @mcp.tool()

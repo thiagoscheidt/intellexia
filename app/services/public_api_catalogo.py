@@ -301,6 +301,12 @@ def _prints():
     return peticao_prints
 
 
+def _print_fap(ctx, p):
+    from mcp_server.tools.fap_portal_print import fap_portal_print_handler
+    return fap_portal_print_handler(ctx.law_firm_id, ctx.user_id, p['cnpj'], p['vigencia'], p['tela'],
+                                    p['numero'], p['calculo'], app_public_url=ctx.app_public_url)
+
+
 def _juris():
     from mcp_server.tools import jurisprudence
     return jurisprudence
@@ -463,6 +469,18 @@ ROTAS: tuple[Rota, ...] = (
                    obrigatorio=True),
              Param('vigencia', 'integer', 'Ano de vigência (padrão: a mais recente).'),
          ), _calculo_estabelecimento, detalhe=True, resposta=C.CALCULO_ESTABELECIMENTO, grupo='fap'),
+    Rota('POST', '/fap/consulta/print', 'fap_panel',
+         'Tira agora o print de uma tela da Consulta do FAP no portal (20 a 60 s): a tela do cálculo, a '
+         'lista de B91–B94/CAT (ou só a linha de um NB), a massa salarial ou os vínculos. Devolve o link '
+         'da imagem, disponível por 7 dias. Só para o escritório da sessão do portal desta instalação.', (
+             Param('cnpj', 'string', 'CNPJ completo do estabelecimento (do Painel FAP ou do cálculo FAP).',
+                   obrigatorio=True, local='body'),
+             Param('vigencia', 'integer', 'Ano de vigência (ex.: 2026).', obrigatorio=True, local='body'),
+             Param('tela', 'string', 'calculo (padrão), B91, B92, B93, B94, CAT, beneficios_pagos, '
+                   'massa_salarial ou vinculos.', local='body', padrao='calculo'),
+             Param('numero', 'string', 'NB ou nº da CAT: o print mostra só essa linha.', local='body'),
+             Param('calculo', 'string', 'atual (padrão) ou original.', local='body', padrao='atual'),
+         ), _print_fap, resposta=C.PRINT_CONSULTA_FAP, grupo='fap'),
     # ── Segurados ────────────────────────────────────────────────────────────
     Rota('GET', '/segurados', 'fap_panel',
          'Visão de um segurado: benefícios, CATs, processos e o cálculo FAP. Informe cpf, nit ou nome.', (

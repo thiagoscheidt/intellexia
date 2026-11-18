@@ -2751,3 +2751,27 @@ def procuracoes_export_excel():
         download_name=f'procuracoes_fap_{timestamp}.xlsx',
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
+
+
+@fap_panel_bp.route('/print-portal/<nome>')
+def print_portal(nome):
+    """Imagem de um print da Consulta do FAP (o ``url_imagem`` do MCP e da API).
+
+    Só a pasta do escritório da sessão é lida; o nome é aleatório e conferido
+    por padrão (``fap_portal_print_service.arquivo_da_imagem``). Erro volta como
+    texto puro: quem abre é o navegador, vindo de um link no Claude.
+    """
+    from app.services import fap_portal_print_service as print_svc
+
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        return 'Faça login no IntellexIA para ver o print.', 401
+    caminho = print_svc.arquivo_da_imagem(law_firm_id, nome)
+    if caminho is None:
+        return current_app.response_class(
+            f'Print não encontrado. Os prints do portal FAP ficam disponíveis por {print_svc.RETENCAO_DIAS} '
+            'dias; peça um novo ao Claude.', status=404, mimetype='text/plain')
+    resposta = send_file(caminho, mimetype='image/png', as_attachment=False, download_name=f'fap_{nome}')
+    resposta.headers['X-Content-Type-Options'] = 'nosniff'
+    resposta.headers['Cache-Control'] = 'private, max-age=3600'
+    return resposta

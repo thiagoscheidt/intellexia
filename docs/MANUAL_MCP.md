@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **78 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **79 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -114,6 +114,7 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `buscar_por_segurado` | Visão 360º do segurado | Visão 360º de uma pessoa: benefícios + CATs + processos (por NIT, CPF ou nome) | Sistema |
 | `revelar_nome_segurado` | Revelar nome do segurado | Revela o **nome** de um segurado pelo CPF (o FAP não informa nome) — a mesma consulta paga do botão **Revelar nome** das telas. Só quando você pede o nome de uma pessoa específica, com limite diário por usuário; o nome fica salvo para todos | Sistema |
 | `consultar_cpf` | Consulta completa de CPF | Consulta **paga** de **qualquer CPF válido** (com ou sem pontuação) e devolve **tudo o que o serviço traz**: nome, nascimento, sexo, nome da mãe. Nada fica salvo; entra no mesmo limite diário do revelar nome. Também em tela, em **Ferramentas → Consulta de CPF**. Para só o nome de um segurado da base, prefira `revelar_nome_segurado` | Sistema |
+| `print_consulta_fap` | Print da Consulta do FAP | Tira **agora** o print de uma tela da **Consulta do FAP** no portal: a tela do cálculo do estabelecimento, a lista de B91–B94 ou CATs (ou **só a linha de um NB**), a massa salarial ou os vínculos, do cálculo atual ou do original. Devolve o link da imagem para colar na petição (leva de 20 a 60 segundos; a imagem fica 7 dias). Depende da sessão do portal FAP estar ativa. Para um print que o escritório já usou numa petição, use `prints_das_peticoes` | FAP Web |
 
 > [!INFO] **Nome do segurado.** O relatório e o portal do FAP **não informam o nome** — só CPF, NIT e nascimento. O nome aparece nas respostas quando alguém já o revelou (botão :btn-outline-primary[Revelar nome] nas telas de Benefícios, ou pedindo à IA), e a busca por nome acha esses segurados. Para revelar um nome novo, peça explicitamente ("qual o nome do segurado do CPF …?"): é uma consulta paga, feita uma vez por CPF, com limite diário por usuário — a IA não revela nomes em lote nem por conta própria. Cada benefício traz também o link gratuito da **consulta de CPF na Receita**, já preenchido (falta só o captcha).
 

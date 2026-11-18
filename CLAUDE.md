@@ -476,6 +476,39 @@ entrega a imagem tirada do PDF original no Drive.
   abre. Print sem legenda não é achado — a figura não tem como ser identificada.
 - Teste: `tests/test_peticao_prints.py` (PDF montado no teste, sem Drive).
 
+### Print da Consulta do FAP (`fap_portal_print_service`)
+
+Ferramenta `print_consulta_fap` (MCP, módulo `fap_panel`), rota
+`POST /api/v1/fap/consulta/print` e a imagem em `/fap-panel/print-portal/<nome>`.
+Abre a Consulta do FAP no portal com a sessão do `FAP_AUTH_JSON`, escolhe
+vigência, empresa e estabelecimento como a pessoa faria e tira o print da tela
+do cálculo, da lista de B91–B94/CAT (ou só a linha de um NB, pelo filtro do
+próprio portal), da massa salarial ou dos vínculos — do cálculo atual ou do
+original. Complementa `prints_das_peticoes`, que acha o print **já usado**.
+
+- **O navegador roda num subprocesso** (`python -m app.services.fap_portal_navegador`,
+  uma linha de JSON na saída, tempo-limite de 180 s): o Playwright síncrono não
+  roda no loop asyncio do MCP, e Chromium travado morre com o processo.
+  **Um navegador por vez** na máquina (trava de arquivo `instance/prints_fap/.navegador.lock`).
+- **Só o escritório do `FAP_SYNC_LAW_FIRM_ID`** (a sessão do portal é da
+  instalação) e **só CNPJ da base** dele — estabelecimento do cálculo FAP ou raiz
+  de empresa do Painel FAP, que pode estar gravada sem os zeros da frente.
+- **Print cru**, como o escritório faz; quem capturou e quando vão na resposta e
+  no `.json` ao lado da imagem, em `instance/prints_fap/<escritório>/`, apagados
+  depois de 7 dias.
+- **Roteiro mapeado na tela real (18/11/2026)**, detalhes na docstring do
+  navegador: autocompletes `#anoVigencia`/`#cnpjRaiz`/`#estabelecimentos` só
+  acham digitando o número **pontuado** (a lista desenha só as opções visíveis);
+  número zerado não é clicável (`sem_itens`); o detalhe é `.modal-table` com
+  DataGrid que só desenha as colunas que cabem — o B91 tem 17 e a 1920 px
+  mostram 12, então sai uma **2ª parte com a tabela rolada até o fim** (DIB, DCB,
+  CPF, NIT); **Escape fecha a janela inteira**, o painel de filtro fecha com
+  clique no título; o rótulo do cálculo exibido é o `li.timeline-selected` do
+  Histórico (o cartão do FAP no alto não muda ao trocar de cálculo).
+- **Homologação não tem sessão viva** (o `FAP_AUTH_JSON` de lá é antigo): a
+  ferramenta responde "sessão expirada" até alguém copiar a sessão ou logar.
+- Teste: `tests/test_fap_portal_print.py` (navegador substituído; não abre o portal).
+
 ### Nome do segurado (consulta de CPF)
 
 O FAP não informa nome — relatório e Consulta do FAP trazem CPF, NIT e
@@ -1262,6 +1295,7 @@ FapReview.revision [POST]
 | `prompt_library_service`               | Biblioteca de IA: visibilidade, edição, versões, favoritos, recomendado, aviso de CPF/CNPJ, campos `{{...}}`, importar/baixar skill do Claude e os comandos do IntellexIA lidos por AST — fonte única da tela `/prompts` e do MCP |
 | `public_api_campos`                    | Campos de resposta de cada rota da API (`Campo`): conferência contra a resposta real, schema do OpenAPI, tabela e exemplo de JSON da documentação |
 | `peticao_prints_service`               | Prints das petições protocoladas: legendas lidas do .md da Base, figura extraída do PDF do Drive na hora (cache em `instance/prints_peticoes/`), acesso ao PDF por arquivo — fonte única do `prints_das_peticoes`, da rota da API e da imagem na Base. Ver a seção "Prints das petições protocoladas" |
+| `fap_portal_print_service`             | Print da Consulta do FAP ao vivo: valida escritório e CNPJ da base, roda o `fap_portal_navegador` (Playwright) num subprocesso com trava de um navegador por vez, guarda as imagens por 7 dias — fonte única do `print_consulta_fap`, da rota da API e da imagem no Painel FAP. Ver a seção "Print da Consulta do FAP" |
 | `access_audit_service`                 | Auditoria de acesso: registro de visitas de tela, estatísticas de atividade/online e uso do MCP (`record_mcp_call`, conexão por usuário, funções usadas) — fonte única do dashboard admin |
 | `comunica_pje_client`                  | Cliente HTTP da API pública do Comunica PJe/DJEN — todo acesso isolado aqui; pacing global + regras de rate limit (ver seção "Integração Comunica PJe") |
 | `communication_monitor_service`        | Monitoramento de Processos: sincronização por OAB e por caderno (dedup por hash da API), descoberta de processos (`origin='comunica_auto'` + triagem), explicação IA com cache (`explain_communication`), queries da tela e das tools MCP — fonte única |
