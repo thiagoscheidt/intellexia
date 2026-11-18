@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **77 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **78 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -80,6 +80,7 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `pesquisar_base_conhecimento` | Pesquisar na Base de Conhecimento | Pesquisa Inteligente: retorna os **trechos/documentos** encontrados, com fonte, página, relevância e **link para abrir o arquivo** | IA |
 | `ler_arquivo_base_conhecimento` | Ler arquivo da Base | Lê o **arquivo inteiro** de um resultado da pesquisa — útil quando o trecho não basta, como num resumo em `.md`. Markdown e texto vêm do arquivo original; PDF e DOCX, remontados dos trechos indexados. Documento grande vem em partes | Sistema |
 | `buscar_por_numero_processo` | Tudo de um processo pelo número | Acha **tudo de um processo pelo número** — petições e documentos da Base de Conhecimento, decisões da Jurisprudência, peças-modelo e o processo no Painel —, com ou sem pontuação, completo ou só parte do número (mínimo 7 dígitos). Traz o link de cada item e, quando houver, o **original no Drive** | Sistema |
+| `prints_das_peticoes` | Prints das petições protocoladas | Acha os **prints que o escritório já usou** nas petições protocoladas — CONBAS, INFBEN, HISCAL, laudo do INSS, CAT, CNIS, CTPS, tela do FAP, trecho de sentença — pelo processo, pelo NB/CAT da legenda ou por um texto, e traz a **legenda pronta** e o **link da imagem** (tirada do PDF original no Drive). Só acha o que já entrou numa petição; print novo continua saindo dos autos | Sistema |
 
 > [!IA] A pesquisa decide sozinha entre busca **semântica** (conceitos) e **textual** (termos exatos). Números de benefício, NIT, CPF e CNPJ são buscados de forma exata e determinística.
 

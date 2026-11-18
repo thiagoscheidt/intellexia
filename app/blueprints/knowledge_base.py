@@ -1068,6 +1068,31 @@ def view(file_id):
         return redirect(url_for('knowledge_base.list'))
 
 
+@knowledge_base_bp.route('/<int:file_id>/print/<int:ordem>')
+def petition_print(file_id, ordem):
+    """Imagem de um print de petição protocolada (o ``url_imagem`` do MCP e da API).
+
+    Na primeira abertura baixa o PDF do Drive e guarda todos os prints da petição
+    em cache (``peticao_prints_service``). Erro volta como texto puro: quem abre é
+    o navegador, vindo de um link no Claude.
+    """
+    from app.services import peticao_prints_service as prints_svc
+
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        return 'Faça login no IntellexIA para ver o print.', 401
+    try:
+        caminho, ext = prints_svc.imagem_do_print(law_firm_id, file_id, ordem)
+    except prints_svc.PrintIndisponivel as erro:
+        return current_app.response_class(str(erro), status=erro.status, mimetype='text/plain')
+    nome = f'print_{file_id}_{ordem}.{ext}'
+    resposta = send_file(caminho, mimetype=f'image/{"jpeg" if ext == "jpg" else ext}',
+                         as_attachment=False, download_name=nome)
+    resposta.headers['X-Content-Type-Options'] = 'nosniff'
+    resposta.headers['Cache-Control'] = 'private, max-age=3600'
+    return resposta
+
+
 @knowledge_base_bp.route('/<int:file_id>/page-image/<int:page_no>')
 def page_image(file_id, page_no):
     """Renderiza uma página específica do PDF como imagem PNG (para o modal de trechos)."""

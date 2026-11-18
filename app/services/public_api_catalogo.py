@@ -296,6 +296,11 @@ def _kb():
     return knowledge
 
 
+def _prints():
+    from mcp_server.tools import peticao_prints
+    return peticao_prints
+
+
 def _juris():
     from mcp_server.tools import jurisprudence
     return jurisprudence
@@ -490,6 +495,20 @@ ROTAS: tuple[Rota, ...] = (
          ), lambda ctx, p: _kb().read_kb_file_handler(
              p['id'], ctx.law_firm_id, p['deslocamento'], app_public_url=ctx.app_public_url),
         detalhe=True, resposta=C.KB_ARQUIVO, grupo='base-conhecimento'),
+    Rota('GET', '/base-conhecimento/prints', 'knowledge_base',
+         'Prints que o escritório já usou nas petições protocoladas (CONBAS, INFBEN, laudo, CAT, tela do '
+         'FAP...), achados pela legenda. O "url_imagem" abre no navegador com o login do IntellexIA. '
+         'Informe ao menos numero_processo, numero ou termo.', (
+             Param('numero_processo', 'string', 'Número do processo das petições, com ou sem pontuação.'),
+             Param('numero', 'string', 'NB, CAT ou processo citado na legenda do print (só dígitos contam).'),
+             Param('sistema', 'string', 'Tipo do print: CONBAS, INFBEN, CAT, laudo, FAP...'),
+             Param('termo', 'string', 'Texto na legenda ou lido dentro da imagem.'),
+             _limite(20, maximo=50),
+             DESLOCAMENTO,
+         ), lambda ctx, p: _prints().petition_prints_handler(
+             ctx.law_firm_id, p['numero_processo'], p['numero'], p['sistema'], p['termo'], p['limite'],
+             p['deslocamento'], app_public_url=ctx.app_public_url),
+        resposta=C.KB_PRINTS, grupo='base-conhecimento'),
     # ── Jurisprudência ───────────────────────────────────────────────────────
     Rota('GET', '/jurisprudencia', 'process_panel',
          'Pesquisa na Base de Jurisprudência (sem termo, lista tudo paginado).', (

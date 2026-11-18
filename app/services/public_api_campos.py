@@ -544,6 +544,25 @@ KB_ARQUIVO = (
     _t('aviso', 'Quando não há texto (arquivo não processado ou sem camada de texto).', opcional=True),
 )
 
+KB_PRINTS = envelope(
+    _i('arquivo_id', 'Petição na Base de Conhecimento (use em /base-conhecimento/arquivos/{id}).'),
+    _i('ordem', 'Posição do print na petição (1, 2, 3...).'),
+    _t('peticao', 'Nome da petição de onde o print saiu.'),
+    _t('data_peticao', 'Data da petição (AAAA-MM-DD), quando está no nome do arquivo.'),
+    _t('numero_processo', 'Número de processo da petição.'),
+    _t('sistema', 'Tipo do print: CONBAS, INFBEN, CAT, Laudo médico pericial do INSS, Tela do FAP...'),
+    _t('legenda', 'A legenda do escritório, com a referência ao evento.'),
+    _t('referencia', 'Só a referência: "(ev. 1:6, pág. 16)".'),
+    _l('numeros', 'NB, CAT e processos citados na legenda (só dígitos).'),
+    _i('partes', 'Figuras que formam o print (mais de uma = quebrou de página; a imagem vem emendada).'),
+    _t('texto_na_imagem', 'Leitura automática do texto da imagem (com erros de leitura).'),
+    _b('pdf_disponivel', 'O PDF original está compartilhado com o IntellexIA no Drive. null = não dá para '
+       'saber nesta instalação.'),
+    _t('url_imagem', 'Imagem do print (abre no navegador com o login do IntellexIA).'),
+    _t('url_peticao', 'A petição no IntellexIA.'),
+    _t('url_original', 'O PDF original no Google Drive.'),
+)
+
 JURIS_PESQUISA = envelope(
     *DECISAO_ITEM,
     _i('pagina', 'Página do inteiro teor onde casou (modo inteiro_teor).', opcional=True),

@@ -225,8 +225,14 @@ def test_amostra_local():
     # Número de processo na pergunta = busca textual direta, sem a IA escolher o modo.
     kb_num = (KnowledgeBase.query.filter_by(law_firm_id=fid, is_active=True)
               .filter(KnowledgeBase.lawsuit_number.isnot(None)).first())
+    # Prints: um processo cuja petição protocolada tem print com legenda.
+    from app.services import peticao_prints_service as prints_svc
+    proc_print = next((kb.lawsuit_number for kb in prints_svc.peticoes(fid)[:200]
+                       if kb.lawsuit_number and prints_svc.localizar(fid, numero_processo=kb.lawsuit_number)),
+                      None)
     extra = {
         '/segurados': {'nit': b.insured_nit} if b else None,
+        '/base-conhecimento/prints': {'numero_processo': proc_print} if proc_print else None,
         '/base-conhecimento/pesquisa': ({'pergunta': kb_num.lawsuit_number, 'modo_busca': 'textual'}
                                         if kb_num else None),
         '/fap/calculo/estabelecimento': ({'cnpj': est.cnpj} if est else None),

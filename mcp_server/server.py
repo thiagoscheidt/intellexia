@@ -129,6 +129,7 @@ from mcp_server.tools.prompt_library import (
     usar_prompt_handler,
 )
 from mcp_server.tools.numero_processo import search_by_process_number_handler
+from mcp_server.tools.peticao_prints import petition_prints_handler
 from mcp_server.tools.jurisprudence import (
     decision_detail_handler,
     export_jurisprudence_excel_handler,
@@ -359,6 +360,63 @@ def ler_arquivo_base_conhecimento(arquivo_id: int, deslocamento: int = 0) -> dic
     with app.app_context():
         return read_kb_file_handler(arquivo_id, claims["law_firm_id"], deslocamento,
                                     app_public_url=APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def prints_das_peticoes(
+    numero_processo: str | None = None,
+    numero: str | None = None,
+    sistema: str | None = None,
+    termo: str | None = None,
+    limite: int = 20,
+    deslocamento: int = 0,
+) -> dict:
+    """Acha os prints (imagens) que o escritório já usou nas petições protocoladas.
+
+    As petições trazem prints recortados dos autos — tela do CONBAS, INFBEN,
+    HISCAL, laudo médico pericial do INSS (SABI), CAT, CNIS/relações
+    previdenciárias, CTPS, tela do FAP, trechos de sentença — cada um com a
+    legenda do escritório ("CONBAS – B94 nº 6322736802 (ev. 1:16)"). O mesmo
+    print volta nas peças seguintes do processo: use quando o usuário pedir o
+    print, a tela ou o laudo de um benefício, CAT ou processo para colar numa
+    peça nova.
+
+    Só encontra o que JÁ foi usado numa petição protocolada que está na Base de
+    Conhecimento. Print que nunca entrou numa petição sai dos autos do processo,
+    não daqui — diga isso ao usuário em vez de procurar de novo.
+
+    Informe ao menos numero_processo, numero ou termo.
+
+    Args:
+        numero_processo: Número do processo das petições (com ou sem pontuação,
+            completo ou parte, mínimo 7 dígitos).
+        numero: NB, número da CAT ou processo citado na LEGENDA do print (só
+            dígitos contam; parte do número vale, mínimo 5 dígitos).
+        sistema: Tipo do print: CONBAS, INFBEN, HISCAL, CAT, CTPS, CNIS, "laudo",
+            "FAP", "sentença"... (busca parcial no tipo e na legenda).
+        termo: Texto na legenda ou no que foi lido dentro da imagem (ex.: o nome
+            do segurado).
+        limite: Máximo de prints por página (padrão 20).
+        deslocamento: Paginação — repita o 'proximo_deslocamento' da resposta.
+
+    Returns:
+        Envelope paginado; cada item traz 'legenda' (já pronta para citar, com
+        a referência ao evento), 'sistema', 'referencia', 'peticao' e
+        'data_peticao' de onde o print saiu, 'texto_na_imagem' (leitura
+        automática, com erros — não cite como transcrição) e 'url_imagem': o link
+        da imagem, que abre no navegador com o login do IntellexIA (apresente como
+        link clicável; a primeira abertura de cada petição leva alguns segundos).
+        O mesmo print costuma aparecer em várias peças com referências de evento
+        diferentes ("ev. 1:16" numa, "ev. 1:6, pág. 13" noutra): mostre as
+        referências e deixe o usuário escolher a do processo atual.
+        'pdf_disponivel' false = o PDF da petição não está compartilhado com o
+        IntellexIA no Drive e o url_imagem não abre; mostre o 'url_original'.
+    """
+    claims = require_module("knowledge_base")
+    with app.app_context():
+        return petition_prints_handler(
+            claims["law_firm_id"], numero_processo, numero, sistema, termo, limite, deslocamento,
+            app_public_url=APP_PUBLIC_URL)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
