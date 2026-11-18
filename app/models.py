@@ -2963,6 +2963,57 @@ class FapCalculoItem(db.Model):
         return f'<FapCalculoItem {self.tipo} {self.identificador} {self.cnpj}/{self.ano_vigencia}>'
 
 
+class FapContestacaoAnexo(db.Model):
+    """Documento que o escritório anexou a uma contestação do FAP (FB-08).
+
+    Vem do "Visualizar Anexos" de cada recálculo da Consulta do FAP, baixado
+    por ``scripts/fap_baixar_anexos.py``; uma linha por anexo do portal. O
+    ``benefit_id`` é resolvido em Python no registro (vigência + CNPJ + NB),
+    para a Central filtrar por inteiro e nunca cruzar texto com ``benefits``
+    (a lição da collation do cálculo FAP). ``texto`` é o PDF lido sem IA;
+    ``tipo_documento`` e ``campos_json`` saem dele por regra.
+    """
+    __tablename__ = 'fap_contestacao_anexos'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'anexo_id', name='uq_fap_anexo_escritorio'),
+        db.Index('ix_fap_anexo_beneficio', 'law_firm_id', 'ano_vigencia', 'cnpj', 'nb'),
+    )
+
+    TEXTO_PENDENTE = 'pendente'
+    TEXTO_OK = 'ok'
+    TEXTO_VAZIO = 'sem_texto'
+    TEXTO_ERRO = 'erro'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    anexo_id = db.Column(db.BigInteger, nullable=False)            # id do anexo no portal
+    ano_vigencia = db.Column(db.Integer, nullable=False, index=True)
+    cnpj = db.Column(db.String(14), nullable=False)
+    cnpj_raiz = db.Column(db.String(8), nullable=False, index=True)
+    recalculo_id = db.Column(db.BigInteger, nullable=False, index=True)
+    recalculo_tipo = db.Column(db.String(80))
+    recalculo_data = db.Column(db.Date)
+    instancia = db.Column(db.SmallInteger, index=True)             # 1, 2 ou NULL (recálculo de outro tipo)
+    elemento = db.Column(db.String(40), index=True)                # BENEFICIO, MASSA_SALARIAL…
+    id_elemento = db.Column(db.BigInteger)
+    nb = db.Column(db.String(20), index=True)                      # só dígitos
+    benefit_id = db.Column(db.Integer, db.ForeignKey('benefits.id', ondelete='SET NULL'), index=True)
+    nome = db.Column(db.String(255))
+    data_envio = db.Column(db.Date)
+    tamanho = db.Column(db.Integer)
+    arquivo = db.Column(db.String(500))                            # relativo à pasta do escritório
+    texto = db.Column(db.Text(16777215))                           # MEDIUMTEXT
+    texto_status = db.Column(db.String(20), nullable=False, default='pendente', index=True)
+    tipo_documento = db.Column(db.String(20), index=True)          # CONBAS, INFBEN, HISMED, CAT, CNIS, ESOCIAL, OUTRO
+    campos_json = db.Column(db.Text)
+    index_status = db.Column(db.String(20), index=True)            # NULL (falta), ok, erro
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<FapContestacaoAnexo {self.anexo_id} {self.nb} {self.cnpj}/{self.ano_vigencia}>'
+
+
 class SeguradoNome(db.Model):
     """Nome do segurado obtido por consulta de CPF — o FAP não informa nome.
 

@@ -412,6 +412,7 @@
               <button type="button" class="btn btn-sm btn-outline-secondary calc-toggle" data-bs-toggle="collapse"
                 data-bs-target="#det-{{ i.id }}" aria-expanded="false" aria-controls="det-{{ i.id }}"
                 aria-label="Mostrar detalhes"><i class="bi bi-chevron-right"></i></button>
+              {% if anexos.get(i.id) %}<i class="bi bi-paperclip text-success ms-1" title="{{ anexos[i.id]|length }} documento(s) enviado(s) na contestação — veja nos detalhes"></i>{% endif %}
             </td>
           </tr>
           <tr class="collapse calc-detail" id="det-{{ i.id }}" style="--tc-color:{{ cor[0] }};">
@@ -442,6 +443,19 @@
                   </div>
                   {% else %}—{% endif %}
                 </dd></div>
+                {% if anexos.get(i.id) %}
+                <div class="col-12"><dt><i class="bi bi-paperclip"></i> Documentos enviados ao FAP na contestação</dt><dd>
+                  <ul class="list-unstyled mb-0 small">
+                    {% for a in anexos[i.id] %}
+                    <li>
+                      <span class="badge bg-light text-dark border me-1">{{ a.instancia ~ 'ª inst.' if a.instancia else 'recálculo' }}</span>
+                      <a href="{{ url_for('disputes_center.anexo_arquivo', anexo_id=a.id) }}" target="_blank" rel="noopener">{{ a.nome or 'documento' }}</a>
+                      <span class="text-muted">· {{ a.tipo_documento_label or a.elemento or '' }}{% if a.data_envio %} · enviado em {{ a.data_envio[8:10] }}/{{ a.data_envio[5:7] }}/{{ a.data_envio[:4] }}{% endif %}{% if a.cids %} · CID {{ a.cids|join(', ') }}{% endif %}</span>
+                    </li>
+                    {% endfor %}
+                  </ul>
+                </dd></div>
+                {% endif %}
               </dl>
               </div>
             </td>

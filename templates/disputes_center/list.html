@@ -544,6 +544,16 @@
         <div id="filteredUncategorizedCount" class="sc-value">{{ uncategorized_count|default(0) }}</div>
         <div class="sc-note"><span id="filteredUncategorizedPct">0%</span> do total</div>
       </div>
+      <div class="stat-card" id="filteredDocumentacaoCard" style="--sc-color:#20c997;--sc-soft:rgba(32,201,151,.10);"
+        title="Deferimento entre os benefícios já julgados, separando os que tiveram documento anexado à contestação daquela instância no portal FAP dos que não tiveram.">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-paperclip"></i></span>
+          <span class="sc-label">Deferimento × documento</span>
+        </div>
+        <div class="sc-sub flex-column align-items-start gap-1" id="filteredDocumentacao">
+          <span class="text-muted small">—</span>
+        </div>
+      </div>
     </div>
 
     <div class="row">
@@ -723,6 +733,15 @@
                     <option value="all">Todos os registros</option>
                     <option value="without">Apenas sem categoria</option>
                     <option value="with">Apenas com categoria</option>
+                  </select>
+                </div>
+                <div class="col-md-4 col-lg-3">
+                  <label for="quickDocumentoFilter" class="form-label mb-1 small text-muted">Documento enviado ao
+                    FAP</label>
+                  <select id="quickDocumentoFilter" class="form-select form-select-sm">
+                    <option value="">Todos os registros</option>
+                    <option value="com">Com documento anexado</option>
+                    <option value="sem">Sem documento anexado</option>
                   </select>
                 </div>
               </div>
@@ -915,6 +934,28 @@
     </div>
   </div>
 
+  <div class="modal fade" id="benefitAnexosModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header border-bottom">
+          <div>
+            <h5 class="modal-title fw-semibold">
+              <i class="bi bi-paperclip me-2 text-success"></i>Documentos enviados ao FAP
+              <span id="benefitAnexosNumber" class="font-monospace text-primary ms-1"></span>
+            </h5>
+            <small class="text-muted d-block mt-1">O que o escritório anexou às contestações deste benefício no
+              portal, por instância. Só aparece depois que o portal publica o recálculo.</small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body" id="benefitAnexosBody"></div>
+        <div class="modal-footer border-top">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal fade" id="benefitTimelineModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
       <div class="modal-content">
@@ -1017,6 +1058,8 @@
     }
 
     $('#quickCategoryModeFilter').val(['all', 'with', 'without'].includes(quickCategoryMode) ? quickCategoryMode : 'all');
+    const quickDocumento = (urlParams.get('quick_documento') || '').trim().toLowerCase();
+    $('#quickDocumentoFilter').val(['com', 'sem'].includes(quickDocumento) ? quickDocumento : '');
 
     if (!rawFilters) {
       return;
@@ -1082,7 +1125,58 @@
     $('#filteredUncategorizedBar').css('width', uncatPct + '%');
     $('#filteredCategorizedPct').text(catPct + '%');
     $('#filteredUncategorizedPct').text(uncatPct + '%');
+    if (safeStats.documentacao) renderDocumentacao(safeStats.documentacao);
   }
+
+  // "Deferimento × documento": a mesma instância nos dois lados (o anexo do
+  // recálculo de 1ª instância conta para o resultado da 1ª, e o de 2ª para a 2ª).
+  function renderDocumentacao(doc) {
+    const taxa = (g) => (g && g.decididos) ? `${g.taxa_deferimento}%` : '—';
+    const linha = (rotulo, inst) => {
+      const d = doc[inst] || doc[String(inst)] || {};
+      const com = d.com || {}, sem = d.sem || {};
+      return `<span class="sc-sub-item"><span class="sc-sub-label">${rotulo}</span>
+        <span class="sc-sub-value" title="${com.decididos || 0} julgados com documento">com doc ${taxa(com)}</span>
+        <span class="text-muted mx-1">·</span>
+        <span class="sc-sub-value" title="${sem.decididos || 0} julgados sem documento">sem ${taxa(sem)}</span></span>`;
+    };
+    $('#filteredDocumentacao').html(linha('1ª inst.', 1) + linha('2ª inst.', 2));
+  }
+
+  $('#benefitAnexosModal').on('show.bs.modal', function (event) {
+    const botao = event.relatedTarget;
+    const corpo = document.getElementById('benefitAnexosBody');
+    if (!botao) return;
+    document.getElementById('benefitAnexosNumber').textContent = botao.dataset.benefitNumber || '';
+    corpo.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Carregando…</div>';
+    fetch(`/disputes-center/benefits/${encodeURIComponent(botao.dataset.benefitId)}/anexos`, { credentials: 'same-origin' })
+      .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then((json) => {
+        const anexos = json.anexos || [];
+        if (!anexos.length) {
+          corpo.innerHTML = `<div class="alert alert-light border mb-0">Nenhum documento encontrado para este benefício.
+            Ou a contestação foi enviada sem anexo, ou o portal ainda não publicou o recálculo dela.</div>`;
+          return;
+        }
+        const grupos = {};
+        anexos.forEach((a) => { (grupos[a.instancia || 0] = grupos[a.instancia || 0] || []).push(a); });
+        const titulo = { 1: '1ª instância', 2: '2ª instância', 0: 'Outro recálculo' };
+        corpo.innerHTML = Object.keys(grupos).sort().map((inst) => `
+          <h6 class="fw-semibold mt-2">${titulo[inst] || 'Recálculo'} <span class="text-muted fw-normal small">(${grupos[inst][0].vigencia})</span></h6>
+          <div class="table-responsive"><table class="table table-sm align-middle mb-3">
+            <thead><tr><th>Documento</th><th>Tipo</th><th>Enviado em</th><th class="text-end">Tamanho</th></tr></thead>
+            <tbody>${grupos[inst].map((a) => `
+              <tr>
+                <td>${a.url ? `<a href="${escapeAttr(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.nome || 'documento')}</a>` : escapeHtml(a.nome || 'documento')}
+                  ${(a.cids || []).length ? `<div class="small text-muted">CID ${escapeHtml(a.cids.join(', '))}</div>` : ''}
+                  ${a.cat_tipo ? `<div class="small text-muted">CAT de ${escapeHtml(a.cat_tipo.toLowerCase())}</div>` : ''}</td>
+                <td><span class="badge bg-light text-dark border">${escapeHtml(a.tipo_documento_label || a.elemento || '—')}</span></td>
+                <td class="text-nowrap">${a.data_envio ? escapeHtml(a.data_envio.split('-').reverse().join('/')) : '—'}</td>
+                <td class="text-end text-nowrap small">${a.tamanho ? Math.max(1, Math.round(a.tamanho / 1024)) + ' KB' : '—'}</td>
+              </tr>`).join('')}</tbody></table></div>`).join('');
+      })
+      .catch(() => { corpo.innerHTML = '<div class="alert alert-danger mb-0">Não foi possível carregar os documentos.</div>'; });
+  });
 
   const table = $('#centralBenefitsTable').DataTable({
     processing: true,
@@ -1110,6 +1204,7 @@
         d.quick_grupo = ($('#quickGrupoFilter').val() || '').trim();
     d.quick_vigencia = ($('#quickVigenciaFilter').val() || '').trim();
         d.quick_category_mode = ($('#quickCategoryModeFilter').val() || 'all').trim();
+        d.quick_documento = ($('#quickDocumentoFilter').val() || '').trim();
         d.vigencia_id = initialVigenciaId;
       },
       dataSrc: function (json) {
@@ -1299,6 +1394,12 @@
             : '';
           const decTitle = decCount === 1 ? 'Ver decisões (1 ocorrência)'
             : (decCount > 1 ? `Ver decisões (${decCount} ocorrências)` : 'Ver decisões');
+          const anexosCount = Number(row.anexos_count || 0);
+          const anexosBadge = anexosCount > 0
+            ? `<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success" style="font-size:0.6rem;">${anexosCount}<span class="visually-hidden">documentos</span></span>`
+            : '';
+          const anexosTitle = anexosCount > 0
+            ? `Documentos enviados ao FAP (${anexosCount})` : 'Documentos enviados ao FAP (nenhum encontrado)';
           return `
               <div class="d-flex flex-wrap justify-content-center gap-2">
                 <button type="button" class="btn btn-outline-primary btn-sm position-relative" data-bs-toggle="modal"
@@ -1308,6 +1409,14 @@
                   data-benefit-insured="${escapeAttr(row.insured_name || '')}"
                   title="${escapeAttr(decTitle)}" aria-label="${escapeAttr(decTitle)}">
                   <i class="bi bi-card-list"></i>${decBadge}
+                </button>
+                <button type="button" class="btn btn-outline-success btn-sm position-relative" data-bs-toggle="modal"
+                  data-bs-target="#benefitAnexosModal"
+                  data-benefit-id="${escapeAttr(row.id || '')}"
+                  data-benefit-number="${escapeAttr(row.benefit_number || '')}"
+                  data-benefit-insured="${escapeAttr(row.insured_name || '')}"
+                  title="${escapeAttr(anexosTitle)}" aria-label="${escapeAttr(anexosTitle)}">
+                  <i class="bi bi-paperclip"></i>${anexosBadge}
                 </button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal"
                   data-bs-target="#benefitDocumentsModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
@@ -1685,6 +1794,7 @@
       quick_grupo: ($('#quickGrupoFilter').val() || '').trim(),
       quick_vigencia: ($('#quickVigenciaFilter').val() || '').trim(),
       quick_category_mode: ($('#quickCategoryModeFilter').val() || 'all').trim(),
+      quick_documento: ($('#quickDocumentoFilter').val() || '').trim(),
       vigencia_id: initialVigenciaId,
     };
 
@@ -1859,6 +1969,7 @@
     $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
     refreshCnpjSelect2();
     $('#quickCategoryModeFilter').val('all');
+    $('#quickDocumentoFilter').val('');
     $('#quickCnpjFilterWrapper').hide();
     $('#quickCnpjFilterSpacer').show();
     $('#quickProtocoloFilter').val('');
@@ -1903,7 +2014,7 @@
     markFiltersPending();
   });
 
-  $('#quickCnpjFilter, #quickGrupoFilter, #quickVigenciaFilter, #quickCategoryModeFilter').on('change', markFiltersPending);
+  $('#quickCnpjFilter, #quickGrupoFilter, #quickVigenciaFilter, #quickCategoryModeFilter, #quickDocumentoFilter').on('change', markFiltersPending);
 
   $('#quickProtocoloFilter').on('input', markFiltersPending).on('keydown', function (e) {
     if (e.key === 'Enter') {

@@ -3,7 +3,10 @@
 Os documentos que o escritório anexou a cada contestação (laudo, CNIS,
 comprovante de vínculo de cada benefício…) ficam no portal, no recálculo que a
 contestação gerou: "Visualizar Anexos" da Consulta do FAP. Aqui eles são
-listados e baixados para o disco, sem tocar no banco.
+listados e baixados para o disco (``executar``, que não toca no banco) e depois
+registrados em ``fap_contestacao_anexos`` (``registrar``: liga ao benefício da
+Central, lê o texto e indexa). As duas etapas são separadas de propósito: o
+disco é a cópia do portal, o banco se refaz dele.
 
 De onde vêm os recálculos: o histórico de cálculos já sincronizado em
 ``fap_calculo_estabelecimentos`` (``scripts/fap_calculo_sync.py``) — todo
@@ -30,12 +33,13 @@ import re
 from collections import Counter
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
-from app.models import FapCalculoEstabelecimento
+from app.models import db, FapCalculoEstabelecimento, FapContestacaoAnexo
 from app.services import fap_calculo_client as client
-from app.utils.cnpj import TAMANHO_CNPJ, TAMANHO_CNPJ_RAIZ, completar_zeros
+from app.utils.cnpj import TAMANHO_CNPJ, TAMANHO_CNPJ_RAIZ, apenas_digitos, completar_zeros
 
 PASTA_PADRAO = Path(__file__).resolve().parents[2] / 'instance' / 'fap_anexos'
 LISTA_DA_PASTA = '_anexos.json'
@@ -255,4 +259,128 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
     if baixar:
         rel['indice'] = refazer_indice(pasta)
     rel['incompleta'] = bool(rel['erros'] or rel['expirada'])
+    return rel
+
+
+# ------------------------------------------------------------ registro no banco
+
+def _data(valor) -> Optional[date]:
+    try:
+        return date.fromisoformat(str(valor)[:10]) if valor else None
+    except ValueError:
+        return None
+
+
+def mapa_de_beneficios(law_firm_id: int) -> dict[tuple, int]:
+    """{(vigência, CNPJ14, NB): benefit_id} da Central, em Python — sem cruzar
+    texto com ``benefits`` dentro do banco (collation)."""
+    from app.models import Benefit, FapVigenciaCnpj
+
+    mapa = {}
+    linhas = (db.session.query(Benefit.id, Benefit.benefit_number, FapVigenciaCnpj.vigencia_year,
+                               FapVigenciaCnpj.employer_cnpj)
+              .join(FapVigenciaCnpj, Benefit.fap_vigencia_cnpj_id == FapVigenciaCnpj.id)
+              .filter(Benefit.law_firm_id == law_firm_id))
+    for bid, numero, ano, cnpj in linhas:
+        nb, cnpj = apenas_digitos(numero), apenas_digitos(cnpj)
+        try:
+            chave = (int(str(ano).strip()[:4]), cnpj.zfill(TAMANHO_CNPJ), nb)
+        except ValueError:
+            continue
+        if nb and cnpj:
+            mapa.setdefault(chave, bid)
+    return mapa
+
+
+def registrar(law_firm_id: int, pasta: Path, *, ler_texto: bool = True, indexar: bool = True,
+              log: Callable[[str], None] = print) -> dict:
+    """Carrega no banco o que está na pasta (``_anexos.json`` + arquivos), liga
+    ao benefício da Central, lê o texto e indexa. Idempotente: anexo já
+    registrado só ganha o que faltava (arquivo, benefício, texto)."""
+    from app.services import fap_anexos_busca_service as busca
+    from app.services import fap_anexos_conteudo as conteudo
+
+    rel = {'listas': 0, 'novos': 0, 'atualizados': 0, 'ligados_a_beneficio': 0,
+           'textos_lidos': 0, 'sem_texto': 0, 'erros_leitura': 0, 'por_tipo': Counter()}
+    beneficios = mapa_de_beneficios(law_firm_id)
+    existentes = {aid: rid for aid, rid in db.session.query(FapContestacaoAnexo.anexo_id, FapContestacaoAnexo.id)
+                  .filter(FapContestacaoAnexo.law_firm_id == law_firm_id)}
+    pendentes = 0
+    for lista in sorted(pasta.glob(f'*/*/*/{LISTA_DA_PASTA}')):
+        try:
+            dados = json.loads(lista.read_text(encoding='utf-8'))
+        except ValueError:
+            continue
+        rel['listas'] += 1
+        rec = Recalculo(dados['ano'], dados['cnpj'], dados['calculo_id'], dados.get('tipo'), dados.get('data'))
+        for a in dados.get('anexos') or []:
+            if not a.get('id'):
+                continue
+            arq = arquivo_do_anexo(pasta, rec, a)
+            relativo = str(arq.relative_to(pasta)) if arq.exists() else None
+            nb = apenas_digitos(str(a.get('nb') or '')) or None
+            bid = beneficios.get((rec.ano, rec.cnpj, nb)) if nb else None
+            rid = existentes.get(int(a['id']))
+            if rid is None:
+                linha = FapContestacaoAnexo(
+                    law_firm_id=law_firm_id, anexo_id=int(a['id']), ano_vigencia=rec.ano, cnpj=rec.cnpj,
+                    cnpj_raiz=rec.cnpj[:8], recalculo_id=rec.calculo_id, recalculo_tipo=rec.tipo,
+                    recalculo_data=_data(rec.data), instancia=conteudo.instancia_do_recalculo(rec.tipo),
+                    elemento=(a.get('tipoElemento') or {}).get('codigo'), id_elemento=a.get('idElemento'),
+                    nb=nb, benefit_id=bid, nome=(a.get('nome') or '')[:255], data_envio=_data(a.get('dataEnvio')),
+                    tamanho=a.get('quantidadeBytes'), arquivo=relativo,
+                    texto_status=FapContestacaoAnexo.TEXTO_PENDENTE)
+                db.session.add(linha)
+                db.session.flush()
+                existentes[linha.anexo_id] = linha.id
+                rel['novos'] += 1
+                rel['ligados_a_beneficio'] += 1 if bid else 0
+            else:
+                linha = db.session.get(FapContestacaoAnexo, rid)
+                mudou = False
+                if relativo and not linha.arquivo:
+                    linha.arquivo, mudou = relativo, True
+                if bid and not linha.benefit_id:
+                    linha.benefit_id, mudou = bid, True
+                    rel['ligados_a_beneficio'] += 1
+                rel['atualizados'] += 1 if mudou else 0
+            pendentes += 1
+            if pendentes % 1000 == 0:
+                db.session.commit()
+                log(f'  {rel["novos"]} novos, {rel["atualizados"]} atualizados…')
+    db.session.commit()
+
+    if ler_texto:
+        ids = [i for (i,) in db.session.query(FapContestacaoAnexo.id).filter(
+            FapContestacaoAnexo.law_firm_id == law_firm_id,
+            FapContestacaoAnexo.texto_status == FapContestacaoAnexo.TEXTO_PENDENTE,
+            FapContestacaoAnexo.arquivo.isnot(None)).order_by(FapContestacaoAnexo.id)]
+        log(f'Lendo o texto de {len(ids)} anexo(s)…')
+        for n, rid in enumerate(ids, 1):
+            linha = db.session.get(FapContestacaoAnexo, rid)
+            try:
+                texto = conteudo.extrair_texto(str(pasta / linha.arquivo)) if linha.arquivo.lower().endswith('.pdf') else ''
+            except Exception:
+                linha.texto_status = FapContestacaoAnexo.TEXTO_ERRO
+                rel['erros_leitura'] += 1
+                texto = None
+            if texto is not None:
+                tipo, extra = conteudo.classificar(texto)
+                linha.tipo_documento = tipo
+                linha.campos_json = json.dumps(extra, ensure_ascii=False) if extra else None
+                if len(texto) >= conteudo.MINIMO_DE_TEXTO:
+                    linha.texto, linha.texto_status = texto, FapContestacaoAnexo.TEXTO_OK
+                    rel['textos_lidos'] += 1
+                else:
+                    linha.texto_status = FapContestacaoAnexo.TEXTO_VAZIO
+                    rel['sem_texto'] += 1
+                rel['por_tipo'][tipo] += 1
+                linha.index_status = None
+            if n % 500 == 0:
+                db.session.commit()
+                log(f'  {n}/{len(ids)} lidos')
+        db.session.commit()
+
+    if indexar:
+        rel['indice'] = busca.indexar_pendentes(law_firm_id, log=log)
     return rel

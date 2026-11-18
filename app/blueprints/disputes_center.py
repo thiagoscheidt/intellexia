@@ -19,7 +19,7 @@ from app.services.openrouter_models_service import fetch_openrouter_text_models_
 from app.utils.timezone import now_sp
 from app.utils.cnpj import cpf_valido, formatar_cnpj, link_consulta_cpf_receita
 
-from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from sqlalchemy import String, and_, case, cast, func, or_
@@ -39,6 +39,7 @@ from app.models import (
     FapContestationCatSourceHistory,
     FapContestationCatManualHistory,
     FapContestationJudgmentReport,
+    FapContestacaoAnexo,
     FapContestationPayrollMass,
     FapContestationPayrollMassSourceHistory,
     FapContestationPayrollMassManualHistory,
@@ -1743,6 +1744,7 @@ def _apply_benefits_filters(
     law_firm_id=None,
     quick_grupo='',
     quick_vigencia='',
+    quick_documento='',
 ):
     search_text = (search_value or '').strip().lower()
     if search_text:
@@ -1831,6 +1833,13 @@ def _apply_benefits_filters(
     elif category_mode == 'without':
         query = query.filter(category_empty)
 
+    # Documento anexado à contestação no portal (FB-08): pelo benefit_id, inteiro.
+    documento_mode = _normalize_text(quick_documento).lower()
+    if documento_mode in ('com', 'sem') and law_firm_id:
+        from app.services.fap_anexos_busca_service import beneficios_com_documento
+        com_documento = Benefit.id.in_(beneficios_com_documento(law_firm_id))
+        query = query.filter(com_documento if documento_mode == 'com' else ~com_documento)
+
     for item in custom_filters or []:
         field = item['field']
         operator = item['operator']
@@ -1908,11 +1917,12 @@ def _apply_benefits_filters(
 
 
 def _serialize_benefit_row(benefit, client_name, decisions_count=0, fap_protocols=None,
-                           nome_revelado=None, pode_revelar=False):
+                           nome_revelado=None, pode_revelar=False, anexos_count=0):
     topics_text = _benefit_topics_text(benefit)
     return {
         'id': benefit.id,
         'decisions_count': int(decisions_count or 0),
+        'anexos_count': int(anexos_count or 0),
         'fap_protocols': fap_protocols or [],
         'benefit_number': benefit.benefit_number or '',
         'client_name': client_name or '',
@@ -1976,6 +1986,7 @@ def _collect_listing_payload(default_length=25):
             'quick_grupo': _normalize_text(payload.get('quick_grupo', '')),
             'quick_vigencia': _normalize_text(payload.get('quick_vigencia', '')),
             'quick_category_mode': _normalize_text(payload.get('quick_category_mode', 'all')).lower(),
+            'quick_documento': _normalize_text(payload.get('quick_documento', '')).lower(),
             'vigencia_id': payload.get('vigencia_id'),
         }
 
@@ -2010,6 +2021,7 @@ def _collect_listing_payload(default_length=25):
         'quick_grupo': quick_grupo,
         'quick_vigencia': quick_vigencia,
         'quick_category_mode': quick_category_mode,
+        'quick_documento': _normalize_text(request.args.get('quick_documento', '')).lower(),
         'vigencia_id': request.args.get('vigencia_id'),
     }
 
@@ -2513,6 +2525,43 @@ def benefit_file_timeline(benefit_id):
             'events': events,
         }
     )
+
+
+@disputes_center_bp.route('/benefits/<int:benefit_id>/anexos', methods=['GET'])
+@require_law_firm
+def benefit_anexos(benefit_id):
+    """Documentos que o escritório anexou às contestações deste benefício no
+    portal FAP (FB-08), por instância."""
+    from app.services.fap_anexos_busca_service import anexos_do_beneficio
+
+    law_firm_id = get_current_law_firm_id()
+    Benefit.query.filter_by(id=benefit_id, law_firm_id=law_firm_id).first_or_404()
+    itens = anexos_do_beneficio(law_firm_id, benefit_id=benefit_id)
+    for item in itens:
+        item['url'] = url_for('disputes_center.anexo_arquivo', anexo_id=item['id']) if item['tem_arquivo'] else None
+    return jsonify({'anexos': itens})
+
+
+@disputes_center_bp.route('/anexos/<int:anexo_id>/arquivo', methods=['GET'])
+@require_law_firm
+def anexo_arquivo(anexo_id):
+    """O arquivo do anexo, servido da cópia em instance/ — só do escritório."""
+    from pathlib import Path
+
+    from app.services.fap_anexos_service import PASTA_PADRAO
+
+    law_firm_id = get_current_law_firm_id()
+    anexo = FapContestacaoAnexo.query.filter_by(id=anexo_id, law_firm_id=law_firm_id).first_or_404()
+    pasta = (PASTA_PADRAO / str(law_firm_id)).resolve()
+    caminho = (pasta / (anexo.arquivo or '')).resolve() if anexo.arquivo else None
+    if caminho is None or pasta not in caminho.parents or not caminho.is_file():
+        abort(404)
+    pdf = caminho.suffix.lower() == '.pdf'
+    resposta = send_file(str(caminho), mimetype='application/pdf' if pdf else None,
+                         as_attachment=not pdf, download_name=anexo.nome or caminho.name)
+    resposta.headers['X-Content-Type-Options'] = 'nosniff'
+    resposta.headers['Cache-Control'] = 'private, max-age=3600'
+    return resposta
 
 
 @disputes_center_bp.route('/benefits/<int:benefit_id>/decisions', methods=['GET'])
@@ -3440,6 +3489,7 @@ def list_disputes_center_api():
         law_firm_id=law_firm_id,
         quick_grupo=payload.get('quick_grupo', ''),
         quick_vigencia=payload.get('quick_vigencia', ''),
+        quick_documento=payload.get('quick_documento', ''),
     )
 
     # Uma passagem só pela tabela. benefits tem linhas de dezenas de KB (2,2 GB na
@@ -3530,6 +3580,16 @@ def list_disputes_center_api():
         )
         decisions_counts = {bid: cnt for bid, cnt in count_rows}
 
+    anexos_counts = {}
+    if benefit_ids:
+        anexos_counts = dict(
+            db.session.query(FapContestacaoAnexo.benefit_id, func.count(FapContestacaoAnexo.id))
+            .filter(FapContestacaoAnexo.law_firm_id == law_firm_id,
+                    FapContestacaoAnexo.benefit_id.in_(benefit_ids))
+            .group_by(FapContestacaoAnexo.benefit_id)
+            .all()
+        )
+
     protocols_by_vigencia = _fap_protocols_by_vigencia_id(
         law_firm_id, {benefit.fap_vigencia_cnpj_id for benefit, _ in paged_results}
     )
@@ -3547,9 +3607,16 @@ def list_disputes_center_api():
             protocols_by_vigencia.get(benefit.fap_vigencia_cnpj_id, []),
             nome_revelado=revelados.get(segurado_nome_service.normalizar_cpf(benefit.insured_cpf) or ''),
             pode_revelar=pode_revelar,
+            anexos_count=anexos_counts.get(benefit.id, 0),
         )
         for benefit, client_name in paged_results
     ]
+
+    # Recorte "com × sem documento" só na 1ª página: trocar de página não muda o filtro.
+    documentacao = None
+    if payload['start'] == 0:
+        from app.services.fap_anexos_busca_service import documentacao_por_resultado
+        documentacao = documentacao_por_resultado(law_firm_id, filtered_query)
 
     return jsonify(
         {
@@ -3566,6 +3633,7 @@ def list_disputes_center_api():
                 'uncategorized': uncategorized_filtered,
                 'first_instance': filtered_first_instance_stats,
                 'second_instance': filtered_second_instance_stats,
+                'documentacao': documentacao,
             },
             'data': data,
         }
@@ -3745,6 +3813,7 @@ def export_disputes_center_excel():
         law_firm_id=law_firm_id,
         quick_grupo=payload.get('quick_grupo', ''),
         quick_vigencia=payload.get('quick_vigencia', ''),
+        quick_documento=payload.get('quick_documento', ''),
     )
 
     order_column = ORDER_COLUMN_MAP.get(payload['order_column'], Benefit.id)

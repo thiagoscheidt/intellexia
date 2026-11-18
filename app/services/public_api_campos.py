@@ -582,6 +582,45 @@ KB_PRINTS = envelope(
     _t('url_original', 'O PDF original no Google Drive.'),
 )
 
+_FAP_DOCUMENTO_ITEM = (
+    _i('documento_id', 'Documento no IntellexIA (use em /fap/documentos-contestacao/{id}).'),
+    _i('vigencia', 'Ano da vigência do FAP.'),
+    _t('cnpj', 'CNPJ do estabelecimento (14 dígitos).'),
+    _t('nb', 'Número do benefício (só dígitos); vazio em documento de massa salarial, vínculos etc.'),
+    _i('benefit_id', 'Benefício na Central de Contestações, quando ligado (use em /fap/beneficios/{id}).'),
+    _i('instancia', 'Contestação de 1ª ou de 2ª instância; null em recálculo de outro tipo.'),
+    _t('elemento', 'O que foi contestado no portal: BENEFICIO, MASSA_SALARIAL, NUMERO_MEDIO_VINCULOS…'),
+    _t('tipo_documento', 'CONBAS, INFBEN, HISMED, CAT, CNIS, ESOCIAL ou OUTRO (lido do texto).'),
+    _t('tipo_documento_label', 'O tipo por extenso.'),
+    _t('nome', 'Nome do arquivo como foi enviado ao portal.'),
+    _d('data_envio', 'Data em que o escritório anexou o documento.'),
+    _i('tamanho', 'Tamanho do arquivo, em bytes.'),
+    _l('cids', 'CIDs do diagnóstico (só HISMED).'),
+    _t('cat_tipo', 'TRAJETO, TIPICO ou DOENCA (só CAT).'),
+    _t('especie', 'Espécie do benefício lida do documento (ex.: 91).'),
+    _t('url_arquivo', 'O PDF no IntellexIA (abre com o login); null se o arquivo não foi baixado.'),
+    _i('anexo_id_portal', 'Identificador do anexo no portal FAP.'),
+)
+
+FAP_DOCUMENTOS = envelope(
+    *_FAP_DOCUMENTO_ITEM,
+    _t('trecho', 'Onde o termo foi achado, entre « ». Só com "termo".', opcional=True),
+    extra=(
+        _b('total_e_minimo', 'O total é estimado pelo índice (passou de 1.000): há pelo menos isso.'),
+        _t('aviso', 'Quando o índice de busca está fora do ar e a pesquisa foi feita direto no banco.',
+           opcional=True),
+    ),
+)
+
+FAP_DOCUMENTO = (
+    *_FAP_DOCUMENTO_ITEM,
+    _t('texto', 'Texto lido do PDF (até 30 mil caracteres por chamada).'),
+    _i('tamanho_texto', 'Tamanho do texto inteiro, em caracteres.'),
+    _t('texto_status', 'ok, sem_texto (PDF de imagem), erro ou pendente.'),
+    _b('tem_mais', 'O texto continua: peça de novo com "deslocamento".'),
+    _i('proximo_deslocamento', 'Valor de "deslocamento" para o resto do texto.', opcional=True),
+)
+
 JURIS_PESQUISA = envelope(
     *DECISAO_ITEM,
     _i('pagina', 'Página do inteiro teor onde casou (modo inteiro_teor).', opcional=True),

@@ -43,6 +43,8 @@ Há dois conjuntos de cartões:
 
 Em ambos: Total, Deferidos, Indeferidos, Em análise, Pendentes, Categorizados e Sem categoria. Os cartões de Deferidos/Indeferidos trazem um detalhamento por 1ª e 2ª instância.
 
+O painel filtrado tem ainda o cartão **Deferimento × documento**: entre os benefícios já julgados, o percentual de deferimento dos que tiveram **documento anexado** à contestação daquela instância no portal e o dos que **não tiveram**. Cada instância é comparada com os documentos dela (o anexo da contestação de 1ª instância conta para o resultado da 1ª; o do recurso, para a 2ª). Passe o mouse sobre os números para ver quantos benefícios entraram na conta.
+
 ### Colunas da tabela
 
 | Coluna | O que significa | De onde vem |
@@ -56,18 +58,24 @@ Em ambos: Total, Deferidos, Indeferidos, Em análise, Pendentes, Categorizados e
 | **Vigência FAP** | Ano(s) de vigência FAP afetados por esse benefício. | Relatório |
 | **Categoria FAP** | Categoria/tópico da contestação, atribuída pela **IA** (ex.: "Erro de Estabelecimento"). Se vazio, aparece o botão **Classificar**; se preenchido, **Reclassificar**. | IA |
 | **DIB / DCB** | **DIB** = Data de Início do Benefício; **DCB** = Data de Cessação do Benefício (datas passadas). | Relatório |
-| **Ações** | Ver decisões, editar, excluir, ver linha do tempo. | — |
+| **Ações** | Ver decisões, documentos enviados ao FAP, pesquisar em documentos, editar, excluir, ver linha do tempo. | — |
 
 > **Sobre DIB e DCB:** são datas do próprio benefício (quando começou e quando cessou). São sempre **datas passadas** — não são prazos.
 
 ### Filtros
 
-Por texto em vários campos, por Cliente, por CNPJ (raiz ou completo), por Status geral e por Categoria FAP (todos / com categoria / sem categoria).
+Por texto em vários campos, por Cliente, por CNPJ (raiz ou completo), por Status geral, por Categoria FAP (todos / com categoria / sem categoria) e por **Documento enviado ao FAP** (todos / com documento anexado / sem documento anexado).
 
 ### Modais úteis
 
 - **Decisões do Benefício** — um mesmo benefício pode ter **várias decisões** (por exemplo, uma para a CAT e outra para "nexo técnico sem CAT"). Aqui você vê cada decisão com sua instância, status, justificativa e parecer.
+- **Documentos enviados ao FAP** (botão do clipe, com a quantidade) — os arquivos que o escritório **anexou à contestação** deste benefício no portal FAP, separados por 1ª e 2ª instância, com a data de envio. Clique no nome para abrir o PDF. Os documentos são reconhecidos pelo conteúdo (CONBAS, INFBEN, HISMED, CAT, CNIS, eSocial); no HISMED aparece o **CID** do diagnóstico e, na CAT, se o acidente foi de **trajeto**. O mesmo aparece nos detalhes da linha da tela **Benefícios do cálculo FAP**.
 - **Linha do tempo de arquivos** — histórico de todos os documentos e edições daquele benefício. As datas aqui são de **transmissão** e **publicação** dos documentos (eventos passados).
+
+> [!INFO]
+> **De onde vêm os documentos enviados.** O portal FAP só mostra os anexos de uma contestação depois que publica o **recálculo** dela ("Visualizar Anexos" na Consulta do FAP). Por isso contestação ainda em análise não tem documento aqui, e o benefício aparece como "sem documento" até o julgamento sair. Os arquivos são copiados do portal pelo IntellexIA e ficam guardados com o escritório.
+
+:claude: No Claude, a ferramenta **Documentos enviados nas contestações** pesquisa no **texto** desses documentos — por NB, CNPJ, vigência, CID, tipo de documento ou palavra — e **Ler documento da contestação** traz o conteúdo inteiro. Ex.: *"quais benefícios B91 da vigência 2025 tiveram perícia com CID M54?"* ou *"me mostra o HISMED que mandamos para o NB 648.526.463-2"*.
 
 ---
 

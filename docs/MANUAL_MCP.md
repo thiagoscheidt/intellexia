@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **79 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos, jurisprudência, monitoramento de publicações, **Diário Oficial da União** e mais — com **81 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -146,6 +146,8 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 |---|---|---|---|
 | `listar_cats_fap` | CATs contestadas | CATs das contestações com datas e status por instância | Relatório |
 | `listar_massas_salariais_fap` | Massa salarial contestada | Folha de pagamento contestada por competência, com valores pleiteados | Relatório |
+| `pesquisar_documentos_contestacao` | Documentos enviados nas contestações | Pesquisa no texto dos documentos que o escritório anexou às contestações no portal (CONBAS, INFBEN, HISMED com CID, CAT de trajeto, CNIS, eSocial), por NB, CNPJ, vigência, CID ou palavra | FAP Web |
+| `ler_documento_contestacao` | Ler documento da contestação | Texto inteiro de um documento anexado (datas e CID da perícia, dados da concessão, descrição do acidente) | FAP Web |
 | `listar_vinculos_fap` | Vínculos contestados | Vínculos empregatícios contestados por competência | Relatório |
 | `listar_rotatividade_fap` | Rotatividade contestada | Taxas de rotatividade contestadas (admissões, rescisões, vínculos) | Relatório |
 

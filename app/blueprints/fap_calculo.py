@@ -13,6 +13,7 @@ from app.models import FapCalculoEstabelecimento, FapCalculoItem, FapCompany, db
 from app.services import fap_calculo_query_service as consulta
 from app.services import fap_group_service
 from app.services import segurado_nome_service
+from app.utils.permissions import has_module_permission, parse_module_permissions
 from app.utils.cnpj import TAMANHO_CNPJ, TAMANHO_CNPJ_RAIZ, apenas_digitos, completar_zeros, formatar_cnpj
 
 fap_calculo_bp = Blueprint('fap_calculo', __name__, url_prefix='/fap-panel/calculo')
@@ -85,6 +86,20 @@ def beneficios_page():
     page = min(page, total_pages)
     itens, total = consulta.pagina(query, page, PER_PAGE, law_firm_id=law_firm_id)
 
+    # Documentos que o escritório anexou à contestação de cada benefício (FB-08).
+    # Dado de saúde (HISMED): só para quem vê a Central.
+    anexos = {}
+    papel = session.get('user_role')
+    if has_module_permission('disputes_center', papel,
+                             parse_module_permissions(session.get('user_module_permissions'), papel)):
+        from app.services.fap_anexos_busca_service import anexos_das_chaves
+        por_chave = anexos_das_chaves(law_firm_id, [
+            (i['ano_vigencia'], i['cnpj'], i['identificador']) for i in itens if i.get('tipo') != 'CAT'])
+        for i in itens:
+            docs = por_chave.get((i['ano_vigencia'], (i['cnpj'] or '').zfill(14), i['identificador']))
+            if docs:
+                anexos[i['id']] = docs
+
     vigencias = [a for (a,) in db.session.query(FapCalculoEstabelecimento.ano_vigencia)
                  .filter(FapCalculoEstabelecimento.law_firm_id == law_firm_id)
                  .distinct().order_by(FapCalculoEstabelecimento.ano_vigencia.desc()).all()]
@@ -108,6 +123,7 @@ def beneficios_page():
                situacao=situacao, contestado=contestado_arg),
         filtros=filtros,
         revelar_nome_disponivel=segurado_nome_service.disponivel(),
+        anexos=anexos,
     )
 
 

@@ -301,6 +301,11 @@ def _prints():
     return peticao_prints
 
 
+def _anexos():
+    from mcp_server.tools import fap_anexos
+    return fap_anexos
+
+
 def _print_fap(ctx, p):
     from mcp_server.tools.fap_portal_print import fap_portal_print_handler
     return fap_portal_print_handler(ctx.law_firm_id, ctx.user_id, p['cnpj'], p['vigencia'], p['tela'],
@@ -434,6 +439,30 @@ ROTAS: tuple[Rota, ...] = (
     ), lambda ctx, p: _fap().list_fap_procuracoes_handler(
         ctx.law_firm_id, p['cnpj_raiz'], p['situacao_codigo'], p['limite'], p['deslocamento']),
         resposta=C.PROCURACOES, grupo='fap'),
+    Rota('GET', '/fap/documentos-contestacao', 'disputes_center',
+         'Pesquisa nos documentos que o escritório anexou às contestações do FAP (CONBAS, INFBEN, HISMED '
+         'com CID, CAT, CNIS, eSocial), pelo texto lido de cada PDF. Número sozinho no termo vira filtro '
+         'exato (10 dígitos = NB, 14 = CNPJ, 8 = raiz).', (
+             Param('termo', 'string', 'Palavras no texto ou no nome do arquivo (todas precisam estar).'),
+             Param('nb', 'string', 'Número do benefício, com ou sem pontuação.'),
+             Param('cnpj', 'string', 'CNPJ do estabelecimento (14 dígitos).'),
+             Param('vigencia', 'integer', 'Ano da vigência do FAP.'),
+             Param('tipo_documento', 'string', 'CONBAS, INFBEN, HISMED, CAT, CNIS, ESOCIAL ou OUTRO.'),
+             Param('cid', 'string', 'CID do diagnóstico no HISMED (ex.: M54.5).'),
+             Param('instancia', 'integer', 'Documentos da contestação de 1ª ou de 2ª instância.',
+                   minimo=1, maximo=2),
+             Param('cat_tipo', 'string', 'TRAJETO, TIPICO ou DOENCA (só documentos CAT).'),
+             _limite(20, maximo=100), DESLOCAMENTO,
+         ), lambda ctx, p: _anexos().search_fap_attachments_handler(
+             ctx.law_firm_id, p['termo'], p['nb'], p['cnpj'], p['vigencia'], p['tipo_documento'], p['cid'],
+             p['instancia'], p['cat_tipo'], p['limite'], p['deslocamento'], app_public_url=ctx.app_public_url),
+         resposta=C.FAP_DOCUMENTOS, grupo='fap'),
+    Rota('GET', '/fap/documentos-contestacao/{id}', 'disputes_center',
+         'Texto de um documento anexado a uma contestação do FAP (o "documento_id" da pesquisa).', (
+             ID, DESLOCAMENTO,
+         ), lambda ctx, p: _anexos().read_fap_attachment_handler(
+             ctx.law_firm_id, p['id'], p['deslocamento'], app_public_url=ctx.app_public_url),
+         detalhe=True, resposta=C.FAP_DOCUMENTO, grupo='fap'),
     Rota('GET', '/fap/calculo/beneficios', 'fap_panel',
          'Benefícios e CATs do cálculo FAP (Consulta do portal), contestados ou não.', (
              CALC_VIGENCIA, EMPRESA, GRUPO, CNPJ, *CALC_SEGURADO, CALC_TIPO, CALC_SITUACAO,

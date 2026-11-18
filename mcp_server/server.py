@@ -130,6 +130,7 @@ from mcp_server.tools.prompt_library import (
 )
 from mcp_server.tools.numero_processo import search_by_process_number_handler
 from mcp_server.tools.peticao_prints import petition_prints_handler
+from mcp_server.tools.fap_anexos import read_fap_attachment_handler, search_fap_attachments_handler
 from mcp_server.tools.fap_portal_print import fap_portal_print_handler
 from mcp_server.tools.jurisprudence import (
     decision_detail_handler,
@@ -1292,6 +1293,90 @@ def listar_cats_fap(
     with app.app_context():
         return list_cats_handler(claims["law_firm_id"], vigencia, cnpj, nit, numero_cat,
                                  limite, deslocamento)
+
+
+@mcp.tool()
+def pesquisar_documentos_contestacao(
+    termo: str | None = None,
+    nb: str | None = None,
+    cnpj: str | None = None,
+    vigencia: int | None = None,
+    tipo_documento: str | None = None,
+    cid: str | None = None,
+    instancia: int | None = None,
+    cat_tipo: str | None = None,
+    limite: int = 20,
+    deslocamento: int = 0,
+) -> dict:
+    """Pesquisa nos documentos que o escritório ANEXOU às contestações do FAP.
+
+    São os arquivos enviados no portal FAP junto com cada contestação, por
+    benefício: CONBAS (concessão), INFBEN, HISMED (histórico de perícias
+    médicas do INSS, com o CID do diagnóstico), CAT (com o tipo do acidente:
+    trajeto, típico ou doença), CNIS e os insumos do eSocial (massa salarial,
+    vínculos). O texto de cada PDF foi lido e é pesquisável. Use para: "qual
+    documento mandamos para o NB X", "benefícios com perícia de CID M54",
+    "CATs de trajeto que anexamos em 2025", "onde aparece tal palavra".
+
+    Só existe o que o portal já publicou: o anexo aparece depois do recálculo
+    da contestação — contestação ainda em análise não tem documento aqui.
+    Os documentos têm dado de saúde (CID): use só para o trabalho do processo.
+
+    Número sozinho no termo vira filtro exato: 10 dígitos = NB, 14 = CNPJ,
+    8 = CNPJ raiz. Frase exata entre aspas.
+
+    Args:
+        termo: Palavras procuradas no texto e no nome do arquivo (todas precisam
+            estar no documento). Aceita NB/CNPJ como número.
+        nb: Número do benefício (com ou sem pontuação).
+        cnpj: CNPJ do estabelecimento (14 dígitos).
+        vigencia: Ano da vigência do FAP (ex.: 2025).
+        tipo_documento: CONBAS, INFBEN, HISMED, CAT, CNIS, ESOCIAL ou OUTRO.
+        cid: CID do diagnóstico no HISMED (ex.: M54.5, S82).
+        instancia: 1 ou 2 — documentos da contestação de 1ª ou de 2ª instância.
+        cat_tipo: TRAJETO, TIPICO ou DOENCA (só documentos CAT).
+        limite: Máximo de documentos por página (padrão 20).
+        deslocamento: Paginação — repita o 'proximo_deslocamento' da resposta.
+
+    Returns:
+        Envelope paginado; cada item traz 'documento_id' (para
+        ler_documento_contestacao), 'nb', 'cnpj', 'vigencia', 'instancia',
+        'tipo_documento', 'nome' do arquivo, 'data_envio', 'cids', 'cat_tipo',
+        'trecho' (com o termo achado entre « ») e 'url_arquivo' (abre o PDF com o
+        login do IntellexIA — apresente como link). 'total_e_minimo' true = o
+        índice só estima o total (passou de 1.000).
+    """
+    claims = require_module("disputes_center")
+    with app.app_context():
+        return search_fap_attachments_handler(
+            claims["law_firm_id"], termo, nb, cnpj, vigencia, tipo_documento, cid, instancia, cat_tipo,
+            limite, deslocamento, app_public_url=APP_PUBLIC_URL)
+
+
+@mcp.tool()
+def ler_documento_contestacao(documento_id: int, deslocamento: int = 0) -> dict:
+    """Lê o texto de um documento anexado a uma contestação do FAP.
+
+    Use depois de pesquisar_documentos_contestacao, com o 'documento_id' de lá,
+    quando precisar do conteúdo: datas, CID e conclusão da perícia (HISMED),
+    dados da concessão (CONBAS), descrição do acidente (CAT), vínculos (CNIS).
+    O texto vem da leitura automática do PDF: tabelas podem sair com rótulo e
+    valor em linhas separadas — confira no 'url_arquivo' antes de citar.
+
+    Args:
+        documento_id: O 'documento_id' devolvido pela pesquisa.
+        deslocamento: Para textos longos (mais de 30 mil caracteres), repita o
+            'proximo_deslocamento' da resposta.
+
+    Returns:
+        Os dados do documento (nb, cnpj, vigencia, instancia, tipo, nome,
+        data_envio, cids, url_arquivo) e 'texto', com 'tem_mais' e
+        'proximo_deslocamento' quando o texto continua.
+    """
+    claims = require_module("disputes_center")
+    with app.app_context():
+        return read_fap_attachment_handler(claims["law_firm_id"], documento_id, deslocamento,
+                                           app_public_url=APP_PUBLIC_URL)
 
 
 @mcp.tool()

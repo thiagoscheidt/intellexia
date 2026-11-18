@@ -8,6 +8,12 @@ Anexos das contestações do FAP (`fap_anexos_service`, `scripts/fap_baixar_anex
 4. Arquivo com base64 inválido ou tamanho diferente do anunciado não vai ao disco.
 5. 403 conta como sem acesso; 401 para a execução (saída 2).
 6. Nome vindo do portal não sai da pasta.
+7. Registro: liga ao benefício da Central (vigência + CNPJ + NB), lê o texto,
+   classifica (HISMED com CID, CONBAS), é idempotente.
+8. Busca: termo no índice (se o Meilisearch estiver no ar) e no banco, NB como
+   filtro exato, CID, outro escritório não vê; recorte com e sem documento.
+9. Telas: documentos do benefício e o arquivo (outro escritório 404), filtro
+   "com/sem documento" e o recorte na lista da Central, linha do cálculo FAP.
 
 Não abre o portal: o cliente é substituído. Escritórios descartáveis, removidos no fim.
 
@@ -24,7 +30,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from main import app
-from app.models import db, FapCalculoEstabelecimento, LawFirm
+from app.models import db, Benefit, FapCalculoItem, User, FapCalculoEstabelecimento, FapContestacaoAnexo, FapVigenciaCnpj, LawFirm
+from app.services import fap_anexos_busca_service as busca
 from app.services import fap_anexos_service as svc
 from app.services import fap_calculo_client as client
 from app.services.fap_web_service import FapWebResult
@@ -39,6 +46,7 @@ CNPJS_FIRMA = ('00000000002535', '00000000002616')
 EST_A = '11222333000181'
 EST_B = '11222333000262'
 _falhas = []
+_B = []
 
 
 def check(nome, condicao, detalhe=''):
@@ -47,8 +55,20 @@ def check(nome, condicao, detalhe=''):
         _falhas.append(nome)
 
 
-PDF = b'%PDF-1.7\n' + b'x' * 200
-PDF2 = b'%PDF-1.4\n' + b'y' * 50
+def _pdf(linhas):
+    import fitz
+    doc = fitz.open()
+    pagina = doc.new_page()
+    for i, linha in enumerate(linhas):
+        pagina.insert_text((40, 60 + 16 * i), linha)
+    return doc.tobytes()
+
+
+PDF = _pdf(['Historico de Pericias Medicas (HISMED) - Dados Gerais', 'Instituto Nacional do Seguro Social',
+            'NB: 648.526.463-2', 'Especie: 91 - AUXILIO POR INCAPACIDADE TEMPORARIA - ACIDENTE DO TRABALHO',
+            'Diagnostico:', 'M54.5', 'Conclusao: 2 - Data de cessacao do beneficio', 'Nexo Tecnico: lombalgia'])
+PDF2 = _pdf(['INFORMACOES DA CONCESSAO DO BENEFICIO (CONBAS)', 'Instituto Nacional do Seguro Social',
+             'Especie: 94 - AUXILIO-ACIDENTE', 'Situacao: Cessado', 'Acidente de trajeto na via publica'])
 
 
 def _anexo(i, nome, conteudo):
@@ -86,6 +106,14 @@ def _cleanup():
     for cnpj in CNPJS_FIRMA:
         firm = LawFirm.query.filter_by(cnpj=cnpj).first()
         if firm:
+            FapContestacaoAnexo.query.filter_by(law_firm_id=firm.id).delete()
+            FapCalculoItem.query.filter_by(law_firm_id=firm.id).delete()
+            Benefit.query.filter_by(law_firm_id=firm.id).delete()
+            from app.models import UserPageVisit
+            for u in User.query.filter_by(law_firm_id=firm.id).all():
+                UserPageVisit.query.filter_by(user_id=u.id).delete()
+                db.session.delete(u)
+            FapVigenciaCnpj.query.filter_by(law_firm_id=firm.id).delete()
             FapCalculoEstabelecimento.query.filter_by(law_firm_id=firm.id).delete()
             db.session.delete(firm)
     db.session.commit()
@@ -181,6 +209,153 @@ def test_arquivo_ruim(a, pasta):
           dict(r['motivos_erro']))
 
 
+def test_registro_e_busca(a, pasta):
+    print('\n7. Registro no banco')
+    svc.executar(a, None, pasta=pasta, baixar=True, log=lambda m: None)
+    vig = FapVigenciaCnpj(law_firm_id=a, employer_cnpj='11.222.333/0001-81', vigencia_year='2026')
+    db.session.add(vig)
+    db.session.flush()
+    deferido = Benefit(law_firm_id=a, benefit_number='648.526.463-2', fap_vigencia_cnpj_id=vig.id,
+                       first_instance_status='indeferido', second_instance_status='deferido')
+    sem_doc = Benefit(law_firm_id=a, benefit_number='1112223334', fap_vigencia_cnpj_id=vig.id,
+                      first_instance_status='indeferido', second_instance_status='rejected')
+    db.session.add_all([deferido, sem_doc])
+    db.session.commit()
+
+    r = svc.registrar(a, pasta, log=lambda m: None)
+    linhas = FapContestacaoAnexo.query.filter_by(law_firm_id=a).order_by(FapContestacaoAnexo.anexo_id).all()
+    check('um registro por anexo', len(linhas) == 2 and r['novos'] == 2, r)
+    check('ligado ao benefício pela vigência + CNPJ + NB', all(l.benefit_id == deferido.id for l in linhas),
+          [l.benefit_id for l in linhas])
+    check('instância do recálculo', all(l.instancia == 2 for l in linhas), [l.instancia for l in linhas])
+    hismed = linhas[0]
+    check('HISMED com CID', hismed.tipo_documento == 'HISMED' and 'M54.5' in (hismed.campos_json or ''),
+          (hismed.tipo_documento, hismed.campos_json))
+    check('CONBAS', linhas[1].tipo_documento == 'CONBAS', linhas[1].tipo_documento)
+    check('texto lido', all(l.texto_status == 'ok' and 'Instituto' in (l.texto or '') for l in linhas))
+    r2 = svc.registrar(a, pasta, log=lambda m: None)
+    check('2ª rodada não duplica nem relê', r2['novos'] == 0 and r2['textos_lidos'] == 0
+          and FapContestacaoAnexo.query.filter_by(law_firm_id=a).count() == 2, r2)
+
+    print('\n8. Busca')
+    docs = busca.anexos_do_beneficio(a, benefit_id=deferido.id)
+    check('documentos do benefício', len(docs) == 2, docs)
+    check('documentos por vigência + CNPJ + NB',
+          len(busca.anexos_do_beneficio(a, ano=2026, cnpj=EST_A, nb='6485264632')) == 2)
+    indice_no_ar = (r.get('indice') or {}).get('indexados') == 2
+    res = busca.pesquisar(a, 'trajeto')
+    check(f'termo no texto ({res["fonte"]})', res['total'] == 1 and res['itens'][0]['tipo_documento'] == 'CONBAS', res)
+    check('trecho grifado', '<mark>' in (res['itens'][0]['trecho'] or '').lower() if res['itens'] else False)
+    check('NB é filtro exato', busca.pesquisar(a, '6485264632')['total'] == 2)
+    check('CID', busca.pesquisar(a, cid='M54.5')['total'] == 1)
+    check('outro escritório não vê', busca.pesquisar(_B[0], 'trajeto')['total'] == 0)
+    if not indice_no_ar:
+        print('  (Meilisearch fora do ar: só a busca pelo banco foi testada)')
+    else:
+        busca.configurar('fap_anexos_inexistente_x', esperar=True)
+        busca._estado['cliente'] = None
+        import app.services.fap_anexos_busca_service as m
+        host = m.MEILISEARCH_HOST
+        m.MEILISEARCH_HOST = 'http://127.0.0.1:9'
+        try:
+            res = busca.pesquisar(a, 'trajeto')
+            check('índice fora do ar cai para o banco', res['fonte'] == 'banco' and res['total'] == 1, res)
+        finally:
+            m.MEILISEARCH_HOST = host
+            busca._estado['cliente'] = None
+            busca.configurar('fap_anexos_test', esperar=True)
+
+    test_telas(a, pasta, deferido, sem_doc)
+    doc = busca.documentacao_por_resultado(a)
+    check('recorte da 2ª instância (os anexos são do recálculo de 2ª): com doc deferido, sem doc indeferido',
+          doc[2]['com']['deferido'] == 1 and doc[2]['sem']['indeferido'] == 1, doc)
+    check('na 1ª instância os dois ficam sem documento', doc[1]['sem']['indeferido'] == 2 and doc[1]['com']['decididos'] == 0, doc)
+    FapContestacaoAnexo.query.filter_by(law_firm_id=a).delete()
+    Benefit.query.filter_by(law_firm_id=a).delete()
+    FapVigenciaCnpj.query.filter_by(law_firm_id=a).delete()
+    db.session.commit()
+
+
+def _logar(client, firm_id, email):
+    u = User.query.filter_by(email=email).first()
+    if u is None:
+        u = User(law_firm_id=firm_id, name='adv anexos', role='admin', is_active=True, email=email)
+        u.set_password('x')
+        db.session.add(u)
+        db.session.commit()
+    with client.session_transaction() as sess:
+        sess['user_id'] = u.id
+        sess['law_firm_id'] = firm_id
+        sess['user_role'] = u.role
+        sess['user_module_permissions'] = u.get_module_permissions()
+
+
+def test_telas(a, pasta, deferido, sem_doc):
+    print('\n9. Telas')
+    pasta_real = svc.PASTA_PADRAO / str(a)
+    if pasta_real.exists():
+        shutil.rmtree(pasta_real)
+    shutil.copytree(pasta, pasta_real)
+    try:
+        c = app.test_client()
+        _logar(c, a, 'adv_a__test_anexos@example.com')
+        r = c.get(f'/disputes-center/benefits/{deferido.id}/anexos')
+        anexos = (r.get_json() or {}).get('anexos') or []
+        check('documentos do benefício', r.status_code == 200 and len(anexos) == 2 and all(x['url'] for x in anexos),
+              (r.status_code, anexos))
+        r = c.get(anexos[0]['url']) if anexos else None
+        check('arquivo do anexo', r is not None and r.status_code == 200 and r.data[:4] == b'%PDF',
+              r.status_code if r else None)
+        r = c.get('/disputes-center/api/list?quick_documento=com&vigencia_id=')
+        j = r.get_json() or {}
+        ids = [x['id'] for x in j.get('data') or []]
+        check('filtro "com documento"', r.status_code == 200 and ids == [deferido.id]
+              and j['data'][0]['anexos_count'] == 2, (r.status_code, ids))
+        r = c.get('/disputes-center/api/list?quick_documento=sem')
+        check('filtro "sem documento"', [x['id'] for x in (r.get_json() or {}).get('data') or []] == [sem_doc.id])
+        doc = ((r.get_json() or {}).get('filtered_stats') or {}).get('documentacao')
+        check('recorte vai na 1ª página da lista', doc is not None and '1' in {str(k) for k in doc}, doc)
+
+        db.session.add(FapCalculoItem(law_firm_id=a, ano_vigencia=2026, cnpj=EST_A, cnpj_raiz=EST_A[:8], tipo='B91',
+                                      identificador='6485264632', calculo_id=101))
+        db.session.commit()
+        r = c.get('/fap-panel/calculo/?vigencia=2026')
+        check('linha do cálculo FAP mostra os documentos', r.status_code == 200
+              and b'Documentos enviados ao FAP' in r.data and b'B91 6485264632.pdf' in r.data, r.status_code)
+
+        # MCP e API: a mesma resposta, conferida contra os campos declarados da API.
+        from app.services import public_api_campos as campos_api
+        from mcp_server.tools import fap_anexos as ferramenta
+        busca_mcp = ferramenta.search_fap_attachments_handler(a, 'trajeto', app_public_url='https://x')
+        item = (busca_mcp.get('itens') or [{}])[0]
+        check('MCP: pesquisa com trecho «» e link', busca_mcp['total_encontrado'] == 1 and '«' in (item.get('trecho') or '')
+              and (item.get('url_arquivo') or '').startswith('https://x/disputes-center/anexos/'), busca_mcp)
+        check('MCP: campos da pesquisa = declarados na API', not campos_api.conferir(busca_mcp, campos_api.FAP_DOCUMENTOS),
+              campos_api.conferir(busca_mcp, campos_api.FAP_DOCUMENTOS))
+        lido = ferramenta.read_fap_attachment_handler(a, item.get('documento_id'), app_public_url='https://x')
+        check('MCP: ler documento traz o texto', 'trajeto' in (lido.get('texto') or ''), lido)
+        lido.pop('dica', None)
+        check('MCP: campos do documento = declarados na API', not campos_api.conferir(lido, campos_api.FAP_DOCUMENTO),
+              campos_api.conferir(lido, campos_api.FAP_DOCUMENTO))
+        try:
+            ferramenta.search_fap_attachments_handler(a)
+            check('MCP: sem filtro recusa', False)
+        except Exception as e:
+            check('MCP: sem filtro recusa', 'filtro' in str(e))
+
+        c2 = app.test_client()
+        _logar(c2, _B[0], 'adv_b__test_anexos@example.com')
+        check('outro escritório: benefício 404', c2.get(f'/disputes-center/benefits/{deferido.id}/anexos').status_code == 404)
+        check('outro escritório: arquivo 404', c2.get(anexos[0]['url']).status_code == 404 if anexos else False)
+        try:
+            ferramenta.read_fap_attachment_handler(_B[0], item.get('documento_id'))
+            check('MCP: outro escritório não lê', False)
+        except Exception as e:
+            check('MCP: outro escritório não lê', 'não encontrado' in str(e))
+    finally:
+        shutil.rmtree(pasta_real, ignore_errors=True)
+
+
 def test_expirada(a, pasta):
     print('\n5. Sessão expirada')
     LISTAS[101] = 'expirada'
@@ -198,9 +373,15 @@ if __name__ == '__main__':
     try:
         with app.app_context():
             a, _b = _setup()
+            _B.append(_b)
+            busca.configurar('fap_anexos_test', esperar=True)
+            try:
+                busca._indice().delete_documents_by_filter(f'law_firm_id = {a}')
+            except Exception:
+                pass
             try:
                 test_recalculos(a)
-                for teste in (test_simulacao, test_baixar, test_arquivo_ruim, test_expirada):
+                for teste in (test_simulacao, test_baixar, test_arquivo_ruim, test_registro_e_busca, test_expirada):
                     pasta = Path(tempfile.mkdtemp(prefix='fap_anexos_test_'))
                     try:
                         teste(a, pasta)
