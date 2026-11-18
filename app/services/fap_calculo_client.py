@@ -77,3 +77,16 @@ def listar_beneficios(svc, ano: int, cnpj14: str, calculo_id: int) -> FapWebResu
 
 def listar_cats(svc, ano: int, cnpj14: str, calculo_id: int) -> FapWebResult:
     return _consultar(svc, f'/vigencias/{ano}/empresa/{cnpj14}/calculos/{calculo_id}/cats')
+
+
+def listar_anexos(svc, ano: int, cnpj14: str, calculo_id: int) -> FapWebResult:
+    """Documentos que a empresa anexou à contestação que gerou este recálculo
+    ("Visualizar Anexos" da Consulta do FAP). Cada item: ``id``, ``tipoElemento``
+    (``{"codigo": "BENEFICIO", ...}``), ``idElemento``, ``nb``, ``nome``,
+    ``dataEnvio`` e ``quantidadeBytes``. Medido em 18/11/2026."""
+    return _consultar(svc, f'/vigencias/{ano}/empresa/{cnpj14}/calculos/{calculo_id}/anexos')
+
+
+def baixar_anexo(svc, ano: int, cnpj14: str, calculo_id: int, anexo_id: int) -> FapWebResult:
+    """O arquivo vem em JSON: ``{"nome": ..., "base64": ...}``."""
+    return _consultar(svc, f'/vigencias/{ano}/empresa/{cnpj14}/calculos/{calculo_id}/anexos/{anexo_id}/download')
