@@ -666,8 +666,30 @@ def test_embargos():
     planilha.original_filename = '30_05_2025 - SENTENÇA - MARCOPOLO.pdf'
     db.session.commit()
     pelo_nome = ler('30_05_2025 - SENTENÇA - MARCOPOLO.pdf', {**sentenca, 'data_julgamento': '29/05/2025'})
-    check('mesmo nome de arquivo de decisão do processo vai para "Revisar"',
+    check('mesmo nome de arquivo de decisão que já tem arquivo vai para "Revisar"',
           pelo_nome.status == U.STATUS_REVIEW and pelo_nome.duplicate_of_id == planilha.id)
+
+    # Decisão da planilha ainda sem arquivo: o PDF repetido é anexado a ela, sem
+    # "Revisar" e sem mexer nos dados (pedido do escritório em 18/11/2026).
+    from app.services import jurisprudence_service as svc_
+    da_planilha = svc_.criar_decisao(1, {**sentenca, 'processo': '5000077-11.2025.4.04.7200',
+                                         'data_julgamento': '10/02/2025', 'resultado': 'DESFAVORAVEL'},
+                                     source='planilha', resolvedor=svc_.ResolvedorDeTeses(1),
+                                     original_filename='10_02_2025 - SENTENÇA - PLANILHA.pdf')
+    db.session.commit()
+    anexado = ler('10_02_2025 - SENTENÇA - PLANILHA.pdf', {**sentenca, 'processo': '5000077-11.2025.4.04.7200',
+                                                            'data_julgamento': '11/02/2025', 'resultado': 'FAVORAVEL'})
+    db.session.refresh(da_planilha)
+    check('PDF de decisão da planilha sem arquivo é anexado sozinho',
+          anexado.status == 'done' and anexado.decision_id == da_planilha.id
+          and da_planilha.pdf_path == anexado.file_path, (anexado.status, anexado.decision_id))
+    check('anexar não mexe nos dados da planilha',
+          da_planilha.resultado == 'desfavoravel' and da_planilha.data_julgamento == date(2025, 2, 10)
+          and D.query.filter_by(law_firm_id=1, processo_digits='50000771120254047200').count() == 1)
+    de_novo = ler('10_02_2025 - SENTENÇA - PLANILHA (2).pdf', {**sentenca, 'processo': '5000077-11.2025.4.04.7200',
+                                                               'data_julgamento': '10/02/2025'})
+    check('com o arquivo já anexado, o próximo repetido vai para "Revisar"',
+          de_novo.status == U.STATUS_REVIEW and de_novo.duplicate_of_id == da_planilha.id)
 
     # Já na base com o tipo errado (COAMO, "Decisão ED" gravada como sentença).
     coamo = ler('04_11_2026 - Decisão ED - COAMO.pdf', {**sentenca, 'processo': '5003509-10.2026.4.04.7010',

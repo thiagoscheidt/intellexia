@@ -156,8 +156,8 @@ de cada arquivo:
 
 | Situação | O que fazer |
 |---|---|
-| concluída | Nada — a decisão já está na base |
-| revisar | Já existe uma decisão do mesmo processo e instância. Escolha :btn-outline-secondary[manter a da base], :btn-outline-warning[substituir] ou :btn-outline-primary[guardar as duas] |
+| concluída | Nada — a decisão já está na base. Se o arquivo é o PDF de uma decisão que veio da planilha **sem arquivo**, ele é anexado a ela sozinho, sem mudar os dados da planilha |
+| revisar | O arquivo repete uma decisão da base que **já tem arquivo** (o mesmo arquivo, o mesmo nome ou o mesmo processo, instância e data). Escolha :btn-outline-secondary[manter a da base], :btn-outline-warning[substituir] ou :btn-outline-primary[guardar as duas]. Outra decisão do mesmo processo e instância com **outra data** (ED1, ED2, agravo interno) não é repetida: entra na base |
 | falhou | O motivo aparece na linha. Use :btn-outline-primary[tentar de novo] |
 
 > [!INFO] **PDFs das decisões importadas da planilha**: na mesma tela, em

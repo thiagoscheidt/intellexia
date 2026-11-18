@@ -238,9 +238,12 @@ def processar(law_firm_id: int, upload_id: int, *, user_id: Optional[int] = None
 
 def _registrar_leitura(upload: JurisprudenceUpload, lido: dict,
                        resolvedor: 'svc.ResolvedorDeTeses') -> JurisprudenceUpload:
-    """Leitura nova pronta: vai para "Revisar" se parece duplicata, senão vira decisão."""
+    """Leitura nova pronta: vira decisão; se repete uma da base, ou é anexada a
+    ela (decisão da planilha ainda sem arquivo) ou vai para "Revisar"."""
     campos = svc.normalizar_registro(lido)
     parecida = _duplicata(upload, campos)
+    if parecida is not None and anexavel(parecida):
+        return _anexar_a_decisao_da_planilha(upload, parecida)
     if parecida is not None:
         upload.status = JurisprudenceUpload.STATUS_REVIEW
         upload.duplicate_of_id = parecida.id
@@ -256,6 +259,24 @@ def _registrar_leitura(upload: JurisprudenceUpload, lido: dict,
         ementa_modo=lido.get('ementa_modo'),
     )
     db.session.flush()
+    return _concluiu(upload, decisao)
+
+
+def anexavel(decisao: JurisprudenceDecision) -> bool:
+    """Decisão da planilha que ainda não tem arquivo recebe o PDF repetido dela
+    sem passar por "Revisar" — o mesmo efeito do "Manter a da base", que
+    anexa o arquivo e não toca nos dados (autorizado pelo escritório em
+    18/11/2026). A que já tem arquivo continua indo para "Revisar": arquivo
+    não se troca sem alguém ver."""
+    return decisao.source == JurisprudenceDecision.SOURCE_PLANILHA and not decisao.pdf_path
+
+
+def _anexar_a_decisao_da_planilha(upload: JurisprudenceUpload,
+                                  decisao: JurisprudenceDecision) -> JurisprudenceUpload:
+    decisao.pdf_path = upload.file_path
+    decisao.texto_integral = None                  # arquivo novo, inteiro teor novo
+    decisao.original_filename = decisao.original_filename or upload.original_filename
+    upload.duplicate_of_id = decisao.id
     return _concluiu(upload, decisao)
 
 
@@ -349,12 +370,14 @@ def reavaliar_revisar(law_firm_id: int, *, gravar: bool = False) -> list[dict]:
         ajustado = tipo_corrigido(lido, upload.original_filename)
         campos = svc.normalizar_registro(ajustado)
         parecida = _duplicata(upload, campos)
-        if parecida is not None and parecida.id == upload.duplicate_of_id and ajustado is lido:
+        if (parecida is not None and parecida.id == upload.duplicate_of_id and ajustado is lido
+                and not anexavel(parecida)):
             continue
         item = {'upload_id': upload.id, 'arquivo': upload.original_filename,
                 'tipo_de': lido.get('tipo_documento') if ajustado is not lido else None,
                 'antes': upload.duplicate_of_id,
-                'destino': 'revisar' if parecida else 'base',
+                'destino': ('anexar' if parecida and anexavel(parecida)
+                            else 'revisar' if parecida else 'base'),
                 'parecida_id': parecida.id if parecida else None}
         resultado.append(item)
         if not gravar:

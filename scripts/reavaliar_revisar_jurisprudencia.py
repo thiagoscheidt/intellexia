@@ -7,6 +7,7 @@
    Outra data no mesmo processo e instância é outra decisão e entra na base
    (até 13/11/2026 ia para "Revisar"). Usa a leitura guardada: **sem reler o
    PDF** e sem IA.
+   PDF repetido de decisão da planilha ainda sem arquivo é anexado a ela.
 2. Base: decisão com nome ou classe de embargos de declaração gravada como
    sentença ou acórdão vira embargos (tipo corrigido à mão não é tocado).
 
@@ -45,12 +46,15 @@ def main() -> int:
         tipo = f" [{item['tipo_de']} → embargos]" if item['tipo_de'] else ''
         if item['destino'] == 'base':
             destino = 'vira decisão' + (f" {item['decision_id']}" if item.get('decision_id') else '')
+        elif item['destino'] == 'anexar':
+            destino = f"PDF anexado à decisão {item['parecida_id']} da planilha"
         else:
             destino = f"continua em Revisar, repete a decisão {item['parecida_id']} (antes: {item['antes']})"
         print(f"  #{item['upload_id']} {item['arquivo'][:70]}{tipo}: {destino}")
     na_base = sum(1 for i in revisar if i['destino'] == 'base')
-    print(f"  {na_base} viram decisão, {len(revisar) - na_base} continuam em Revisar contra outra decisão; "
-          f"o resto não muda.")
+    anexados = sum(1 for i in revisar if i['destino'] == 'anexar')
+    print(f"  {na_base} viram decisão, {anexados} anexados à decisão da planilha, "
+          f"{len(revisar) - na_base - anexados} continuam em Revisar contra outra decisão; o resto não muda.")
     if not args.gravar:
         print('\nSimulação — nada gravado; rode com --gravar.')
     return 0

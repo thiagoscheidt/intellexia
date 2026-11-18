@@ -445,6 +445,37 @@ O escritório compartilha com `intellexia-drive@intellexia-503416.iam.gserviceac
   registro** da Base. Na tela, o envio aparece como "importação automática"
   (`created_by` vazio).
 
+### Prints das petições protocoladas (`peticao_prints_service`)
+
+Ferramenta `prints_das_peticoes` (MCP, módulo `knowledge_base`), rota
+`GET /api/v1/base-conhecimento/prints` e a imagem em
+`/knowledge-base/<id>/print/<ordem>` (login + escritório). Acha os prints que o
+escritório **já usou** nas petições (CONBAS, INFBEN, laudo do INSS, CAT, tela do
+FAP...) pela legenda padronizada — "CONBAS – B94 nº 6322736802 (ev. 1:16)" — e
+entrega a imagem tirada do PDF original no Drive.
+
+- **Nada é pré-processado.** O índice é o .md da Base (a conversão guardou a
+  legenda e o texto lido da imagem); a imagem sai do PDF na hora do pedido, e a
+  primeira abertura grava **todos** os prints da petição em
+  `instance/prints_peticoes/<escritório>/` — a segunda é imediata. Medido: busca
+  por NB em 1.168 .md ≈ 3,6 s; primeira imagem ≈ 3 s.
+- **A conversão põe a legenda em três lugares** (linha antes do bloco da imagem,
+  1ª linha lida da imagem, meio do bloco da figura anterior) e cola o rodapé do
+  timbre ("CEP 88010-301") na frente; `legenda()` trata os três. Legenda é curta,
+  começa em maiúscula e termina na referência "(ev. …)" — item de lista e frase
+  da peça não contam.
+- **No PDF** o timbre se repete em toda página e cada print vem numa moldura de
+  sombra (faixas de imagem mais largas atrás dele): as duas ficam de fora
+  (`_decorativa`). Figura sem texto entre ela e a anterior é continuação e sai
+  emendada numa imagem só. Casamento .md ↔ PDF pela legenda normalizada (`chave`).
+- **`pdf_disponivel` é por arquivo (`metadados`), nunca pela listagem**: a
+  listagem do Drive só traz o que foi compartilhado com a conta, e o PDF aberto
+  "para qualquer pessoa com o link" baixa sem aparecer nela.
+- **Cobertura (18/11/2026)**: 248 petições com print legendado (a legenda
+  padronizada é costume de 2025–2026; 2023–2024 quase não têm), 171 com PDF que
+  abre. Print sem legenda não é achado — a figura não tem como ser identificada.
+- Teste: `tests/test_peticao_prints.py` (PDF montado no teste, sem Drive).
+
 ### Nome do segurado (consulta de CPF)
 
 O FAP não informa nome — relatório e Consulta do FAP trazem CPF, NIT e
@@ -829,7 +860,11 @@ e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
   substituir, guardar as duas) — nunca descartar em silêncio. **Outra data no
   mesmo processo e instância é outra decisão e entra**: ED1/ED2/ED3, o agravo
   interno depois da apelação (pedido do escritório em 13/11/2026; até então ia
-  para "revisar" e ficava fora da base).
+  para "revisar" e ficava fora da base). **Repetido de decisão da planilha
+  ainda sem arquivo não vai para "revisar": o arquivo é anexado a ela**
+  (`anexavel`, o mesmo efeito do "manter a da base", sem tocar nos dados —
+  autorizado pelo escritório em 18/11/2026); a que já tem arquivo continua indo,
+  porque arquivo não se troca sem alguém ver.
 - **ED julgado na vara vem com cabeçalho "SENTENÇA"** e a IA segue o cabeçalho
   (44 de 87 itens em "Revisar" na homologação, 12/11/2026). O tipo é corrigido
   depois da leitura (`jurisprudence_upload_service.tipo_corrigido`) pelo nome do
@@ -1226,6 +1261,7 @@ FapReview.revision [POST]
 | `public_api_catalogo`                  | Registro das rotas da API (`Rota`/`Param` → handler do MCP), leitura e validação de parâmetros, teto de página, OpenAPI, resumo por linha e exemplo `curl` — fonte única das rotas e da documentação |
 | `prompt_library_service`               | Biblioteca de IA: visibilidade, edição, versões, favoritos, recomendado, aviso de CPF/CNPJ, campos `{{...}}`, importar/baixar skill do Claude e os comandos do IntellexIA lidos por AST — fonte única da tela `/prompts` e do MCP |
 | `public_api_campos`                    | Campos de resposta de cada rota da API (`Campo`): conferência contra a resposta real, schema do OpenAPI, tabela e exemplo de JSON da documentação |
+| `peticao_prints_service`               | Prints das petições protocoladas: legendas lidas do .md da Base, figura extraída do PDF do Drive na hora (cache em `instance/prints_peticoes/`), acesso ao PDF por arquivo — fonte única do `prints_das_peticoes`, da rota da API e da imagem na Base. Ver a seção "Prints das petições protocoladas" |
 | `access_audit_service`                 | Auditoria de acesso: registro de visitas de tela, estatísticas de atividade/online e uso do MCP (`record_mcp_call`, conexão por usuário, funções usadas) — fonte única do dashboard admin |
 | `comunica_pje_client`                  | Cliente HTTP da API pública do Comunica PJe/DJEN — todo acesso isolado aqui; pacing global + regras de rate limit (ver seção "Integração Comunica PJe") |
 | `communication_monitor_service`        | Monitoramento de Processos: sincronização por OAB e por caderno (dedup por hash da API), descoberta de processos (`origin='comunica_auto'` + triagem), explicação IA com cache (`explain_communication`), queries da tela e das tools MCP — fonte única |
