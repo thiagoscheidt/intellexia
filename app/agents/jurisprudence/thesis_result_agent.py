@@ -58,7 +58,9 @@ def recortar(texto: str, limite: int = MAX_CARACTERES) -> str:
 
 class JurisprudenceThesisResultAgent:
     AGENT_NAME = 'JurisprudenceThesisResultAgent'
-    MAX_TOKENS = 4000
+    # O raciocínio do gpt-5-mini sai do mesmo orçamento: com 4 mil, 7 de 618
+    # leituras vieram cortadas (homologação, 18/11/2026).
+    MAX_TOKENS = 16000
 
     def __init__(self, model_name: Optional[str] = None,
                  llm_factory: Optional[Callable[[], Any]] = None):
