@@ -27,6 +27,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Optional
 
+from flask import current_app
+
 from app.models import db, JurisprudenceDecision
 from app.services import jurisprudence_normalizer as norm
 
@@ -140,10 +142,18 @@ def preencher(law_firm_id: int, *, gravar: bool = False, limite: Optional[int] =
     agente = agente or JurisprudenceThesisResultAgent(
         model_name=ai_model_settings_service.get_model(law_firm_id, 'jurisprudence_extractor'))
 
+    # A thread do pool não herda o contexto do Flask, e sem ele o
+    # TokenUsageService não grava o custo (rodadas de 18/11/2026 ficaram sem).
+    app = current_app._get_current_object()
+
     def ler(tarefa):
         decision_id, teses, f = tarefa
-        return decision_id, agente.ler(teses=teses, texto=f.get('texto'), arquivo=f.get('arquivo'),
-                                       law_firm_id=law_firm_id, decision_id=decision_id)
+        with app.app_context():
+            try:
+                return decision_id, agente.ler(teses=teses, texto=f.get('texto'), arquivo=f.get('arquivo'),
+                                               law_firm_id=law_firm_id, decision_id=decision_id)
+            finally:
+                db.session.remove()
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         futuros = {pool.submit(ler, t): t[0] for t in tarefas}
