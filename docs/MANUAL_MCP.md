@@ -20,6 +20,7 @@ O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de 
 - "O que o Ministério da Previdência publicou ontem na Seção 1?" — o sumário da edição, órgão por órgão;
 - "Saiu alguma portaria sobre o \"Fator Acidentário de Prevenção\" em agosto?" — pesquisa no acervo do Diário Oficial;
 - "Qual foi o resultado da contestação de protocolo 10128.053144/2025-42?" — e, na sequência, "quais benefícios dela foram deferidos?";
+- "**Que documentos mandamos na contestação do NB 651.667.275-3?**" — e "quais perícias com CID M54 anexamos em 2025?", pelo texto dos documentos enviados ao portal;
 - "O que temos na base de conhecimento sobre acidente de trajeto?";
 - "Pesquise o NB 6320957810 nos documentos" — retorna os trechos com link para abrir o PDF;
 - "Me traga todos os benefícios B91 de 2023 **em planilha**" — gera o Excel oficial do sistema com link de download;
