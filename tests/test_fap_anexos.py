@@ -188,6 +188,11 @@ def test_baixar(a, pasta):
     CHAMADAS.update(lista=0, download=0)
     r2 = svc.executar(a, None, pasta=pasta, baixar=True, log=lambda m: None)
     check('2ª rodada não baixa de novo', CHAMADAS['download'] == 0 and r2['ja_no_disco'] == 2, r2)
+    check('recálculo sem anexo ganha marca vazia', (pasta / '2026' / EST_A / '102' / svc.LISTA_DA_PASTA).exists())
+    CHAMADAS.update(lista=0, download=0)
+    r3 = svc.executar(a, None, pasta=pasta, baixar=True, somente_novos=True, log=lambda m: None)
+    check('--somente-novos só consulta o que nunca foi consultado', CHAMADAS['lista'] == 1
+          and r3['ja_consultados'] == 2, (CHAMADAS, r3['ja_consultados']))
 
     print('\n6. Nome do portal')
     fora = [p for p in pasta.rglob('*fora.pdf')]

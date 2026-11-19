@@ -171,17 +171,26 @@ def _motivo(r) -> str:
 
 def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool = False,
              anos=None, raizes=None, cnpjs=None, limite: Optional[int] = None, workers: int = 8,
-             log: Callable[[str], None] = print) -> dict:
+             somente_novos: bool = False, log: Callable[[str], None] = print) -> dict:
     """Lista os anexos de cada recálculo e, com ``baixar``, grava no disco.
 
-    Sem ``baixar`` nada é gravado: só conta anexos e tamanho.
+    Sem ``baixar`` nada é gravado: só conta anexos e tamanho. ``somente_novos``
+    pula o recálculo já consultado (tem ``_anexos.json``, inclusive o vazio de
+    quem não tem anexo): os anexos de um recálculo publicado não mudam, e a
+    rotina diária só precisa olhar os recálculos que apareceram.
     """
     recs = recalculos(law_firm_id, anos=anos, raizes=raizes, cnpjs=cnpjs)
+    ja_consultados = 0
+    if somente_novos:
+        antes = len(recs)
+        recs = [r for r in recs if not (pasta_do_recalculo(pasta, r) / LISTA_DA_PASTA).exists()]
+        ja_consultados = antes - len(recs)
     if limite:
         recs = recs[:limite]
     rel = {'recalculos': len(recs), 'consultados': 0, 'com_anexo': 0, 'anexos': 0, 'bytes': 0,
            'por_elemento': Counter(), 'baixados': 0, 'ja_no_disco': 0, 'bytes_baixados': 0,
-           'sem_acesso': 0, 'erros': 0, 'motivos_erro': Counter(), 'expirada': False}
+           'sem_acesso': 0, 'erros': 0, 'motivos_erro': Counter(), 'expirada': False,
+           'ja_consultados': ja_consultados}
     log(f'{len(recs)} recálculo(s) para consultar.')
 
     def listar(rec):
@@ -236,6 +245,9 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
                         if baixar:
                             _gravar_lista(pasta, rec, anexos)
                             pendentes |= {pool.submit(baixar_um, rec, a) for a in anexos}
+                    elif baixar:
+                        # Marca de "consultado, sem anexo", para o --somente-novos não voltar nele.
+                        _gravar_lista(pasta, rec, [])
                     if rel['consultados'] % 500 == 0:
                         log(f"  {rel['consultados']}/{len(recs)} consultados, {rel['anexos']} anexos"
                             + (f", {rel['baixados']} baixados" if baixar else ''))

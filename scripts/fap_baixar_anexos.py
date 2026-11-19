@@ -18,6 +18,7 @@ Uso:
   uv run python scripts/fap_baixar_anexos.py --empresa 00025841 --baixar
   uv run python scripts/fap_baixar_anexos.py --estabelecimento 00025841000105 --baixar
   uv run python scripts/fap_baixar_anexos.py --baixar                          # tudo
+  uv run python scripts/fap_baixar_anexos.py --baixar --somente-novos          # rotina diária
   uv run python scripts/fap_baixar_anexos.py --registrar                       # só o banco
   uv run python scripts/fap_baixar_anexos.py --ocr --minutos 180               # digitalizados, aos poucos
 
@@ -93,6 +94,8 @@ def main(argv=None, svc=None) -> int:
     ap.add_argument('--estabelecimento', action='append', default=[], help='CNPJ de 14 dígitos (repetível)')
     ap.add_argument('--limite', type=int, default=None, help='só os N primeiros recálculos')
     ap.add_argument('--baixar', action='store_true', help='grava os arquivos (sem ele, só conta)')
+    ap.add_argument('--somente-novos', action='store_true',
+                    help='pula os recálculos já consultados (rotina diária)')
     ap.add_argument('--registrar', action='store_true', help='só registra no banco o que já está na pasta')
     ap.add_argument('--sem-registrar', action='store_true', help='com --baixar, não registra no banco')
     ap.add_argument('--ocr', action='store_true',
@@ -138,10 +141,11 @@ def main(argv=None, svc=None) -> int:
         r = anexos.executar(law_firm_id, svc, pasta=pasta, baixar=args.baixar,
                             anos=args.vigencia or None, raizes=args.empresa or None,
                             cnpjs=args.estabelecimento or None, limite=args.limite,
-                            workers=workers, log=_log)
+                            workers=workers, somente_novos=args.somente_novos, log=_log)
 
     _log('Resumo:')
-    _log(f"  recálculos consultados: {r['consultados']} de {r['recalculos']}")
+    _log(f"  recálculos consultados: {r['consultados']} de {r['recalculos']}"
+         + (f" (pulados, já consultados antes: {r['ja_consultados']})" if args.somente_novos else ''))
     _log(f"  com anexo: {r['com_anexo']} · anexos: {r['anexos']} · {_mb(r['bytes'])}")
     for elemento, n in r['por_elemento'].most_common():
         _log(f'    {n}× {elemento}')
