@@ -325,9 +325,11 @@
     display: flex;
   }
 
-  .doc-placar { display: flex; flex-direction: column; gap: .3rem; font-size: .8rem; margin-top: .15rem; }
-  .doc-placar-linha .sc-sub-label { display: block; }
-  .doc-placar-linha strong { color: var(--sc-color); }
+  .doc-placar { display: grid; grid-template-columns: auto 1fr 1fr; gap: .2rem .75rem; align-items: baseline;
+    margin-top: .35rem; font-size: .85rem; }
+  .doc-placar .doc-cab { white-space: nowrap; font-size: .68rem; text-transform: uppercase; letter-spacing: .03em; color: var(--bs-secondary-color); }
+  .doc-placar .doc-num { font-weight: 700; color: var(--sc-color); font-variant-numeric: tabular-nums; }
+  .doc-placar .doc-num.vazio { color: var(--bs-secondary-color); font-weight: 400; }
 
   #applyCentralFiltersBtn.is-pending {
     box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .35);
@@ -554,6 +556,7 @@
           <span class="sc-icon"><i class="bi bi-paperclip"></i></span>
           <span class="sc-label">Deferimento × documento</span>
         </div>
+        <div class="sc-note">% de deferidos, com e sem documento anexado</div>
         <div class="doc-placar" id="filteredDocumentacao"><span class="text-muted small">—</span></div>
       </div>
     </div>
@@ -1133,16 +1136,17 @@
   // "Deferimento × documento": a mesma instância nos dois lados (o anexo do
   // recálculo de 1ª instância conta para o resultado da 1ª, e o de 2ª para a 2ª).
   function renderDocumentacao(doc) {
-    const taxa = (g) => (g && g.decididos) ? `${String(g.taxa_deferimento).replace('.', ',')}%` : '—';
+    // Tabelinha: instância × (com doc., sem doc.), % de deferidos entre os julgados.
+    const celula = (g, oque) => (g && g.decididos)
+      ? `<span class="doc-num" title="${g.deferido} deferido(s) de ${g.decididos} julgado(s) ${oque}">${String(g.taxa_deferimento).replace('.', ',')}%</span>`
+      : `<span class="doc-num vazio" title="nenhum julgado ${oque}">—</span>`;
     const linha = (rotulo, inst) => {
       const d = doc[inst] || doc[String(inst)] || {};
-      const com = d.com || {}, sem = d.sem || {};
-      return `<div class="doc-placar-linha"><span class="sc-sub-label">${rotulo}</span>
-        <div><span title="${com.decididos || 0} julgado(s) com documento"><strong>${taxa(com)}</strong> com doc.</span>
-        <span class="text-muted">·</span>
-        <span title="${sem.decididos || 0} julgado(s) sem documento"><strong>${taxa(sem)}</strong> sem</span></div></div>`;
+      return `<span class="doc-cab">${rotulo}</span>${celula(d.com, 'com documento')}${celula(d.sem, 'sem documento')}`;
     };
-    $('#filteredDocumentacao').html(linha('1ª inst.', 1) + linha('2ª inst.', 2));
+    $('#filteredDocumentacao').html(
+      '<span></span><span class="doc-cab">com</span><span class="doc-cab">sem</span>'
+      + linha('1ª inst.', 1) + linha('2ª inst.', 2));
   }
 
   $('#benefitAnexosModal').on('show.bs.modal', function (event) {
