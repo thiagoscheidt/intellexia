@@ -1173,11 +1173,12 @@
             <thead><tr><th>Documento</th><th>Tipo</th><th>Enviado em</th><th class="text-end">Tamanho</th></tr></thead>
             <tbody>${grupos[inst].map((a) => `
               <tr>
-                <td>${a.url ? `<a href="${escapeAttr(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.nome || 'documento')}</a>` : escapeHtml(a.nome || 'documento')}
+                <td>${a.url ? `<a href="${escapeAttr(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.nome || 'documento')}</a>`
+                  : `${escapeHtml(a.nome || 'documento')}<div class="small text-muted"><i class="bi bi-hourglass-split me-1"></i>o arquivo ainda está sendo copiado do portal</div>`}
                   ${(a.cids || []).length ? `<div class="small text-muted">CID ${escapeHtml(a.cids.join(', '))}</div>` : ''}
                   ${a.cat_tipo ? `<div class="small text-muted">CAT de ${escapeHtml(a.cat_tipo.toLowerCase())}</div>` : ''}
                   ${a.texto_por_ocr ? '<div class="small text-muted" title="PDF digitalizado: o texto foi lido por OCR e pode ter erros">texto lido por OCR</div>' : ''}</td>
-                <td><span class="badge bg-light text-dark border">${escapeHtml(a.tipo_documento_label || a.elemento || '—')}</span></td>
+                <td>${a.tipo_documento_label ? `<span class="badge bg-light text-dark border">${escapeHtml(a.tipo_documento_label)}</span>` : '<span class="text-muted">—</span>'}</td>
                 <td class="text-nowrap">${a.data_envio ? escapeHtml(a.data_envio.split('-').reverse().join('/')) : '—'}</td>
                 <td class="text-end text-nowrap small">${a.tamanho ? Math.max(1, Math.round(a.tamanho / 1024)) + ' KB' : '—'}</td>
               </tr>`).join('')}</tbody></table></div>`).join('');
