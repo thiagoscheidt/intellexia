@@ -1177,7 +1177,9 @@
                   : `${escapeHtml(a.nome || 'documento')}<div class="small text-muted"><i class="bi bi-hourglass-split me-1"></i>o arquivo ainda está sendo copiado do portal</div>`}
                   ${(a.cids || []).length ? `<div class="small text-muted">CID ${escapeHtml(a.cids.join(', '))}</div>` : ''}
                   ${a.cat_tipo ? `<div class="small text-muted">CAT de ${escapeHtml(a.cat_tipo.toLowerCase())}</div>` : ''}
-                  ${a.texto_por_ocr ? '<div class="small text-muted" title="PDF digitalizado: o texto foi lido por OCR e pode ter erros">texto lido por OCR</div>' : ''}</td>
+                  ${a.texto_por_ocr ? '<div class="small text-muted" title="PDF digitalizado: o texto foi lido por OCR e pode ter erros">texto lido por OCR</div>' : ''}
+                  ${(a.url && a.paginas) ? `<div class="small">${Array.from({ length: Math.min(a.paginas, 20) }, (_, i) =>
+                    `<a href="/disputes-center/anexos/${encodeURIComponent(a.id)}/pagina/${i + 1}.png" target="_blank" rel="noopener" class="me-2" title="Abrir a página ${i + 1} como imagem, para copiar e colar numa peça"><i class="bi bi-image"></i> pág. ${i + 1}</a>`).join('')}</div>` : ''}</td>
                 <td>${a.tipo_documento_label ? `<span class="badge bg-light text-dark border">${escapeHtml(a.tipo_documento_label)}</span>` : '<span class="text-muted">—</span>'}</td>
                 <td class="text-nowrap">${a.data_envio ? escapeHtml(a.data_envio.split('-').reverse().join('/')) : '—'}</td>
                 <td class="text-end text-nowrap small">${a.tamanho ? Math.max(1, Math.round(a.tamanho / 1024)) + ' KB' : '—'}</td>

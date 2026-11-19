@@ -49,6 +49,23 @@ def extrair_texto(caminho: str) -> str:
         return '\n'.join(p.get_text() for p in doc).strip()
 
 
+def contar_paginas(caminho: str) -> int:
+    import fitz  # PyMuPDF
+
+    with fitz.open(caminho) as doc:
+        return doc.page_count
+
+
+def pagina_png(caminho: str, numero: int, dpi: int = 150) -> bytes:
+    """A página ``numero`` (1, 2…) do PDF como imagem — para colar numa peça."""
+    import fitz  # PyMuPDF
+
+    with fitz.open(caminho) as doc:
+        if not 1 <= numero <= doc.page_count:
+            raise IndexError(numero)
+        return doc[numero - 1].get_pixmap(dpi=dpi).tobytes('png')
+
+
 def classificar(texto: Optional[str]) -> tuple[str, dict]:
     """``(tipo, campos)``. Campos só do que a regra acha com segurança."""
     t = _sem_acento(texto or '')

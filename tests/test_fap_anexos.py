@@ -313,6 +313,11 @@ def test_telas(a, pasta, deferido, sem_doc):
         r = c.get(anexos[0]['url']) if anexos else None
         check('arquivo do anexo', r is not None and r.status_code == 200 and r.data[:4] == b'%PDF',
               r.status_code if r else None)
+        pagina = f"/disputes-center/anexos/{anexos[0]['id']}/pagina/1.png" if anexos else ''
+        r = c.get(pagina)
+        check('página como imagem PNG', r.status_code == 200 and r.data[:8] == b'\x89PNG\r\n\x1a\n'
+              and anexos[0]['paginas'] == 1, (r.status_code, anexos[0].get('paginas') if anexos else None))
+        check('página que não existe: 404', c.get(pagina.replace('/1.png', '/9.png')).status_code == 404)
         r = c.get('/disputes-center/api/list?quick_documento=com&vigencia_id=')
         j = r.get_json() or {}
         ids = [x['id'] for x in j.get('data') or []]
@@ -337,6 +342,8 @@ def test_telas(a, pasta, deferido, sem_doc):
         item = (busca_mcp.get('itens') or [{}])[0]
         check('MCP: pesquisa com trecho «» e link', busca_mcp['total_encontrado'] == 1 and '«' in (item.get('trecho') or '')
               and (item.get('url_arquivo') or '').startswith('https://x/disputes-center/anexos/'), busca_mcp)
+        check('MCP: uma imagem por página', item.get('url_paginas') == [
+            f"https://x/disputes-center/anexos/{item.get('documento_id')}/pagina/1.png"], item.get('url_paginas'))
         check('MCP: campos da pesquisa = declarados na API', not campos_api.conferir(busca_mcp, campos_api.FAP_DOCUMENTOS),
               campos_api.conferir(busca_mcp, campos_api.FAP_DOCUMENTOS))
         lido = ferramenta.read_fap_attachment_handler(a, item.get('documento_id'), app_public_url='https://x')
@@ -354,6 +361,7 @@ def test_telas(a, pasta, deferido, sem_doc):
         _logar(c2, _B[0], 'adv_b__test_anexos@example.com')
         check('outro escritório: benefício 404', c2.get(f'/disputes-center/benefits/{deferido.id}/anexos').status_code == 404)
         check('outro escritório: arquivo 404', c2.get(anexos[0]['url']).status_code == 404 if anexos else False)
+        check('outro escritório: página 404', c2.get(pagina).status_code == 404)
         try:
             ferramenta.read_fap_attachment_handler(_B[0], item.get('documento_id'))
             check('MCP: outro escritório não lê', False)

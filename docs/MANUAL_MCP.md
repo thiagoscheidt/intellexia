@@ -148,7 +148,7 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `listar_cats_fap` | CATs contestadas | CATs das contestações com datas e status por instância | Relatório |
 | `listar_massas_salariais_fap` | Massa salarial contestada | Folha de pagamento contestada por competência, com valores pleiteados | Relatório |
 | `pesquisar_documentos_contestacao` | Documentos enviados nas contestações | Pesquisa no texto dos documentos que o escritório anexou às contestações no portal (CONBAS, INFBEN, HISMED com CID, CAT de trajeto, CNIS, eSocial), por NB, CNPJ, vigência, CID ou palavra | FAP Web |
-| `ler_documento_contestacao` | Ler documento da contestação | Texto inteiro de um documento anexado (datas e CID da perícia, dados da concessão, descrição do acidente) | FAP Web |
+| `ler_documento_contestacao` | Ler documento da contestação | Texto inteiro de um documento anexado (datas e CID da perícia, dados da concessão, descrição do acidente), com o link do PDF e a imagem de cada página para colar numa peça | FAP Web |
 | `listar_vinculos_fap` | Vínculos contestados | Vínculos empregatícios contestados por competência | Relatório |
 | `listar_rotatividade_fap` | Rotatividade contestada | Taxas de rotatividade contestadas (admissões, rescisões, vínculos) | Relatório |
 

@@ -2546,19 +2546,37 @@ def benefit_anexos(benefit_id):
 @require_law_firm
 def anexo_arquivo(anexo_id):
     """O arquivo do anexo, servido da cópia em instance/ — só do escritório."""
-    from pathlib import Path
+    from app.services.fap_anexos_busca_service import caminho_do_arquivo
 
-    from app.services.fap_anexos_service import PASTA_PADRAO
-
-    law_firm_id = get_current_law_firm_id()
-    anexo = FapContestacaoAnexo.query.filter_by(id=anexo_id, law_firm_id=law_firm_id).first_or_404()
-    pasta = (PASTA_PADRAO / str(law_firm_id)).resolve()
-    caminho = (pasta / (anexo.arquivo or '')).resolve() if anexo.arquivo else None
-    if caminho is None or pasta not in caminho.parents or not caminho.is_file():
+    anexo = FapContestacaoAnexo.query.filter_by(id=anexo_id, law_firm_id=get_current_law_firm_id()).first_or_404()
+    caminho = caminho_do_arquivo(anexo)
+    if caminho is None:
         abort(404)
     pdf = caminho.suffix.lower() == '.pdf'
     resposta = send_file(str(caminho), mimetype='application/pdf' if pdf else None,
                          as_attachment=not pdf, download_name=anexo.nome or caminho.name)
+    resposta.headers['X-Content-Type-Options'] = 'nosniff'
+    resposta.headers['Cache-Control'] = 'private, max-age=3600'
+    return resposta
+
+
+@disputes_center_bp.route('/anexos/<int:anexo_id>/pagina/<int:numero>.png', methods=['GET'])
+@require_law_firm
+def anexo_pagina(anexo_id, numero):
+    """Uma página do anexo como imagem, para colar direto numa peça (o "print")."""
+    from app.services.fap_anexos_busca_service import caminho_do_arquivo
+    from app.services.fap_anexos_conteudo import pagina_png
+
+    anexo = FapContestacaoAnexo.query.filter_by(id=anexo_id, law_firm_id=get_current_law_firm_id()).first_or_404()
+    caminho = caminho_do_arquivo(anexo)
+    if caminho is None or caminho.suffix.lower() != '.pdf':
+        abort(404)
+    try:
+        imagem = pagina_png(str(caminho), numero)
+    except IndexError:
+        abort(404)
+    resposta = send_file(BytesIO(imagem), mimetype='image/png',
+                         download_name=f'{(anexo.nome or "documento").rsplit(".", 1)[0]} - pagina {numero}.png')
     resposta.headers['X-Content-Type-Options'] = 'nosniff'
     resposta.headers['Cache-Control'] = 'private, max-age=3600'
     return resposta

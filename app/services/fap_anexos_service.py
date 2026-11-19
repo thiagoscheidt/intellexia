@@ -386,6 +386,11 @@ def registrar(law_firm_id: int, pasta: Path, *, ler_texto: bool = True, indexar:
                     tipo = conteudo.tipo_pelo_nome(linha.nome)
                     linha.texto_status = FapContestacaoAnexo.TEXTO_VAZIO
                     rel['sem_texto'] += 1
+                if linha.arquivo.lower().endswith('.pdf'):
+                    try:
+                        extra['paginas'] = conteudo.contar_paginas(str(pasta / linha.arquivo))
+                    except Exception:
+                        pass
                 linha.tipo_documento = tipo
                 linha.campos_json = json.dumps(extra, ensure_ascii=False) if extra else None
                 rel['por_tipo'][tipo] += 1

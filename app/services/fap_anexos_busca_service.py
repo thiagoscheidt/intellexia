@@ -122,6 +122,34 @@ def indexar_pendentes(law_firm_id: Optional[int] = None, *, refazer: bool = Fals
 
 # ---------------------------------------------------------------- consultas
 
+def caminho_do_arquivo(a: FapContestacaoAnexo):
+    """Caminho do arquivo na cópia do escritório, ou None se não baixou / saiu da pasta."""
+    from app.services.fap_anexos_service import PASTA_PADRAO
+
+    if not a.arquivo:
+        return None
+    pasta = (PASTA_PADRAO / str(a.law_firm_id)).resolve()
+    caminho = (pasta / a.arquivo).resolve()
+    return caminho if pasta in caminho.parents and caminho.is_file() else None
+
+
+def paginas(a: FapContestacaoAnexo) -> int:
+    """Páginas do PDF: do registro, ou contadas na hora (registrado antes de guardar o número)."""
+    c = campos(a)
+    if c.get('paginas'):
+        return int(c['paginas'])
+    if not (a.arquivo or '').lower().endswith('.pdf'):
+        return 0
+    caminho = caminho_do_arquivo(a)
+    if caminho is None:
+        return 0
+    try:
+        from app.services.fap_anexos_conteudo import contar_paginas
+        return contar_paginas(str(caminho))
+    except Exception:
+        return 0
+
+
 def _item(a: FapContestacaoAnexo, trecho: Optional[str] = None) -> dict:
     c = campos(a)
     return {
@@ -131,7 +159,7 @@ def _item(a: FapContestacaoAnexo, trecho: Optional[str] = None) -> dict:
         'nome': a.nome, 'data_envio': a.data_envio.isoformat() if a.data_envio else None,
         'tamanho': a.tamanho, 'cids': c.get('cids') or [], 'cat_tipo': c.get('cat_tipo'),
         'especie': c.get('especie'), 'texto_por_ocr': bool(c.get('ocr')),
-        'tem_arquivo': bool(a.arquivo), 'trecho': trecho,
+        'tem_arquivo': bool(a.arquivo), 'paginas': paginas(a), 'trecho': trecho,
     }
 
 

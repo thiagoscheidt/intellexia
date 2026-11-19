@@ -601,6 +601,8 @@ _FAP_DOCUMENTO_ITEM = (
     _b('texto_por_ocr', 'O PDF é digitalizado e o texto veio de OCR: pode faltar acento e haver palavras '
        'coladas — confira no arquivo antes de citar.'),
     _t('url_arquivo', 'O PDF no IntellexIA (abre com o login); null se o arquivo não foi baixado.'),
+    _i('paginas', 'Páginas do PDF (0 se o arquivo ainda não foi baixado ou não é PDF).'),
+    _l('url_paginas', 'Uma imagem PNG por página (até 20), para colar numa peça; abre com o login.'),
     _i('anexo_id_portal', 'Identificador do anexo no portal FAP.'),
 )
 

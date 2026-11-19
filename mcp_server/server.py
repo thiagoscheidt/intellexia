@@ -1343,7 +1343,10 @@ def pesquisar_documentos_contestacao(
         ler_documento_contestacao), 'nb', 'cnpj', 'vigencia', 'instancia',
         'tipo_documento', 'nome' do arquivo, 'data_envio', 'cids', 'cat_tipo',
         'trecho' (com o termo achado entre « ») e 'url_arquivo' (abre o PDF com o
-        login do IntellexIA — apresente como link). 'texto_por_ocr' true = PDF
+        login do IntellexIA — apresente como link). 'url_paginas' traz uma imagem
+        PNG por página: quando o usuário quiser o "print" do documento para colar
+        numa peça, mostre esses links (abrem com o login; clicar com o botão
+        direito e copiar a imagem). 'texto_por_ocr' true = PDF
         digitalizado lido por OCR (sem acento, palavras às vezes coladas): a busca
         por palavra pode falhar nele — tente também pelo NB. 'total_e_minimo'
         true = o índice só estima o total (passou de 1.000).
@@ -1372,7 +1375,7 @@ def ler_documento_contestacao(documento_id: int, deslocamento: int = 0) -> dict:
 
     Returns:
         Os dados do documento (nb, cnpj, vigencia, instancia, tipo, nome,
-        data_envio, cids, url_arquivo) e 'texto', com 'tem_mais' e
+        data_envio, cids, url_arquivo, url_paginas — a imagem de cada página) e 'texto', com 'tem_mais' e
         'proximo_deslocamento' quando o texto continua.
     """
     claims = require_module("disputes_center")

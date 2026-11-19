@@ -69,7 +69,7 @@ Por texto em vários campos, por Cliente, por CNPJ (raiz ou completo), por Statu
 ### Modais úteis
 
 - **Decisões do Benefício** — um mesmo benefício pode ter **várias decisões** (por exemplo, uma para a CAT e outra para "nexo técnico sem CAT"). Aqui você vê cada decisão com sua instância, status, justificativa e parecer.
-- **Documentos enviados ao FAP** (botão do clipe, com a quantidade) — os arquivos que o escritório **anexou à contestação** deste benefício no portal FAP, separados por 1ª e 2ª instância, com a data de envio. Clique no nome para abrir o PDF. Os documentos são reconhecidos pelo conteúdo (CONBAS, INFBEN, HISMED, CAT, CNIS, eSocial); no HISMED aparece o **CID** do diagnóstico e, na CAT, se o acidente foi de **trajeto**. O mesmo aparece nos detalhes da linha da tela **Benefícios do cálculo FAP**.
+- **Documentos enviados ao FAP** (botão do clipe, com a quantidade) — os arquivos que o escritório **anexou à contestação** deste benefício no portal FAP, separados por 1ª e 2ª instância, com a data de envio. Clique no nome para abrir o PDF, ou em **pág. 1**, **pág. 2**… para abrir cada página como **imagem** — é só copiar e colar na peça, sem recortar o PDF. Os documentos são reconhecidos pelo conteúdo (CONBAS, INFBEN, HISMED, CAT, CNIS, eSocial); no HISMED aparece o **CID** do diagnóstico e, na CAT, se o acidente foi de **trajeto**. O mesmo aparece nos detalhes da linha da tela **Benefícios do cálculo FAP**.
 - **Linha do tempo de arquivos** — histórico de todos os documentos e edições daquele benefício. As datas aqui são de **transmissão** e **publicação** dos documentos (eventos passados).
 
 > [!INFO]

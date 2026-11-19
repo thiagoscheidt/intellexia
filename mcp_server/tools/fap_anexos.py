@@ -16,6 +16,7 @@ from fastmcp.exceptions import ToolError
 from mcp_server.tools.pagination import clamp_limit, clamp_offset, page_envelope
 
 LIMITE_TEXTO = 30_000
+MAX_PAGINAS_LINK = 20
 
 
 def _url(app_public_url: str, caminho: str) -> str | None:
@@ -34,6 +35,12 @@ def _limpo(item: dict, app_public_url: str) -> dict:
     tem_arquivo = saida.pop("tem_arquivo", False)
     saida["url_arquivo"] = (_url(app_public_url, f"/disputes-center/anexos/{saida['documento_id']}/arquivo")
                             if tem_arquivo else None)
+    # Uma imagem por página, para colar direto numa peça (o "print" do documento).
+    paginas = saida.get("paginas") or 0
+    saida["url_paginas"] = [
+        _url(app_public_url, f"/disputes-center/anexos/{saida['documento_id']}/pagina/{n}.png")
+        for n in range(1, min(paginas, MAX_PAGINAS_LINK) + 1)
+    ] if tem_arquivo and app_public_url else []
     saida["anexo_id_portal"] = saida.pop("anexo_id", None)
     return saida
 
