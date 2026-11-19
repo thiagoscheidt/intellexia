@@ -145,7 +145,8 @@ def main(argv=None, svc=None) -> int:
 
     _log('Resumo:')
     _log(f"  recálculos consultados: {r['consultados']} de {r['recalculos']}"
-         + (f" (pulados, já consultados antes: {r['ja_consultados']})" if args.somente_novos else ''))
+         + (f" (pulados, já consultados antes: {r['ja_consultados']}; downloads retomados: {r['retomados']})"
+            if args.somente_novos else ''))
     _log(f"  com anexo: {r['com_anexo']} · anexos: {r['anexos']} · {_mb(r['bytes'])}")
     for elemento, n in r['por_elemento'].most_common():
         _log(f'    {n}× {elemento}')

@@ -30,7 +30,7 @@ import csv
 import json
 import os
 import re
-from collections import Counter
+from collections import Counter, deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import date
@@ -120,6 +120,15 @@ def decodificar(dados, tamanho_esperado: Optional[int]) -> bytes:
     return conteudo
 
 
+def _no_disco(pasta: Path, rec: Recalculo, anexo: dict) -> bool:
+    destino = arquivo_do_anexo(pasta, rec, anexo)
+    try:
+        tamanho = destino.stat().st_size
+    except OSError:
+        return False
+    return not anexo.get('quantidadeBytes') or tamanho == int(anexo['quantidadeBytes'])
+
+
 def _gravar(destino: Path, conteudo: bytes) -> None:
     destino.parent.mkdir(parents=True, exist_ok=True)
     parcial = destino.with_name(destino.name + '.part')
@@ -177,29 +186,48 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
     Sem ``baixar`` nada é gravado: só conta anexos e tamanho. ``somente_novos``
     pula o recálculo já consultado (tem ``_anexos.json``, inclusive o vazio de
     quem não tem anexo): os anexos de um recálculo publicado não mudam, e a
-    rotina diária só precisa olhar os recálculos que apareceram.
+    rotina diária só precisa olhar os recálculos que apareceram. Com ``baixar``,
+    o que ficou faltando no disco desses já consultados é baixado sem listar de
+    novo — é assim que uma cópia interrompida retoma.
+
+    Fila com janela fixa (2 × workers em andamento): com uma ``wait`` sobre
+    todos os futuros, a cópia de 19/11/2026 enfileirou 190 mil downloads e
+    cada conclusão percorria a fila inteira — 21 arquivos por minuto com o
+    portal respondendo em menos de 1 s.
     """
     recs = recalculos(law_firm_id, anos=anos, raizes=raizes, cnpjs=cnpjs)
     ja_consultados = 0
+    faltando: list[tuple] = []
     if somente_novos:
-        antes = len(recs)
-        recs = [r for r in recs if not (pasta_do_recalculo(pasta, r) / LISTA_DA_PASTA).exists()]
-        ja_consultados = antes - len(recs)
+        novos = []
+        for r in recs:
+            lista = pasta_do_recalculo(pasta, r) / LISTA_DA_PASTA
+            if not lista.exists():
+                novos.append(r)
+                continue
+            ja_consultados += 1
+            if baixar:
+                try:
+                    anexos_ja = json.loads(lista.read_text(encoding='utf-8')).get('anexos') or []
+                except ValueError:
+                    anexos_ja = []
+                faltando += [(r, a) for a in anexos_ja if a.get('id') and not _no_disco(pasta, r, a)]
+        recs = novos
     if limite:
         recs = recs[:limite]
     rel = {'recalculos': len(recs), 'consultados': 0, 'com_anexo': 0, 'anexos': 0, 'bytes': 0,
            'por_elemento': Counter(), 'baixados': 0, 'ja_no_disco': 0, 'bytes_baixados': 0,
            'sem_acesso': 0, 'erros': 0, 'motivos_erro': Counter(), 'expirada': False,
-           'ja_consultados': ja_consultados}
-    log(f'{len(recs)} recálculo(s) para consultar.')
+           'ja_consultados': ja_consultados, 'retomados': len(faltando)}
+    log(f'{len(recs)} recálculo(s) para consultar'
+        + (f', {len(faltando)} download(s) que ficaram faltando' if faltando else '') + '.')
 
     def listar(rec):
         return 'lista', rec, None, client.listar_anexos(svc, rec.ano, rec.cnpj, rec.calculo_id)
 
     def baixar_um(rec, anexo):
         destino = arquivo_do_anexo(pasta, rec, anexo)
-        if destino.exists() and (not anexo.get('quantidadeBytes')
-                                 or destino.stat().st_size == int(anexo['quantidadeBytes'])):
+        if _no_disco(pasta, rec, anexo):
             return 'disco', rec, anexo, None
         r = client.baixar_anexo(svc, rec.ano, rec.cnpj, rec.calculo_id, anexo['id'])
         if r.ok:
@@ -208,10 +236,15 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
             return 'baixado', rec, anexo, len(conteudo)
         return 'falha_download', rec, anexo, r
 
+    fila = deque([('baixar', rec, a) for rec, a in faltando] + [('lista', rec, None) for rec in recs])
+    janela = max(1, workers) * 2
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        pendentes = {pool.submit(listar, rec) for rec in recs}
-        while pendentes:
-            feitos, pendentes = wait(pendentes, return_when=FIRST_COMPLETED)
+        em_voo = set()
+        while fila or em_voo:
+            while fila and len(em_voo) < janela:
+                oque, rec, anexo = fila.popleft()
+                em_voo.add(pool.submit(listar, rec) if oque == 'lista' else pool.submit(baixar_um, rec, anexo))
+            feitos, em_voo = wait(em_voo, return_when=FIRST_COMPLETED)
             for f in feitos:
                 try:
                     tipo, rec, anexo, r = f.result()
@@ -244,7 +277,8 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
                             rel['por_elemento'][(a.get('tipoElemento') or {}).get('codigo') or '?'] += 1
                         if baixar:
                             _gravar_lista(pasta, rec, anexos)
-                            pendentes |= {pool.submit(baixar_um, rec, a) for a in anexos}
+                            # Na frente da fila: baixa logo, não depois de todas as listagens.
+                            fila.extendleft(('baixar', rec, a) for a in reversed(anexos))
                     elif baixar:
                         # Marca de "consultado, sem anexo", para o --somente-novos não voltar nele.
                         _gravar_lista(pasta, rec, [])
@@ -256,6 +290,9 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
                 elif tipo == 'baixado':
                     rel['baixados'] += 1
                     rel['bytes_baixados'] += r
+                    if rel['baixados'] % 1000 == 0:
+                        log(f"  {rel['baixados']} baixados ({rel['bytes_baixados'] / 1e6:,.0f} MB), "
+                            f"{rel['consultados']}/{len(recs)} recálculos consultados")
                 else:  # falha_download
                     if r.expired:
                         rel['expirada'] = True
@@ -264,7 +301,7 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
                         rel['motivos_erro'][f'download: {_motivo(r)}'] += 1
 
             if rel['expirada']:
-                for p in pendentes:
+                for p in em_voo:
                     p.cancel()
                 break
 

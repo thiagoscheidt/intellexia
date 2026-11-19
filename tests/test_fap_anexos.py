@@ -193,12 +193,34 @@ def test_baixar(a, pasta):
     r3 = svc.executar(a, None, pasta=pasta, baixar=True, somente_novos=True, log=lambda m: None)
     check('--somente-novos só consulta o que nunca foi consultado', CHAMADAS['lista'] == 1
           and r3['ja_consultados'] == 2, (CHAMADAS, r3['ja_consultados']))
+    arq.unlink()
+    CHAMADAS.update(lista=0, download=0)
+    r4 = svc.executar(a, None, pasta=pasta, baixar=True, somente_novos=True, log=lambda m: None)
+    check('--somente-novos retoma o download que faltou, sem listar de novo',
+          arq.exists() and r4['retomados'] == 1 and CHAMADAS['download'] == 1 and CHAMADAS['lista'] == 1,
+          (CHAMADAS, r4['retomados']))
 
     print('\n6. Nome do portal')
     fora = [p for p in pasta.rglob('*fora.pdf')]
     check('"../../fora.pdf" fica dentro da pasta do recálculo',
           len(fora) == 1 and fora[0].parent == rec, fora)
     check('nome_seguro', svc.nome_seguro('../a/b\\c.pdf') == '_a_b_c.pdf' and svc.nome_seguro('') == 'anexo')
+
+
+def test_fila_grande(a, pasta):
+    print('\n11. Fila grande (a cópia de 19/11 travou em 21 arquivos/min com 190 mil na fila)')
+    import time
+    n = 3000
+    LISTAS[101] = [_anexo(10_000 + i, f'doc {i}.pdf', PDF2) for i in range(n)]
+    for i in range(n):
+        ARQUIVOS[10_000 + i] = ARQUIVOS[2]
+    try:
+        t0 = time.time()
+        r = svc.executar(a, None, pasta=pasta, baixar=True, cnpjs=[EST_A], workers=8, log=lambda m: None)
+        dt = time.time() - t0
+    finally:
+        LISTAS[101] = [_anexo(1, 'B91 6485264632.pdf', PDF), _anexo(2, '../../fora.pdf', PDF2)]
+    check(f'{n} downloads em {dt:.1f}s (tem de ficar bem abaixo de 1 minuto)', r['baixados'] == n and dt < 30, r)
 
 
 def test_arquivo_ruim(a, pasta):
@@ -434,7 +456,7 @@ if __name__ == '__main__':
                 pass
             try:
                 test_recalculos(a)
-                for teste in (test_simulacao, test_baixar, test_arquivo_ruim, test_registro_e_busca, test_ocr, test_expirada):
+                for teste in (test_simulacao, test_baixar, test_arquivo_ruim, test_registro_e_busca, test_ocr, test_fila_grande, test_expirada):
                     pasta = Path(tempfile.mkdtemp(prefix='fap_anexos_test_'))
                     try:
                         teste(a, pasta)
