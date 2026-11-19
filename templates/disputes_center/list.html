@@ -325,6 +325,10 @@
     display: flex;
   }
 
+  .doc-placar { display: flex; flex-direction: column; gap: .3rem; font-size: .8rem; margin-top: .15rem; }
+  .doc-placar-linha .sc-sub-label { display: block; }
+  .doc-placar-linha strong { color: var(--sc-color); }
+
   #applyCentralFiltersBtn.is-pending {
     box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .35);
   }
@@ -550,9 +554,7 @@
           <span class="sc-icon"><i class="bi bi-paperclip"></i></span>
           <span class="sc-label">Deferimento × documento</span>
         </div>
-        <div class="sc-sub flex-column align-items-start gap-1" id="filteredDocumentacao">
-          <span class="text-muted small">—</span>
-        </div>
+        <div class="doc-placar" id="filteredDocumentacao"><span class="text-muted small">—</span></div>
       </div>
     </div>
 
@@ -1131,14 +1133,14 @@
   // "Deferimento × documento": a mesma instância nos dois lados (o anexo do
   // recálculo de 1ª instância conta para o resultado da 1ª, e o de 2ª para a 2ª).
   function renderDocumentacao(doc) {
-    const taxa = (g) => (g && g.decididos) ? `${g.taxa_deferimento}%` : '—';
+    const taxa = (g) => (g && g.decididos) ? `${String(g.taxa_deferimento).replace('.', ',')}%` : '—';
     const linha = (rotulo, inst) => {
       const d = doc[inst] || doc[String(inst)] || {};
       const com = d.com || {}, sem = d.sem || {};
-      return `<span class="sc-sub-item"><span class="sc-sub-label">${rotulo}</span>
-        <span class="sc-sub-value" title="${com.decididos || 0} julgados com documento">com doc ${taxa(com)}</span>
-        <span class="text-muted mx-1">·</span>
-        <span class="sc-sub-value" title="${sem.decididos || 0} julgados sem documento">sem ${taxa(sem)}</span></span>`;
+      return `<div class="doc-placar-linha"><span class="sc-sub-label">${rotulo}</span>
+        <div><span title="${com.decididos || 0} julgado(s) com documento"><strong>${taxa(com)}</strong> com doc.</span>
+        <span class="text-muted">·</span>
+        <span title="${sem.decididos || 0} julgado(s) sem documento"><strong>${taxa(sem)}</strong> sem</span></div></div>`;
     };
     $('#filteredDocumentacao').html(linha('1ª inst.', 1) + linha('2ª inst.', 2));
   }
