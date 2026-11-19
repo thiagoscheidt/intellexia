@@ -141,7 +141,8 @@ def main(argv=None, svc=None) -> int:
         r = anexos.executar(law_firm_id, svc, pasta=pasta, baixar=args.baixar,
                             anos=args.vigencia or None, raizes=args.empresa or None,
                             cnpjs=args.estabelecimento or None, limite=args.limite,
-                            workers=workers, somente_novos=args.somente_novos, log=_log)
+                            workers=workers, somente_novos=args.somente_novos,
+                            processos=args.baixar, log=_log)
 
     _log('Resumo:')
     _log(f"  recálculos consultados: {r['consultados']} de {r['recalculos']}"

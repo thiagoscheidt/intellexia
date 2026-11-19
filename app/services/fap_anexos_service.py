@@ -31,7 +31,7 @@ import json
 import os
 import re
 from collections import Counter, deque
-from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -120,6 +120,31 @@ def decodificar(dados, tamanho_esperado: Optional[int]) -> bytes:
     return conteudo
 
 
+TAREFAS_POR_PROCESSO = 500
+_SVC_DO_PROCESSO = None
+
+
+def _baixar_um(pasta: Path, svc, rec: Recalculo, anexo: dict):
+    if _no_disco(pasta, rec, anexo):
+        return 'disco', rec, anexo, None
+    r = client.baixar_anexo(svc, rec.ano, rec.cnpj, rec.calculo_id, anexo['id'])
+    if r.ok:
+        conteudo = decodificar(r.data, anexo.get('quantidadeBytes'))
+        _gravar(arquivo_do_anexo(pasta, rec, anexo), conteudo)
+        return 'baixado', rec, anexo, len(conteudo)
+    return 'falha_download', rec, anexo, r
+
+
+def _baixar_em_processo(pasta: str, rec: Recalculo, anexo: dict):
+    """O mesmo download, num processo do pool (a sessão do portal vem do
+    ambiente, herdado do processo principal, que já leu o ``.env``)."""
+    global _SVC_DO_PROCESSO
+    if _SVC_DO_PROCESSO is None:
+        from app.services.fap_web_service import FapWebAuthPayload, FapWebService
+        _SVC_DO_PROCESSO = FapWebService(FapWebAuthPayload.from_env())
+    return _baixar_um(Path(pasta), _SVC_DO_PROCESSO, rec, anexo)
+
+
 def _no_disco(pasta: Path, rec: Recalculo, anexo: dict) -> bool:
     destino = arquivo_do_anexo(pasta, rec, anexo)
     try:
@@ -180,7 +205,8 @@ def _motivo(r) -> str:
 
 def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool = False,
              anos=None, raizes=None, cnpjs=None, limite: Optional[int] = None, workers: int = 8,
-             somente_novos: bool = False, log: Callable[[str], None] = print) -> dict:
+             somente_novos: bool = False, processos: bool = False,
+             log: Callable[[str], None] = print) -> dict:
     """Lista os anexos de cada recálculo e, com ``baixar``, grava no disco.
 
     Sem ``baixar`` nada é gravado: só conta anexos e tamanho. ``somente_novos``
@@ -226,24 +252,30 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
         return 'lista', rec, None, client.listar_anexos(svc, rec.ano, rec.cnpj, rec.calculo_id)
 
     def baixar_um(rec, anexo):
-        destino = arquivo_do_anexo(pasta, rec, anexo)
-        if _no_disco(pasta, rec, anexo):
-            return 'disco', rec, anexo, None
-        r = client.baixar_anexo(svc, rec.ano, rec.cnpj, rec.calculo_id, anexo['id'])
-        if r.ok:
-            conteudo = decodificar(r.data, anexo.get('quantidadeBytes'))
-            _gravar(destino, conteudo)
-            return 'baixado', rec, anexo, len(conteudo)
-        return 'falha_download', rec, anexo, r
+        return _baixar_um(pasta, svc, rec, anexo)
 
     fila = deque([('baixar', rec, a) for rec, a in faltando] + [('lista', rec, None) for rec in recs])
     janela = max(1, workers) * 2
+    # Downloads em processos que se renovam (``processos``): numa thread de vida
+    # longa o custo por arquivo crescia sem parar — 19/11/2026, de 1.000 arquivos
+    # em 1,5 min para 1.000 em 25 min, com a CPU presa no sistema, enquanto um
+    # processo novo voltava ao ritmo. A listagem continua em threads (leve).
+    procs = None
+    if processos and baixar:
+        import multiprocessing
+        procs = ProcessPoolExecutor(max_workers=max(1, workers), max_tasks_per_child=TAREFAS_POR_PROCESSO,
+                                    mp_context=multiprocessing.get_context('spawn'))
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         em_voo = set()
         while fila or em_voo:
             while fila and len(em_voo) < janela:
                 oque, rec, anexo = fila.popleft()
-                em_voo.add(pool.submit(listar, rec) if oque == 'lista' else pool.submit(baixar_um, rec, anexo))
+                if oque == 'lista':
+                    em_voo.add(pool.submit(listar, rec))
+                elif procs is not None:
+                    em_voo.add(procs.submit(_baixar_em_processo, str(pasta), rec, anexo))
+                else:
+                    em_voo.add(pool.submit(baixar_um, rec, anexo))
             feitos, em_voo = wait(em_voo, return_when=FIRST_COMPLETED)
             for f in feitos:
                 try:
@@ -304,6 +336,8 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
                 for p in em_voo:
                     p.cancel()
                 break
+    if procs is not None:
+        procs.shutdown(wait=True, cancel_futures=True)
 
     if baixar:
         rel['indice'] = refazer_indice(pasta)
