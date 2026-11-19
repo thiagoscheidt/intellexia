@@ -100,6 +100,9 @@ def read_fap_attachment_handler(law_firm_id: int, documento_id: int, deslocament
     proximo = deslocamento + len(pedaco)
     doc["tem_mais"] = proximo < len(texto)
     doc["proximo_deslocamento"] = proximo if doc["tem_mais"] else None
+    if doc.get("texto_por_ocr"):
+        doc["dica"] = ("Texto lido por OCR de um PDF digitalizado: pode faltar acento e haver palavras "
+                       "coladas. Confira no url_arquivo antes de citar números ou trechos.")
     if not texto:
         doc["dica"] = ("Este documento não tem texto (PDF de imagem ou arquivo ainda não lido). "
                        "Mostre o url_arquivo para a pessoa abrir.")

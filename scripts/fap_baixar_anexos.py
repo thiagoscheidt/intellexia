@@ -19,6 +19,7 @@ Uso:
   uv run python scripts/fap_baixar_anexos.py --estabelecimento 00025841000105 --baixar
   uv run python scripts/fap_baixar_anexos.py --baixar                          # tudo
   uv run python scripts/fap_baixar_anexos.py --registrar                       # só o banco
+  uv run python scripts/fap_baixar_anexos.py --ocr --minutos 180               # digitalizados, aos poucos
 
 Variáveis (.env):
   FAP_AUTH_JSON               — sessão do portal
@@ -72,6 +73,19 @@ def _registrar(anexos, law_firm_id: int, pasta: Path) -> int:
     return EXIT_OK
 
 
+def _ocr(anexos, law_firm_id: int, pasta: Path, minutos, limite) -> int:
+    t0 = time.time()
+    r = anexos.aplicar_ocr(law_firm_id, pasta, minutos=minutos, limite=limite, log=_log)
+    _log(f"  OCR: {r['lidos']} lido(s) · {r['sem_texto_mesmo_assim']} sem texto mesmo assim · {r['erros']} erro(s)"
+         f" · {r['candidatos'] - r['lidos'] - r['sem_texto_mesmo_assim'] - r['erros']} ficam para a próxima rodada")
+    for tipo, n in r['por_tipo'].most_common():
+        _log(f'    {n}× {tipo}')
+    if r['parou_por_tempo']:
+        _log(f'  parou no limite de {minutos:g} min; a próxima rodada continua de onde parou.')
+    _log(f'  tempo: {time.time() - t0:.0f}s')
+    return EXIT_OK
+
+
 def main(argv=None, svc=None) -> int:
     ap = argparse.ArgumentParser(description='Baixa os anexos das contestações do FAP.')
     ap.add_argument('--vigencia', type=int, action='append', default=[], help='ano (repetível)')
@@ -81,6 +95,9 @@ def main(argv=None, svc=None) -> int:
     ap.add_argument('--baixar', action='store_true', help='grava os arquivos (sem ele, só conta)')
     ap.add_argument('--registrar', action='store_true', help='só registra no banco o que já está na pasta')
     ap.add_argument('--sem-registrar', action='store_true', help='com --baixar, não registra no banco')
+    ap.add_argument('--ocr', action='store_true',
+                    help='lê por OCR os PDFs digitalizados já registrados (sem ir ao portal)')
+    ap.add_argument('--minutos', type=float, default=None, help='com --ocr, para depois de N minutos')
     ap.add_argument('--pasta', default=None, help='pasta de destino (padrão instance/fap_anexos/<escritório>)')
     ap.add_argument('--escritorio', type=int, default=None, help='law_firm_id (padrão: FAP_SYNC_LAW_FIRM_ID)')
     ap.add_argument('--workers', type=int, default=WORKERS_PADRAO, help=f'consultas em paralelo (máx {WORKERS_MAX})')
@@ -97,6 +114,9 @@ def main(argv=None, svc=None) -> int:
     if args.registrar:
         with app.app_context():
             return _registrar(anexos, law_firm_id, pasta)
+    if args.ocr:
+        with app.app_context():
+            return _ocr(anexos, law_firm_id, pasta, args.minutos, args.limite)
 
     if svc is None:
         from app.services.fap_web_service import FapWebAuthPayload, FapWebService

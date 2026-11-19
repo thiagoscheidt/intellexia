@@ -598,6 +598,8 @@ _FAP_DOCUMENTO_ITEM = (
     _l('cids', 'CIDs do diagnóstico (só HISMED).'),
     _t('cat_tipo', 'TRAJETO, TIPICO ou DOENCA (só CAT).'),
     _t('especie', 'Espécie do benefício lida do documento (ex.: 91).'),
+    _b('texto_por_ocr', 'O PDF é digitalizado e o texto veio de OCR: pode faltar acento e haver palavras '
+       'coladas — confira no arquivo antes de citar.'),
     _t('url_arquivo', 'O PDF no IntellexIA (abre com o login); null se o arquivo não foi baixado.'),
     _i('anexo_id_portal', 'Identificador do anexo no portal FAP.'),
 )

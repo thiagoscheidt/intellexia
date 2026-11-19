@@ -1343,8 +1343,10 @@ def pesquisar_documentos_contestacao(
         ler_documento_contestacao), 'nb', 'cnpj', 'vigencia', 'instancia',
         'tipo_documento', 'nome' do arquivo, 'data_envio', 'cids', 'cat_tipo',
         'trecho' (com o termo achado entre « ») e 'url_arquivo' (abre o PDF com o
-        login do IntellexIA — apresente como link). 'total_e_minimo' true = o
-        índice só estima o total (passou de 1.000).
+        login do IntellexIA — apresente como link). 'texto_por_ocr' true = PDF
+        digitalizado lido por OCR (sem acento, palavras às vezes coladas): a busca
+        por palavra pode falhar nele — tente também pelo NB. 'total_e_minimo'
+        true = o índice só estima o total (passou de 1.000).
     """
     claims = require_module("disputes_center")
     with app.app_context():

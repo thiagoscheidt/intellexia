@@ -73,7 +73,7 @@ Por texto em vários campos, por Cliente, por CNPJ (raiz ou completo), por Statu
 - **Linha do tempo de arquivos** — histórico de todos os documentos e edições daquele benefício. As datas aqui são de **transmissão** e **publicação** dos documentos (eventos passados).
 
 > [!INFO]
-> **De onde vêm os documentos enviados.** O portal FAP só mostra os anexos de uma contestação depois que publica o **recálculo** dela ("Visualizar Anexos" na Consulta do FAP). Por isso contestação ainda em análise não tem documento aqui, e o benefício aparece como "sem documento" até o julgamento sair. Os arquivos são copiados do portal pelo IntellexIA e ficam guardados com o escritório.
+> **De onde vêm os documentos enviados.** O portal FAP só mostra os anexos de uma contestação depois que publica o **recálculo** dela ("Visualizar Anexos" na Consulta do FAP). Por isso contestação ainda em análise não tem documento aqui, e o benefício aparece como "sem documento" até o julgamento sair. Os arquivos são copiados do portal pelo IntellexIA e ficam guardados com o escritório. Parte dos PDFs é **digitalizada** (imagem): o IntellexIA lê esses por OCR aos poucos, de madrugada, e marca "texto lido por OCR" — a leitura pode perder acento e juntar palavras, então confira no PDF antes de citar.
 
 :claude: No Claude, a ferramenta **Documentos enviados nas contestações** pesquisa no **texto** desses documentos — por NB, CNPJ, vigência, CID, tipo de documento ou palavra — e **Ler documento da contestação** traz o conteúdo inteiro. Ex.: *"quais benefícios B91 da vigência 2025 tiveram perícia com CID M54?"* ou *"me mostra o HISMED que mandamos para o NB 648.526.463-2"*.
 

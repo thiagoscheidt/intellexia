@@ -12,6 +12,8 @@ Anexos das contestações do FAP (`fap_anexos_service`, `scripts/fap_baixar_anex
    classifica (HISMED com CID, CONBAS), é idempotente.
 8. Busca: termo no índice (se o Meilisearch estiver no ar) e no banco, NB como
    filtro exato, CID, outro escritório não vê; recorte com e sem documento.
+10. OCR: PDF só de imagem é lido, ganha tipo e a marca de OCR, e não é tentado de novo;
+    tipo pelo nome do arquivo.
 9. Telas: documentos do benefício e o arquivo (outro escritório 404), filtro
    "com/sem documento" e o recorte na lista da Central, linha do cálculo FAP.
 
@@ -356,6 +358,44 @@ def test_telas(a, pasta, deferido, sem_doc):
         shutil.rmtree(pasta_real, ignore_errors=True)
 
 
+def test_ocr(a, pasta):
+    print('\n10. OCR dos digitalizados')
+    import fitz
+    from app.services import fap_anexos_conteudo as conteudo
+    check('tipo pelo nome', conteudo.tipo_pelo_nome('Dados Básicos da Concessão - CONBAS.pdf') == 'CONBAS'
+          and conteudo.tipo_pelo_nome('CAT 2024.581997.5-01.pdf') == 'CAT'
+          and conteudo.tipo_pelo_nome('6485264632_vinculado ao CNPJ da empresa.pdf') == 'OUTRO'
+          and conteudo.tipo_pelo_nome('Vinculo_CNIS_16822716360.doc') == 'CNIS')
+    # PDF só de imagem: o texto vira figura e a página não tem camada de texto.
+    origem = fitz.open()
+    pg = origem.new_page()
+    pg.insert_text((40, 80), 'Historico de Pericias Medicas HISMED', fontsize=18)
+    pg.insert_text((40, 120), 'Diagnostico M54.5 lombalgia trajeto', fontsize=18)
+    imagem = pg.get_pixmap(dpi=150).tobytes('png')
+    digitalizado = fitz.open()
+    digitalizado.new_page().insert_image(fitz.Rect(0, 0, 595, 842), stream=imagem)
+    destino = pasta / '2026' / EST_A / '777' / '9 - laudo digitalizado.pdf'
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_bytes(digitalizado.tobytes())
+    check('o PDF de teste não tem texto', len(conteudo.extrair_texto(str(destino))) < conteudo.MINIMO_DE_TEXTO)
+    linha = FapContestacaoAnexo(law_firm_id=a, anexo_id=9, ano_vigencia=2026, cnpj=EST_A, cnpj_raiz=EST_A[:8],
+                                recalculo_id=777, nb='6485264632', nome='laudo digitalizado.pdf',
+                                arquivo=str(destino.relative_to(pasta)), texto_status='sem_texto',
+                                tipo_documento='OUTRO')
+    db.session.add(linha)
+    db.session.commit()
+    r = svc.aplicar_ocr(a, pasta, log=lambda m: None)
+    db.session.refresh(linha)
+    check('OCR leu o texto', r['lidos'] == 1 and 'lombalgia' in (linha.texto or '').lower(), (r, linha.texto))
+    check('tipo pelo texto do OCR e CID', linha.tipo_documento == 'HISMED' and 'M54.5' in (linha.campos_json or ''),
+          (linha.tipo_documento, linha.campos_json))
+    check('marca de OCR na busca', busca.anexos_do_beneficio(a, ano=2026, cnpj=EST_A, nb='6485264632')[0]['texto_por_ocr'])
+    r2 = svc.aplicar_ocr(a, pasta, log=lambda m: None)
+    check('não tenta de novo', r2['candidatos'] == 0, r2)
+    FapContestacaoAnexo.query.filter_by(law_firm_id=a).delete()
+    db.session.commit()
+
+
 def test_expirada(a, pasta):
     print('\n5. Sessão expirada')
     LISTAS[101] = 'expirada'
@@ -381,7 +421,7 @@ if __name__ == '__main__':
                 pass
             try:
                 test_recalculos(a)
-                for teste in (test_simulacao, test_baixar, test_arquivo_ruim, test_registro_e_busca, test_expirada):
+                for teste in (test_simulacao, test_baixar, test_arquivo_ruim, test_registro_e_busca, test_ocr, test_expirada):
                     pasta = Path(tempfile.mkdtemp(prefix='fap_anexos_test_'))
                     try:
                         teste(a, pasta)

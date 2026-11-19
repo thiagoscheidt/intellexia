@@ -366,14 +366,16 @@ def registrar(law_firm_id: int, pasta: Path, *, ler_texto: bool = True, indexar:
                 texto = None
             if texto is not None:
                 tipo, extra = conteudo.classificar(texto)
-                linha.tipo_documento = tipo
-                linha.campos_json = json.dumps(extra, ensure_ascii=False) if extra else None
                 if len(texto) >= conteudo.MINIMO_DE_TEXTO:
                     linha.texto, linha.texto_status = texto, FapContestacaoAnexo.TEXTO_OK
                     rel['textos_lidos'] += 1
                 else:
+                    # Digitalizado (ou .doc): o tipo sai do nome; o texto, do OCR (``aplicar_ocr``).
+                    tipo = conteudo.tipo_pelo_nome(linha.nome)
                     linha.texto_status = FapContestacaoAnexo.TEXTO_VAZIO
                     rel['sem_texto'] += 1
+                linha.tipo_documento = tipo
+                linha.campos_json = json.dumps(extra, ensure_ascii=False) if extra else None
                 rel['por_tipo'][tipo] += 1
                 linha.index_status = None
             if n % 500 == 0:
@@ -383,4 +385,70 @@ def registrar(law_firm_id: int, pasta: Path, *, ler_texto: bool = True, indexar:
 
     if indexar:
         rel['indice'] = busca.indexar_pendentes(law_firm_id, log=log)
+    return rel
+
+
+# ------------------------------------------------------------ OCR dos digitalizados
+
+# Ordem do OCR: o que só se acha lendo (perícia, CAT, não identificado) primeiro;
+# CONBAS e INFBEN por último — a busca já os acha pelo NB, que é filtro.
+_PRIORIDADE_OCR = {'HISMED': 0, 'CAT': 1, 'OUTRO': 2, 'CNIS': 3, 'ESOCIAL': 4, 'INFBEN': 5, 'CONBAS': 6}
+
+
+def aplicar_ocr(law_firm_id: int, pasta: Path, *, minutos: Optional[float] = None,
+                limite: Optional[int] = None, log: Callable[[str], None] = print) -> dict:
+    """Lê por OCR os PDFs digitalizados (``sem_texto``), por ordem de valor,
+    até o tempo ou a quantidade acabar. Cada um é tentado uma vez
+    (``ocr_tentado`` em ``campos_json``); o texto lido leva ``ocr: true``."""
+    import time
+
+    from app.services import fap_anexos_busca_service as busca
+    from app.services import fap_anexos_conteudo as conteudo
+
+    inicio = time.time()
+    rel = {'candidatos': 0, 'lidos': 0, 'sem_texto_mesmo_assim': 0, 'erros': 0, 'por_tipo': Counter(),
+           'parou_por_tempo': False}
+    linhas = (db.session.query(FapContestacaoAnexo.id, FapContestacaoAnexo.tipo_documento, FapContestacaoAnexo.nome)
+              .filter(FapContestacaoAnexo.law_firm_id == law_firm_id,
+                      FapContestacaoAnexo.texto_status == FapContestacaoAnexo.TEXTO_VAZIO,
+                      FapContestacaoAnexo.arquivo.ilike('%.pdf'),
+                      db.or_(FapContestacaoAnexo.campos_json.is_(None),
+                             ~FapContestacaoAnexo.campos_json.like('%ocr_tentado%')))
+              .all())
+    fila = sorted(linhas, key=lambda r: (_PRIORIDADE_OCR.get(r.tipo_documento or conteudo.tipo_pelo_nome(r.nome), 2), r.id))
+    if limite:
+        fila = fila[:limite]
+    rel['candidatos'] = len(fila)
+    log(f'OCR: {len(fila)} PDF(s) digitalizado(s) na fila.')
+    for n, (rid, _tipo, _nome) in enumerate(fila, 1):
+        if minutos and (time.time() - inicio) / 60 >= minutos:
+            rel['parou_por_tempo'] = True
+            break
+        linha = db.session.get(FapContestacaoAnexo, rid)
+        extra = busca.campos(linha)
+        extra['ocr_tentado'] = True
+        try:
+            texto = conteudo.ocr(str(pasta / linha.arquivo))
+        except Exception as erro:
+            rel['erros'] += 1
+            log(f'  OCR falhou no documento {rid}: {type(erro).__name__}')
+            texto = ''
+        if len(texto) >= conteudo.MINIMO_DE_TEXTO:
+            tipo, campos_texto = conteudo.classificar(texto)
+            if tipo == 'OUTRO':
+                tipo = conteudo.tipo_pelo_nome(linha.nome)
+            extra.update(campos_texto)
+            extra['ocr'] = True
+            linha.texto, linha.texto_status, linha.tipo_documento = texto, FapContestacaoAnexo.TEXTO_OK, tipo
+            linha.index_status = None
+            rel['lidos'] += 1
+            rel['por_tipo'][tipo] += 1
+        else:
+            linha.tipo_documento = linha.tipo_documento or conteudo.tipo_pelo_nome(linha.nome)
+            rel['sem_texto_mesmo_assim'] += 1
+        linha.campos_json = json.dumps(extra, ensure_ascii=False)
+        db.session.commit()
+        if n % 50 == 0:
+            log(f'  {n}/{len(fila)} lidos por OCR ({(time.time() - inicio) / 60:.0f} min)')
+    rel['indice'] = busca.indexar_pendentes(law_firm_id, log=log)
     return rel

@@ -82,6 +82,49 @@ def classificar(texto: Optional[str]) -> tuple[str, dict]:
     return tipo, campos
 
 
+_NOME_TIPO = (
+    ('HISMED', re.compile(r'HISMED|PERICIAS? MEDICAS?|SABI')),
+    ('CONBAS', re.compile(r'CONBAS|DADOS BASICOS DA CONCESSAO')),
+    ('INFBEN', re.compile(r'INFBEN|CONREV')),
+    ('CNIS', re.compile(r'CNIS|(?<![A-Z])VINCULOS?(?![A-Z])')),  # não "vinculado ao CNPJ"
+    ('CAT', re.compile(r'(?<![A-Z])CAT(?![A-Z])|COMUNICACAO DE ACIDENTE')),
+    ('ESOCIAL', re.compile(r'ESOCIAL|INSUMOS')),
+)
+
+
+def tipo_pelo_nome(nome: Optional[str]) -> str:
+    """Tipo pelo nome do arquivo — para o PDF digitalizado, que não tem texto
+    ("CONBAS-B92.pdf", "Dados Básicos da Concessão - CONBAS.pdf")."""
+    n = _sem_acento(nome or '')
+    for tipo, padrao in _NOME_TIPO:
+        if padrao.search(n):
+            return tipo
+    return 'OUTRO'
+
+
+_MOTOR_OCR = None
+DPI_OCR = 150
+
+
+def ocr(caminho: str, dpi: int = DPI_OCR) -> str:
+    """Texto de um PDF digitalizado pelo RapidOCR (vem com o Docling; o
+    servidor não tem Tesseract). Medido em 18/11/2026: ~8 s por página com o
+    servidor carregado; perde acento e às vezes cola palavras — quem mostra o
+    texto avisa que é leitura por OCR."""
+    global _MOTOR_OCR
+    import fitz  # PyMuPDF
+
+    if _MOTOR_OCR is None:
+        from rapidocr import RapidOCR
+        _MOTOR_OCR = RapidOCR()
+    paginas = []
+    with fitz.open(caminho) as doc:
+        for pagina in doc:
+            r = _MOTOR_OCR(pagina.get_pixmap(dpi=dpi).tobytes('png'))
+            paginas.append('\n'.join(getattr(r, 'txts', None) or ()))
+    return '\n'.join(paginas).strip()
+
+
 def instancia_do_recalculo(tipo_recalculo: Optional[str]) -> Optional[int]:
     t = (tipo_recalculo or '').upper()
     if 'SEGUNDA' in t:

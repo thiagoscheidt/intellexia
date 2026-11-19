@@ -130,7 +130,8 @@ def _item(a: FapContestacaoAnexo, trecho: Optional[str] = None) -> dict:
         'tipo_documento': a.tipo_documento, 'tipo_documento_label': TIPOS.get(a.tipo_documento or '', a.tipo_documento),
         'nome': a.nome, 'data_envio': a.data_envio.isoformat() if a.data_envio else None,
         'tamanho': a.tamanho, 'cids': c.get('cids') or [], 'cat_tipo': c.get('cat_tipo'),
-        'especie': c.get('especie'), 'tem_arquivo': bool(a.arquivo), 'trecho': trecho,
+        'especie': c.get('especie'), 'texto_por_ocr': bool(c.get('ocr')),
+        'tem_arquivo': bool(a.arquivo), 'trecho': trecho,
     }
 
 
