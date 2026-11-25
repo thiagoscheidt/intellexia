@@ -20,6 +20,7 @@ Uso:
   uv run python scripts/fap_baixar_anexos.py --baixar                          # tudo
   uv run python scripts/fap_baixar_anexos.py --baixar --somente-novos          # rotina diária
   uv run python scripts/fap_baixar_anexos.py --registrar                       # só o banco
+  uv run python scripts/fap_baixar_anexos.py --deduplicar                      # cópias repetidas viram link
   uv run python scripts/fap_baixar_anexos.py --ocr --minutos 180               # digitalizados, aos poucos
 
 Variáveis (.env):
@@ -97,6 +98,8 @@ def main(argv=None, svc=None) -> int:
     ap.add_argument('--somente-novos', action='store_true',
                     help='pula os recálculos já consultados (rotina diária)')
     ap.add_argument('--registrar', action='store_true', help='só registra no banco o que já está na pasta')
+    ap.add_argument('--deduplicar', action='store_true',
+                    help='troca as cópias repetidas do mesmo anexo por links (libera espaço)')
     ap.add_argument('--sem-registrar', action='store_true', help='com --baixar, não registra no banco')
     ap.add_argument('--ocr', action='store_true',
                     help='lê por OCR os PDFs digitalizados já registrados (sem ir ao portal)')
@@ -117,6 +120,14 @@ def main(argv=None, svc=None) -> int:
     if args.registrar:
         with app.app_context():
             return _registrar(anexos, law_firm_id, pasta)
+    if args.deduplicar:
+        t0 = time.time()
+        _log(f'Trocando cópias repetidas por links em {pasta}…')
+        r = anexos.deduplicar(pasta, log=_log)
+        _log(f"  anexos distintos: {r['anexos']} · cópias trocadas por link: {r['trocados']} · "
+             f"liberado: {_mb(r['bytes_liberados'])} · com tamanho diferente (ficaram): {r['tamanho_diferente']}")
+        _log(f'  tempo: {time.time() - t0:.0f}s')
+        return EXIT_OK
     if args.ocr:
         with app.app_context():
             return _ocr(anexos, law_firm_id, pasta, args.minutos, args.limite)
@@ -152,7 +163,8 @@ def main(argv=None, svc=None) -> int:
     for elemento, n in r['por_elemento'].most_common():
         _log(f'    {n}× {elemento}')
     if args.baixar:
-        _log(f"  baixados agora: {r['baixados']} ({_mb(r['bytes_baixados'])}) · já estavam no disco: {r['ja_no_disco']}")
+        _log(f"  baixados agora: {r['baixados']} ({_mb(r['bytes_baixados'])}) · já estavam no disco: {r['ja_no_disco']}"
+         f" · mesmo anexo de outro estabelecimento (link): {r['ligados']}")
         _log(f"  índice: {r.get('indice', 0)} linha(s) em {pasta / anexos.INDICE}")
     _log(f"  sem acesso (403, sessão parcial ou sem procuração): {r['sem_acesso']}")
     _log(f"  erros: {r['erros']}")

@@ -223,6 +223,31 @@ def test_fila_grande(a, pasta):
     check(f'{n} downloads em {dt:.1f}s (tem de ficar bem abaixo de 1 minuto)', r['baixados'] == n and dt < 30, r)
 
 
+def test_um_download_por_anexo(a, pasta):
+    print('\n12. Um download por anexo (o portal repete os anexos em cada estabelecimento)')
+    LISTAS[102] = [_anexo(1, 'B91 6485264632.pdf', PDF)]          # o mesmo anexo 1 do recálculo 101
+    CHAMADAS.update(lista=0, download=0)
+    try:
+        r = svc.executar(a, None, pasta=pasta, baixar=True, cnpjs=[EST_A], log=lambda m: None)
+    finally:
+        LISTAS[102] = []
+    f101 = pasta / '2026' / EST_A / '101' / '1 - B91 6485264632.pdf'
+    f102 = pasta / '2026' / EST_A / '102' / '1 - B91 6485264632.pdf'
+    check('o anexo repetido é baixado uma vez só', CHAMADAS['download'] == 2 and r['ligados'] == 1, (CHAMADAS, r['ligados']))
+    check('a outra cópia é link para o mesmo arquivo', f102.exists() and f101.stat().st_ino == f102.stat().st_ino)
+
+    print('\n13. --deduplicar')
+    f102.unlink()
+    f102.write_bytes(PDF)                                          # cópia separada, como na cópia de 19/11
+    diferente = pasta / '2026' / EST_A / '102' / '2 - outro tamanho.pdf'
+    diferente.write_bytes(b'x')                                     # mesmo id 2, tamanho diferente
+    r = svc.deduplicar(pasta, log=lambda m: None)
+    check('cópia repetida vira link e libera o espaço', f101.stat().st_ino == f102.stat().st_ino
+          and r['trocados'] == 1 and r['bytes_liberados'] == len(PDF), r)
+    check('tamanho diferente fica como está', diferente.exists() and r['tamanho_diferente'] == 1, r)
+    check('rodar de novo não troca nada', svc.deduplicar(pasta, log=lambda m: None)['trocados'] == 0)
+
+
 def test_arquivo_ruim(a, pasta):
     print('\n4. Arquivo que não confere')
     ARQUIVOS[1] = {'nome': 'x.pdf', 'base64': base64.b64encode(PDF[:-5]).decode()}
@@ -456,7 +481,7 @@ if __name__ == '__main__':
                 pass
             try:
                 test_recalculos(a)
-                for teste in (test_simulacao, test_baixar, test_arquivo_ruim, test_registro_e_busca, test_ocr, test_fila_grande, test_expirada):
+                for teste in (test_simulacao, test_baixar, test_arquivo_ruim, test_registro_e_busca, test_ocr, test_fila_grande, test_um_download_por_anexo, test_expirada):
                     pasta = Path(tempfile.mkdtemp(prefix='fap_anexos_test_'))
                     try:
                         teste(a, pasta)

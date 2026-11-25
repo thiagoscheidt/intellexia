@@ -29,6 +29,7 @@ import binascii
 import csv
 import json
 import os
+import shutil
 import re
 from collections import Counter, deque
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, ThreadPoolExecutor, wait
@@ -145,10 +146,75 @@ def _baixar_em_processo(pasta: str, rec: Recalculo, anexo: dict):
     return _baixar_um(Path(pasta), _SVC_DO_PROCESSO, rec, anexo)
 
 
-def _no_disco(pasta: Path, rec: Recalculo, anexo: dict) -> bool:
-    destino = arquivo_do_anexo(pasta, rec, anexo)
+def _id_do_arquivo(nome: str) -> Optional[int]:
+    prefixo = nome.split(' - ', 1)[0]
+    return int(prefixo) if prefixo.isdigit() else None
+
+
+def _arquivos_de_anexo(pasta: Path):
+    """(id do anexo, caminho) de cada arquivo baixado na pasta."""
+    for raiz, _dirs, arquivos in os.walk(pasta):
+        for nome in arquivos:
+            if nome.endswith('.part') or nome in (LISTA_DA_PASTA, INDICE):
+                continue
+            aid = _id_do_arquivo(nome)
+            if aid is not None:
+                yield aid, Path(raiz) / nome
+
+
+def _ligar(origem: Path, destino: Path) -> None:
+    """``destino`` passa a ser o mesmo arquivo que ``origem`` (link físico; cópia se não der)."""
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    parcial = destino.with_name(destino.name + '.part')
     try:
-        tamanho = destino.stat().st_size
+        if parcial.exists():
+            parcial.unlink()
+        os.link(origem, parcial)
+    except OSError:
+        shutil.copyfile(origem, parcial)
+    os.replace(parcial, destino)
+
+
+def deduplicar(pasta: Path, log: Callable[[str], None] = print) -> dict:
+    """Troca as cópias repetidas do mesmo anexo por links para um arquivo só.
+
+    O portal lista os anexos da contestação em cada estabelecimento da empresa,
+    e até 24/11/2026 a cópia guardava um arquivo por estabelecimento: 244.947
+    arquivos para 82 mil anexos, 76 GB. Mesmo id do portal = mesmo documento;
+    o tamanho ainda é conferido, e arquivo de tamanho diferente fica como está.
+    """
+    rel = {'anexos': 0, 'trocados': 0, 'bytes_liberados': 0, 'tamanho_diferente': 0}
+    primeiro: dict[int, tuple] = {}
+    for aid, caminho in _arquivos_de_anexo(pasta):
+        try:
+            st = caminho.stat()
+        except OSError:
+            continue
+        if aid not in primeiro:
+            primeiro[aid] = (caminho, st.st_ino, st.st_size, st.st_dev)
+            rel['anexos'] += 1
+            continue
+        origem, ino, tamanho, dev = primeiro[aid]
+        if st.st_ino == ino and st.st_dev == dev:
+            continue  # já é o mesmo arquivo
+        if st.st_size != tamanho:
+            rel['tamanho_diferente'] += 1
+            continue
+        _ligar(origem, caminho)
+        rel['trocados'] += 1
+        rel['bytes_liberados'] += st.st_size
+        if rel['trocados'] % 20000 == 0:
+            log(f"  {rel['trocados']} cópias trocadas por link ({rel['bytes_liberados'] / 1e9:,.1f} GB)")
+    return rel
+
+
+def _no_disco(pasta: Path, rec: Recalculo, anexo: dict) -> bool:
+    return _no_disco_em(arquivo_do_anexo(pasta, rec, anexo), anexo)
+
+
+def _no_disco_em(caminho: Path, anexo: dict) -> bool:
+    try:
+        tamanho = caminho.stat().st_size
     except OSError:
         return False
     return not anexo.get('quantidadeBytes') or tamanho == int(anexo['quantidadeBytes'])
@@ -243,8 +309,47 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
         recs = recs[:limite]
     rel = {'recalculos': len(recs), 'consultados': 0, 'com_anexo': 0, 'anexos': 0, 'bytes': 0,
            'por_elemento': Counter(), 'baixados': 0, 'ja_no_disco': 0, 'bytes_baixados': 0,
-           'sem_acesso': 0, 'erros': 0, 'motivos_erro': Counter(), 'expirada': False,
+           'ligados': 0, 'sem_acesso': 0, 'erros': 0, 'motivos_erro': Counter(), 'expirada': False,
            'ja_consultados': ja_consultados, 'retomados': len(faltando)}
+
+    # Um download por anexo: o portal lista os anexos da contestação em cada
+    # estabelecimento, e o mesmo id em outro recálculo vira link para o arquivo
+    # já baixado (ou espera o primeiro terminar), em vez de outra cópia.
+    por_id: dict[int, Path] = {}
+    if baixar:
+        for aid, caminho in _arquivos_de_anexo(pasta):
+            por_id.setdefault(aid, caminho)
+    vistos: set[int] = set()
+    esperando: dict[int, list] = {}
+
+    def encaminhar(rec, anexo):
+        aid = int(anexo['id'])
+        destino = arquivo_do_anexo(pasta, rec, anexo)
+        if _no_disco(pasta, rec, anexo):
+            por_id.setdefault(aid, destino)
+            rel['ja_no_disco'] += 1
+            return None
+        origem = por_id.get(aid)
+        if origem is not None and _no_disco_em(origem, anexo):
+            _ligar(origem, destino)
+            rel['ligados'] += 1
+            return None
+        if aid in vistos:
+            esperando.setdefault(aid, []).append((rec, anexo))
+            return None
+        vistos.add(aid)
+        return ('baixar', rec, anexo)
+
+    def concluido(rec, anexo, ok: bool):
+        aid = int(anexo['id'])
+        vistos.discard(aid)
+        pendentes = esperando.pop(aid, [])
+        if not ok:
+            return
+        origem = por_id.setdefault(aid, arquivo_do_anexo(pasta, rec, anexo))
+        for rec2, anexo2 in pendentes:
+            _ligar(origem, arquivo_do_anexo(pasta, rec2, anexo2))
+            rel['ligados'] += 1
     log(f'{len(recs)} recálculo(s) para consultar'
         + (f', {len(faltando)} download(s) que ficaram faltando' if faltando else '') + '.')
 
@@ -254,7 +359,8 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
     def baixar_um(rec, anexo):
         return _baixar_um(pasta, svc, rec, anexo)
 
-    fila = deque([('baixar', rec, a) for rec, a in faltando] + [('lista', rec, None) for rec in recs])
+    fila = deque([t for t in (encaminhar(rec, a) for rec, a in faltando) if t]
+                 + [('lista', rec, None) for rec in recs])
     janela = max(1, workers) * 2
     # Downloads em processos que se renovam (``processos``): numa thread de vida
     # longa o custo por arquivo crescia sem parar — 19/11/2026, de 1.000 arquivos
@@ -310,7 +416,8 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
                         if baixar:
                             _gravar_lista(pasta, rec, anexos)
                             # Na frente da fila: baixa logo, não depois de todas as listagens.
-                            fila.extendleft(('baixar', rec, a) for a in reversed(anexos))
+                            novos = [t for t in (encaminhar(rec, a) for a in anexos) if t]
+                            fila.extendleft(reversed(novos))
                     elif baixar:
                         # Marca de "consultado, sem anexo", para o --somente-novos não voltar nele.
                         _gravar_lista(pasta, rec, [])
@@ -319,13 +426,16 @@ def executar(law_firm_id: int, svc, *, pasta: Path = PASTA_PADRAO, baixar: bool 
                             + (f", {rel['baixados']} baixados" if baixar else ''))
                 elif tipo == 'disco':
                     rel['ja_no_disco'] += 1
+                    concluido(rec, anexo, True)
                 elif tipo == 'baixado':
                     rel['baixados'] += 1
                     rel['bytes_baixados'] += r
+                    concluido(rec, anexo, True)
                     if rel['baixados'] % 1000 == 0:
                         log(f"  {rel['baixados']} baixados ({rel['bytes_baixados'] / 1e6:,.0f} MB), "
                             f"{rel['consultados']}/{len(recs)} recálculos consultados")
                 else:  # falha_download
+                    concluido(rec, anexo, False)
                     if r.expired:
                         rel['expirada'] = True
                     else:
