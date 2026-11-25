@@ -30,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from main import app
 from app.models import db, LawFirm
 from app.services import catalogo_teses_service as svc
+from app.services import jurisprudence_index_service as indice_juris
 
 
 def _lista(titulo: str, itens: list, formato, limite: int = 40) -> None:
@@ -95,6 +96,11 @@ def main() -> int:
     parser.add_argument('--descricoes', action='store_true',
                         help='sobrescreve a descrição das teses existentes com a da planilha')
     args = parser.parse_args()
+
+    # No script a atualização do índice da Jurisprudência roda aqui mesmo: em
+    # thread de fundo ela morreria junto com o processo, deixando as decisões
+    # com a tese do catálogo antiga no índice.
+    indice_juris.SINCRONO = True
 
     with app.app_context():
         if db.session.get(LawFirm, args.escritorio) is None:
