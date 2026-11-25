@@ -1119,6 +1119,7 @@ class JudicialLegalThesis(db.Model):
     __tablename__ = 'judicial_legal_theses'
     __table_args__ = (
         db.UniqueConstraint('law_firm_id', 'key', name='uq_judicial_legal_theses_law_firm_key'),
+        db.UniqueConstraint('law_firm_id', 'code', name='uq_judicial_legal_theses_firm_code'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -1129,10 +1130,32 @@ class JudicialLegalThesis(db.Model):
     description = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True)
 
+    # Catálogo do escritório (PRC-23): código fixo (T-FAP-001), área e junção.
+    # Área NULL = FAP: as teses cadastradas antes eram todas de benefício.
+    code = db.Column(db.String(20))
+    area = db.Column(db.String(30))
+    merged_into_id = db.Column(db.Integer, db.ForeignKey('judicial_legal_theses.id'), index=True)
+
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
+    AREA_FAP = 'FAP'
+    AREAS = ('FAP', 'Processual', 'Tributário', 'Trabalhista', 'Previdenciário')
+
+    @classmethod
+    def filtro_de_beneficio(cls):
+        """Teses que se atribuem a um benefício (área FAP ou sem área).
+
+        As processuais e tributárias do catálogo são teses da decisão, não do
+        benefício: ficam fora do seletor do benefício e do extrator."""
+        return db.or_(cls.area.is_(None), cls.area == cls.AREA_FAP)
+
+    @property
+    def is_benefit_thesis(self) -> bool:
+        return self.area in (None, '', self.AREA_FAP)
+
     law_firm = db.relationship('LawFirm')
+    merged_into = db.relationship('JudicialLegalThesis', remote_side=[id])
     benefits = db.relationship(
         'JudicialProcessBenefit',
         secondary=judicial_process_benefit_legal_theses,

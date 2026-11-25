@@ -362,7 +362,12 @@ class AgentDocumentExtractor:
         try:
             from app.models import JudicialLegalThesis
 
-            query = JudicialLegalThesis.query.filter_by(is_active=True)
+            # Teses atribuídas a benefício: as processuais/tributárias do
+            # catálogo são da decisão, não do benefício.
+            query = JudicialLegalThesis.query.filter(
+                JudicialLegalThesis.is_active.is_(True),
+                JudicialLegalThesis.filtro_de_beneficio(),
+            )
             if law_firm_id is not None:
                 query = query.filter_by(law_firm_id=law_firm_id)
 

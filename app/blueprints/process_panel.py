@@ -904,7 +904,13 @@ def manage_legal_theses():
     return render_template(
         'process_panel/legal_theses_management.html',
         legal_theses=legal_theses,
+        areas=JudicialLegalThesis.AREAS,
     )
+
+
+def _area_do_form() -> str:
+    area = request.form.get('area', '').strip()
+    return area if area in JudicialLegalThesis.AREAS else JudicialLegalThesis.AREA_FAP
 
 
 @process_panel_bp.route('/config/teses-juridicas/criar', methods=['POST'])
@@ -936,6 +942,7 @@ def create_legal_thesis():
                 name=name,
                 key=key,
                 description=description or None,
+                area=_area_do_form(),
                 is_active=True,
             )
         )
@@ -980,6 +987,8 @@ def update_legal_thesis(thesis_id):
         thesis.name = name
         thesis.key = key
         thesis.description = description or None
+        if 'area' in request.form:
+            thesis.area = _area_do_form()
         thesis.updated_at = datetime.now()
         db.session.commit()
         flash('Tese jurídica atualizada com sucesso.', 'success')
@@ -999,6 +1008,12 @@ def toggle_legal_thesis_status(thesis_id):
         id=thesis_id,
         law_firm_id=law_firm_id,
     ).first_or_404()
+
+    if thesis.merged_into_id:
+        # Reativar a tese juntada a deixaria sem os benefícios e peças que
+        # foram levados para o destino.
+        flash('Essa tese foi juntada em outra e não pode ser reativada.', 'warning')
+        return redirect(url_for('process_panel.manage_legal_theses'))
 
     try:
         thesis.is_active = not thesis.is_active
@@ -1155,9 +1170,10 @@ def list_processes():
 
     if view_mode == 'kanban':
         clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.name.asc()).all()
-        legal_theses = JudicialLegalThesis.query.filter_by(
-            law_firm_id=law_firm_id,
-            is_active=True,
+        legal_theses = JudicialLegalThesis.query.filter(
+            JudicialLegalThesis.law_firm_id == law_firm_id,
+            JudicialLegalThesis.is_active.is_(True),
+            JudicialLegalThesis.filtro_de_beneficio(),
         ).order_by(JudicialLegalThesis.name.asc()).all()
 
         configured_phases = JudicialPhase.query.filter_by(
@@ -1208,9 +1224,10 @@ def list_processes():
             discovery_view=discovery_view,
         )
 
-    legal_theses = JudicialLegalThesis.query.filter_by(
-        law_firm_id=law_firm_id,
-        is_active=True,
+    legal_theses = JudicialLegalThesis.query.filter(
+        JudicialLegalThesis.law_firm_id == law_firm_id,
+        JudicialLegalThesis.is_active.is_(True),
+        JudicialLegalThesis.filtro_de_beneficio(),
     ).order_by(JudicialLegalThesis.name.asc()).all()
 
     # Pendências por processo (página atual): prazo mais próximo + publicações não lidas
@@ -1940,9 +1957,14 @@ def detail(process_id):
         process_id=process.id
     ).order_by(JudicialProcessCitedBenefit.insured_name.asc(), JudicialProcessCitedBenefit.id.asc()).all()
 
-    legal_theses = JudicialLegalThesis.query.filter_by(
-        law_firm_id=law_firm_id,
-        is_active=True,
+    # Seletor de tese do benefício: só as de benefício (área FAP). A que já
+    # está num benefício deste processo continua na lista, senão salvar o
+    # seletor a tiraria do benefício sem a pessoa ver.
+    ja_ligadas = {t.id for b in process_benefits for t in b.legal_theses}
+    legal_theses = JudicialLegalThesis.query.filter(
+        JudicialLegalThesis.law_firm_id == law_firm_id,
+        JudicialLegalThesis.is_active.is_(True),
+        db.or_(JudicialLegalThesis.filtro_de_beneficio(), JudicialLegalThesis.id.in_(ja_ligadas or [0])),
     ).order_by(JudicialLegalThesis.name.asc()).all()
 
     benefit_thesis_contestation_map = {}

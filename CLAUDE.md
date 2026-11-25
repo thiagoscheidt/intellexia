@@ -942,6 +942,22 @@ e com o catálogo `judicial_legal_theses`) e `jurisprudence_uploads`, todas com
   `tese_id` têm nomes diferentes de propósito**: com os dois chamados `id`, o
   modelo trocava um pelo outro ("id 6" era ERRO NA BASE ESTATISTICA na base e
   "60 DIAS" no catálogo) e sugeria ligação absurda com motivo coerente.
+- **Catálogo do escritório (PRC-23)**: o escritório mantém o catálogo numa
+  planilha (abas CATÁLOGO e EQUIVALÊNCIAS — equivalência é **por grafia
+  inteira**, não por termo). `scripts/importar_catalogo_teses.py PLANILHA
+  --escritorio N` (simula por padrão; `--aplicar`; `--juntar`; `--descricoes`)
+  via `catalogo_teses_service`: amplia o mesmo `judicial_legal_theses` do Painel
+  (casa pelo código, na 1ª vez pelo nome), grava `code` (fixo, nunca muda),
+  `area` e liga as grafias. Colunas de `database/alter_judicial_legal_theses_add_catalog_columns.py`
+  — **rodar antes do deploy**: o modelo já as lê em toda consulta ao catálogo.
+  **Juntar tese do catálogo não é desativar**: "sem decisões ligadas" na planilha
+  fala só da Jurisprudência, mas a tese está em benefícios do Painel, análises da
+  contestação e peças-modelo (banco, payload do Qdrant e Meilisearch, pela
+  **chave**), e a geração ignora tese inativa. `juntar_tese` leva tudo ao destino
+  e grava `merged_into_id`; a tela não reativa tese juntada. **Área**: só FAP (ou
+  sem área) entra no seletor de tese do benefício e no extrator
+  (`JudicialLegalThesis.filtro_de_beneficio()`); processual e tributária são
+  teses da decisão. Teste: `tests/test_catalogo_teses.py`.
 - **Dois campos de tese, dois filtros.** *Tese original* é o texto exato que
   veio da decisão (`teses_brutas_json`, N por decisão, gravado sem mudar caixa
   nem acento). O filtro agrupa só por acento e maiúsculas (`norm.chave`) — a
