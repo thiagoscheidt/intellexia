@@ -597,6 +597,66 @@ def test_r4_58_a_60_dias_conferencia():
           not ((a or {}).get('contagem_dias') or {}).get('conferencia'))
 
 
+def test_r4_so_o_par_dcb_dib():
+    print('\n46. RPI-36 (25/11) — a conta só vale para DCB do 1º → DIB do 2º')
+    # O caso da Daniella: duas DCBs do mesmo benefício, em tópicos diferentes.
+    duas_dcbs = ('DCB divergente entre tópicos: no tópico 2 a DCB do NB 6123456789 é '
+                 '31/12/2022 e no tópico 5 consta 15/01/2025.')
+    a, descartes = _par(duas_dcbs)
+    check('duas DCBs: não vira conferência', a is not None and not descartes
+          and not a.get('contagem_dias'), str((a or {}).get('contagem_dias')))
+    check('duas DCBs: gravidade mantida', a and a['severity'] == 'CRÍTICO')
+    check('duas DCBs: texto intacto', a and a['description'] == duas_dcbs)
+
+    a, _ = _par('DCB divergente: DCB 31/12/2022 no tópico 2 e DCB 15/01/2025 no tópico 5.')
+    check('DCB e DCB rotuladas: intacto', a and not a.get('contagem_dias') and a['severity'] == 'CRÍTICO')
+
+    a, _ = _par('DIB divergente: a petição traz DIB 01/02/2020 e o INFBEN, DIB 01/02/2021.')
+    check('duas DIBs: intacto', a and not a.get('contagem_dias') and a['severity'] == 'CRÍTICO')
+
+    a, _ = _par('DIB 01/02/2020 anterior à DCB 01/08/2020 do mesmo benefício: datas trocadas.')
+    check('DIB antes da DCB: intacto', a and not a.get('contagem_dias') and a['severity'] == 'CRÍTICO')
+
+    a, _ = _par('Restabelecimento: datas 31/01/2022 (DCB) e 10/03/2022 (DIB), 37 dias.')
+    check('rótulo depois da data também vale',
+          ((a or {}).get('contagem_dias') or {}).get('dias') == 37, str((a or {}).get('contagem_dias')))
+
+    a, _ = _par('Restabelecimento entre os benefícios de 31/01/2022 e 10/03/2022: 37 dias.')
+    check('sem rótulo, mas com o assunto do intervalo: conta',
+          ((a or {}).get('contagem_dias') or {}).get('dias') == 37)
+
+
+def test_r4_58_ou_mais_com_numero_errado_continua_erro():
+    print('\n47. RPI-36 (25/11) — 58+ com número errado na petição: erro e aviso')
+    doc = 'Maria: DCB em 01/03/2023 e DIB em 02/05/2023, intervalo de 40 dias.'
+    a, descartes = _par('Restabelecimento: entre a DCB de 01/03/2023 e a DIB de 02/05/2023 '
+                        'há 61 dias, e não 40 dias como consta na petição.', doc)
+    contagem = (a or {}).get('contagem_dias') or {}
+    check('mantido', a is not None and not descartes)
+    check('não é conferência', not contagem.get('conferencia'), str(contagem))
+    check('gravidade mantida', a and a['severity'] == 'CRÍTICO')
+    check('leva o aviso dos 58+', 'equipe confere' in (contagem.get('aviso') or '')
+          and 'acima de 60' in (contagem.get('aviso') or ''), contagem.get('aviso'))
+
+    a, _ = _par('Restabelecimento: a petição informa 40 dias entre a DCB de 01/03/2023 e a '
+                'DIB de 29/04/2023.', 'DCB 01/03/2023, DIB 29/04/2023, intervalo de 40 dias.')
+    contagem = (a or {}).get('contagem_dias') or {}
+    check('58 dias e um número só, o da petição, errado: erro', not contagem.get('conferencia')
+          and a and a['severity'] == 'CRÍTICO' and contagem.get('aviso'), str(contagem))
+
+    doc_certo = 'DCB 01/03/2023, DIB 29/04/2023, intervalo de 58 dias.'
+    a, descartes = _par('Restabelecimento: DCB 01/03/2023 e DIB 29/04/2023, 58 dias, mas o '
+                        'correto seria 59 dias.', doc_certo)
+    contagem = (a or {}).get('contagem_dias') or {}
+    check('58 dias com a petição certa: conferência', a is not None and not descartes
+          and contagem.get('conferencia') is True and a['severity'] == 'FORMAL', str(contagem))
+
+    a, _ = _par('Restabelecimento: DCB 01/03/2023 e DIB 29/04/2023, 59 dias.',
+                'DCB 01/03/2023, DIB 29/04/2023, intervalo de 59 dias.')
+    check('58 dias e 1 dia de diferença: conferência',
+          ((a or {}).get('contagem_dias') or {}).get('conferencia') is True)
+
+
 # ── R7 — FB-02: petição x anexo/planilha divergindo só na formatação ─────
 
 def _regras(achados, documento=PETICAO):
@@ -689,6 +749,8 @@ def main() -> int:
     test_r4_um_dia_de_diferenca_e_conferencia()
     test_r4_dois_dias_de_diferenca_e_erro()
     test_r4_58_a_60_dias_conferencia()
+    test_r4_so_o_par_dcb_dib()
+    test_r4_58_ou_mais_com_numero_errado_continua_erro()
 
     test_r7_razao_social_so_pontuacao_contra_anexo()
     test_r7_nit_formatado_contra_digitos()

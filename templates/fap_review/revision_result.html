@@ -1765,7 +1765,8 @@
                                     <i class="bi bi-calculator"></i>
                                     <span>Conta do intervalo entre DCB e DIB: <strong>{{ finding.contagem_dias.conta }}</strong>
                                         (contam-se só os dias entre as duas datas).
-                                        {% if finding.contagem_dias.conferencia %}<br>{{ finding.contagem_dias.aviso or 'Só para conferência, não é erro' }}. Não conta na pontuação.{% endif %}
+                                        {% if finding.contagem_dias.conferencia %}<br>{{ finding.contagem_dias.aviso or 'Só para conferência, não é erro' }}. Não conta na pontuação.
+                                        {% elif finding.contagem_dias.aviso %}<br>{{ finding.contagem_dias.aviso }}. O número de dias da petição está errado, então continua sendo erro.{% endif %}
                                     </span>
                                 </div>
                                 {% endif %}

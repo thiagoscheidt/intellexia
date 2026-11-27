@@ -617,6 +617,9 @@ def _achado_para_exibir(numero: int, achado: dict, ignorados: set[str]) -> dict:
         item['conta_dos_dias'] = contagem['conta']
         if contagem.get('conferencia'):
             item['so_conferencia'] = contagem.get('motivo') or True
+        elif contagem.get('aviso'):
+            # 58+ com o número da petição errado: erro, com o aviso para a equipe.
+            item['aviso_de_conferencia'] = contagem['aviso']
     if _svc.build_finding_fingerprint(achado) in ignorados:
         item['ja_marcado_nao_pertinente'] = True
     if achado.get('is_new_pattern'):

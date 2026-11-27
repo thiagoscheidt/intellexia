@@ -320,8 +320,129 @@ def _como_conferencia(achado: dict, contagem: dict, aviso: str) -> dict:
     return ajustado
 
 
+_ROTULO_DA_DATA = re.compile(r'\b(dcb|dib)\b')
+# Rótulo colado depois da data: "31/01/2022 (DCB)", "31/01/2022, DCB".
+_ROTULO_DEPOIS_DA_DATA = re.compile(r'[\s(,–-]{0,4}(dcb|dib)\b')
+
+# Quanto texto antes da data ainda pode trazer o rótulo dela ("a DCB do NB
+# 123.456.789-0, cessado em 31/01/2022").
+_JANELA_ROTULO_ANTES = 80
+
+# Sem rótulo nas datas, só o assunto do achado diz que elas são o par da tese.
+_ASSUNTO_DO_INTERVALO = ('restabelec', 'prorroga', 'intervalo')
+
+
+def _rotulo_da_data(texto: str, inicio: int, fim: int, livre_desde: int) -> tuple[str | None, int]:
+    """``('dcb'|'dib'|None, posição)`` — o rótulo da data e até onde ele vai.
+
+    Vale o rótulo mais perto da data entre ``livre_desde`` (o fim da data
+    anterior e do rótulo colado nela) e a data, ou o colado logo depois dela.
+    """
+    depois = _ROTULO_DEPOIS_DA_DATA.match(texto, fim)
+    antes = _ROTULO_DA_DATA.findall(texto[max(livre_desde, inicio - _JANELA_ROTULO_ANTES):inicio])
+    if antes:
+        return antes[-1], fim
+    if depois:
+        return depois.group(1), depois.end()
+    return None, fim
+
+
+def _par_dcb_dib(texto: str) -> tuple[date, date] | None:
+    """O par da tese do restabelecimento — DCB do 1º benefício, DIB do 2º.
+
+    RPI-36 (25/11/2026): a conta só vale para esse par. Duas datas quaisquer num
+    achado que cita DCB ou DIB não bastam: o achado de "DCB divergente entre
+    dois tópicos" tem duas DCBs do mesmo benefício, e contá-las como intervalo
+    rebaixava um erro crítico para conferência com "745 dias".
+    """
+    datas = []
+    livre_desde = 0
+    for casamento in _DATA_BR.finditer(texto):
+        rotulo, livre_desde = _rotulo_da_data(texto, casamento.start(), casamento.end(), livre_desde)
+        valor = _para_data(casamento.group(0))
+        if valor is not None:
+            datas.append((valor, rotulo))
+
+    por_data: dict[date, set] = {}
+    for valor, rotulo in datas:
+        por_data.setdefault(valor, set()).add(rotulo)
+    if len(por_data) != 2:
+        # Uma data só não fecha intervalo; três ou mais não dizem qual par é o
+        # da tese. Nos dois casos, chutar é pior que não mexer.
+        return None
+
+    (primeira, rotulos_1), (segunda, rotulos_2) = sorted(por_data.items())
+    rotulos_1.discard(None)
+    rotulos_2.discard(None)
+    if rotulos_1 == {'dcb'} and rotulos_2 == {'dib'}:
+        return primeira, segunda
+    if not rotulos_1 and not rotulos_2 and any(t in texto for t in _ASSUNTO_DO_INTERVALO):
+        return primeira, segunda
+    # Duas DCBs, duas DIBs, DIB antes da DCB ou um rótulo só: não é o par da tese.
+    return None
+
+
+def _numero_do_achado(achado: dict, documento: str, texto: str, real: int,
+                      dcb: date, dib: date, conta: str) -> tuple[str, dict, str | None]:
+    """O que o achado diz do número de dias, comparado com a conta.
+
+    Returns:
+        ``(situacao, achado, motivo)``. Situação: ``'descartar'`` (a petição
+        traz a conta certa e o achado aponta outra — caso GIASSI; o motivo vai
+        no descarte), ``'peticao_errada'`` (o número da petição difere da conta
+        em mais de 1 dia), ``'um_dia'`` (1 dia de diferença), ``'certo'`` ou
+        ``'indefinido'``. Quando o modelo errou a conta, o achado volta com o
+        número corrigido.
+    """
+    # O limite legal citado no próprio texto não é o intervalo alegado.
+    citados = {int(n) for n in _QUANTIDADE_DE_DIAS.findall(texto)}
+    citados.discard(LIMITE_RESTABELECIMENTO)
+
+    def _so_na_peticao(numero: int, outro: int) -> bool:
+        return bool(documento) and _dias_no_documento(documento, numero) \
+            and not _dias_no_documento(documento, outro)
+
+    if len(citados) == 1:
+        alegado = next(iter(citados))
+        if alegado == real:
+            return 'certo', achado, None
+        if _so_na_peticao(alegado, real):
+            # O número citado é o da petição, não a conta do modelo.
+            situacao = 'um_dia' if abs(alegado - real) <= TOLERANCIA_DIAS else 'peticao_errada'
+            return situacao, achado, None
+        # RPI-10: o modelo errou a conta — o apontamento vale, o número não.
+        correcao = {
+            'regra': 'R4',
+            'de': alegado,
+            'para': real,
+            'motivo': (f'entre a DCB de {dcb:%d/%m/%Y} e a DIB de {dib:%d/%m/%Y} há '
+                       f'{real} dias, não {alegado} — contam-se só os dias entre as '
+                       f'duas datas'),
+        }
+        return 'indefinido', _aplicar_correcao_de_dias(achado, correcao), None
+
+    if len(citados) == 2 and real in citados:
+        outro = next(iter(citados - {real}))
+        if _so_na_peticao(real, outro):
+            # Caso GIASSI (RPI-36): a petição traz a conta certa e o modelo
+            # aponta outra.
+            return 'descartar', achado, (f'a petição traz {real} dias, que é a conta pela '
+                                         f'regra ({conta}); o achado apontava {outro}')
+        if abs(outro - real) <= TOLERANCIA_DIAS:
+            return 'um_dia', achado, None
+        if _so_na_peticao(outro, real):
+            return 'peticao_errada', achado, None
+
+    return 'indefinido', achado, None
+
+
 def _aplicar_r4(achado: dict, documento: str) -> tuple[dict | None, str | None]:
     """Recalcula o intervalo do par DCB/DIB citado no achado.
+
+    Regra do escritório (seção 3.3 do manual, RPI-36): número de dias errado na
+    petição — diferença maior que 1 dia — é sempre erro; de 58 dias para cima,
+    além disso, entra o aviso para a equipe avaliar. Sem número errado
+    confirmado, 58+ e a diferença de 1 dia ficam só para conferência.
 
     Returns:
         ``(achado, None)`` — o achado como deve seguir (com a conta em
@@ -333,14 +454,10 @@ def _aplicar_r4(achado: dict, documento: str) -> tuple[dict | None, str | None]:
     if not any(termo in texto for termo in _TESE_DOS_60_DIAS):
         return achado, None
 
-    datas = {_para_data(f'{d}/{m}/{a}') for d, m, a in _DATA_BR.findall(texto)}
-    datas.discard(None)
-    if len(datas) != 2:
-        # Uma data só não fecha intervalo; três ou mais não dizem qual par é o
-        # da tese. Nos dois casos, chutar é pior que não mexer.
+    par = _par_dcb_dib(texto)
+    if par is None:
         return achado, None
-
-    dcb, dib = sorted(datas)
+    dcb, dib = par
     real = dias_entre_beneficios(dcb, dib)
     if real is None:
         return achado, None
@@ -348,56 +465,27 @@ def _aplicar_r4(achado: dict, documento: str) -> tuple[dict | None, str | None]:
     conta = conta_dos_dias(dcb, dib, real)
     contagem = {'regra': 'R4', 'dcb': f'{dcb:%d/%m/%Y}', 'dib': f'{dib:%d/%m/%Y}',
                 'dias': real, 'conta': conta}
-
-    if real >= INICIO_CONFERENCIA:
-        aviso = (f'Com {INICIO_CONFERENCIA} dias ou mais o par fica para '
-                 f'conferência, não é erro')
-        if real > LIMITE_RESTABELECIMENTO:
-            aviso += (f'; acima de {LIMITE_RESTABELECIMENTO} dias não é restabelecimento '
-                       f'e o benefício normalmente não entra na petição — se entrou, a '
-                       f'equipe avalia caso a caso')
-        return _como_conferencia(achado, contagem, aviso), None
+    situacao, ajustado, motivo = _numero_do_achado(achado, documento, texto, real, dcb, dib, conta)
 
     aviso_um_dia = (f'A diferença de {TOLERANCIA_DIAS} dia em relação a esta '
                      f'conta pode ser proposital: fica para conferência, não é erro')
 
-    # O limite legal citado no próprio texto não é o intervalo alegado.
-    citados = {int(n) for n in _QUANTIDADE_DE_DIAS.findall(texto)}
-    citados.discard(LIMITE_RESTABELECIMENTO)
+    if real >= INICIO_CONFERENCIA:
+        aviso = f'Com {INICIO_CONFERENCIA} dias ou mais a equipe confere o par'
+        if real > LIMITE_RESTABELECIMENTO:
+            aviso += (f'; acima de {LIMITE_RESTABELECIMENTO} dias não é restabelecimento '
+                       f'e o benefício normalmente não entra na petição — se entrou, a '
+                       f'equipe avalia caso a caso')
+        if situacao == 'peticao_errada':
+            # O número da petição está errado: continua erro, com o aviso junto.
+            return _com_conta(ajustado, {**contagem, 'aviso': aviso}), None
+        return _como_conferencia(ajustado, contagem, f'{aviso}; só conferência, não é erro'), None
 
-    if len(citados) == 1:
-        alegado = next(iter(citados))
-        if alegado == real:
-            return _com_conta(achado, contagem), None
-        if (documento and _dias_no_documento(documento, alegado)
-                and not _dias_no_documento(documento, real)):
-            # O número citado é o da petição, não a conta do modelo.
-            if abs(alegado - real) <= TOLERANCIA_DIAS:
-                return _como_conferencia(achado, contagem, aviso_um_dia), None
-            return _com_conta(achado, contagem), None
-        # RPI-10: o modelo errou a conta — o apontamento vale, o número não.
-        correcao = {
-            'regra': 'R4',
-            'de': alegado,
-            'para': real,
-            'motivo': (f'entre a DCB de {dcb:%d/%m/%Y} e a DIB de {dib:%d/%m/%Y} há '
-                       f'{real} dias, não {alegado} — contam-se só os dias entre as '
-                       f'duas datas'),
-        }
-        return _com_conta(_aplicar_correcao_de_dias(achado, correcao), contagem), None
-
-    if len(citados) == 2 and real in citados:
-        outro = next(iter(citados - {real}))
-        if (documento and _dias_no_documento(documento, real)
-                and not _dias_no_documento(documento, outro)):
-            # Caso GIASSI (RPI-36): a petição traz a conta certa e o modelo
-            # aponta outra.
-            return None, (f'a petição traz {real} dias, que é a conta pela regra '
-                          f'({conta}); o achado apontava {outro}')
-        if abs(outro - real) <= TOLERANCIA_DIAS:
-            return _como_conferencia(achado, contagem, aviso_um_dia), None
-
-    return _com_conta(achado, contagem), None
+    if situacao == 'descartar':
+        return None, motivo
+    if situacao == 'um_dia':
+        return _como_conferencia(ajustado, contagem, aviso_um_dia), None
+    return _com_conta(ajustado, contagem), None
 
 
 def _aplicar_correcao_de_dias(achado: dict, correcao: dict) -> dict:
