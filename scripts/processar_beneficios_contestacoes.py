@@ -4,6 +4,9 @@ Processa os benefícios de contestações FAP já sincronizadas (com arquivo loc
 equivalente ao botão "Processar Benefícios" da página de contestações.
 
 Uso:
+  # Sem --ano_vigencia: todas as vigências que o portal pode ter hoje (a do ano
+  # seguinte entra em outubro, quando é divulgada) — é o que o cron diário usa.
+  uv run python scripts/processar_beneficios_contestacoes.py --workers 2
   uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026
   uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --workers 4
   uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --law_firm_id 2
@@ -50,7 +53,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description='Processa benefícios de contestações FAP já sincronizadas'
     )
-    parser.add_argument('--ano_vigencia', type=int, nargs='+', required=True, help='Ano(s) de vigência (ex: 2026 ou 2022 2023 2024)')
+    parser.add_argument(
+        '--ano_vigencia', type=int, nargs='+', default=None,
+        help='Ano(s) de vigência (ex: 2026 ou 2022 2023 2024). Sem ele, todas as '
+             'vigências do portal até a mais nova que pode existir hoje.',
+    )
     parser.add_argument('--law_firm_id', type=int, default=1, help='ID do escritório (padrão: 1)')
     parser.add_argument('--cnpj_raiz', default='', help='Filtro por CNPJ raiz (8 dígitos)')
     parser.add_argument('--instancia', default='', help='Filtro por código de instância')
@@ -482,7 +489,15 @@ def main() -> None:
 
     service = FapContestationJudgmentReportService(flask_app=app)
 
-    anos = sorted(args.ano_vigencia)
+    # Sem anos explícitos, a lista é calculada a cada execução, como no
+    # fap_sync_cron. Com a lista fixa no crontab (2017–2026), a vigência 2027
+    # divulgada em outubro/2026 teve os PDFs baixados e nenhum benefício
+    # processado: 3.300 contestações paradas até 27/11/2026.
+    if args.ano_vigencia:
+        anos = sorted(args.ano_vigencia)
+    else:
+        from app.services.fap_vigencia_service import anos_portal
+        anos = sorted(anos_portal())
     _log(f'Anos a processar: {anos}')
 
     for ano in anos:

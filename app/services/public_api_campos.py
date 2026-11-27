@@ -132,7 +132,10 @@ CONTESTACAO_CAMPOS = (
     _t('protocolo', 'Protocolo administrativo.'),
     _d('data_transmissao', 'Quando foi transmitida ao portal.'),
     _d('data_dou', 'Data do resultado no Diário Oficial.'),
-    _b('pdf_baixado', 'O relatório de julgamento em PDF já foi baixado.'),
+    _b('pdf_baixado', 'O PDF da contestação (transmitida ou julgada) já foi baixado.'),
+    _b('beneficios_processados', 'Os benefícios do PDF já entraram na Central. Falso com o PDF '
+       'baixado = processamento pendente (cron diário); a contestação transmitida também '
+       'gera benefícios, "Em análise".'),
     _t('url_abrir_pdf', 'Endereço do PDF no IntellexIA (abre com o login do app).'),
     _d('ultima_sincronizacao', 'Última sincronização com o portal.'),
 )

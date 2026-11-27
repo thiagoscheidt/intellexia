@@ -488,8 +488,13 @@ def listar_contestacoes_fap(
 
     Returns:
         Dicionário com 'total_encontrado', 'retornados' e 'itens' (cada item com
-        identificação, instância, situação, resultado do deferimento, data D.O.U.
-        e se o PDF já foi baixado).
+        identificação, instância, situação, resultado do deferimento, data D.O.U.,
+        se o PDF já foi baixado e se os benefícios dele já foram processados).
+
+    Os benefícios e as justificativas entram na Central quando o PDF da
+    contestação é processado — inclusive a contestação só transmitida, cujos
+    benefícios ficam "Em análise". Não dependem do julgamento.
+    `beneficios_processados` falso = processamento pendente, não falta de dado.
     """
     claims = require_module("fap_panel")
     with app.app_context():
@@ -990,7 +995,9 @@ def detalhar_contestacao(contestacao_id: int) -> dict:
 
     Inclui todos os dados da contestação, os benefícios vinculados à mesma
     vigência/CNPJ (com contagem por status de 1ª instância) e as alterações
-    recentes detectadas na sincronização.
+    recentes detectadas na sincronização. `beneficios_processados` falso com
+    `pdf_baixado` verdadeiro = o PDF ainda não foi processado; os benefícios
+    não dependem do julgamento (a contestação transmitida os traz "Em análise").
 
     Args:
         contestacao_id: ID interno da contestação (campo 'id' de listar_contestacoes_fap).

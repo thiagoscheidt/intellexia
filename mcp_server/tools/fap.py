@@ -396,6 +396,7 @@ def list_fap_contestacoes_handler(
     )
 
     names = _company_name_map(law_firm_id)
+    processadas = _contestacoes_processadas(law_firm_id, contestacoes)
     itens = [
         {
             "id": c.id,
@@ -414,12 +415,42 @@ def list_fap_contestacoes_handler(
             "data_transmissao": _iso(c.data_transmissao),
             "data_dou": _iso(c.data_dou_date),
             "pdf_baixado": bool(c.file_path),
+            "beneficios_processados": _beneficios_processados(c, processadas),
             "url_abrir_pdf": _pdf_url(c, app_public_url),
             "ultima_sincronizacao": _iso(c.last_synced_at),
         }
         for c in contestacoes
     ]
     return page_envelope(total, offset, itens)
+
+
+def _contestacoes_processadas(law_firm_id: int, contestacoes) -> set[int]:
+    """`contestacao_id`s cujos benefícios já saíram do PDF para a Central.
+
+    O PDF baixado não basta: os benefícios só existem depois do processamento
+    (`processar_beneficios_contestacoes.py`, cron diário, ou o botão do Painel
+    FAP). Sem esse campo, o Claude via "PDF baixado, 0 benefícios" e concluía
+    que os benefícios só chegam com o julgamento — falso: a contestação
+    transmitida gera os benefícios "Em análise", com a justificativa.
+    """
+    from app.models import FapAutoImportedContestacao
+
+    ids = {c.contestacao_id for c in contestacoes if c.contestacao_id is not None}
+    if not ids:
+        return set()
+    linhas = (
+        FapAutoImportedContestacao.query
+        .filter(FapAutoImportedContestacao.law_firm_id == law_firm_id,
+                FapAutoImportedContestacao.contestacao_id.in_(ids))
+        .with_entities(FapAutoImportedContestacao.contestacao_id)
+        .all()
+    )
+    return {cid for (cid,) in linhas}
+
+
+def _beneficios_processados(c, processadas: set[int]) -> bool:
+    """Processada e sem reprocessamento pendente (julgada depois de importada)."""
+    return c.contestacao_id in processadas and not c.needs_reprocess
 
 
 def get_contestacao_detail_handler(contestacao_id: int, law_firm_id: int,
@@ -478,6 +509,8 @@ def get_contestacao_detail_handler(contestacao_id: int, law_firm_id: int,
         "data_transmissao": _iso(c.data_transmissao),
         "data_dou": _iso(c.data_dou_date),
         "pdf_baixado": bool(c.file_path),
+        "beneficios_processados": _beneficios_processados(
+            c, _contestacoes_processadas(law_firm_id, [c])),
         "url_abrir_pdf": _pdf_url(c, app_public_url),
         "ultima_sincronizacao": _iso(c.last_synced_at),
         "beneficios_vinculados": {
